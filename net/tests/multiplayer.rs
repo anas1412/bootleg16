@@ -225,3 +225,40 @@ fn he_hurts_and_flash_blinds_across_the_network() {
     assert_eq!(blind.alpha, if in_front { 255 } else { 200 }, "flash at {at:?}");
     assert!(blind.hold > 0.0 && blind.fade > blind.hold);
 }
+
+#[test]
+fn idle_players_keep_their_ammo() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 40, 0.0);
+    g.connect();
+    for _ in 0..1280 {
+        g.tick(Input::default(), Input::default());
+    }
+    for c in [&g.a, &g.b] {
+        let gun = c.state.loadout.active_gun().expect("pistol out");
+        let server = g.server.player_state(c.id().unwrap()).unwrap().loadout.active_gun().unwrap().clip;
+        assert_eq!((gun.clip, server), (sim::weapons::gun(gun.id).unwrap().clip, sim::weapons::gun(gun.id).unwrap().clip), "{:?}", gun.id);
+    }
+}
+
+#[test]
+fn throwing_grenades_does_not_touch_anyone_elses_ammo() {
+    use sim::weapons::Id;
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 0, 0.0);
+    g.server.set_give(vec![Id::Smoke, Id::HeGrenade]);
+    g.connect();
+    let base = Input { yaw: 270.0, pitch: -30.0, ..Default::default() };
+    for t in 0..2000u32 {
+        let a = match t {
+            1 | 121 => Input { slot: 4, ..base },
+            241..=340 => Input { attack: true, ..base },
+            _ => base,
+        };
+        g.tick(a, Input::default());
+    }
+    let b = g.b.state.loadout.active_gun().unwrap();
+    assert_eq!(b.clip, sim::weapons::gun(b.id).unwrap().clip, "B's {:?} lost ammo", b.id);
+    let sb = g.server.player_state(g.b.id().unwrap()).unwrap().loadout.active_gun().unwrap().clip;
+    assert_eq!(sb, b.clip);
+}

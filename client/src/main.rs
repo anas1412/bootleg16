@@ -5,7 +5,8 @@
 //! Usage: `client [map] [--connect host:port] [--name name]` (default de_dust2, offline).
 //! The game directory comes from `BOOTLEG16_DIR` (default: the Steam Half-Life install).
 //! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.
-//! `BOOTLEG16_SCREENSHOT=path.png` saves one frame and exits (used for automated checks).
+//! `BOOTLEG16_SCREENSHOT=path.png` saves one frame (after `BOOTLEG16_SCREENSHOT_AT` seconds,
+//! default 2) and exits; such runs ignore mouse and keyboard (used for automated checks).
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead).
 //! `--give ak47,awp` (offline) hands you extra weapons until there's a buy menu.
 mod map;
@@ -50,7 +51,7 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(128.0))
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, walk)
-        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, hud, grab_cursor, screenshot).chain())
+        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, hud, grab_cursor, screenshot).chain())
         .run();
 }
 
@@ -161,7 +162,19 @@ fn setup(
     client.simulate_network(ping, loss);
     info!("connecting to {server_addr} as {player_name} (fake ping {ping} ms, loss {loss})");
     let eye = Vec3::from(pos) + Vec3::Y * sim::pmove::VIEW_HEIGHT_STANDING;
-    commands.insert_resource(Walker { client, prev_eye: [0.0; 3], noclip: false, slot_held: 0, tracers: Vec::new(), feed: Vec::new() });
+    commands.insert_resource(Walker {
+        client,
+        prev_eye: [0.0; 3],
+        noclip: false,
+        slot_held: 0,
+        tracers: Vec::new(),
+        feed: Vec::new(),
+        pending_fx: Vec::new(),
+        flash_hold: 0.0,
+        flash_fade: 0.0,
+        flash_total_fade: 0.0,
+        flash_alpha: 0.0,
+    });
     // HUD: crosshair, status line, kill feed.
     commands.spawn((
         Text::new("+"),
@@ -221,6 +234,28 @@ fn setup(
         looks.push([standing, stance("crouch_aim_carbine")]);
     }
     commands.insert_resource(OtherPlayers { looks });
+
+    // Grenade world models and effect materials.
+    let mut grenade_parts = Vec::new();
+    for name in ["w_hegrenade", "w_flashbang", "w_smokegrenade"] {
+        let parts = goldsrc::mdl::Model::load(root.join(format!("cstrike/models/{name}.mdl")))
+            .map(|m| model_parts(&m, 0, &mut meshes, &mut materials, &mut images))
+            .unwrap_or_default();
+        grenade_parts.push(parts);
+    }
+    commands.insert_resource(Effects {
+        grenades: grenade_parts,
+        sphere: meshes.add(Sphere::new(1.0)),
+        // Double-sided: you can stand inside a smoke cloud.
+        smoke_puff: materials.add(StandardMaterial { base_color: Color::srgba(0.55, 0.55, 0.55, 0.85), unlit: true, alpha_mode: AlphaMode::Blend, cull_mode: None, double_sided: true, ..default() }),
+    });
+    // Full-screen white for flashbangs (invisible until flashed).
+    commands.spawn((
+        FlashOverlay,
+        Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), ..default() },
+        BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.0)),
+        GlobalZIndex(10),
+    ));
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection {
@@ -286,6 +321,164 @@ struct Walker {
     tracers: Vec<([f32; 3], [f32; 3], f32)>,
     /// Kill feed lines and seconds left.
     feed: Vec<(String, f32)>,
+    /// Events for `grenade_effects` (explosions, flashes).
+    pending_fx: Vec<net::protocol::GameEvent>,
+    /// Flashbang: seconds of full white left, seconds of fade left (and total), strength.
+    flash_hold: f32,
+    flash_fade: f32,
+    flash_total_fade: f32,
+    flash_alpha: f32,
+}
+
+/// Meshes and materials for one posed studio model.
+fn model_parts(
+    model: &goldsrc::mdl::Model,
+    seq: usize,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    images: &mut Assets<Image>,
+) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
+    let textures: Vec<Handle<StandardMaterial>> = model
+        .textures()
+        .into_iter()
+        .map(|t| {
+            let image = images.add(rgba_image(t.width, t.height, t.rgba, false, TextureFormat::Rgba8UnormSrgb));
+            materials.add(StandardMaterial { base_color_texture: Some(image), unlit: true, alpha_mode: AlphaMode::Mask(0.5), ..default() })
+        })
+        .collect();
+    model
+        .posed_mesh(&model.pose(seq, 0, 0.5))
+        .into_iter()
+        .filter(|p| !p.indices.is_empty())
+        .map(|p| {
+            let positions: Vec<[f32; 3]> = p.positions.iter().map(|v| map::to_y_up(*v)).collect();
+            let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+                .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+                .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
+                .with_inserted_indices(Indices::U32(p.indices))
+                .with_computed_normals();
+            (meshes.add(mesh), textures.get(p.texture).cloned().unwrap_or_default())
+        })
+        .collect()
+}
+
+#[derive(Resource)]
+struct Effects {
+    /// HE, flash, smoke world models.
+    grenades: Vec<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>>,
+    sphere: Handle<Mesh>,
+    smoke_puff: Handle<StandardMaterial>,
+}
+
+#[derive(Component)]
+struct GrenadeView;
+
+/// An HE fireball: age in seconds.
+#[derive(Component)]
+struct Fireball(f32);
+
+/// A smoke cloud's puffs, keyed by where the cloud is.
+#[derive(Component)]
+struct SmokeCloud([i32; 3]);
+
+#[derive(Component)]
+struct FlashOverlay;
+
+/// Grenades in flight, fireballs, smoke clouds, and the flashbang white-out.
+#[allow(clippy::too_many_arguments)]
+fn grenade_effects(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut w: ResMut<Walker>,
+    fx: Res<Effects>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    views: Query<Entity, With<GrenadeView>>,
+    mut fireballs: Query<(Entity, &mut Fireball, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
+    clouds: Query<(Entity, &SmokeCloud)>,
+    mut overlay: Single<&mut BackgroundColor, With<FlashOverlay>>,
+) {
+    let dt = time.delta_secs();
+    // Grenades in flight: few enough to redraw from scratch every frame.
+    for e in &views {
+        commands.entity(e).despawn();
+    }
+    for (kind, at) in w.client.grenades.clone() {
+        let i = match kind {
+            sim::grenades::Kind::He => 0,
+            sim::grenades::Kind::Flash => 1,
+            sim::grenades::Kind::Smoke => 2,
+        };
+        let parent = commands.spawn((GrenadeView, Transform::from_translation(Vec3::from(map::to_y_up(at))), Visibility::default())).id();
+        for (mesh, mat) in &fx.grenades[i] {
+            let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(mat.clone()))).id();
+            commands.entity(parent).add_child(child);
+        }
+    }
+    // Explosions and flashes from server events (handled here, the rest in `effects`).
+    let me = w.client.id();
+    for e in std::mem::take(&mut w.pending_fx) {
+        match e {
+            net::protocol::GameEvent::Explosion { at } => {
+                let mat = materials.add(StandardMaterial { base_color: Color::srgba(1.0, 0.6, 0.15, 0.9), unlit: true, alpha_mode: AlphaMode::Blend, ..default() });
+                commands.spawn((Fireball(0.0), Mesh3d(fx.sphere.clone()), MeshMaterial3d(mat), Transform::from_translation(Vec3::from(map::to_y_up(at))).with_scale(Vec3::splat(20.0))));
+            }
+            net::protocol::GameEvent::Flash { blinded, .. } => {
+                if let Some((_, b)) = blinded.iter().find(|(id, _)| Some(*id) == me) {
+                    // A new flash never shortens one that's still on (simplified "max" rule).
+                    w.flash_hold = w.flash_hold.max(b.hold);
+                    w.flash_fade = w.flash_fade.max(b.fade);
+                    w.flash_alpha = w.flash_alpha.max(b.alpha as f32 / 255.0);
+                    w.flash_total_fade = w.flash_fade;
+                }
+            }
+            _ => {}
+        }
+    }
+    for (e, mut f, mut tf, mat) in &mut fireballs {
+        f.0 += dt;
+        let t = f.0 / 0.35;
+        tf.scale = Vec3::splat(20.0 + 130.0 * t.min(1.0));
+        if let Some(mut m) = materials.get_mut(&mat.0) {
+            m.base_color.set_alpha(0.9 * (1.0 - t).max(0.0));
+        }
+        if t >= 1.0 {
+            commands.entity(e).despawn();
+        }
+    }
+    // Flashbang white-out: full for `hold` seconds, then fades out over `fade`.
+    let a = if w.flash_hold > 0.0 {
+        w.flash_hold -= dt;
+        w.flash_alpha
+    } else if w.flash_fade > 0.0 {
+        w.flash_fade -= dt;
+        w.flash_alpha * (w.flash_fade / w.flash_total_fade.max(0.01)).max(0.0)
+    } else {
+        w.flash_alpha = 0.0;
+        0.0
+    };
+    overlay.0 = Color::srgba(1.0, 1.0, 1.0, a);
+    // Smoke clouds: a cluster of grey puffs, thinning out in the last 3 seconds.
+    let key = |at: [f32; 3]| at.map(|v| v.round() as i32);
+    let live: Vec<_> = w.client.smokes.iter().map(|s| (key(s.at), *s)).collect();
+    for (e, c) in &clouds {
+        if !live.iter().any(|(k, _)| *k == c.0) {
+            commands.entity(e).despawn();
+        }
+    }
+    for (k, smoke) in &live {
+        if clouds.iter().any(|(_, c)| c.0 == *k) {
+            continue;
+        }
+        let centre = Vec3::from(map::to_y_up(smoke.at));
+        let parent = commands.spawn((SmokeCloud(*k), Transform::from_translation(centre), Visibility::default())).id();
+        for i in 0..14 {
+            let a = i as f32 * 2.4;
+            let r = 30.0 + (i % 4) as f32 * 22.0;
+            let offset = Vec3::new(a.cos() * r, 20.0 + (i % 3) as f32 * 35.0, a.sin() * r);
+            let child = commands.spawn((Mesh3d(fx.sphere.clone()), MeshMaterial3d(fx.smoke_puff.clone()), Transform::from_translation(offset).with_scale(Vec3::splat(70.0)))).id();
+            commands.entity(parent).add_child(child);
+        }
+    }
 }
 
 /// Player model meshes: [look][standing, crouched] -> parts.
@@ -359,6 +552,9 @@ fn mouse_look(
 fn walk(keys: Res<ButtonInput<KeyCode>>, mouse: Res<ButtonInput<MouseButton>>, cursor: Single<&CursorOptions>, cam: Single<&FlyCam>, mut w: ResMut<Walker>) {
     // Mouse buttons only count while the mouse is captured (the first click just captures it).
     let captured = cursor.grab_mode != CursorGrabMode::None;
+    // Automated screenshot runs ignore the keyboard too (the window may pop up while you type).
+    let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
+    let keys = if auto { &ButtonInput::<KeyCode>::default() } else { &*keys };
     let slot_keys = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5];
     let slot = slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0);
     // Several ticks can run per frame: send a slot press once.
@@ -410,8 +606,8 @@ fn move_camera(
         if let Some(o) = w.client.others().into_iter().find(|o| o.alive) {
             let eye = [o.origin[0], o.origin[1], o.origin[2] + 20.0];
             let (s, c) = o.yaw.to_radians().sin_cos();
-            // Prefer a view of their front; fall back to behind. Never put the camera in a wall.
-            let spot = [1.0f32, -1.0]
+            // Chase view from behind (like CS); in front if there's no room. Never in a wall.
+            let spot = [-1.0f32, 1.0]
                 .iter()
                 .map(|side| {
                     let want = [eye[0] + c * 100.0 * side, eye[1] + s * 100.0 * side, eye[2] + 10.0];
@@ -472,6 +668,7 @@ fn effects(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos) {
                 };
                 w.feed.push((line, 6.0));
             }
+            e @ (net::protocol::GameEvent::Explosion { .. } | net::protocol::GameEvent::Flash { .. }) => w.pending_fx.push(e),
             _ => {}
         }
     }
@@ -496,8 +693,10 @@ fn hud(w: Res<Walker>, mut status: Single<&mut Text, (With<HudStatus>, Without<H
     let l = &w.client.state.loadout;
     let weapon = sim::weapons::def(l.active_id()).name;
     let ammo = l.active_gun().map(|g| format!("{} / {}", g.clip, g.reserve)).unwrap_or_default();
+    let [he, fl, sm] = l.grenades;
+    let nades = if he + fl + sm > 0 { format!("      HE {he}  flash {fl}  smoke {sm}") } else { String::new() };
     status.0 = if v.alive() {
-        format!("+ {:.0}   armor {:.0}{}      {weapon}  {ammo}", v.health, v.armor, if v.helmet { " (helmet)" } else { "" })
+        format!("+ {:.0}   armor {:.0}{}      {weapon}  {ammo}{nades}", v.health, v.armor, if v.helmet { " (helmet)" } else { "" })
     } else {
         "dead - respawning".into()
     };
@@ -510,7 +709,8 @@ fn grab_cursor(
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
 ) {
-    if mouse.just_pressed(MouseButton::Left) {
+    // Automated screenshot runs never take the user's mouse.
+    if mouse.just_pressed(MouseButton::Left) && std::env::var_os("BOOTLEG16_SCREENSHOT").is_none() {
         cursor.grab_mode = CursorGrabMode::Locked;
         cursor.visible = false;
     }
@@ -520,15 +720,21 @@ fn grab_cursor(
     }
 }
 
-/// With BOOTLEG16_SCREENSHOT set: save frame 120 to that path, then quit.
-fn screenshot(mut commands: Commands, mut frame: Local<u32>, mut exit: MessageWriter<AppExit>) {
+/// With BOOTLEG16_SCREENSHOT set: save a frame to that path after ~2 s (or
+/// BOOTLEG16_SCREENSHOT_AT seconds), then quit.
+fn screenshot(mut commands: Commands, time: Res<Time>, mut taken: Local<Option<f32>>, mut exit: MessageWriter<AppExit>) {
     let Some(path) = std::env::var_os("BOOTLEG16_SCREENSHOT") else { return };
-    *frame += 1;
-    if *frame == 120 {
-        commands.spawn(Screenshot::primary_window()).observe(save_to_disk(PathBuf::from(path)));
-    }
-    if *frame == 180 {
-        exit.write(AppExit::Success);
+    let at: f32 = std::env::var("BOOTLEG16_SCREENSHOT_AT").ok().and_then(|f| f.parse().ok()).unwrap_or(2.0);
+    let now = time.elapsed_secs();
+    match *taken {
+        None if now >= at => {
+            commands.spawn(Screenshot::primary_window()).observe(save_to_disk(PathBuf::from(path)));
+            *taken = Some(now);
+        }
+        Some(t) if now >= t + 1.0 => {
+            exit.write(AppExit::Success);
+        }
+        _ => {}
     }
 }
 

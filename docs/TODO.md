@@ -14,7 +14,13 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Lag compensation; client predicts its own weapons (ammo/recoil) on the command clock
 - [x] Knife slash/stab with backstab
 - [x] HUD (health/armor/ammo/weapon), crosshair, tracers, kill feed
-- [ ] Grenades: HE (damage 100, radius 350), flash (radius 1500, facing rules), smoke (~21 s), bounce physics
+- [x] Grenades: throw formula, GoldSrc bounce physics, 1.5 s fuse; HE (100 dmg, 350 radius,
+      armor 1x), flash (1500 radius, line of sight, facing rules), smoke (21 s, pops on the ground)
+- [x] Grenade models in flight, HE fireball, flash white-out, smoke cloud, HUD counts
+- [ ] Smoke looks like a solid grey blob: use CS-style soft sprite puffs; smoke should also hide
+      players from the server's visibility checks (anti-wallhack)
+- [ ] Flash "already flashed" combine rule (simplified to max); HE water rule; grenade bounce sounds
+- [ ] ⚠ Flash white-out and HE fireball not yet checked on screen (only the smoke was)
 - [ ] Hit flinch/slow-down (`velocity_modifier`) and victim view punch on hit
 - [ ] Knife: GoldSrc hull sweep and 8-corner search (approximated by 5 rays now)
 - [ ] Shield
