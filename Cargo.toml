@@ -4,6 +4,6 @@ resolver = "2"
 
 # Bevy is unusably slow unoptimized; keep our own code fast to rebuild.
 [profile.dev]
-opt-level = 1
+opt-level = 3
 [profile.dev.package."*"]
 opt-level = 3

@@ -5,7 +5,7 @@ use crate::game::{Frame, Walker};
 use crate::menu::AppState;
 use crate::{map, models};
 use bevy::prelude::*;
-use goldsrc::mdl::BoneTransform;
+use bevy::mesh::skinning::SkinnedMeshInverseBindposes;
 use net::protocol::Team;
 use sim::hitbox::HitGroup;
 use sim::weapons::Id;
@@ -94,8 +94,9 @@ struct OtherPlayer {
     id: u8,
     look: usize,
     weapon: Id,
-    body: Vec<Handle<Mesh>>,
-    gun: Vec<(Entity, Handle<Mesh>)>,
+    body: Vec<Entity>,
+    /// The p_ model in their hand and its bones (it borrows the body's pose by bone name).
+    gun: Option<(Arc<models::Loaded>, models::SpawnedSkin)>,
     gait_frame: f32,
     last_origin: [f32; 3],
     speed: f32,
@@ -108,7 +109,7 @@ struct OtherPlayer {
 #[derive(Component)]
 struct Corpse {
     look: usize,
-    body: Vec<Handle<Mesh>>,
+    body: Vec<Entity>,
     seq: usize,
     started: f32,
     done: bool,
@@ -148,8 +149,10 @@ fn anim_events(
                 look.dying.insert(id);
                 let Some((e, p)) = live.iter().find(|(_, p)| p.id == id) else { continue };
                 // The corpse keeps the body; the gun drops (the server puts it on the ground).
-                for (g, _) in &p.gun {
-                    commands.entity(*g).despawn();
+                if let Some((_, g)) = &p.gun {
+                    for e in g.joints.iter().chain(&g.parts) {
+                        commands.entity(*e).despawn();
+                    }
                 }
                 let model = &look.looks[p.look].model;
                 let name = match look.last_hit.get(&id) {
@@ -189,6 +192,7 @@ fn draw_others(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut bindposes: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     drawn: Query<(Entity, &OtherPlayer)>,
 ) {
     let all = w.client.others();
@@ -205,46 +209,24 @@ fn draw_others(
             continue;
         }
         let body = look.looks[*li].clone();
-        let pose = body.model.pose(0, 0, 0.5);
         let parent = commands.spawn((place(o), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
-        let mut handles = Vec::new();
-        for (mesh, material) in models::static_parts(&body, &pose, &mut meshes) {
-            let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
-            commands.entity(parent).add_child(child);
-            handles.push(mesh);
-        }
-        let mut gun = Vec::new();
-        if let Some(wm) = cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials) {
-            for (mesh, material) in models::static_parts(&wm, &wm.model.borrow_pose(&body.model, &pose), &mut meshes) {
-                let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material))).id();
-                commands.entity(parent).add_child(child);
-                gun.push((child, mesh));
-            }
-        }
-        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: handles, gun, gait_frame: 0.0, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None });
+        let joints = body.spawn_skinned(&mut commands, parent, &mut meshes, &mut bindposes).joints;
+        let gun = cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials).map(|wm| {
+            let s = wm.spawn_skinned(&mut commands, parent, &mut meshes, &mut bindposes);
+            (wm, s)
+        });
+        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, gait_frame: 0.0, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None });
     }
 }
 
-/// Write a posed model into existing meshes (same parts, new vertex positions).
-fn repose(model: &goldsrc::mdl::Model, pose: &[BoneTransform], handles: impl Iterator<Item = Handle<Mesh>>, meshes: &mut Assets<Mesh>) {
-    let parts = model.posed_mesh(pose);
-    for (part, h) in parts.iter().filter(|p| !p.indices.is_empty()).zip(handles) {
-        if let Some(mut m) = meshes.get_mut(&h) {
-            *m = models::part_mesh(part, map::to_y_up, false);
-        }
-    }
-}
-
+/// Pose every player's (and corpse's) bones for this frame; the GPU does the rest.
 fn animate(
     w: Res<Walker>,
     look: Res<OtherPlayers>,
-    mut cache: ResMut<models::ModelCache>,
-    mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
     time: Res<Time>,
-    mut live: Query<(&mut OtherPlayer, &mut Transform), Without<Corpse>>,
+    mut live: Query<(&mut OtherPlayer, &mut Transform), (Without<Corpse>, Without<ChildOf>)>,
     mut corpses: Query<&mut Corpse>,
+    mut bones: Query<&mut Transform, With<ChildOf>>,
 ) {
     let (now, dt) = (time.elapsed_secs(), time.delta_secs().max(1e-4));
     let others = w.client.others();
@@ -286,9 +268,9 @@ fn animate(
         // Aim pitch picks the blend (9 sets from looking up to looking down; GoldSrc pitch is down-positive).
         let blend = 0.5 + o.pitch.clamp(-90.0, 90.0) / 180.0;
         let pose = model.player_pose((gait, p.gait_frame), upper, blend);
-        repose(model, &pose, p.body.iter().cloned(), &mut meshes);
-        if let Some(wm) = cache.get(&models::weapon_model("p", p.weapon), &mut images, &mut materials) {
-            repose(&wm.model, &wm.model.borrow_pose(model, &pose), p.gun.iter().map(|(_, h)| h.clone()), &mut meshes);
+        models::set_pose(&p.body, &pose, &mut bones);
+        if let Some((wm, g)) = &p.gun {
+            models::set_pose(&g.joints, &wm.model.borrow_pose(model, &pose), &mut bones);
         }
     }
     for mut c in &mut corpses {
@@ -299,7 +281,6 @@ fn animate(
         let sq = &model.sequences[c.seq];
         let frame = (now - c.started) * sq.fps;
         c.done = frame >= sq.frames as f32 - 1.0;
-        let pose = model.pose_at(c.seq, frame, 0.5);
-        repose(model, &pose, c.body.iter().cloned(), &mut meshes);
+        models::set_pose(&c.body, &model.pose_at(c.seq, frame, 0.5), &mut bones);
     }
 }

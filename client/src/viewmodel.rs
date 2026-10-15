@@ -58,9 +58,12 @@ pub fn attach(commands: &mut Commands, cam: Entity) {
         .spawn((
             ViewModelCamera,
             Camera3d::default(),
+            Msaa::Off,
+            bevy::light::cluster::ClusterConfig::Single,
             Camera { order: 1, clear_color: ClearColorConfig::None, ..default() },
             Projection::Perspective(PerspectiveProjection { fov: 2.0 * (45f32.to_radians().tan() * 0.75).atan(), near: 1.0, far: 200.0, ..default() }),
             bevy::core_pipeline::tonemapping::Tonemapping::None,
+            bevy::core_pipeline::tonemapping::DebandDither::Disabled,
             RenderLayers::layer(LAYER),
             Transform::default(),
         ))

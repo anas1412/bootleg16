@@ -23,6 +23,8 @@ pub enum UiAction {
     Connect,
     Sensitivity(f32),
     Volume(f32),
+    FpsMax(i32),
+    ToggleVsync,
     Quit,
     Resume,
     Leave,

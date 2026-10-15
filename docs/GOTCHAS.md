@@ -116,3 +116,18 @@ something surprises you.
 - Player aim blend: 0.5 + pitch/180 with GoldSrc pitch (down positive) — checked: -60 points the gun up.
 - Death events arrive before the interpolated snapshot shows the player dead (4 ticks later):
   keep a "dying" set or the live model is redrawn on top of the corpse.
+
+## Performance (2026-10-15)
+- Server input queue: the speed-hack budget only allows real time, so a burst of inputs after a client
+  hitch (map load) became a permanent backlog = ~120 ms of fake ping. Backlogs that last 1/4 s are dropped.
+- KDE Wayland: `PresentMode::AutoNoVsync` still ran at 60; `Mailbox` runs free without tearing.
+  FPS readings also drop to 60 whenever KWin throttles an unfocused/occluded test window — don't trust those.
+- `Model::posed_mesh` used to decode every texture to RGBA per call (just for UV sizes): huge per-frame cost.
+- Animating by rebuilding meshes re-uploads them every frame (`allocate_and_free_meshes` was the top render
+  system). Players are GPU-skinned now: vertices in bone space (`Model::bind_mesh`), identity inverse binds,
+  one joint entity per bone; bounds come from the bind pose, so skinned parts get `NoFrustumCulling`.
+- `ClusterConfig::None` breaks Bevy 0.20 GPU clustering (zero-size texture errors); use `Single`.
+- Profiling: `cargo build -p client --features profile` (bevy trace_chrome) into `CARGO_TARGET_DIR=target-prof`
+  (a full separate Bevy build, ~45 min at -j 2); the trace JSON is ~1 GB for 10 s. gdb can't attach to a running
+  process (ptrace_scope 1): run it under gdb instead.
+- Dev profile now builds our crates at opt-level 3 too (opt 1 cost a lot of fps); rebuilds ~3 min.

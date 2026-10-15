@@ -124,8 +124,13 @@ fn ground_guns(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut parts: Local<std::collections::HashMap<sim::weapons::Id, Parts>>,
+    mut shown: Local<Vec<(sim::weapons::Id, [f32; 3])>>,
     views: Query<Entity, With<GroundGunView>>,
 ) {
+    if *shown == w.client.ground {
+        return;
+    }
+    *shown = w.client.ground.clone();
     for e in &views {
         commands.entity(e).despawn();
     }
@@ -164,7 +169,7 @@ fn grenade_effects(
     mut overlay: Single<&mut BackgroundColor, With<FlashOverlay>>,
 ) {
     let dt = time.delta_secs();
-    // Grenades in flight: few enough to redraw from scratch every frame.
+    // Grenades in flight: few enough to redraw from scratch every frame they exist.
     for e in &views {
         commands.entity(e).despawn();
     }
@@ -224,7 +229,7 @@ fn grenade_effects(
         flash.alpha = 0.0;
         0.0
     };
-    overlay.0 = Color::srgba(1.0, 1.0, 1.0, a);
+    overlay.set_if_neq(BackgroundColor(Color::srgba(1.0, 1.0, 1.0, a)));
     // Smoke clouds: a cluster of grey puffs.
     let key = |at: [f32; 3]| at.map(|v| v.round() as i32);
     let live: Vec<_> = w.client.smokes.iter().map(|s| (key(s.at), *s)).collect();

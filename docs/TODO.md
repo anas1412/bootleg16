@@ -63,7 +63,9 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Scoreboard by team, clickable buy panel with prices (free in practice), team select (M, 1/2/5/6)
 - [x] Main menu: practice (map, dummies, strafe), join server, settings (name, sensitivity, volume); Esc menu
 - [ ] HUD: money, round timer, team score (with the round system)
+- [x] FPS + ping counter (top left); Max FPS and VSync settings
 - [ ] Settings: FOV, key binds, crosshair style
+- [ ] Viewmodel: GPU skinning like players (still rebuilds its mesh each frame); try drawing it without a second camera
 - [x] Spawn view angle from the spawn point
 
 ### Networking (`docs/NETWORKING.md`)

@@ -315,6 +315,8 @@ pub struct MeshPart {
     pub positions: Vec<Vec3>,
     pub uvs: Vec<[f32; 2]>,
     pub indices: Vec<u32>,
+    /// The bone each vertex follows (GoldSrc vertices have exactly one).
+    pub bones: Vec<u16>,
 }
 
 /// A model texture decoded to RGBA8.
@@ -355,11 +357,20 @@ impl Model {
             .collect()
     }
 
+    /// The mesh with every vertex in its own bone's space, for GPU skinning: draw it with
+    /// each bone's model-space transform (see `MeshPart::bones`).
+    pub fn bind_mesh(&self) -> Vec<MeshPart> {
+        let identity = BoneTransform { rot: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], pos: [0.0; 3] };
+        self.posed_mesh(&vec![identity; self.bones.len()])
+    }
+
     /// Triangles of the first sub-model of every body part, posed (model space).
     pub fn posed_mesh(&self, pose: &[BoneTransform]) -> Vec<MeshPart> {
         let i16_at = |o: usize| self.data.get(o..o + 2).map(|b| i16::from_le_bytes([b[0], b[1]])).unwrap_or(0);
         let f32_at = |o: usize| self.data.get(o..o + 4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).unwrap_or(0.0);
-        let textures = self.textures();
+        // Only the sizes are needed (UVs are in texels); decoding the pixels here cost a lot per frame.
+        let (tex_count, tex_index) = (self.header_i32(180), self.header_i32(184));
+        let tex_size = |t: usize| if t < tex_count { (self.header_i32(tex_index + t * 80 + 68) as f32, self.header_i32(tex_index + t * 80 + 72) as f32) } else { (1.0, 1.0) };
         let (num_skinref, skin_index) = (self.header_i32(192), self.header_i32(200));
         let skin = |r: usize| if r < num_skinref { i16_at(skin_index + r * 2).max(0) as usize } else { r };
         let (num_parts, part_index) = (self.header_i32(204), self.header_i32(208));
@@ -368,9 +379,10 @@ impl Model {
             let model = self.header_i32(part_index + p * 76 + 72); // first sub-model of this body part
             let (num_mesh, mesh_index) = (self.header_i32(model + 72), self.header_i32(model + 76));
             let (num_verts, vert_info, vert_index) = (self.header_i32(model + 80), self.header_i32(model + 84), self.header_i32(model + 88));
+            let vert_bone = |v: usize| self.data.get(vert_info + v).copied().unwrap_or(0) as u16;
             let verts: Vec<Vec3> = (0..num_verts)
                 .map(|v| {
-                    let bone = self.data.get(vert_info + v).copied().unwrap_or(0) as usize;
+                    let bone = vert_bone(v) as usize;
                     let o = vert_index + v * 12;
                     let local = [f32_at(o), f32_at(o + 4), f32_at(o + 8)];
                     pose.get(bone).map(|t| t.apply(local)).unwrap_or(local)
@@ -379,7 +391,7 @@ impl Model {
             for m in 0..num_mesh {
                 let mo = mesh_index + m * 20;
                 let tex = skin(self.header_i32(mo + 8));
-                let (tw, th) = textures.get(tex).map(|t| (t.width as f32, t.height as f32)).unwrap_or((1.0, 1.0));
+                let (tw, th) = tex_size(tex);
                 let mut part = MeshPart { texture: tex, ..Default::default() };
                 // Triangle commands: count (>0 strip, <0 fan, 0 end), then (vert, norm, s, t) per vertex.
                 let mut c = self.header_i32(mo + 4);
@@ -395,6 +407,7 @@ impl Model {
                         let o = c + k * 8;
                         let v = (i16_at(o).max(0) as usize).min(verts.len().saturating_sub(1));
                         part.positions.push(verts.get(v).copied().unwrap_or([0.0; 3]));
+                        part.bones.push(vert_bone(v));
                         part.uvs.push([i16_at(o + 4) as f32 / tw, i16_at(o + 6) as f32 / th]);
                     }
                     let count = n.unsigned_abs();

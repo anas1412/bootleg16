@@ -12,6 +12,7 @@
 //! `BOOTLEG16_SPECTATE=front` watches them from the front.
 mod buy;
 mod effects;
+mod framerate;
 mod game;
 mod hud;
 mod impacts;
@@ -56,6 +57,7 @@ fn main() {
         .init_state::<menu::AppState>()
         .add_plugins((
             menu::MenuPlugin,
+            framerate::FrameratePlugin,
             game::GamePlugin,
             level::LevelPlugin,
             players::PlayersPlugin,

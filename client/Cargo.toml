@@ -8,3 +8,7 @@ goldsrc = { path = "../goldsrc" }
 sim = { path = "../sim" }
 net = { path = "../net" }
 bevy = { version = "0.20", features = ["wav"] }
+
+[features]
+# Per-system timings: `cargo build -p client --features profile`, run, open trace-*.json in ui.perfetto.dev.
+profile = ["bevy/trace_chrome"]

@@ -19,6 +19,11 @@ use std::time::{Duration, Instant};
 /// Inputs a client may bank while its packets are delayed. Anything sent faster
 /// than real time beyond this is thrown away, which stops speed hacks.
 const MAX_INPUT_BUDGET: f32 = 16.0;
+/// Inputs left waiting after a tick that count as a backlog, and how many ticks in a row a
+/// backlog may last before the oldest are dropped (else a burst after a client hitch, e.g.
+/// loading the map, turns into permanent input lag: the budget only allows real time).
+const BACKLOG_INPUTS: usize = 4;
+const BACKLOG_TICKS: u32 = TICK_RATE / 4;
 
 /// How a server runs the game until the round system exists.
 #[derive(Clone, Debug)]
@@ -105,6 +110,8 @@ struct Remote {
     /// Highest input number actually run.
     last_run: u32,
     budget: f32,
+    /// Ticks in a row that ended with a backlog of inputs.
+    backlog: u32,
     last_heard: u32,
     use_held: bool,
     /// +use pressed during this tick (for doors).
@@ -382,6 +389,14 @@ impl Server {
                 if !fired.shots.is_empty() || fired.swing.is_some() || fired.throw.is_some() {
                     pending.push(Pending { shooter: c.id, eye: c.state.movement.eye(), yaw: input.yaw, velocity: c.state.movement.velocity, fired, view_tick });
                 }
+            }
+            c.backlog = if c.queue.len() > BACKLOG_INPUTS { c.backlog + 1 } else { 0 };
+            if c.backlog > BACKLOG_TICKS {
+                // Stale movement: skip it (the client's prediction corrects once).
+                while c.queue.len() > 1 {
+                    c.queue.pop_front();
+                }
+                c.backlog = 0;
             }
             if c.vitals.alive() {
                 actors.push(actor(&c.state.movement, c.view, c.used));
@@ -764,6 +779,7 @@ impl Remote {
             last_queued: 0,
             last_run: 0,
             budget: 0.0,
+            backlog: 0,
             last_heard: tick,
             use_held: false,
             used: false,

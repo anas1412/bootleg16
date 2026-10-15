@@ -35,11 +35,14 @@ pub struct Settings {
     /// Mouse sensitivity, as in CS (× 0.022° per mouse count).
     pub sensitivity: f32,
     pub volume: f32,
+    /// Frame rate cap (0 = none), like CS's fps_max.
+    pub fps_max: u32,
+    pub vsync: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8 }
+        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false }
     }
 }
 
@@ -56,6 +59,8 @@ impl Settings {
                     Some(("name", v)) => s.name = v.trim().to_string(),
                     Some(("sensitivity", v)) => s.sensitivity = v.trim().parse().unwrap_or(s.sensitivity),
                     Some(("volume", v)) => s.volume = v.trim().parse().unwrap_or(s.volume),
+                    Some(("fps_max", v)) => s.fps_max = v.trim().parse().unwrap_or(s.fps_max),
+                    Some(("vsync", v)) => s.vsync = v.trim() == "true",
                     _ => {}
                 }
             }
@@ -66,7 +71,7 @@ impl Settings {
     fn save(&self) {
         let p = settings_path();
         let _ = std::fs::create_dir_all(p.parent().unwrap());
-        let _ = std::fs::write(p, format!("name={}\nsensitivity={}\nvolume={}\n", self.name, self.sensitivity, self.volume));
+        let _ = std::fs::write(p, format!("name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\n", self.name, self.sensitivity, self.volume, self.fps_max, self.vsync));
     }
 }
 
@@ -267,6 +272,9 @@ fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res
                         p.spawn(text(format!("Name: {}_   (type to change)", settings.name), 18.0, MUTED));
                         setting_row(p, &format!("Mouse sensitivity: {:.1}", settings.sensitivity), UiAction::Sensitivity(-0.1), UiAction::Sensitivity(0.1));
                         setting_row(p, &format!("Volume: {:.0}%", settings.volume * 100.0), UiAction::Volume(-0.05), UiAction::Volume(0.05));
+                        let cap = if settings.fps_max == 0 { "unlimited".to_string() } else { settings.fps_max.to_string() };
+                        setting_row(p, &format!("Max FPS: {cap}"), UiAction::FpsMax(-1), UiAction::FpsMax(1));
+                        button(p, if settings.vsync { "VSync: on" } else { "VSync: off" }, UiAction::ToggleVsync, settings.vsync);
                     });
                 }
             });
@@ -343,6 +351,17 @@ fn menu_actions(
             }
             UiAction::Volume(d) => {
                 settings.volume = (settings.volume + d).clamp(0.0, 1.0);
+                settings.save();
+            }
+            UiAction::FpsMax(step) => {
+                // Steps like CS players use; 0 (unlimited) last.
+                const CAPS: [u32; 8] = [60, 100, 144, 200, 240, 300, 500, 0];
+                let i = CAPS.iter().position(|c| *c == settings.fps_max).unwrap_or(5) as i32;
+                settings.fps_max = CAPS[(i + step).clamp(0, CAPS.len() as i32 - 1) as usize];
+                settings.save();
+            }
+            UiAction::ToggleVsync => {
+                settings.vsync = !settings.vsync;
                 settings.save();
             }
             UiAction::Quit => {

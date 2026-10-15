@@ -93,6 +93,9 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res
     let cam = commands
         .spawn((
             Camera3d::default(),
+            Msaa::Off, // CS 1.6 look (no anti-aliasing), and cheaper
+            // No dynamic lights (all baked in lightmaps): one cluster (None breaks Bevy 0.20 GPU clustering).
+            bevy::light::cluster::ClusterConfig::Single,
             Projection::Perspective(PerspectiveProjection {
                 fov: 73.74_f32.to_radians(), // vertical FOV matching 90° horizontal at 4:3
                 near: 4.0,
@@ -102,6 +105,7 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res
             // Exposure of 1.0, so lightmap values map straight to screen brightness.
             bevy::camera::Exposure { ev100: -(1.2_f32.log2()) },
             Tonemapping::None,
+            bevy::core_pipeline::tonemapping::DebandDither::Disabled,
             Transform::default(),
             FlyCam { yaw: 0.0, pitch: 0.0 },
             SpatialListener::new(16.0),

@@ -75,6 +75,8 @@ pub struct Client {
     pub practice: bool,
     /// The server's map, once welcomed.
     pub map: Option<String>,
+    /// Round trip to the server in ms (smoothed): how long until it acknowledges an input.
+    pub ping_ms: f32,
 }
 
 impl Client {
@@ -104,6 +106,7 @@ impl Client {
             scores: Vec::new(),
             practice: false,
             map: None,
+            ping_ms: 0.0,
         })
     }
 
@@ -198,6 +201,9 @@ impl Client {
 
                 // Correct our prediction: take the server's state, replay what it hasn't run yet.
                 if let Some(mine) = players.iter().find(|p| p.id == id) {
+                    // Our last input went out at `seq`; the server had run up to `ack`.
+                    let sample = self.seq.saturating_sub(ack) as f32 * TICK * 1000.0;
+                    self.ping_ms = if self.ping_ms == 0.0 { sample } else { self.ping_ms * 0.9 + sample * 0.1 };
                     while self.history.front().is_some_and(|(s, _)| *s <= ack) {
                         self.history.pop_front();
                     }
