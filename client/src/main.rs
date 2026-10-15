@@ -1,7 +1,7 @@
 //! Map viewer: loads a GoldSrc map from the user's install and flies around it.
 //!
 //! Usage: `client [map]` (default de_dust2). The game directory comes from
-//! `CS16_DIR` (default: the Steam Half-Life install). Set `CS16_SCREENSHOT=path.png`
+//! `BOOTLEG16_DIR` (default: the Steam Half-Life install). Set `BOOTLEG16_SCREENSHOT=path.png`
 //! to save one frame and exit (used for automated checks).
 mod map;
 
@@ -27,7 +27,7 @@ use std::path::PathBuf;
 const LIGHTMAP_SCALE: f32 = 2.0;
 
 fn game_dir() -> PathBuf {
-    std::env::var_os("CS16_DIR").map(PathBuf::from).unwrap_or_else(|| {
+    std::env::var_os("BOOTLEG16_DIR").map(PathBuf::from).unwrap_or_else(|| {
         PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".steam/steam/steamapps/common/Half-Life")
     })
 }
@@ -35,7 +35,7 @@ fn game_dir() -> PathBuf {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window { title: "cs16-rust".into(), ..default() }),
+            primary_window: Some(Window { title: "bootleg1.6".into(), ..default() }),
             ..default()
         }))
         // GoldSrc lighting is fully baked into lightmaps; no extra ambient.
@@ -180,9 +180,9 @@ fn grab_cursor(
     }
 }
 
-/// With CS16_SCREENSHOT set: save frame 120 to that path, then quit.
+/// With BOOTLEG16_SCREENSHOT set: save frame 120 to that path, then quit.
 fn screenshot(mut commands: Commands, mut frame: Local<u32>, mut exit: MessageWriter<AppExit>) {
-    let Some(path) = std::env::var_os("CS16_SCREENSHOT") else { return };
+    let Some(path) = std::env::var_os("BOOTLEG16_SCREENSHOT") else { return };
     *frame += 1;
     if *frame == 120 {
         commands.spawn(Screenshot::primary_window()).observe(save_to_disk(PathBuf::from(path)));
