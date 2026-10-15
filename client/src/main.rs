@@ -1,4 +1,5 @@
-//! Map viewer: loads a GoldSrc map from the user's install and flies around it.
+//! Map viewer: loads a GoldSrc map from the user's install and walks around it
+//! with CS 1.6 movement (V toggles free flight).
 //!
 //! Usage: `client [map]` (default de_dust2). The game directory comes from
 //! `BOOTLEG16_DIR` (default: the Steam Half-Life install). Set `BOOTLEG16_SCREENSHOT=path.png`
@@ -41,8 +42,11 @@ fn main() {
         // GoldSrc lighting is fully baked into lightmaps; no extra ambient.
         .insert_resource(GlobalAmbientLight { brightness: 0.0, ..default() })
         .insert_resource(ClearColor(Color::srgb(0.45, 0.6, 0.8)))
+        // The movement simulation runs at a fixed 128 ticks per second, like the server will.
+        .insert_resource(Time::<Fixed>::from_hz(128.0))
         .add_systems(Startup, setup)
-        .add_systems(Update, (fly_camera, grab_cursor, screenshot))
+        .add_systems(FixedUpdate, walk)
+        .add_systems(Update, (mouse_look, move_camera, grab_cursor, screenshot).chain())
         .run();
 }
 
@@ -111,7 +115,10 @@ fn setup(
     }
 
     let (pos, yaw) = geo.spawns.first().copied().unwrap_or(([0.0; 3], 0.0));
-    let eye = Vec3::from(pos) + Vec3::Y * 28.0; // standing eye height above the spawn origin
+    let world = sim::collision::World::from_bsp(&goldsrc::bsp::Bsp::load(&path).expect("map loaded above"));
+    let player = sim::pmove::Player::new(map::from_y_up(pos));
+    let eye = Vec3::from(map::to_y_up(player.eye()));
+    commands.insert_resource(Walker { world, player, prev_eye: player.eye(), noclip: false });
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection {
@@ -134,19 +141,67 @@ struct FlyCam {
     pitch: f32,
 }
 
-fn fly_camera(
-    time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
-    motion: Res<AccumulatedMouseMotion>,
-    cursor: Single<&CursorOptions>,
-    mut cam: Single<(&mut Transform, &mut FlyCam)>,
-) {
+/// The local player, simulated with the same code the server will run.
+#[derive(Resource)]
+struct Walker {
+    world: sim::collision::World,
+    player: sim::pmove::Player,
+    /// Eye position at the previous tick, for smoothing between ticks.
+    prev_eye: [f32; 3],
+    /// V toggles free flying (no collision).
+    noclip: bool,
+}
+
+fn mouse_look(motion: Res<AccumulatedMouseMotion>, cursor: Single<&CursorOptions>, mut cam: Single<(&mut Transform, &mut FlyCam)>) {
     let (ref mut tf, ref mut fc) = *cam;
     if cursor.grab_mode != CursorGrabMode::None {
         fc.yaw -= motion.delta.x * 0.002;
         fc.pitch = (fc.pitch - motion.delta.y * 0.002).clamp(-1.55, 1.55);
     }
     tf.rotation = Quat::from_euler(EulerRot::YXZ, fc.yaw, fc.pitch, 0.0);
+}
+
+/// One simulation tick from the keyboard. WASD move, Space jump, Ctrl crouch.
+fn walk(keys: Res<ButtonInput<KeyCode>>, cam: Single<&FlyCam>, mut w: ResMut<Walker>) {
+    if w.noclip {
+        return;
+    }
+    let axis = |pos: KeyCode, neg: KeyCode| 400.0 * (keys.pressed(pos) as i32 - keys.pressed(neg) as i32) as f32;
+    let input = sim::pmove::Input {
+        forward: axis(KeyCode::KeyW, KeyCode::KeyS),
+        side: axis(KeyCode::KeyD, KeyCode::KeyA),
+        // Bevy yaw 0 looks down -Z, which is GoldSrc yaw 90.
+        yaw: cam.yaw.to_degrees() + 90.0,
+        jump: keys.pressed(KeyCode::Space),
+        crouch: keys.pressed(KeyCode::ControlLeft),
+    };
+    let w = &mut *w;
+    w.prev_eye = w.player.eye();
+    sim::pmove::step(&mut w.player, &input, 1.0 / 128.0, &w.world, &sim::pmove::MoveVars::default());
+}
+
+fn move_camera(
+    time: Res<Time>,
+    fixed: Res<Time<Fixed>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut w: ResMut<Walker>,
+    mut tf: Single<&mut Transform, With<FlyCam>>,
+) {
+    if keys.just_pressed(KeyCode::KeyV) {
+        w.noclip = !w.noclip;
+        if !w.noclip {
+            // Drop the player where the camera is.
+            let feet = map::from_y_up(tf.translation.into());
+            w.player = sim::pmove::Player::new([feet[0], feet[1], feet[2] - sim::pmove::VIEW_HEIGHT_STANDING]);
+            w.prev_eye = w.player.eye();
+        }
+    }
+    if !w.noclip {
+        let a = fixed.overstep_fraction();
+        let (p, c) = (Vec3::from(map::to_y_up(w.prev_eye)), Vec3::from(map::to_y_up(w.player.eye())));
+        tf.translation = p.lerp(c, a);
+        return;
+    }
     let mut dir = Vec3::ZERO;
     for (k, d) in [
         (KeyCode::KeyW, tf.forward().as_vec3()),
@@ -163,7 +218,6 @@ fn fly_camera(
     let speed = if keys.pressed(KeyCode::ShiftLeft) { 1200.0 } else { 400.0 };
     tf.translation += dir.normalize_or_zero() * speed * time.delta_secs();
 }
-
 /// Click to capture the mouse, Escape to release it.
 fn grab_cursor(
     mut cursor: Single<&mut CursorOptions>,

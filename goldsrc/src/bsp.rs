@@ -11,6 +11,7 @@ const L_VERTICES: usize = 3;
 const L_TEXINFO: usize = 6;
 const L_FACES: usize = 7;
 const L_LIGHTING: usize = 8;
+const L_CLIPNODES: usize = 9;
 const L_EDGES: usize = 12;
 const L_SURFEDGES: usize = 13;
 const L_MODELS: usize = 14;
@@ -79,6 +80,9 @@ pub struct MipTex {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Model {
+    /// Root node per collision hull: 0 = BSP nodes (point), 1 = standing player,
+    /// 2 = large monsters, 3 = crouched player. Hulls 1-3 index `Bsp::clipnodes`.
+    pub head_nodes: [i32; 4],
     pub mins: [f32; 3],
     pub maxs: [f32; 3],
     pub origin: [f32; 3],
@@ -99,6 +103,14 @@ pub struct Bsp {
     /// Raw RGB lightmap bytes, indexed by `Face::light_offset`.
     pub lighting: Vec<u8>,
     pub models: Vec<Model>,
+    pub clipnodes: Vec<ClipNode>,
+}
+
+/// Collision-hull BSP node. Negative children are leaf contents (-1 empty, -2 solid).
+#[derive(Debug, Clone, Copy)]
+pub struct ClipNode {
+    pub plane: u32,
+    pub children: [i16; 2],
 }
 
 struct Reader<'a> {
@@ -230,14 +242,18 @@ impl Bsp {
             }
         }
 
+        let mut r = lump(L_CLIPNODES, "clipnodes")?;
+        while r.more() {
+            let plane = r.u32()?;
+            bsp.clipnodes.push(ClipNode { plane, children: [r.u16()? as i16, r.u16()? as i16] });
+        }
+
         let mut r = lump(L_MODELS, "models")?;
         while r.more() {
             let (mins, maxs, origin) = (r.f32x3()?, r.f32x3()?, r.f32x3()?);
-            for _ in 0..4 {
-                r.i32()?; // hull head nodes
-            }
+            let head_nodes = [r.i32()?, r.i32()?, r.i32()?, r.i32()?];
             r.i32()?; // visleafs
-            bsp.models.push(Model { mins, maxs, origin, first_face: r.u32()?, num_faces: r.u32()? });
+            bsp.models.push(Model { head_nodes, mins, maxs, origin, first_face: r.u32()?, num_faces: r.u32()? });
         }
 
         Ok(bsp)

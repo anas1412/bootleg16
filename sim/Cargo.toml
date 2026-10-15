@@ -1,0 +1,9 @@
+[package]
+name = "sim"
+version = "0.1.0"
+edition = "2021"
+
+# Pure game simulation: no engine, no rendering, deterministic. The server and
+# client both run this.
+[dependencies]
+goldsrc = { path = "../goldsrc" }
