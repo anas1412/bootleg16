@@ -7,7 +7,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 5;
+pub const PROTOCOL_VERSION: u32 = 6;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -24,6 +24,8 @@ pub enum ClientMsg {
     Hello { version: u32, name: String },
     /// Inputs numbered `first_seq`, `first_seq + 1`, ...
     Inputs { first_seq: u32, inputs: Vec<TimedInput> },
+    /// Get a weapon (free while there's no economy; becomes the buy menu).
+    Buy { item: Id },
     Bye,
 }
 

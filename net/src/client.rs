@@ -250,6 +250,11 @@ impl Client {
         out
     }
 
+    /// Ask the server for a weapon (the buy menu).
+    pub fn buy(&mut self, item: sim::weapons::Id) {
+        self.socket.send(self.server, encode(&ClientMsg::Buy { item }));
+    }
+
     pub fn disconnect(&mut self) {
         self.socket.send(self.server, encode(&ClientMsg::Bye));
     }

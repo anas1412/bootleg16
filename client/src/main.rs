@@ -51,7 +51,7 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(128.0))
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, walk)
-        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, hud, grab_cursor, screenshot).chain())
+        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, grab_cursor, buy_menu, hud, screenshot).chain())
         .run();
 }
 
@@ -169,6 +169,7 @@ fn setup(
         slot_held: 0,
         tracers: Vec::new(),
         feed: Vec::new(),
+        menu: None,
         pending_fx: Vec::new(),
         flash_hold: 0.0,
         flash_fade: 0.0,
@@ -188,6 +189,13 @@ fn setup(
         TextFont { font_size: bevy::text::FontSize::Px(22.0), ..default() },
         TextColor(Color::srgb(1.0, 0.85, 0.3)),
         Node { position_type: PositionType::Absolute, left: px(16), bottom: px(12), ..default() },
+    ));
+    commands.spawn((
+        HudMenu,
+        Text::new(""),
+        TextFont { font_size: bevy::text::FontSize::Px(20.0), ..default() },
+        TextColor(Color::srgb(1.0, 0.85, 0.3)),
+        Node { position_type: PositionType::Absolute, left: px(24), top: percent(30), ..default() },
     ));
     commands.spawn((
         HudFeed,
@@ -321,6 +329,8 @@ struct Walker {
     tracers: Vec<([f32; 3], [f32; 3], f32)>,
     /// Kill feed lines and seconds left.
     feed: Vec<(String, f32)>,
+    /// Weapon menu: closed (None), open on categories (Some(None)) or a category.
+    menu: Option<Option<usize>>,
     /// Events for `grenade_effects` (explosions, flashes).
     pending_fx: Vec<net::protocol::GameEvent>,
     /// Flashbang: seconds of full white left, seconds of fade left (and total), strength.
@@ -556,7 +566,8 @@ fn walk(keys: Res<ButtonInput<KeyCode>>, mouse: Res<ButtonInput<MouseButton>>, c
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
     let keys = if auto { &ButtonInput::<KeyCode>::default() } else { &*keys };
     let slot_keys = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5];
-    let slot = slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0);
+    // While the weapon menu is open, number keys belong to the menu.
+    let slot = if w.menu.is_some() { 0 } else { slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0) };
     // Several ticks can run per frame: send a slot press once.
     let slot = if slot == w.slot_held { 0 } else { slot };
     w.slot_held = slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0);
@@ -648,6 +659,66 @@ fn move_camera(
     let speed = if keys.pressed(KeyCode::ShiftLeft) { 1200.0 } else { 400.0 };
     tf.translation += dir.normalize_or_zero() * speed * time.delta_secs();
 }
+/// The weapon menu (B): categories, then items, chosen with number keys.
+const MENU: &[(&str, &[sim::weapons::Id])] = {
+    use sim::weapons::Id::*;
+    &[
+        ("Pistols", &[Glock, Usp, P228, Deagle, FiveSeven, Elite]),
+        ("Shotguns", &[M3, Xm1014]),
+        ("SMGs", &[Mac10, Tmp, Mp5, Ump45, P90]),
+        ("Rifles", &[Galil, Famas, Ak47, M4a1, Sg552, Aug]),
+        ("Snipers", &[Scout, Awp, G3sg1, Sg550]),
+        ("Machine gun", &[M249]),
+        ("Grenades", &[HeGrenade, Flashbang, Smoke]),
+    ]
+};
+
+#[derive(Component)]
+struct HudMenu;
+
+/// B opens the menu; a number picks a category, then a weapon; Esc/B closes it.
+fn buy_menu(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Walker>, mut text: Single<&mut Text, With<HudMenu>>) {
+    if std::env::var_os("BOOTLEG16_SCREENSHOT").is_some() && std::env::var_os("BOOTLEG16_MENU").is_none() {
+        return;
+    }
+    let digits = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9];
+    let pressed = digits.iter().position(|k| keys.just_pressed(*k));
+    if keys.just_pressed(KeyCode::KeyB) {
+        w.menu = if w.menu.is_some() { None } else { Some(None) };
+    } else if keys.just_pressed(KeyCode::Escape) {
+        w.menu = None;
+    } else if let (Some(state), Some(n)) = (w.menu, pressed) {
+        match state {
+            None if n < MENU.len() => w.menu = Some(Some(n)),
+            Some(cat) if n < MENU[cat].1.len() => {
+                w.client.buy(MENU[cat].1[n]);
+                w.menu = None;
+            }
+            _ => {}
+        }
+    }
+    if std::env::var_os("BOOTLEG16_MENU").is_some() && w.menu.is_none() {
+        w.menu = Some(Some(3)); // screenshot check: show the rifles page
+    }
+    text.0 = match w.menu {
+        None => String::new(),
+        Some(None) => {
+            let mut t = String::from("Weapons (free for now)\n");
+            for (i, (name, _)) in MENU.iter().enumerate() {
+                t += &format!("\n{}. {name}", i + 1);
+            }
+            t + "\n\nEsc. close"
+        }
+        Some(Some(cat)) => {
+            let mut t = format!("{}\n", MENU[cat].0);
+            for (i, id) in MENU[cat].1.iter().enumerate() {
+                t += &format!("\n{}. {}", i + 1, sim::weapons::def(*id).name);
+            }
+            t + "\n\nEsc. close"
+        }
+    };
+}
+
 #[derive(Component)]
 struct HudStatus;
 
@@ -703,18 +774,20 @@ fn hud(w: Res<Walker>, mut status: Single<&mut Text, (With<HudStatus>, Without<H
     feed.0 = w.feed.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join("\n");
 }
 
-/// Click to capture the mouse, Escape to release it.
+/// Click to capture the mouse, Escape to release it (runs before `buy_menu`).
 fn grab_cursor(
     mut cursor: Single<&mut CursorOptions>,
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
+    w: Res<Walker>,
 ) {
     // Automated screenshot runs never take the user's mouse.
     if mouse.just_pressed(MouseButton::Left) && std::env::var_os("BOOTLEG16_SCREENSHOT").is_none() {
         cursor.grab_mode = CursorGrabMode::Locked;
         cursor.visible = false;
     }
-    if keys.just_pressed(KeyCode::Escape) {
+    // Esc closes the weapon menu first (in `buy_menu`); only then does it free the mouse.
+    if keys.just_pressed(KeyCode::Escape) && w.menu.is_none() {
         cursor.grab_mode = CursorGrabMode::None;
         cursor.visible = true;
     }

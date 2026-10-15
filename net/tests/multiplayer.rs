@@ -262,3 +262,20 @@ fn throwing_grenades_does_not_touch_anyone_elses_ammo() {
     let sb = g.server.player_state(g.b.id().unwrap()).unwrap().loadout.active_gun().unwrap().clip;
     assert_eq!(sb, b.clip);
 }
+
+#[test]
+fn weapon_menu_gives_the_weapon() {
+    use sim::weapons::Id;
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 60, 0.0);
+    g.connect();
+    g.a.buy(Id::Awp);
+    g.a.buy(Id::Flashbang);
+    for _ in 0..64 {
+        g.tick(Input::default(), Input::default());
+    }
+    let server = &g.server.player_state(g.a.id().unwrap()).unwrap().loadout;
+    assert_eq!(server.active_id(), Id::Awp);
+    assert_eq!(server.grenades, [0, 1, 0]);
+    assert_eq!(g.a.state.loadout.active_id(), Id::Awp, "the client sees it too");
+}

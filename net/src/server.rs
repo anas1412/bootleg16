@@ -481,6 +481,14 @@ impl Server {
                     c.queue.pop_front();
                 }
             }
+            ClientMsg::Buy { item } => {
+                // Free for everyone until rounds and money exist.
+                let Some(c) = self.clients.get_mut(&from) else { return };
+                if c.vitals.alive() {
+                    let now = c.last_run as f64 * TICK as f64;
+                    c.state.loadout.give(item, now);
+                }
+            }
             ClientMsg::Bye => {
                 self.clients.remove(&from);
             }
