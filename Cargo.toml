@@ -1,3 +1,9 @@
 [workspace]
-members = ["goldsrc"]
+members = ["goldsrc", "client"]
 resolver = "2"
+
+# Bevy is unusably slow unoptimized; keep our own code fast to rebuild.
+[profile.dev]
+opt-level = 1
+[profile.dev.package."*"]
+opt-level = 3
