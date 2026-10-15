@@ -1,6 +1,7 @@
 //! Playing: the connection (`Walker`), keyboard and mouse into sim inputs, and the camera.
 //! Also defines the order the other in-game plugins run in each frame (`Frame`).
 use crate::buy::BuyMenu;
+use crate::level::Spawns;
 use crate::menu::{overlay_open, AppState, GameConfig, MenuError, Overlay, PendingClient, Settings};
 use crate::{game_dir, map, sound, viewmodel};
 use bevy::{
@@ -31,7 +32,7 @@ impl Plugin for GamePlugin {
         )
             .add_systems(OnEnter(AppState::InGame), enter)
             .add_systems(FixedUpdate, walk.run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
-            .add_systems(Update, (mouse_look, move_camera, grab_cursor).chain().in_set(Frame::Camera));
+            .add_systems(Update, (face_spawn, mouse_look, move_camera, grab_cursor).chain().in_set(Frame::Camera));
     }
 }
 
@@ -108,6 +109,19 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res
         ))
         .id();
     viewmodel::attach(&mut commands, cam);
+}
+
+/// On (re)spawning, look the way the spawn point faces, like CS.
+fn face_spawn(w: Res<Walker>, spawns: Option<Res<Spawns>>, mut cam: Single<&mut FlyCam>, mut was_alive: Local<bool>) {
+    let alive = w.client.vitals.alive() && w.client.id().is_some();
+    if alive && !*was_alive {
+        let me = Vec3::from(map::to_y_up(w.client.me().origin));
+        if let Some((_, yaw)) = spawns.iter().flat_map(|s| s.0.iter()).min_by(|a, b| me.distance(Vec3::from(a.0)).total_cmp(&me.distance(Vec3::from(b.0)))) {
+            cam.yaw = (yaw - 90.0).to_radians();
+            cam.pitch = 0.0;
+        }
+    }
+    *was_alive = alive;
 }
 
 fn mouse_look(

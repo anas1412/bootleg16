@@ -57,6 +57,7 @@ fn spawn_level(
         Err(e) => return error!("loading {}: {e}", path.display()),
     };
     info!("{}: {} batches, lightmap {:?}", config.map, geo.batches.len(), geo.lightmap_size);
+    commands.insert_resource(Spawns(geo.spawns.clone()));
 
     let (lw, lh) = geo.lightmap_size;
     // Lightmaps are light intensities, not colours: keep them linear (no sRGB decode).
@@ -105,6 +106,10 @@ fn spawn_level(
         }
     }
 }
+
+/// Spawn points (Bevy coordinates) and the way they face (GoldSrc yaw, degrees).
+#[derive(Resource)]
+pub struct Spawns(pub Vec<([f32; 3], f32)>);
 
 /// A door's render entity; the value is its brush model index.
 #[derive(Component)]

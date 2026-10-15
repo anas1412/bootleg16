@@ -37,7 +37,7 @@ pub enum UiAction {
 pub struct UiActions(pub Vec<UiAction>);
 
 pub fn text(s: impl Into<String>, size: f32, color: Color) -> impl Bundle {
-    (Text::new(s), TextFont { font_size: FontSize::Px(size), ..default() }, TextColor(color), TextShadow::default())
+    (Text::new(s), TextFont { font_size: FontSize::Px(size), ..default() }, TextColor(color), TextShadow { offset: Vec2::splat(1.5), color: Color::srgba(0.0, 0.0, 0.0, 0.8) })
 }
 
 /// A glass panel node.
