@@ -31,6 +31,7 @@ pub struct Remote {
     pub id: u8,
     pub origin: [f32; 3],
     pub crouched: bool,
+    pub alive: bool,
 }
 
 pub struct Client {
@@ -44,6 +45,8 @@ pub struct Client {
     vars: MoveVars,
     /// Our player as predicted (ahead of the server by our unacknowledged inputs).
     pub me: Player,
+    /// Our health and armor, as the server last said.
+    pub vitals: sim::combat::Vitals,
     seq: u32,
     history: VecDeque<(u32, TimedInput)>,
     snaps: VecDeque<Snap>,
@@ -67,6 +70,7 @@ impl Client {
             world,
             vars: MoveVars::default(),
             me: Player::new([0.0; 3]),
+            vitals: sim::combat::Vitals::default(),
             seq: 0,
             history: VecDeque::new(),
             snaps: VecDeque::new(),
@@ -106,7 +110,7 @@ impl Client {
         // Predict: run the input now, keep it until the server confirms it.
         self.seq += 1;
         self.history.push_back((self.seq, TimedInput { input, view_tick: self.render_tick }));
-        let events = step(&mut self.me, &input, TICK, &self.world, &self.vars);
+        let events = if self.vitals.alive() { step(&mut self.me, &input, TICK, &self.world, &self.vars) } else { Events::default() };
 
         let recent: Vec<_> = self.history.iter().rev().take(INPUT_REDUNDANCY).rev().collect();
         let first_seq = recent.first().map(|(s, _)| *s).unwrap_or(self.seq);
@@ -149,9 +153,12 @@ impl Client {
                         self.history.pop_front();
                     }
                     let before = self.me.origin;
+                    self.vitals = mine.vitals;
                     self.me = mine.player;
-                    for (_, timed) in &self.history {
-                        step(&mut self.me, &timed.input, TICK, &self.world, &self.vars);
+                    if self.vitals.alive() {
+                        for (_, timed) in &self.history {
+                            step(&mut self.me, &timed.input, TICK, &self.world, &self.vars);
+                        }
                     }
                     let d = [self.me.origin[0] - before[0], self.me.origin[1] - before[1], self.me.origin[2] - before[2]];
                     self.last_correction = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
@@ -192,12 +199,12 @@ impl Client {
                         Some(pa) => std::array::from_fn(|i| pa.player.origin[i] + (pb.player.origin[i] - pa.player.origin[i]) * t),
                         None => pb.player.origin,
                     };
-                    out.push(Remote { id: pb.id, origin, crouched: pb.player.crouched });
+                    out.push(Remote { id: pb.id, origin, crouched: pb.player.crouched, alive: pb.vitals.alive() });
                 }
             }
             None => {
                 for p in newest.players.iter().filter(|p| Some(p.id) != me) {
-                    out.push(Remote { id: p.id, origin: p.player.origin, crouched: p.player.crouched });
+                    out.push(Remote { id: p.id, origin: p.player.origin, crouched: p.player.crouched, alive: p.vitals.alive() });
                 }
             }
         }

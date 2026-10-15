@@ -1,10 +1,11 @@
 //! Messages between client and server (postcard-encoded, one per UDP datagram).
 use serde::{Deserialize, Serialize};
 use sim::doors::DoorNet;
+use sim::combat::Vitals;
 use sim::pmove::{Input, Player};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -39,6 +40,7 @@ pub const MAX_UNLAG_TICKS: u32 = TICK_RATE / 2;
 pub struct PlayerNet {
     pub id: u8,
     pub player: Player,
+    pub vitals: Vitals,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

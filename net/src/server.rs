@@ -4,6 +4,7 @@ use crate::protocol::*;
 use crate::socket::Socket;
 use goldsrc::bsp::Bsp;
 use sim::collision::World;
+use sim::combat::Vitals;
 use sim::doors::Actor;
 use sim::pmove::{step, MoveVars, Player};
 use std::collections::{HashMap, VecDeque};
@@ -14,9 +15,15 @@ use std::time::{Duration, Instant};
 /// than real time beyond this is thrown away, which stops speed hacks.
 const MAX_INPUT_BUDGET: f32 = 16.0;
 
+/// Seconds a dead player waits before respawning (until rounds exist).
+const RESPAWN_TICKS: u32 = 3 * TICK_RATE;
+
 struct Remote {
     id: u8,
     player: Player,
+    vitals: Vitals,
+    /// Tick to respawn at while dead.
+    respawn_at: Option<u32>,
     queue: VecDeque<(u32, TimedInput)>,
     /// Highest input number accepted into the queue.
     last_queued: u32,
@@ -84,6 +91,17 @@ impl Server {
         self.clients.len()
     }
 
+    fn next_spawn_point(&mut self) -> [f32; 3] {
+        let spawn = self.spawns.get(self.next_spawn % self.spawns.len().max(1)).copied().unwrap_or([0.0; 3]);
+        self.next_spawn += 1;
+        spawn
+    }
+
+    /// Server-side health of a player.
+    pub fn vitals(&self, id: u8) -> Option<&Vitals> {
+        self.clients.values().find(|c| c.id == id).map(|c| &c.vitals)
+    }
+
     /// Server-side state of a player (for tests and admin tools).
     pub fn player(&self, id: u8) -> Option<&Player> {
         self.clients.values().find(|c| c.id == id).map(|c| &c.player)
@@ -140,6 +158,22 @@ impl Server {
             }
         }
 
+        // Respawn the dead whose wait is over.
+        let tick = self.tick;
+        let mut respawns = Vec::new();
+        for (addr, c) in &self.clients {
+            if c.respawn_at.is_some_and(|t| t <= tick) {
+                respawns.push(*addr);
+            }
+        }
+        for addr in respawns {
+            let spawn = self.next_spawn_point();
+            let c = self.clients.get_mut(&addr).unwrap();
+            c.player = Player::new(spawn);
+            c.vitals = Vitals::default();
+            c.respawn_at = None;
+        }
+
         let mut actors = Vec::new();
         for c in self.clients.values_mut() {
             c.budget = (c.budget + 1.0).min(MAX_INPUT_BUDGET);
@@ -151,10 +185,18 @@ impl Server {
                 c.used |= input.use_key && !c.use_held;
                 c.use_held = input.use_key;
                 c.view = (input.yaw, input.pitch);
-                step(&mut c.player, &input, TICK, &self.world, &self.vars);
                 c.last_run = seq;
+                if !c.vitals.alive() {
+                    continue; // the dead don't move (their inputs are still acknowledged)
+                }
+                let ev = step(&mut c.player, &input, TICK, &self.world, &self.vars);
+                if ev.fall_damage > 0.0 && c.vitals.hurt(ev.fall_damage, 0.0) {
+                    c.respawn_at = Some(tick + RESPAWN_TICKS);
+                }
             }
-            actors.push(actor(&c.player, c.view, c.used));
+            if c.vitals.alive() {
+                actors.push(actor(&c.player, c.view, c.used));
+            }
         }
         self.world.update(TICK, &actors);
 
@@ -170,7 +212,7 @@ impl Server {
         self.clients.retain(|_, c| tick - c.last_heard < TIMEOUT_TICKS);
 
         if self.tick % SNAPSHOT_EVERY == 0 {
-            let players: Vec<PlayerNet> = self.clients.values().map(|c| PlayerNet { id: c.id, player: c.player }).collect();
+            let players: Vec<PlayerNet> = self.clients.values().map(|c| PlayerNet { id: c.id, player: c.player, vitals: c.vitals }).collect();
             let doors = self.world.doors.net_state();
             let sends: Vec<_> = self.clients.iter().map(|(a, c)| (*a, c.last_run)).collect();
             for (addr, ack) in sends {
@@ -194,13 +236,14 @@ impl Server {
                         return;
                     }
                     let id = (0..=u8::MAX).find(|i| self.clients.values().all(|c| c.id != *i)).unwrap_or(0);
-                    let spawn = self.spawns.get(self.next_spawn % self.spawns.len().max(1)).copied().unwrap_or([0.0; 3]);
-                    self.next_spawn += 1;
+                    let spawn = self.next_spawn_point();
                     self.clients.insert(
                         from,
                         Remote {
                             id,
                             player: Player::new(spawn),
+                            vitals: Vitals::default(),
+                            respawn_at: None,
                             queue: VecDeque::new(),
                             last_queued: 0,
                             last_run: 0,

@@ -92,6 +92,12 @@ pub struct Input {
     pub walk: bool,
     /// E (+use) held: opens use-only doors on the press.
     pub use_key: bool,
+    /// Mouse 1 / mouse 2 / R held.
+    pub attack: bool,
+    pub attack2: bool,
+    pub reload: bool,
+    /// Weapon slot pressed this tick (1 primary .. 5 bomb), 0 = none.
+    pub slot: u8,
 }
 
 /// Full movement state; the server sends it so clients can correct their prediction.

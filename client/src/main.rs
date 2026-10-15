@@ -153,7 +153,7 @@ fn setup(
     client.simulate_network(ping, loss);
     info!("connecting to {server_addr} as {player_name} (fake ping {ping} ms, loss {loss})");
     let eye = Vec3::from(pos) + Vec3::Y * sim::pmove::VIEW_HEIGHT_STANDING;
-    commands.insert_resource(Walker { client, prev_eye: [0.0; 3], noclip: false });
+    commands.insert_resource(Walker { client, prev_eye: [0.0; 3], noclip: false, slot_held: 0 });
     commands.insert_resource(OtherPlayers {
         mesh: meshes.add(Cuboid::new(32.0, 72.0, 32.0)),
         material: materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.45, 0.1), unlit: true, ..default() }),
@@ -217,6 +217,8 @@ struct Walker {
     prev_eye: [f32; 3],
     /// V detaches the camera for free flight (the player stays put).
     noclip: bool,
+    /// Weapon slot key held (to send each press once).
+    slot_held: u8,
 }
 
 /// Placeholder look for other players until there are character models.
@@ -231,7 +233,7 @@ struct OtherPlayer(u8);
 
 /// One box per other player, where the server (interpolated) says they are.
 fn draw_others(mut commands: Commands, w: Res<Walker>, look: Res<OtherPlayers>, mut drawn: Query<(Entity, &OtherPlayer, &mut Transform)>) {
-    let others = w.client.others();
+    let others: Vec<_> = w.client.others().into_iter().filter(|o| o.alive).collect();
     for (e, OtherPlayer(id), mut tf) in &mut drawn {
         match others.iter().find(|o| o.id == *id) {
             Some(o) => {
@@ -260,8 +262,16 @@ fn mouse_look(motion: Res<AccumulatedMouseMotion>, cursor: Single<&CursorOptions
     tf.rotation = Quat::from_euler(EulerRot::YXZ, fc.yaw, fc.pitch, 0.0);
 }
 
-/// One simulation tick from the keyboard. WASD move, Space jump, Ctrl crouch, Shift walk, E use.
-fn walk(keys: Res<ButtonInput<KeyCode>>, cam: Single<&FlyCam>, mut w: ResMut<Walker>) {
+/// One simulation tick from the keyboard and mouse. WASD move, Space jump, Ctrl crouch,
+/// Shift walk, E use, mouse fire, R reload, 1-5 weapon slots.
+fn walk(keys: Res<ButtonInput<KeyCode>>, mouse: Res<ButtonInput<MouseButton>>, cursor: Single<&CursorOptions>, cam: Single<&FlyCam>, mut w: ResMut<Walker>) {
+    // Mouse buttons only count while the mouse is captured (the first click just captures it).
+    let captured = cursor.grab_mode != CursorGrabMode::None;
+    let slot_keys = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5];
+    let slot = slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0);
+    // Several ticks can run per frame: send a slot press once.
+    let slot = if slot == w.slot_held { 0 } else { slot };
+    w.slot_held = slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0);
     let axis = |pos: KeyCode, neg: KeyCode| 400.0 * (keys.pressed(pos) as i32 - keys.pressed(neg) as i32) as f32;
     let input = sim::pmove::Input {
         forward: axis(KeyCode::KeyW, KeyCode::KeyS),
@@ -274,6 +284,10 @@ fn walk(keys: Res<ButtonInput<KeyCode>>, cam: Single<&FlyCam>, mut w: ResMut<Wal
         crouch: keys.pressed(KeyCode::ControlLeft),
         walk: keys.pressed(KeyCode::ShiftLeft),
         use_key: keys.pressed(KeyCode::KeyE),
+        attack: captured && mouse.pressed(MouseButton::Left),
+        attack2: captured && mouse.pressed(MouseButton::Right),
+        reload: keys.pressed(KeyCode::KeyR),
+        slot,
     };
     // Free flight: keep the connection alive but stand still.
     let input = if w.noclip { sim::pmove::Input { yaw: input.yaw, pitch: input.pitch, ..default() } } else { input };
