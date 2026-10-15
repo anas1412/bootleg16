@@ -67,7 +67,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Prediction error smoothing (corrections are applied instantly)
 
 ### Voice
-- [ ] Proximity voice chat (positional, fades with distance like game sounds).
+- [ ] Proximity voice chat (positional, fades with distance like game sounds). Open: everyone
+      nearby, or teammates only? (undecided)
       **No radio commands/callouts**: decided 2026-10-15, voice replaces them.
 
 ### Sound
