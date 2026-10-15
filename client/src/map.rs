@@ -32,7 +32,10 @@ pub struct Batch {
 }
 
 pub struct MapGeometry {
+    /// The world and everything that never moves.
     pub batches: Vec<Batch>,
+    /// Doors: (brush model index, batches in the model's own space). The sim says where they are.
+    pub movers: Vec<(usize, Vec<Batch>)>,
     /// Decoded textures, indexed by `Batch::texture`. Missing ones are a checkerboard.
     pub textures: Vec<Texture>,
     pub lightmap_size: (usize, usize),
@@ -125,7 +128,9 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
         .collect();
 
     // Which brush models to draw: the world, plus visible brush entities.
-    let mut models: Vec<(usize, [f32; 3])> = vec![(0, [0.0; 3])];
+    // (model, offset, group): group 0 is static; each door gets its own group.
+    let mut models: Vec<(usize, [f32; 3], usize)> = vec![(0, [0.0; 3], 0)];
+    let mut mover_models = Vec::new();
     let mut spawns = Vec::new();
     for e in bsp.entity_list() {
         let class = e.get("classname").map(String::as_str).unwrap_or("");
@@ -145,7 +150,12 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
         }
         if let Some(i) = e.get("model").and_then(|m| m.strip_prefix('*')?.parse::<usize>().ok()) {
             if i < bsp.models.len() {
-                models.push((i, origin));
+                if matches!(class, "func_door" | "func_door_rotating") {
+                    mover_models.push(i);
+                    models.push((i, [0.0; 3], mover_models.len()));
+                } else {
+                    models.push((i, origin, 0));
+                }
             }
         }
     }
@@ -153,10 +163,11 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
     let mut atlas = Atlas { rgba: Vec::new(), x: 0, y: 0, shelf_h: 0 };
     // Fully-lit 2x2 block for faces without lightmap data.
     let fullbright = atlas.insert(2, 2, &[255; 12]);
-    let mut batches: Vec<Batch> = (0..textures.len()).map(|t| Batch { texture: t, ..Default::default() }).collect();
-    let mut lm_rects = Vec::new(); // (batch, first vertex, atlas pos, smin, tmin)
+    let new_group = || -> Vec<Batch> { (0..textures.len()).map(|t| Batch { texture: t, ..Default::default() }).collect() };
+    let mut groups: Vec<Vec<Batch>> = (0..=mover_models.len()).map(|_| new_group()).collect();
+    let mut lm_rects = Vec::new(); // (group, batch, first vertex, atlas pos, smin, tmin)
 
-    for (model, offset) in models {
+    for (model, offset, group) in models {
         let m = bsp.models[model];
         for face in &bsp.faces[m.first_face as usize..(m.first_face + m.num_faces) as usize] {
             let ti = bsp.texinfo[face.texinfo as usize];
@@ -186,7 +197,7 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
                 .then(|| bsp.lighting.get(face.light_offset as usize..face.light_offset as usize + lw * lh * 3))
                 .flatten();
 
-            let b = &mut batches[ti.miptex as usize];
+            let b = &mut groups[group][ti.miptex as usize];
             let first = b.positions.len() as u32;
             for (i, v) in verts.iter().enumerate() {
                 b.positions.push(to_y_up(*v));
@@ -200,7 +211,7 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
                 Some(rgb) => {
                     let at = atlas.insert(lw, lh, rgb);
                     b.lightmap_uv.extend(std::iter::repeat_n([0.0; 2], verts.len())); // filled in below
-                    lm_rects.push((ti.miptex as usize, first, st, at, bs, bt));
+                    lm_rects.push((group, ti.miptex as usize, first, st, at, bs, bt));
                 }
                 None => {
                     let c = [(fullbright.0 as f32 + 1.0), (fullbright.1 as f32 + 1.0)];
@@ -213,13 +224,13 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
     // Atlas height is only known now, so lightmap UVs are filled in last.
     let ah = atlas.height().next_power_of_two();
     atlas.rgba.resize(ah * ATLAS_W * 4, 255);
-    for b in &mut batches {
+    for b in groups.iter_mut().flatten() {
         for uv in &mut b.lightmap_uv {
             *uv = [uv[0] / ATLAS_W as f32, uv[1] / ah as f32];
         }
     }
-    for (bi, first, st, (ax, ay), bs, bt) in lm_rects {
-        let b = &mut batches[bi];
+    for (g, bi, first, st, (ax, ay), bs, bt) in lm_rects {
+        let b = &mut groups[g][bi];
         let at = first as usize;
         for (i, (s, t)) in st.into_iter().enumerate() {
             let u = (ax as f32 + s / 16.0 - bs + 0.5) / ATLAS_W as f32;
@@ -227,7 +238,12 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
             b.lightmap_uv[at + i] = [u, v];
         }
     }
-    batches.retain(|b| !b.indices.is_empty());
+    for g in &mut groups {
+        g.retain(|b| !b.indices.is_empty());
+    }
+    let mut groups = groups.into_iter();
+    let batches = groups.next().unwrap_or_default();
+    let movers = mover_models.into_iter().zip(groups).collect();
 
-    Ok(MapGeometry { batches, textures, lightmap_size: (ATLAS_W, ah), lightmap_rgba: atlas.rgba, spawns })
+    Ok(MapGeometry { batches, movers, textures, lightmap_size: (ATLAS_W, ah), lightmap_rgba: atlas.rgba, spawns })
 }
