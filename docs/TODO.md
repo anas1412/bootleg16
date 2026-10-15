@@ -76,5 +76,5 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] In-game map editor (Forge-style: place, test instantly, share)
 - [ ] First original map `rust2`: Dust2-style flow, new geometry, own/CC0 textures
 - [ ] Engine works from a neutral map form so editor maps and BSPs both load
-- [ ] Standalone release: own assets, own name (`bootleg1.6` is a codename;
+- [ ] Standalone release: own assets, own name (`bootleg16` is a codename;
       pick e.g. Oxidestrike/Fuseline), legal check before selling

@@ -32,6 +32,8 @@ pub struct Remote {
     pub origin: [f32; 3],
     pub crouched: bool,
     pub alive: bool,
+    pub yaw: f32,
+    pub pitch: f32,
 }
 
 pub struct Client {
@@ -199,12 +201,17 @@ impl Client {
                         Some(pa) => std::array::from_fn(|i| pa.player.origin[i] + (pb.player.origin[i] - pa.player.origin[i]) * t),
                         None => pb.player.origin,
                     };
-                    out.push(Remote { id: pb.id, origin, crouched: pb.player.crouched, alive: pb.vitals.alive() });
+                    // Turn the short way round when blending yaw.
+                    let yaw = match a.players.iter().find(|p| p.id == pb.id) {
+                        Some(pa) => pa.yaw + ((pb.yaw - pa.yaw + 540.0).rem_euclid(360.0) - 180.0) * t,
+                        None => pb.yaw,
+                    };
+                    out.push(Remote { id: pb.id, origin, crouched: pb.player.crouched, alive: pb.vitals.alive(), yaw, pitch: pb.pitch });
                 }
             }
             None => {
                 for p in newest.players.iter().filter(|p| Some(p.id) != me) {
-                    out.push(Remote { id: p.id, origin: p.player.origin, crouched: p.player.crouched, alive: p.vitals.alive() });
+                    out.push(Remote { id: p.id, origin: p.player.origin, crouched: p.player.crouched, alive: p.vitals.alive(), yaw: p.yaw, pitch: p.pitch });
                 }
             }
         }

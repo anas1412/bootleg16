@@ -5,7 +5,7 @@ use sim::combat::Vitals;
 use sim::pmove::{Input, Player};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -41,6 +41,9 @@ pub struct PlayerNet {
     pub id: u8,
     pub player: Player,
     pub vitals: Vitals,
+    /// View angles (degrees), so others can be drawn facing the right way.
+    pub yaw: f32,
+    pub pitch: f32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

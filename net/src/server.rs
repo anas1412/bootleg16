@@ -212,7 +212,7 @@ impl Server {
         self.clients.retain(|_, c| tick - c.last_heard < TIMEOUT_TICKS);
 
         if self.tick % SNAPSHOT_EVERY == 0 {
-            let players: Vec<PlayerNet> = self.clients.values().map(|c| PlayerNet { id: c.id, player: c.player, vitals: c.vitals }).collect();
+            let players: Vec<PlayerNet> = self.clients.values().map(|c| PlayerNet { id: c.id, player: c.player, vitals: c.vitals, yaw: c.view.0, pitch: c.view.1 }).collect();
             let doors = self.world.doors.net_state();
             let sends: Vec<_> = self.clients.iter().map(|(a, c)| (*a, c.last_run)).collect();
             for (addr, ack) in sends {

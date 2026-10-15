@@ -230,3 +230,113 @@ fn concat(p: &BoneTransform, c: &BoneTransform) -> BoneTransform {
     let rot = std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| p.rot[i][k] * c.rot[k][j]).sum()));
     BoneTransform { rot, pos: p.apply(c.pos) }
 }
+
+/// One textured piece of a posed model, ready for a renderer.
+#[derive(Debug, Clone, Default)]
+pub struct MeshPart {
+    pub texture: usize,
+    pub positions: Vec<Vec3>,
+    pub uvs: Vec<[f32; 2]>,
+    pub indices: Vec<u32>,
+}
+
+/// A model texture decoded to RGBA8.
+#[derive(Debug, Clone)]
+pub struct ModelTexture {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+
+impl Model {
+    fn header_i32(&self, at: usize) -> usize {
+        self.data.get(at..at + 4).map(|b| i32::from_le_bytes(b.try_into().unwrap())).unwrap_or(0).max(0) as usize
+    }
+
+    /// Decode the textures stored in this file (8-bit with a palette each).
+    pub fn textures(&self) -> Vec<ModelTexture> {
+        let (count, index) = (self.header_i32(180), self.header_i32(184));
+        (0..count)
+            .filter_map(|i| {
+                let o = index + i * 80;
+                let name = crate::texture::cstr(self.data.get(o..o + 64)?);
+                let flags = self.header_i32(o + 64);
+                let (w, h, pix) = (self.header_i32(o + 68), self.header_i32(o + 72), self.header_i32(o + 76));
+                let pixels = self.data.get(pix..pix + w * h)?;
+                let pal = self.data.get(pix + w * h..pix + w * h + 768)?;
+                let masked = flags & 0x40 != 0; // index 255 is transparent
+                let rgba = pixels
+                    .iter()
+                    .flat_map(|&p| {
+                        let c = &pal[p as usize * 3..p as usize * 3 + 3];
+                        [c[0], c[1], c[2], if masked && p == 255 { 0 } else { 255 }]
+                    })
+                    .collect();
+                Some(ModelTexture { name, width: w as u32, height: h as u32, rgba })
+            })
+            .collect()
+    }
+
+    /// Triangles of the first sub-model of every body part, posed (model space).
+    pub fn posed_mesh(&self, pose: &[BoneTransform]) -> Vec<MeshPart> {
+        let i16_at = |o: usize| self.data.get(o..o + 2).map(|b| i16::from_le_bytes([b[0], b[1]])).unwrap_or(0);
+        let f32_at = |o: usize| self.data.get(o..o + 4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).unwrap_or(0.0);
+        let textures = self.textures();
+        let (num_skinref, skin_index) = (self.header_i32(192), self.header_i32(200));
+        let skin = |r: usize| if r < num_skinref { i16_at(skin_index + r * 2).max(0) as usize } else { r };
+        let (num_parts, part_index) = (self.header_i32(204), self.header_i32(208));
+        let mut out: Vec<MeshPart> = Vec::new();
+        for p in 0..num_parts {
+            let model = self.header_i32(part_index + p * 76 + 72); // first sub-model of this body part
+            let (num_mesh, mesh_index) = (self.header_i32(model + 72), self.header_i32(model + 76));
+            let (num_verts, vert_info, vert_index) = (self.header_i32(model + 80), self.header_i32(model + 84), self.header_i32(model + 88));
+            let verts: Vec<Vec3> = (0..num_verts)
+                .map(|v| {
+                    let bone = self.data.get(vert_info + v).copied().unwrap_or(0) as usize;
+                    let o = vert_index + v * 12;
+                    let local = [f32_at(o), f32_at(o + 4), f32_at(o + 8)];
+                    pose.get(bone).map(|t| t.apply(local)).unwrap_or(local)
+                })
+                .collect();
+            for m in 0..num_mesh {
+                let mo = mesh_index + m * 20;
+                let tex = skin(self.header_i32(mo + 8));
+                let (tw, th) = textures.get(tex).map(|t| (t.width as f32, t.height as f32)).unwrap_or((1.0, 1.0));
+                let mut part = MeshPart { texture: tex, ..Default::default() };
+                // Triangle commands: count (>0 strip, <0 fan, 0 end), then (vert, norm, s, t) per vertex.
+                let mut c = self.header_i32(mo + 4);
+                loop {
+                    let n = i16_at(c) as i32;
+                    c += 2;
+                    if n == 0 {
+                        break;
+                    }
+                    let fan = n < 0;
+                    let first = part.positions.len() as u32;
+                    for k in 0..n.unsigned_abs() as usize {
+                        let o = c + k * 8;
+                        let v = (i16_at(o).max(0) as usize).min(verts.len().saturating_sub(1));
+                        part.positions.push(verts.get(v).copied().unwrap_or([0.0; 3]));
+                        part.uvs.push([i16_at(o + 4) as f32 / tw, i16_at(o + 6) as f32 / th]);
+                    }
+                    let count = n.unsigned_abs();
+                    for k in 2..count {
+                        let (a, b, cc) = if fan {
+                            (first, first + k - 1, first + k)
+                        } else if k % 2 == 0 {
+                            (first + k - 2, first + k - 1, first + k)
+                        } else {
+                            (first + k - 1, first + k - 2, first + k)
+                        };
+                        // GoldSrc winds clockwise; flip to counter-clockwise.
+                        part.indices.extend([a, cc, b]);
+                    }
+                    c += count as usize * 8;
+                }
+                out.push(part);
+            }
+        }
+        out
+    }
+}

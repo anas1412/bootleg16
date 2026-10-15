@@ -6,6 +6,7 @@
 //! The game directory comes from `BOOTLEG16_DIR` (default: the Steam Half-Life install).
 //! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.
 //! `BOOTLEG16_SCREENSHOT=path.png` saves one frame and exits (used for automated checks).
+//! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead).
 mod map;
 
 use bevy::{
@@ -38,7 +39,7 @@ fn game_dir() -> PathBuf {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window { title: "bootleg1.6".into(), ..default() }),
+            primary_window: Some(Window { title: "bootleg16".into(), ..default() }),
             ..default()
         }))
         // GoldSrc lighting is fully baked into lightmaps; no extra ambient.
@@ -154,10 +155,44 @@ fn setup(
     info!("connecting to {server_addr} as {player_name} (fake ping {ping} ms, loss {loss})");
     let eye = Vec3::from(pos) + Vec3::Y * sim::pmove::VIEW_HEIGHT_STANDING;
     commands.insert_resource(Walker { client, prev_eye: [0.0; 3], noclip: false, slot_held: 0 });
-    commands.insert_resource(OtherPlayers {
-        mesh: meshes.add(Cuboid::new(32.0, 72.0, 32.0)),
-        material: materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.45, 0.1), unlit: true, ..default() }),
-    });
+    // Player models from the install: one T and one CT look, posed standing and crouched.
+    let mut looks = Vec::new();
+    for name in ["arctic", "urban"] {
+        let path = root.join(format!("cstrike/models/player/{name}/{name}.mdl"));
+        let Ok(model) = goldsrc::mdl::Model::load(&path) else {
+            warn!("missing player model {}", path.display());
+            continue;
+        };
+        let textures: Vec<Handle<StandardMaterial>> = model
+            .textures()
+            .into_iter()
+            .map(|t| {
+                let image = images.add(rgba_image(t.width, t.height, t.rgba, false, TextureFormat::Rgba8UnormSrgb));
+                // ⚠ Unlit until models are lit from the map's lightmaps like GoldSrc does.
+                materials.add(StandardMaterial { base_color_texture: Some(image), unlit: true, alpha_mode: AlphaMode::Mask(0.5), ..default() })
+            })
+            .collect();
+        let mut stance = |seq: &str| -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
+            let Some(seq) = model.sequence(seq) else { return Vec::new() };
+            model
+                .posed_mesh(&model.pose(seq, 0, 0.5))
+                .into_iter()
+                .filter(|p| !p.indices.is_empty())
+                .map(|p| {
+                    let positions: Vec<[f32; 3]> = p.positions.iter().map(|v| map::to_y_up(*v)).collect();
+                    let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD)
+                        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+                        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
+                        .with_inserted_indices(Indices::U32(p.indices))
+                        .with_computed_normals();
+                    (meshes.add(mesh), textures.get(p.texture).cloned().unwrap_or_default())
+                })
+                .collect()
+        };
+        let standing = stance("ref_aim_carbine");
+        looks.push([standing, stance("crouch_aim_carbine")]);
+    }
+    commands.insert_resource(OtherPlayers { looks });
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection {
@@ -221,35 +256,46 @@ struct Walker {
     slot_held: u8,
 }
 
-/// Placeholder look for other players until there are character models.
+/// Player model meshes: [look][standing, crouched] -> parts.
 #[derive(Resource)]
 struct OtherPlayers {
-    mesh: Handle<Mesh>,
-    material: Handle<StandardMaterial>,
+    looks: Vec<[Vec<(Handle<Mesh>, Handle<StandardMaterial>)>; 2]>,
 }
 
+/// Another player's model; `crouched` is the stance its children were built for.
 #[derive(Component)]
-struct OtherPlayer(u8);
+struct OtherPlayer {
+    id: u8,
+    crouched: bool,
+}
 
-/// One box per other player, where the server (interpolated) says they are.
+/// Each other player's model, where the server (interpolated) says they are.
 fn draw_others(mut commands: Commands, w: Res<Walker>, look: Res<OtherPlayers>, mut drawn: Query<(Entity, &OtherPlayer, &mut Transform)>) {
     let others: Vec<_> = w.client.others().into_iter().filter(|o| o.alive).collect();
-    for (e, OtherPlayer(id), mut tf) in &mut drawn {
-        match others.iter().find(|o| o.id == *id) {
-            Some(o) => {
-                // Crouched boxes are half height, still centred on the origin.
-                tf.translation = Vec3::from(map::to_y_up(o.origin));
-                tf.scale = Vec3::new(1.0, if o.crouched { 0.5 } else { 1.0 }, 1.0);
-            }
+    let place = |o: &net::client::Remote| {
+        Transform::from_translation(Vec3::from(map::to_y_up(o.origin))).with_rotation(Quat::from_rotation_y(o.yaw.to_radians()))
+    };
+    for (e, p, mut tf) in &mut drawn {
+        match others.iter().find(|o| o.id == p.id) {
+            // Stance changed: rebuild with the other pose.
+            Some(o) if o.crouched != p.crouched => commands.entity(e).despawn(),
+            Some(o) => *tf = place(o),
             None => {
-                info!("player {id} left");
+                info!("player {} left", p.id);
                 commands.entity(e).despawn();
             }
         }
     }
-    for o in others.iter().filter(|o| !drawn.iter().any(|(_, d, _)| d.0 == o.id)) {
-        info!("player {} is in the game at {:?}", o.id, o.origin);
-        commands.spawn((Mesh3d(look.mesh.clone()), MeshMaterial3d(look.material.clone()), OtherPlayer(o.id), Transform::from_translation(Vec3::from(map::to_y_up(o.origin)))));
+    for o in others.iter().filter(|o| !drawn.iter().any(|(_, d, _)| d.id == o.id && d.crouched == o.crouched)) {
+        if !drawn.iter().any(|(_, d, _)| d.id == o.id) {
+            info!("player {} is in the game at {:?}", o.id, o.origin);
+        }
+        let Some(parts) = look.looks.get(o.id as usize % look.looks.len().max(1)) else { continue };
+        let parent = commands.spawn((OtherPlayer { id: o.id, crouched: o.crouched }, place(o), Visibility::default())).id();
+        for (mesh, material) in &parts[o.crouched as usize] {
+            let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
+            commands.entity(parent).add_child(child);
+        }
     }
 }
 
@@ -304,6 +350,28 @@ fn move_camera(
 ) {
     if keys.just_pressed(KeyCode::KeyV) {
         w.noclip = !w.noclip;
+    }
+    // Dead (or forced with BOOTLEG16_SPECTATE): watch another player from in front of them.
+    let spectate = !w.client.vitals.alive() || std::env::var_os("BOOTLEG16_SPECTATE").is_some();
+    if spectate && !w.noclip {
+        if let Some(o) = w.client.others().into_iter().find(|o| o.alive) {
+            let eye = [o.origin[0], o.origin[1], o.origin[2] + 20.0];
+            let (s, c) = o.yaw.to_radians().sin_cos();
+            // Prefer a view of their front; fall back to behind. Never put the camera in a wall.
+            let spot = [1.0f32, -1.0]
+                .iter()
+                .map(|side| {
+                    let want = [eye[0] + c * 100.0 * side, eye[1] + s * 100.0 * side, eye[2] + 10.0];
+                    let t = w.client.world.trace_line(eye, want);
+                    (t.fraction, [eye[0] + (want[0] - eye[0]) * t.fraction * 0.9, eye[1] + (want[1] - eye[1]) * t.fraction * 0.9, eye[2] + (want[2] - eye[2]) * t.fraction * 0.9])
+                })
+                .find(|(f, _)| *f > 0.6)
+                .map(|(_, p)| p)
+                .unwrap_or(eye);
+            tf.translation = Vec3::from(map::to_y_up(spot));
+            tf.look_at(Vec3::from(map::to_y_up(eye)), Vec3::Y);
+            return;
+        }
     }
     if !w.noclip {
         if w.client.id().is_none() {

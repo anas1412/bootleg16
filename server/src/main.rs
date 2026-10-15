@@ -14,6 +14,6 @@ fn main() {
     let bsp = goldsrc::bsp::Bsp::load(&path).unwrap_or_else(|e| panic!("loading {}: {e}", path.display()));
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let mut server = net::Server::new(addr, &map, &bsp).unwrap_or_else(|e| panic!("binding {addr}: {e}"));
-    println!("bootleg1.6 server: {map} on {} at {} tick", server.local_addr(), net::protocol::TICK_RATE);
+    println!("bootleg16 server: {map} on {} at {} tick", server.local_addr(), net::protocol::TICK_RATE);
     server.run();
 }
