@@ -52,6 +52,12 @@ const FLOOR_NORMAL_Z: f32 = 0.7;
 const LIFT_OFF_SPEED: f32 = 180.0;
 /// Origin difference between the standing and crouched hulls (box centres).
 const CROUCH_OFFSET: f32 = 18.0;
+/// Shift-walk multiplier: client cvar `cl_movespeedkey` (client.so).
+const WALK_SPEED: f32 = 0.52;
+/// Below this ground speed there are no footsteps (`PM_UpdateStepSound`).
+const FOOTSTEP_MIN_SPEED: f32 = 150.0;
+/// Milliseconds between footsteps when running. ⚠ HL convention; verify in `PM_UpdateStepSound`.
+const FOOTSTEP_INTERVAL_MS: f32 = 300.0;
 /// Seconds to crouch on the ground (`PM_Duck`).
 const TIME_TO_DUCK: f32 = 0.4;
 /// Ladders (`PM_LadderMove`).
@@ -81,6 +87,8 @@ pub struct Input {
     pub pitch: f32,
     pub jump: bool,
     pub crouch: bool,
+    /// Shift: walk slowly (0.52x), quiet enough to make no footsteps.
+    pub walk: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -105,6 +113,8 @@ pub struct Player {
     duck_time: f32,
     /// Downward speed while airborne, for landing and fall damage.
     fall_velocity: f32,
+    /// Milliseconds until the next footstep may play.
+    step_timer: f32,
 }
 
 /// Things that happened during a step, for the game rules to act on.
@@ -114,6 +124,8 @@ pub struct Events {
     pub landed: bool,
     /// Health to subtract (0 when the fall was safe).
     pub fall_damage: f32,
+    /// A footstep sound plays now (other players hear it).
+    pub footstep: bool,
 }
 
 impl Player {
@@ -132,6 +144,7 @@ impl Player {
             ducking: false,
             duck_time: 0.0,
             fall_velocity: 0.0,
+            step_timer: 0.0,
         }
     }
 
@@ -180,6 +193,10 @@ pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVa
     if len > p.max_speed {
         fmove *= p.max_speed / len;
         smove *= p.max_speed / len;
+    }
+    if input.walk {
+        fmove *= WALK_SPEED;
+        smove *= WALK_SPEED;
     }
     if p.crouched || p.ducking {
         fmove *= CROUCH_SPEED;
@@ -242,6 +259,12 @@ pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVa
     }
     if p.on_ground || p.on_ladder || p.water_level >= 2 {
         p.fall_velocity = 0.0;
+    }
+    p.step_timer = (p.step_timer - ms).max(0.0);
+    let moving_loud = (p.on_ground || p.on_ladder) && p.speed_2d().max(p.velocity[2].abs() * p.on_ladder as i32 as f32) >= FOOTSTEP_MIN_SPEED;
+    if moving_loud && p.step_timer == 0.0 {
+        ev.footstep = true;
+        p.step_timer = FOOTSTEP_INTERVAL_MS;
     }
     ev
 }
@@ -691,5 +714,22 @@ mod tests {
         assert_eq!(events[0], 0.0);
         assert!((events[1] - 40.0).abs() < 3.0, "{events:?}");
         assert!(events[2] > 100.0, "{events:?}");
+    }
+
+    #[test]
+    fn shift_walk_is_slow_and_silent() {
+        let (mut p, w) = standing_on_floor();
+        let walk = Input { forward: 400.0, walk: true, ..Default::default() };
+        let mut steps = 0;
+        for _ in 0..256 {
+            steps += step(&mut p, &walk, DT, &w, &MoveVars::default()).footstep as i32;
+        }
+        assert!((p.speed_2d() - 130.0).abs() < 1.0, "{}", p.speed_2d());
+        assert_eq!(steps, 0);
+        let run_input = Input { forward: 400.0, ..Default::default() };
+        for _ in 0..256 {
+            steps += step(&mut p, &run_input, DT, &w, &MoveVars::default()).footstep as i32;
+        }
+        assert!(steps >= 4, "running made {steps} footsteps in 2 s");
     }
 }

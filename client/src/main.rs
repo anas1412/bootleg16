@@ -161,7 +161,7 @@ fn mouse_look(motion: Res<AccumulatedMouseMotion>, cursor: Single<&CursorOptions
     tf.rotation = Quat::from_euler(EulerRot::YXZ, fc.yaw, fc.pitch, 0.0);
 }
 
-/// One simulation tick from the keyboard. WASD move, Space jump, Ctrl crouch.
+/// One simulation tick from the keyboard. WASD move, Space jump, Ctrl crouch, Shift walk.
 fn walk(keys: Res<ButtonInput<KeyCode>>, cam: Single<&FlyCam>, mut w: ResMut<Walker>) {
     if w.noclip {
         return;
@@ -176,6 +176,7 @@ fn walk(keys: Res<ButtonInput<KeyCode>>, cam: Single<&FlyCam>, mut w: ResMut<Wal
         pitch: -cam.pitch.to_degrees(),
         jump: keys.pressed(KeyCode::Space),
         crouch: keys.pressed(KeyCode::ControlLeft),
+        walk: keys.pressed(KeyCode::ShiftLeft),
     };
     let w = &mut *w;
     w.prev_eye = w.player.eye();
