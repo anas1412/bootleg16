@@ -4,6 +4,7 @@
 //! rotating doors swing away from whoever opened them, and a closing door that
 //! hits a player goes back up.
 use crate::{add, dot, length, scale, sub, Vec3};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // Spawnflags shared by both door types.
@@ -19,7 +20,7 @@ const SF_ROTATE_Y: u32 = 128;
 /// How far +use reaches.
 const USE_RANGE: f32 = 64.0;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum DoorState {
     Closed,
     Opening,
@@ -117,6 +118,14 @@ impl Door {
             base
         }
     }
+}
+
+/// The part of a door that changes during play (sent from server to clients).
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct DoorNet {
+    pub progress: f32,
+    pub sign: f32,
+    pub state: DoorState,
 }
 
 /// A `trigger_multiple`: touching it fires its target (after `delay`), then rests `wait` seconds.
@@ -277,6 +286,19 @@ impl Doors {
             }
         }
         out
+    }
+
+    pub fn net_state(&self) -> Vec<DoorNet> {
+        self.doors.iter().map(|d| DoorNet { progress: d.progress, sign: d.sign, state: d.state }).collect()
+    }
+
+    /// Adopt the server's door positions (same map, so same door order).
+    pub fn apply_net_state(&mut self, s: &[DoorNet]) {
+        for (d, n) in self.doors.iter_mut().zip(s) {
+            d.progress = n.progress;
+            d.sign = n.sign;
+            d.state = n.state;
+        }
     }
 
     /// Index of the door using this brush model, if it is one.

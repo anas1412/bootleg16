@@ -7,3 +7,4 @@ edition = "2021"
 # client both run this.
 [dependencies]
 goldsrc = { path = "../goldsrc" }
+serde = { version = "1", features = ["derive"] }

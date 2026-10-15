@@ -3,6 +3,7 @@
 //! are read from the game's own `cs.so` (see docs/MOVEMENT.md).
 use crate::collision::{Contents, Hull, Ladder, World};
 use crate::{add, dot, length, scale, sub, Vec3};
+use serde::{Deserialize, Serialize};
 
 /// Server movement settings. Defaults are what CS 1.6 forces every round.
 #[derive(Clone, Copy, Debug)]
@@ -76,7 +77,7 @@ pub const VIEW_HEIGHT_STANDING: f32 = 17.0;
 pub const VIEW_HEIGHT_CROUCHED: f32 = 12.0;
 
 /// One tick of player input.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Input {
     /// Forward and sideways move (units/s; CS clients send ±400).
     pub forward: f32,
@@ -89,9 +90,12 @@ pub struct Input {
     pub crouch: bool,
     /// Shift: walk slowly (0.52x), quiet enough to make no footsteps.
     pub walk: bool,
+    /// E (+use) held: opens use-only doors on the press.
+    pub use_key: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
+/// Full movement state; the server sends it so clients can correct their prediction.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Player {
     pub origin: Vec3,
     pub velocity: Vec3,

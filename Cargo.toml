@@ -1,5 +1,5 @@
 [workspace]
-members = ["goldsrc", "sim", "client"]
+members = ["goldsrc", "sim", "net", "server", "client"]
 resolver = "2"
 
 # Bevy is unusably slow unoptimized; keep our own code fast to rebuild.

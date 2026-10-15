@@ -1,0 +1,11 @@
+[package]
+name = "net"
+version = "0.1.0"
+edition = "2021"
+
+# Networking: protocol, authoritative server, client prediction. No engine code.
+[dependencies]
+goldsrc = { path = "../goldsrc" }
+sim = { path = "../sim" }
+serde = { version = "1", features = ["derive"] }
+postcard = { version = "1", features = ["alloc"] }
