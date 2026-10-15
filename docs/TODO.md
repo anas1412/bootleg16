@@ -19,7 +19,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Knife, grenades (HE damage/radius, flash, smoke), shotguns (pellets, `FireBullets`)
 - [ ] Weapon move speeds into `Player::max_speed`
 - [ ] Breakables (`func_breakable`: dust2 glass/boxes), `func_button`
-- [ ] Health, death, spectating
+- [x] Health/armor/death plumbing; spectator camera when dead (deathmatch respawn until rounds exist)
 - [ ] ⚠ Shotgun stats (separate fire function), M4A1 silenced-vs-unsilenced call sites
 - [ ] ⚠ Pistol/knife move speeds other than Deagle (set in each weapon's `Spawn`)
 
@@ -37,7 +37,9 @@ land, and add new ones here instead of leaving them only in chat.
 
 ### Players and bots
 - [ ] Bots to fill empty slots (navigation on the four maps)
-- [ ] Player models and animations (from the install's MDL files) instead of orange boxes
+- [x] Player models drawn from the install's MDL files (static aim pose per stance)
+- [ ] Player animations (run/walk/jump/crouch-walk, aim pitch, weapon-specific poses), T vs CT models per team
+- [ ] Light models from the map's lightmaps like GoldSrc (they're unlit now)
 - [ ] First-person weapon models (viewmodels)
 
 ### HUD and UI

@@ -106,7 +106,9 @@ fn setup(
             alpha_mode: if t.name.starts_with('{') { AlphaMode::Mask(0.5) } else { AlphaMode::Opaque },
             ..default()
         });
-        let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD)
+        // Keep the mesh on the CPU side too: Bevy needs it to compute the bounding box for
+        // culling (GPU-only meshes get a box at the origin and vanish when it's off-screen).
+        let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, b.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, b.uv)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, b.lightmap_uv)
@@ -180,7 +182,7 @@ fn setup(
                 .filter(|p| !p.indices.is_empty())
                 .map(|p| {
                     let positions: Vec<[f32; 3]> = p.positions.iter().map(|v| map::to_y_up(*v)).collect();
-                    let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD)
+                    let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
                         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
                         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
                         .with_inserted_indices(Indices::U32(p.indices))
@@ -370,6 +372,7 @@ fn move_camera(
                 .unwrap_or(eye);
             tf.translation = Vec3::from(map::to_y_up(spot));
             tf.look_at(Vec3::from(map::to_y_up(eye)), Vec3::Y);
+            debug!("spectating {} from {spot:?} at {eye:?} (yaw {})", o.id, o.yaw);
             return;
         }
     }
