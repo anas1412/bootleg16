@@ -45,7 +45,7 @@ pub struct Client {
     /// Our player as predicted (ahead of the server by our unacknowledged inputs).
     pub me: Player,
     seq: u32,
-    history: VecDeque<(u32, Input)>,
+    history: VecDeque<(u32, TimedInput)>,
     snaps: VecDeque<Snap>,
     latest_tick: u32,
     /// Server time we are drawing other players at.
@@ -105,7 +105,7 @@ impl Client {
 
         // Predict: run the input now, keep it until the server confirms it.
         self.seq += 1;
-        self.history.push_back((self.seq, input));
+        self.history.push_back((self.seq, TimedInput { input, view_tick: self.render_tick }));
         let events = step(&mut self.me, &input, TICK, &self.world, &self.vars);
 
         let recent: Vec<_> = self.history.iter().rev().take(INPUT_REDUNDANCY).rev().collect();
@@ -150,8 +150,8 @@ impl Client {
                     }
                     let before = self.me.origin;
                     self.me = mine.player;
-                    for (_, input) in &self.history {
-                        step(&mut self.me, input, TICK, &self.world, &self.vars);
+                    for (_, timed) in &self.history {
+                        step(&mut self.me, &timed.input, TICK, &self.world, &self.vars);
                     }
                     let d = [self.me.origin[0] - before[0], self.me.origin[1] - before[1], self.me.origin[2] - before[2]];
                     self.last_correction = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
@@ -162,6 +162,11 @@ impl Client {
                 }
             }
         }
+    }
+
+    /// Server time other players are currently drawn at (sent with each input).
+    pub fn view_tick(&self) -> f32 {
+        self.render_tick
     }
 
     pub fn id(&self) -> Option<u8> {

@@ -20,9 +20,20 @@ pub const MAX_PLAYERS: usize = 32;
 pub enum ClientMsg {
     Hello { version: u32, name: String },
     /// Inputs numbered `first_seq`, `first_seq + 1`, ...
-    Inputs { first_seq: u32, inputs: Vec<Input> },
+    Inputs { first_seq: u32, inputs: Vec<TimedInput> },
     Bye,
 }
+
+/// An input plus the server time the client was showing other players at, so
+/// the server can rewind them for hit detection (lag compensation).
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct TimedInput {
+    pub input: Input,
+    pub view_tick: f32,
+}
+
+/// Lag compensation never rewinds further than this (CS default `sv_maxunlag` 0.5 s).
+pub const MAX_UNLAG_TICKS: u32 = TICK_RATE / 2;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PlayerNet {

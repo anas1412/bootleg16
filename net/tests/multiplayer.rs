@@ -51,16 +51,26 @@ fn dist(a: [f32; 3], b: [f32; 3]) -> f32 {
 }
 
 /// Run A along a path, then stand still; check the server, B's view and A's prediction agree.
-fn run_and_check(g: &mut Game, label: &str) {
+/// `unlag_tolerance`: with packet loss the client blends across missing snapshots,
+/// so its view of a turning player differs slightly from the server's full history.
+fn run_and_check(g: &mut Game, label: &str, unlag_tolerance: f32) {
     let id = g.a.id().unwrap();
     let mut last = g.server.player(id).unwrap().origin;
     let mut travelled = 0.0;
     let mut worst_correction = 0.0f32;
+    let mut worst_unlag = 0.0f32;
     for t in 0..256 {
         // Run in wide circles with jumps, bouncing off whatever walls are near the spawn.
         let input = Input { forward: 400.0, yaw: t as f32 * 2.0, jump: t % 70 == 0, ..Default::default() };
         g.tick(input, Input::default());
         worst_correction = worst_correction.max(g.a.last_correction);
+        // Lag compensation: rewinding to B's view time puts A exactly where B is drawing A.
+        if t > 64 {
+            if let Some(seen) = g.b.others().into_iter().find(|r| r.id == id) {
+                let rewound = g.server.rewind(g.b.view_tick()).into_iter().find(|p| p.0 == id).unwrap().1;
+                worst_unlag = worst_unlag.max(dist(seen.origin, rewound));
+            }
+        }
         let now = g.server.player(id).unwrap().origin;
         travelled += dist(now, last);
         last = now;
@@ -72,6 +82,7 @@ fn run_and_check(g: &mut Game, label: &str) {
     assert!(travelled > 200.0, "{label}: A only travelled {travelled} units on the server");
     // A's prediction ends exactly where the server says (same code, same inputs).
     assert!(dist(g.a.me.origin, server_a.origin) < 0.01, "{label}: prediction {:?} vs server {:?}", g.a.me.origin, server_a.origin);
+    assert!(worst_unlag < unlag_tolerance, "{label}: rewound position off by {worst_unlag} from what B saw");
     // Mid-run corrections stay tiny: prediction was right the whole way.
     assert!(worst_correction < 1.0, "{label}: worst correction {worst_correction}");
     // B sees A where the server has them.
@@ -84,7 +95,7 @@ fn two_clients_on_lan() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 0, 0.0);
     g.connect();
-    run_and_check(&mut g, "lan");
+    run_and_check(&mut g, "lan", 0.05);
 }
 
 #[test]
@@ -92,7 +103,7 @@ fn two_clients_at_100ms_ping_with_5_percent_loss() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 100, 0.05);
     g.connect();
-    run_and_check(&mut g, "100ms/5%");
+    run_and_check(&mut g, "100ms/5%", 2.0);
 }
 
 #[test]

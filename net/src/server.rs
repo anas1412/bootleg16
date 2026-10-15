@@ -5,7 +5,7 @@ use crate::socket::Socket;
 use goldsrc::bsp::Bsp;
 use sim::collision::World;
 use sim::doors::Actor;
-use sim::pmove::{step, Input, MoveVars, Player};
+use sim::pmove::{step, MoveVars, Player};
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -17,7 +17,7 @@ const MAX_INPUT_BUDGET: f32 = 16.0;
 struct Remote {
     id: u8,
     player: Player,
-    queue: VecDeque<(u32, Input)>,
+    queue: VecDeque<(u32, TimedInput)>,
     /// Highest input number accepted into the queue.
     last_queued: u32,
     /// Highest input number actually run.
@@ -28,6 +28,15 @@ struct Remote {
     /// +use pressed during this tick (for doors).
     used: bool,
     view: (f32, f32),
+    /// Server time this client was seeing others at, as of its latest input.
+    view_tick: f32,
+}
+
+/// Where everyone was at one tick (for lag compensation).
+#[derive(Clone, Debug)]
+pub struct PastPositions {
+    pub tick: u32,
+    pub players: Vec<(u8, [f32; 3], bool)>,
 }
 
 pub struct Server {
@@ -39,6 +48,8 @@ pub struct Server {
     spawns: Vec<[f32; 3]>,
     next_spawn: usize,
     tick: u32,
+    /// The last second of positions, newest last.
+    history: VecDeque<PastPositions>,
 }
 
 impl Server {
@@ -61,6 +72,7 @@ impl Server {
             spawns,
             next_spawn: 0,
             tick: 0,
+            history: VecDeque::new(),
         })
     }
 
@@ -75,6 +87,31 @@ impl Server {
     /// Server-side state of a player (for tests and admin tools).
     pub fn player(&self, id: u8) -> Option<&Player> {
         self.clients.values().find(|c| c.id == id).map(|c| &c.player)
+    }
+
+    /// Everyone's positions as a client saw them at `view_tick` (interpolated, like the
+    /// client draws them), capped at `MAX_UNLAG_TICKS` into the past.
+    pub fn rewind(&self, view_tick: f32) -> Vec<(u8, [f32; 3], bool)> {
+        let oldest = self.tick.saturating_sub(MAX_UNLAG_TICKS) as f32;
+        let t = view_tick.clamp(oldest, self.tick as f32);
+        // Only the ticks that went out as snapshots: that's exactly what clients blend between.
+        let sent: Vec<&PastPositions> = self.history.iter().filter(|h| h.tick % SNAPSHOT_EVERY == 0).collect();
+        let pair = sent.iter().zip(sent.iter().skip(1)).find(|(a, b)| a.tick as f32 <= t && t <= b.tick as f32);
+        let Some((a, b)) = pair else {
+            return self.history.back().map(|h| h.players.clone()).unwrap_or_default();
+        };
+        let f = (t - a.tick as f32) / (b.tick - a.tick) as f32;
+        b.players
+            .iter()
+            .map(|&(id, pb, crouched)| match a.players.iter().find(|p| p.0 == id) {
+                Some(&(_, pa, _)) => (id, std::array::from_fn(|i| pa[i] + (pb[i] - pa[i]) * f), crouched),
+                None => (id, pb, crouched),
+            })
+            .collect()
+    }
+
+    pub fn tick(&self) -> u32 {
+        self.tick
     }
 
     /// Run forever at the tick rate.
@@ -108,7 +145,8 @@ impl Server {
             c.budget = (c.budget + 1.0).min(MAX_INPUT_BUDGET);
             c.used = false;
             while c.budget >= 1.0 {
-                let Some((seq, input)) = c.queue.pop_front() else { break };
+                let Some((seq, TimedInput { input, view_tick })) = c.queue.pop_front() else { break };
+                c.view_tick = view_tick;
                 c.budget -= 1.0;
                 c.used |= input.use_key && !c.use_held;
                 c.use_held = input.use_key;
@@ -119,6 +157,14 @@ impl Server {
             actors.push(actor(&c.player, c.view, c.used));
         }
         self.world.update(TICK, &actors);
+
+        self.history.push_back(PastPositions {
+            tick: self.tick,
+            players: self.clients.values().map(|c| (c.id, c.player.origin, c.player.crouched)).collect(),
+        });
+        while self.history.len() > TICK_RATE as usize {
+            self.history.pop_front();
+        }
 
         let tick = self.tick;
         self.clients.retain(|_, c| tick - c.last_heard < TIMEOUT_TICKS);
@@ -163,6 +209,7 @@ impl Server {
                             use_held: false,
                             used: false,
                             view: (0.0, 0.0),
+                            view_tick: 0.0,
                         },
                     );
                 }
