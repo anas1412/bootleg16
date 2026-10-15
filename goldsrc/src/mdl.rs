@@ -209,11 +209,22 @@ impl Model {
     /// other skeleton doesn't have stay at their rest pose.
     pub fn borrow_pose(&self, other: &Model, other_pose: &[BoneTransform]) -> Vec<BoneTransform> {
         let rest = self.pose(0, 0, 0.0);
-        self.bones
-            .iter()
-            .enumerate()
-            .map(|(i, b)| other.bones.iter().position(|o| o.name == b.name).and_then(|j| other_pose.get(j).copied()).unwrap_or(rest[i]))
-            .collect()
+        let mut out: Vec<BoneTransform> = Vec::with_capacity(self.bones.len());
+        for (i, b) in self.bones.iter().enumerate() {
+            let borrowed = other.bones.iter().position(|o| o.name == b.name).and_then(|j| other_pose.get(j).copied());
+            let t = match borrowed {
+                Some(t) => t,
+                // Our own extra bone (e.g. a weapon's muzzle): keep its rest offset from its
+                // parent, so it follows the borrowed parent.
+                None if b.parent >= 0 && (b.parent as usize) < i => {
+                    let p = b.parent as usize;
+                    concat(&out[p], &concat(&inverse(&rest[p]), &rest[i]))
+                }
+                None => rest[i],
+            };
+            out.push(t);
+        }
+        out
     }
 }
 
@@ -248,6 +259,13 @@ fn quat_matrix(q: Quat) -> [[f32; 3]; 3] {
         [2.0 * (x * y + w * z), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - w * x)],
         [2.0 * (x * z - w * y), 2.0 * (y * z + w * x), 1.0 - 2.0 * (x * x + y * y)],
     ]
+}
+
+/// Inverse of a rigid transform (rotation transposed, translation undone).
+fn inverse(t: &BoneTransform) -> BoneTransform {
+    let rot: [[f32; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| t.rot[j][i]));
+    let pos = std::array::from_fn(|i| -(rot[i][0] * t.pos[0] + rot[i][1] * t.pos[1] + rot[i][2] * t.pos[2]));
+    BoneTransform { rot, pos }
 }
 
 /// parent * child

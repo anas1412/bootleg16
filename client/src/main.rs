@@ -7,7 +7,8 @@
 //! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.
 //! `BOOTLEG16_SCREENSHOT=path.png` saves one frame (after `BOOTLEG16_SCREENSHOT_AT` seconds,
 //! default 2) and exits; such runs ignore mouse and keyboard (used for automated checks).
-//! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead).
+//! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead);
+//! `BOOTLEG16_SPECTATE=front` watches them from the front.
 //! `--give ak47,awp` (offline) hands you extra weapons until there's a buy menu.
 mod map;
 mod models;
@@ -220,15 +221,13 @@ fn setup(
     let mut looks = Vec::new();
     let mut cache = models::ModelCache::new(root.clone());
     for name in ["arctic", "urban"] {
-        let Some(l) = cache.get(&format!("player/{name}/{name}.mdl"), &mut images, &mut materials) else { continue };
-        let pose = |seq: &str| l.model.sequence(seq).map(|s| l.model.pose(s, 0, 0.5)).unwrap_or_default();
-        let poses = [pose("ref_aim_carbine"), pose("crouch_aim_carbine")];
-        let parts = [models::static_parts(&l, &poses[0], &mut meshes), models::static_parts(&l, &poses[1], &mut meshes)];
-        looks.push(Look { model: l, poses, parts });
+        if let Some(model) = cache.get(&format!("player/{name}/{name}.mdl"), &mut images, &mut materials) {
+            looks.push(Look { model });
+        }
     }
     commands.insert_resource(cache);
     commands.insert_resource(viewmodel::ViewModel::default());
-    commands.insert_resource(OtherPlayers { looks, weapons: Default::default() });
+    commands.insert_resource(OtherPlayers { looks, posed: Default::default() });
 
     // Grenade world models and effect materials.
     let mut grenade_parts = Vec::new();
@@ -513,18 +512,34 @@ fn grenade_effects(
 
 type Parts = Vec<(Handle<Mesh>, Handle<StandardMaterial>)>;
 
-/// One player model (T or CT look) with its standing and crouched aim poses.
+/// A player model (T or CT look).
 struct Look {
     model: std::sync::Arc<models::Loaded>,
-    poses: [Vec<goldsrc::mdl::BoneTransform>; 2],
-    parts: [Parts; 2],
+}
+
+/// The player body animation set CS uses for each weapon (`ref_aim_<ext>`, `crouch_aim_<ext>`).
+fn anim_ext(id: sim::weapons::Id) -> &'static str {
+    use sim::weapons::Id::*;
+    match id {
+        Knife => "knife",
+        Glock | Usp | P228 | Deagle | FiveSeven => "onehanded",
+        Elite => "dualpistols",
+        M3 | Xm1014 => "shotgun",
+        Mac10 | Tmp | Mp5 | Ump45 | P90 => "mp5",
+        Galil | Ak47 => "ak47",
+        Famas | M4a1 | Sg552 | Aug => "carbine",
+        Scout | Awp | G3sg1 | Sg550 => "rifle",
+        M249 => "m249",
+        HeGrenade | Flashbang | Smoke => "grenade",
+        C4 => "c4",
+    }
 }
 
 #[derive(Resource)]
 struct OtherPlayers {
     looks: Vec<Look>,
-    /// Weapon-in-hand meshes, posed with each look and stance: (look, crouched, weapon).
-    weapons: std::collections::HashMap<(usize, bool, sim::weapons::Id), Parts>,
+    /// Body plus weapon-in-hand meshes for (look, crouched, weapon), built on first use.
+    posed: std::collections::HashMap<(usize, bool, sim::weapons::Id), Parts>,
 }
 
 /// Another player's model; `crouched` and `weapon` are what its children were built for.
@@ -570,21 +585,21 @@ fn draw_others(
             continue;
         }
         let li = o.id as usize % look.looks.len();
-        // The p_ weapon model takes its pose from the player's skeleton (matching bone names).
         let key = (li, o.crouched, o.weapon);
-        if !look.weapons.contains_key(&key) {
-            let parts = match cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials) {
-                Some(wm) => {
-                    let l = &look.looks[li];
-                    let pose = wm.model.borrow_pose(&l.model.model, &l.poses[o.crouched as usize]);
-                    models::static_parts(&wm, &pose, &mut meshes)
-                }
-                None => Vec::new(),
-            };
-            look.weapons.insert(key, parts);
+        if !look.posed.contains_key(&key) {
+            // Body in the weapon's aim pose; the p_ weapon model borrows that skeleton by bone name.
+            let body = look.looks[li].model.clone();
+            let seq = format!("{}_aim_{}", if o.crouched { "crouch" } else { "ref" }, anim_ext(o.weapon));
+            let seq = body.model.sequence(&seq).or_else(|| body.model.sequence(if o.crouched { "crouch_aim_carbine" } else { "ref_aim_carbine" })).unwrap_or(0);
+            let pose = body.model.pose(seq, 0, 0.5);
+            let mut parts = models::static_parts(&body, &pose, &mut meshes);
+            if let Some(wm) = cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials) {
+                parts.extend(models::static_parts(&wm, &wm.model.borrow_pose(&body.model, &pose), &mut meshes));
+            }
+            look.posed.insert(key, parts);
         }
         let parent = commands.spawn((OtherPlayer { id: o.id, crouched: o.crouched, weapon: o.weapon }, place(o), Visibility::default())).id();
-        for (mesh, material) in look.looks[li].parts[o.crouched as usize].iter().chain(&look.weapons[&key]) {
+        for (mesh, material) in &look.posed[&key] {
             let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
             commands.entity(parent).add_child(child);
         }
@@ -698,8 +713,10 @@ fn move_camera(
         if let Some(o) = w.client.others().into_iter().find(|o| o.alive) {
             let eye = [o.origin[0], o.origin[1], o.origin[2] + 20.0];
             let (s, c) = o.yaw.to_radians().sin_cos();
-            // Chase view from behind (like CS); in front if there's no room. Never in a wall.
-            let spot = [-1.0f32, 1.0]
+            // Chase view from behind (like CS); in front if there's no room (or
+            // BOOTLEG16_SPECTATE=front, for checking models). Never in a wall.
+            let front_first = std::env::var("BOOTLEG16_SPECTATE").is_ok_and(|v| v == "front");
+            let spot = if front_first { [1.0f32, -1.0] } else { [-1.0, 1.0] }
                 .iter()
                 .map(|side| {
                     let want = [eye[0] + c * 100.0 * side, eye[1] + s * 100.0 * side, eye[2] + 10.0];
