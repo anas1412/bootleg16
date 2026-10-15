@@ -216,3 +216,83 @@ fn bullets_know_what_texture_they_hit() {
     )).unwrap_or_default());
     eprintln!("dust2 T spawn floor: {floor} -> material {}", mats.kind(floor));
 }
+
+mod shooting {
+    use super::*;
+    use sim::hitbox::{HitGroup, Hitboxes};
+    use sim::weapons::bullets::{fire_bullet, Target};
+    use sim::weapons::{gun, Id, Shot};
+
+    fn setup() -> Option<(World, Hitboxes, goldsrc::materials::Materials, [f32; 3])> {
+        let bsp = load("de_dust2")?;
+        let home = std::env::var("HOME").ok()?;
+        let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
+        let model = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")).ok()?;
+        let mats = goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!("{dir}/cstrike/sound/materials.txt")).ok()?);
+        let world = World::from_bsp(&bsp);
+        // Stand on the floor at the first T spawn.
+        let s = bsp.entity_list().iter().find(|e| e.get("classname").map(String::as_str) == Some("info_player_deathmatch")).map(|e| vec3(&e["origin"]))?;
+        let origin = world.trace(Hull::Standing, s, [s[0], s[1], s[2] - 200.0]).end;
+        Some((world, Hitboxes::from_model(&model, "carbine")?, mats, origin))
+    }
+
+    /// A direction from `origin` with at least `need` units of open floor ahead.
+    fn open_direction(world: &World, origin: [f32; 3], need: f32) -> f32 {
+        (0..72)
+            .map(|i| i as f32 * 5.0)
+            .find(|yaw| {
+                let (s, c) = yaw.to_radians().sin_cos();
+                (0..3).all(|k| {
+                    let z = origin[2] - 20.0 + k as f32 * 25.0;
+                    world.trace_line([origin[0], origin[1], z], [origin[0] + c * need, origin[1] + s * need, z]).fraction == 1.0
+                })
+            })
+            .expect("some open direction")
+    }
+
+    fn ak_shot(pitch: f32, yaw: f32) -> Shot {
+        let g = gun(Id::Ak47).unwrap();
+        Shot { weapon: Id::Ak47, damage: 36, range_mod: 0.98, penetration: g.penetration, distance: g.distance, bullet: g.bullet, spread: 0.0, angles: [pitch, yaw], side_offset: 0.0, seed: 1, pellets: None }
+    }
+
+    #[test]
+    fn ak_hits_a_player_500_units_away_with_falloff() {
+        let Some((world, hb, mats, me)) = setup() else { return };
+        let yaw = open_direction(&world, me, 700.0);
+        let (s, c) = yaw.to_radians().sin_cos();
+        let target = Target { id: 1, origin: [me[0] + c * 500.0, me[1] + s * 500.0, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false };
+        let eye = [me[0], me[1], me[2] + 17.0];
+        // Aim level at chest height (target origin + 9).
+        let pitch = -((target.origin[2] + 9.0 - eye[2]) / 500.0).atan().to_degrees();
+        let r = fire_bullet(&world, &mats, &hb, eye, &ak_shot(pitch, yaw), 0, &[target]);
+        assert_eq!(r.hits.len(), 1, "{r:?}");
+        // 36 * 0.98^(500/500) = 35.28 -> 35 (integer), chest x1 / arms x1 / stomach x1.25.
+        assert!(matches!(r.hits[0].group, HitGroup::Chest | HitGroup::LeftArm | HitGroup::RightArm | HitGroup::Stomach), "{:?}", r.hits[0]);
+        assert!((r.hits[0].damage - 35.0 * sim::combat::hitgroup_multiplier(r.hits[0].group)).abs() < 0.01, "{:?}", r.hits[0]);
+    }
+
+    #[test]
+    fn bullets_pass_through_one_player_into_the_next() {
+        let Some((world, hb, mats, me)) = setup() else { return };
+        let yaw = open_direction(&world, me, 700.0);
+        let (s, c) = yaw.to_radians().sin_cos();
+        let at = |d: f32, id| Target { id, origin: [me[0] + c * d, me[1] + s * d, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false };
+        let eye = [me[0], me[1], me[2] + 17.0];
+        let pitch = -((me[2] + 9.0 - eye[2]) / 300.0).atan().to_degrees();
+        let r = fire_bullet(&world, &mats, &hb, eye, &ak_shot(pitch, yaw), 0, &[at(200.0, 1), at(300.0, 2)]);
+        assert_eq!(r.hits.iter().map(|h| h.victim).collect::<Vec<_>>(), vec![1, 2], "{r:?}");
+        let base = |h: &sim::weapons::bullets::BulletHit| h.damage / sim::combat::hitgroup_multiplier(h.group);
+        assert!(base(&r.hits[1]) < base(&r.hits[0]) * 0.8, "second victim takes less: {r:?}");
+    }
+
+    #[test]
+    fn a_thick_wall_stops_the_bullet() {
+        let Some((world, hb, mats, me)) = setup() else { return };
+        // Shoot straight down: the bullet hits the floor and the target "under" it is safe.
+        let below = Target { id: 1, origin: [me[0], me[1], me[2] - 300.0], yaw: 0.0, pitch: 0.0, crouched: false };
+        let eye = [me[0], me[1], me[2] + 17.0];
+        let r = fire_bullet(&world, &mats, &hb, eye, &ak_shot(89.0, 0.0), 0, &[below]);
+        assert!(r.hits.is_empty(), "{r:?}");
+        assert!(!r.impacts.is_empty());
+    }
+}

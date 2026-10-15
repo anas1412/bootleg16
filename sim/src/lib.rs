@@ -4,6 +4,7 @@ pub mod combat;
 pub mod doors;
 pub mod hitbox;
 pub mod pmove;
+pub mod weapons;
 
 pub type Vec3 = [f32; 3];
 
