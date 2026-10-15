@@ -71,21 +71,24 @@ fn clip(v: Vec3, n: Vec3, backoff: f32) -> Vec3 {
 
 impl Grenade {
     /// One tick of `MOVETYPE_BOUNCE` physics plus the grenade's own touch rule.
-    pub fn physics(&mut self, dt: f32, world: &World, gravity: f32) {
+    /// Returns true when it hit something hard enough to make a bounce sound.
+    pub fn physics(&mut self, dt: f32, world: &World, gravity: f32) -> bool {
         if self.velocity[2] > 0.0 {
             self.on_ground = false;
         }
         if self.on_ground && self.velocity == [0.0; 3] {
-            return;
+            return false;
         }
         let (grav, friction) = self.kind.physics();
         self.velocity[2] -= grav * gravity * dt;
         let t = world.trace_line(self.origin, add(self.origin, scale(self.velocity, dt)));
         self.origin = t.end;
         if t.fraction >= 1.0 || t.start_solid {
-            return;
+            return false;
         }
         // Touch (`BounceTouch`): rolling slows it; after 10 bounces it settles.
+        // The bounce sound plays for the first five bounces in the air.
+        let sound = !self.on_ground && self.bounces < 5;
         if self.on_ground {
             self.velocity = scale(self.velocity, 0.8);
         } else {
@@ -93,7 +96,7 @@ impl Grenade {
             if self.bounces >= 10 {
                 self.on_ground = true;
                 self.velocity = [0.0; 3];
-                return;
+                return sound;
             }
         }
         // Bounce off the surface: friction 0.7 keeps 30% of the speed into it, 0.8 keeps 20%.
@@ -108,6 +111,7 @@ impl Grenade {
                 self.origin = world.trace_line(self.origin, add(self.origin, rest)).end;
             }
         }
+        sound
     }
 
     /// Ready to go off: HE and flash on the fuse; smoke on the fuse once on the ground.

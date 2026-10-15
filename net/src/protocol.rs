@@ -7,7 +7,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 7;
+pub const PROTOCOL_VERSION: u32 = 8;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -78,14 +78,28 @@ pub struct PlayerNet {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum GameEvent {
     /// A bullet from `from` that ended at `to` (wall impact or far away).
-    Shot { shooter: u8, weapon: Id, from: [f32; 3], to: [f32; 3] },
-    Damage { attacker: u8, victim: u8, amount: f32, group: HitGroup },
+    Shot { shooter: u8, weapon: Id, silenced: bool, from: [f32; 3], to: [f32; 3] },
+    Damage { attacker: u8, victim: u8, amount: f32, group: HitGroup, sound: HitSound },
+    /// Someone's footstep (everyone else hears it; you hear your own predicted ones).
+    Footstep { player: u8, at: [f32; 3] },
+    GrenadeBounce { kind: sim::grenades::Kind, at: [f32; 3] },
     /// `weapon` None = fell to death.
     Kill { killer: u8, victim: u8, weapon: Option<Id>, headshot: bool },
     /// An HE went off here.
     Explosion { at: [f32; 3] },
     /// A flashbang went off here; `blinded` lists who it caught and how badly.
     Flash { at: [f32; 3], blinded: Vec<(u8, sim::grenades::Blind)> },
+}
+
+/// Which impact sound a hit makes.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HitSound {
+    Flesh,
+    Kevlar,
+    /// Headshot stopped by a helmet ("ding").
+    Helmet,
+    Headshot,
+    Explosion,
 }
 
 /// A smoke cloud: where, and how many seconds it has left.

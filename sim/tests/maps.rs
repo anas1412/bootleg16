@@ -252,7 +252,7 @@ mod shooting {
 
     fn ak_shot(pitch: f32, yaw: f32) -> Shot {
         let g = gun(Id::Ak47).unwrap();
-        Shot { weapon: Id::Ak47, damage: 36, range_mod: 0.98, penetration: g.penetration, distance: g.distance, bullet: g.bullet, spread: 0.0, angles: [pitch, yaw], side_offset: 0.0, seed: 1, pellets: None }
+        Shot { weapon: Id::Ak47, damage: 36, range_mod: 0.98, penetration: g.penetration, distance: g.distance, bullet: g.bullet, spread: 0.0, angles: [pitch, yaw], side_offset: 0.0, seed: 1, pellets: None, silenced: false }
     }
 
     #[test]

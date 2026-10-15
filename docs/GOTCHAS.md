@@ -73,6 +73,12 @@ something surprises you.
   `Assets::get_mut` returns a guard (`if let Some(mut m) = ...`); built-in
   `Lightmap` component with `UV_1`.
 - Translucent effects seen from inside (smoke) need `cull_mode: None`.
+- Audio: rodio's spatial sink scales loudness by 1/distance^2 (capped at 1). Shrink
+  `SpatialScale` (1/4096) so it only pans, and apply GoldSrc falloff
+  (`1 - dist * attn / 1000`) yourself. WAV needs Bevy's `wav` feature.
+- Reload/draw/pin sounds are **animation events** (id 5004, file name in options)
+  inside the `v_` models; event 5001 is the muzzle flash. Play them as frames pass.
+- Glock: `shoot3` is the single-shot animation, `shoot`/`shoot2` are burst ones.
 - A spectator/chase camera must trace to its spot and stop short of walls.
 
 ## Simulation and netcode

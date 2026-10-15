@@ -33,6 +33,9 @@ pub struct Sequence {
     pub blends: usize,
     /// Byte offset of this sequence's per-bone animation headers (one set per blend).
     anim_index: usize,
+    /// Animation events: (frame, event id, options). Event 5004 plays the sound named
+    /// in `options` (this is how CS times reload and draw sounds).
+    pub events: Vec<(usize, i32, String)>,
 }
 
 pub struct Model {
@@ -118,7 +121,15 @@ impl Model {
         let mut sequences = Vec::with_capacity(num_seq);
         for i in 0..num_seq {
             let o = seq_index + i * 176;
+            let (num_events, event_index) = (i32_at(o + 48)?.max(0) as usize, i32_at(o + 52)?.max(0) as usize);
+            let events = (0..num_events)
+                .filter_map(|e| {
+                    let eo = event_index + e * 76;
+                    Some((i32_at(eo).ok()?.max(0) as usize, i32_at(eo + 4).ok()?, crate::texture::cstr(data.get(eo + 12..eo + 76)?)))
+                })
+                .collect();
             sequences.push(Sequence {
+                events,
                 name: crate::texture::cstr(data.get(o..o + 32).ok_or_else(|| bad("sequences"))?),
                 fps: f32_at(o + 32)?,
                 frames: i32_at(o + 56)?.max(1) as usize,

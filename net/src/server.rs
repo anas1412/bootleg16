@@ -276,6 +276,9 @@ impl Server {
                 }
                 let cmd_time = seq as f64 * TICK as f64;
                 let (ev, fired) = player::step(&mut c.state, &input, TICK, cmd_time, player::seed(c.id, seq), true, &self.world, &self.vars);
+                if ev.footstep {
+                    self.events.push(GameEvent::Footstep { player: c.id, at: c.state.movement.origin });
+                }
                 if ev.fall_damage > 0.0 && c.vitals.hurt(ev.fall_damage, 0.0) {
                     c.respawn_at = Some(tick + RESPAWN_TICKS);
                     self.events.push(GameEvent::Kill { killer: c.id, victim: c.id, weapon: None, headshot: false });
@@ -428,7 +431,9 @@ impl Server {
         use sim::grenades::{self, Kind};
         let now = self.tick as f64 * TICK as f64;
         for g in &mut self.grenades {
-            g.physics(TICK, &self.world, self.vars.gravity);
+            if g.physics(TICK, &self.world, self.vars.gravity) {
+                self.events.push(GameEvent::GrenadeBounce { kind: g.kind, at: g.origin });
+            }
         }
         let (due, flying): (Vec<_>, Vec<_>) = self.grenades.drain(..).partition(|g| g.due(now));
         self.grenades = flying;
@@ -446,7 +451,7 @@ impl Server {
                         }
                         let (health, armor) = combat::explosion_damage(&c.vitals, dmg);
                         let killed = c.vitals.hurt(health, armor);
-                        self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic });
+                        self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion });
                         if killed {
                             c.respawn_at = Some(tick + RESPAWN_TICKS);
                             self.events.push(GameEvent::Kill { killer: g.owner, victim: c.id, weapon: Some(Id::HeGrenade), headshot: false });
@@ -489,7 +494,7 @@ impl Server {
                 let (f, _, _) = bullets::view_vectors(shot.angles[0], shot.angles[1]);
                 std::array::from_fn(|i| p.eye[i] + f[i] * 2048.0)
             });
-            self.events.push(GameEvent::Shot { shooter: p.shooter, weapon: shot.weapon, from: p.eye, to: end });
+            self.events.push(GameEvent::Shot { shooter: p.shooter, weapon: shot.weapon, silenced: shot.silenced, from: p.eye, to: end });
             hits.extend(r.hits.into_iter().map(|h| (h.victim, h.damage, h.group, shot.weapon)));
         }
         if let Some(swing) = p.fired.swing {
@@ -520,8 +525,15 @@ impl Server {
                 continue;
             }
             let (health, armor) = combat::bullet_damage(&c.vitals, damage, group, data::armor_factor(weapon), false);
+            let sound = match group {
+                HitGroup::Head if c.vitals.helmet && c.vitals.armor > 0.0 => HitSound::Helmet,
+                HitGroup::Head => HitSound::Headshot,
+                HitGroup::LeftLeg | HitGroup::RightLeg => HitSound::Flesh,
+                _ if c.vitals.armor > 0.0 => HitSound::Kevlar,
+                _ => HitSound::Flesh,
+            };
             let killed = c.vitals.hurt(health, armor);
-            self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group });
+            self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group, sound });
             if killed {
                 c.respawn_at = Some(tick + RESPAWN_TICKS);
                 self.events.push(GameEvent::Kill { killer: p.shooter, victim, weapon: Some(weapon), headshot: group == HitGroup::Head });

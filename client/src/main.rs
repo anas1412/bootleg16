@@ -12,6 +12,7 @@
 //! `--give ak47,awp` (offline) hands you extra weapons until there's a buy menu.
 mod map;
 mod models;
+mod sound;
 mod viewmodel;
 
 use bevy::{
@@ -43,10 +44,13 @@ fn game_dir() -> PathBuf {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window { title: "bootleg16".into(), ..default() }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin { primary_window: Some(Window { title: "bootleg16".into(), ..default() }), ..default() })
+                // Shrink audio space so rodio's 1/d^2 loudness never kicks in: it only pans,
+                // and `sound` applies GoldSrc's own distance falloff.
+                .set(bevy::audio::AudioPlugin { default_spatial_scale: bevy::audio::SpatialScale::new(1.0 / 4096.0), ..default() }),
+        )
         // GoldSrc lighting is fully baked into lightmaps; no extra ambient.
         .insert_resource(GlobalAmbientLight { brightness: 0.0, ..default() })
         .insert_resource(ClearColor(Color::srgb(0.45, 0.6, 0.8)))
@@ -54,7 +58,7 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(128.0))
         .add_systems(Startup, (setup, viewmodel::setup).chain())
         .add_systems(FixedUpdate, walk)
-        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, ground_guns, viewmodel::update, grab_cursor, buy_menu, scoreboard, hud, screenshot).chain())
+        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, ground_guns, viewmodel::update, sound::play_cues, grab_cursor, buy_menu, scoreboard, hud, screenshot).chain())
         .run();
 }
 
@@ -176,6 +180,7 @@ fn setup(
         feed: Vec::new(),
         menu: None,
         pending_fx: Vec::new(),
+        cues: Vec::new(),
         flash_hold: 0.0,
         flash_fade: 0.0,
         flash_total_fade: 0.0,
@@ -263,7 +268,9 @@ fn setup(
         Tonemapping::None,
         Transform::from_translation(eye).with_rotation(Quat::from_rotation_y((yaw - 90.0).to_radians())),
         FlyCam { yaw: (yaw - 90.0).to_radians(), pitch: 0.0 },
+        SpatialListener::new(16.0),
     ));
+    commands.insert_resource(sound::Sounds::new(root.clone()));
 }
 
 /// A door's render entity; the value is its brush model index.
@@ -322,6 +329,8 @@ struct Walker {
     menu: Option<Option<usize>>,
     /// Events for `grenade_effects` (explosions, flashes).
     pending_fx: Vec<net::protocol::GameEvent>,
+    /// Sounds to play this frame.
+    cues: Vec<sound::Cue>,
     /// Flashbang: seconds of full white left, seconds of fade left (and total), strength.
     flash_hold: f32,
     flash_fade: f32,
@@ -497,6 +506,9 @@ fn grenade_effects(
     for (k, smoke) in &live {
         if clouds.iter().any(|(_, c)| c.0 == *k) {
             continue;
+        }
+        if smoke.left > sim::grenades::SMOKE_SECONDS as f32 - 1.0 {
+            w.cues.push(sound::Cue::Smoke { at: smoke.at }); // just popped (not one we joined late)
         }
         let centre = Vec3::from(map::to_y_up(smoke.at));
         let parent = commands.spawn((SmokeCloud(*k), Transform::from_translation(centre), Visibility::default())).id();
@@ -686,8 +698,24 @@ fn walk(
     // Free flight: keep the connection alive but stand still.
     let input = if w.noclip { sim::pmove::Input { yaw: input.yaw, pitch: input.pitch, ..default() } } else { input };
     w.prev_eye = w.client.me().eye();
-    let (_events, fired) = w.client.tick(input);
+    let (events, fired) = w.client.tick(input);
     vm.cues.add(&fired);
+    // Our own sounds, predicted: no waiting for the server.
+    let pistol = w.client.state.loadout.active == sim::weapons::Slot::Secondary;
+    for shot in &fired.shots {
+        w.cues.push(sound::Cue::Shot { weapon: shot.weapon, silenced: shot.silenced, at: None });
+    }
+    if fired.dry_fire {
+        w.cues.push(sound::Cue::DryFire { pistol });
+    }
+    if let Some(s) = fired.swing {
+        w.cues.push(sound::Cue::Swing { stab: s.stab });
+    }
+    if events.footstep || events.landed {
+        let me = *w.client.me();
+        let feet = [me.origin[0], me.origin[1], me.origin[2] + me.hull().mins()[2]];
+        w.cues.push(sound::Cue::Footstep { feet, own: true, ladder: me.on_ladder, water: me.water_level > 0 });
+    }
     // Our own shots show at once (predicted); other players' come from server events.
     for shot in fired.shots {
         let eye = w.client.me().eye();
@@ -907,8 +935,21 @@ fn effects(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos) {
     let me = w.client.id();
     for e in w.client.take_events() {
         match e {
-            net::protocol::GameEvent::Shot { shooter, from, to, .. } if Some(shooter) != me => w.tracers.push((from, to, 0.08)),
+            net::protocol::GameEvent::Shot { shooter, weapon, silenced, from, to } if Some(shooter) != me => {
+                w.tracers.push((from, to, 0.08));
+                w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from) });
+            }
+            net::protocol::GameEvent::Footstep { player, at } if Some(player) != me => {
+                w.cues.push(sound::Cue::Footstep { feet: [at[0], at[1], at[2] - 36.0], own: false, ladder: false, water: false });
+            }
+            net::protocol::GameEvent::Damage { victim, sound, .. } => {
+                let at = if Some(victim) == me { None } else { w.client.others().iter().find(|o| o.id == victim).map(|o| o.origin) };
+                w.cues.push(sound::Cue::Hit { sound, at });
+            }
+            net::protocol::GameEvent::GrenadeBounce { kind, at } => w.cues.push(sound::Cue::Bounce { kind, at }),
             net::protocol::GameEvent::Kill { killer, victim, weapon, headshot } => {
+                let at = if Some(victim) == me { None } else { w.client.others().iter().find(|o| o.id == victim).map(|o| o.origin) };
+                w.cues.push(sound::Cue::Death { at });
                 let name = |id: u8| if Some(id) == me { "you".to_string() } else { format!("player {id}") };
                 let line = match weapon {
                     None => format!("{} fell", name(victim)),
@@ -916,7 +957,14 @@ fn effects(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos) {
                 };
                 w.feed.push((line, 6.0));
             }
-            e @ (net::protocol::GameEvent::Explosion { .. } | net::protocol::GameEvent::Flash { .. }) => w.pending_fx.push(e),
+            e @ (net::protocol::GameEvent::Explosion { .. } | net::protocol::GameEvent::Flash { .. }) => {
+                match &e {
+                    net::protocol::GameEvent::Explosion { at } => w.cues.push(sound::Cue::Explosion { at: *at }),
+                    net::protocol::GameEvent::Flash { at, .. } => w.cues.push(sound::Cue::Flash { at: *at }),
+                    _ => {}
+                }
+                w.pending_fx.push(e);
+            }
             _ => {}
         }
     }

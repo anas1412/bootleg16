@@ -42,6 +42,9 @@ pub struct ViewModel {
     was_pinned: bool,
     slash: u8,
     pub cues: Cues,
+    /// Animation frame reached last update (for firing animation sound events once).
+    last_frame: f32,
+    last_fov: u8,
 }
 
 #[derive(Component)]
@@ -79,7 +82,7 @@ fn find(model: &goldsrc::mdl::Model, names: &[&str]) -> Option<usize> {
 pub fn update(
     mut commands: Commands,
     time: Res<Time>,
-    w: Res<Walker>,
+    mut w: ResMut<Walker>,
     mut vm: ResMut<ViewModel>,
     mut cache: ResMut<ModelCache>,
     mut images: ResMut<Assets<Image>>,
@@ -139,6 +142,9 @@ pub fn update(
         let empty = gun.is_some_and(|g| g.clip == 0);
         let seq = if id == Id::Elite {
             find(&m.model, if *side < 0.0 { &["shoot_left1"] } else { &["shoot_right1"] })
+        } else if id == Id::Glock {
+            // CS: `shoot3` is the single shot, `shoot` the burst; `shoot_empty` on the last round.
+            find(&m.model, if empty { &["shoot_empty"] } else if mode == 1 { &["shoot"] } else { &["shoot3"] })
         } else {
             let k = (now * 1000.0) as usize % 3;
             let shoot = names(["shoot1", "shoot2", "shoot3"][k]);
@@ -191,6 +197,25 @@ pub fn update(
         frame %= (s.frames.max(2) - 1) as f32;
     }
 
+    // Sounds the model's animation asks for (reload clicks, bolt pulls, pin pulls).
+    let mut sounds = Vec::new();
+    let s = &m.model.sequences[vm.seq.min(m.model.sequences.len() - 1)];
+    let wrapped = frame < vm.last_frame;
+    for (f, event, file) in &s.events {
+        let f = *f as f32;
+        let crossed = if wrapped { f > vm.last_frame || f <= frame } else { f > vm.last_frame && f <= frame };
+        if *event == 5004 && crossed && alive {
+            sounds.push(crate::sound::Cue::File(file.clone()));
+        }
+    }
+    vm.last_frame = frame;
+    // Scoping in and out clicks.
+    let fov = gun.map(|g| g.fov()).unwrap_or(90);
+    if fov != vm.last_fov && vm.shown.is_some_and(|s| s.0 == id) && vm.last_fov != 0 {
+        sounds.push(crate::sound::Cue::Zoom);
+    }
+    vm.last_fov = fov;
+
     // Pose and upload the vertices.
     let pose = m.model.pose_at(vm.seq, frame, 0.0);
     for (part, handle) in m.model.posed_mesh(&pose).iter().zip(&vm.meshes) {
@@ -208,6 +233,7 @@ pub fn update(
             *v = if show { Visibility::Inherited } else { Visibility::Hidden };
         }
     }
+    w.cues.extend(sounds);
 }
 
 fn play(vm: &mut ViewModel, seq: Option<usize>, now: f32, looping: bool) {
@@ -215,5 +241,6 @@ fn play(vm: &mut ViewModel, seq: Option<usize>, now: f32, looping: bool) {
         vm.seq = seq;
         vm.started = now;
         vm.looping = looping;
+        vm.last_frame = -1.0;
     }
 }

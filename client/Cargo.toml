@@ -7,4 +7,4 @@ edition = "2021"
 goldsrc = { path = "../goldsrc" }
 sim = { path = "../sim" }
 net = { path = "../net" }
-bevy = "0.20"
+bevy = { version = "0.20", features = ["wav"] }

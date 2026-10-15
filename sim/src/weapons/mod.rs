@@ -142,6 +142,8 @@ pub struct Shot {
     pub side_offset: f32,
     pub seed: u64,
     pub pellets: Option<data::Pellets>,
+    /// M4A1/USP with the silencer on (quieter, different sound).
+    pub silenced: bool,
 }
 
 /// A knife swing to trace.
@@ -448,6 +450,7 @@ impl Loadout {
                     side_offset: 0.0,
                     seed: c.seed,
                     pellets: None,
+                    silenced: false,
                 });
                 let idx = 3 - left as usize; // which delay comes next
                 g.burst = if left > 1 { Some((left - 1, c.now + burst.delays.get(idx).copied().unwrap_or(0.0) as f64, spread)) } else { None };
@@ -597,6 +600,7 @@ fn fire(g: &mut GunState, gd: &data::Gun, c: &Context, out: &mut Fired, punch: &
             side_offset,
             seed: c.seed,
             pellets: gd.pellets,
+            silenced: matches!(g.id, Id::M4a1 | Id::Usp) && g.mode == 1,
         });
         let cycle = if g.zoom > 0 { gd.zoomed_cycle.unwrap_or(mode.cycle) } else { mode.cycle };
         g.next_primary = c.now + cycle as f64;
