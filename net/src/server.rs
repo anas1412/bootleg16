@@ -20,8 +20,35 @@ use std::time::{Duration, Instant};
 /// than real time beyond this is thrown away, which stops speed hacks.
 const MAX_INPUT_BUDGET: f32 = 16.0;
 
-/// Seconds a dead player waits before respawning (until rounds exist).
-const RESPAWN_TICKS: u32 = 3 * TICK_RATE;
+/// How a server runs the game until the round system exists.
+#[derive(Clone, Debug)]
+pub struct Rules {
+    /// Practice room: everything below is set for practising.
+    pub practice: bool,
+    /// Ticks before a dead player comes back.
+    pub respawn_ticks: u32,
+    /// Reserve ammo is topped up all the time (you still reload).
+    pub infinite_ammo: bool,
+    /// Practice dummies on the other team.
+    pub dummies: u8,
+    /// Dummies strafe left and right instead of standing still.
+    pub dummy_move: bool,
+}
+
+impl Default for Rules {
+    fn default() -> Self {
+        Rules { practice: false, respawn_ticks: 3 * TICK_RATE, infinite_ammo: false, dummies: 0, dummy_move: false }
+    }
+}
+
+impl Rules {
+    pub fn practice(dummies: u8, dummy_move: bool) -> Rules {
+        Rules { practice: true, respawn_ticks: TICK_RATE / 2, infinite_ammo: true, dummies, dummy_move }
+    }
+}
+
+/// Dummies stay down a little longer so you see them fall.
+const DUMMY_RESPAWN_TICKS: u32 = 2 * TICK_RATE;
 
 /// Knife reach (slash / stab) and damage.
 const SLASH_RANGE: f32 = 48.0;
@@ -63,6 +90,9 @@ const REPICK_TICKS: u32 = TICK_RATE / 2;
 struct Remote {
     id: u8,
     name: String,
+    team: Team,
+    /// A practice dummy (no network connection; the server makes its inputs).
+    bot: bool,
     kills: i32,
     deaths: u32,
     state: PlayerState,
@@ -106,8 +136,10 @@ pub struct Server {
     assets: Assets,
     vars: MoveVars,
     clients: HashMap<SocketAddr, Remote>,
-    spawns: Vec<[f32; 3]>,
-    next_spawn: usize,
+    /// Spawn points: T (`info_player_deathmatch`), CT (`info_player_start`).
+    spawns_t: Vec<[f32; 3]>,
+    spawns_ct: Vec<[f32; 3]>,
+    rules: Rules,
     tick: u32,
     /// The last second of positions, newest last.
     history: VecDeque<PastPositions>,
@@ -125,15 +157,17 @@ pub struct Server {
 
 impl Server {
     pub fn new(bind: SocketAddr, map: &str, bsp: &Bsp, assets: Assets) -> std::io::Result<Server> {
-        let spawns = bsp
-            .entity_list()
-            .iter()
-            .filter(|e| matches!(e.get("classname").map(String::as_str), Some("info_player_start" | "info_player_deathmatch")))
-            .filter_map(|e| {
-                let v: Vec<f32> = e.get("origin")?.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-                Some([*v.first()?, *v.get(1)?, *v.get(2)?])
-            })
-            .collect();
+        let ents = bsp.entity_list();
+        let spawns = |class: &str| -> Vec<[f32; 3]> {
+            ents.iter()
+                .filter(|e| e.get("classname").map(String::as_str) == Some(class))
+                .filter_map(|e| {
+                    let v: Vec<f32> = e.get("origin")?.split_whitespace().filter_map(|x| x.parse().ok()).collect();
+                    Some([*v.first()?, *v.get(1)?, *v.get(2)?])
+                })
+                .collect()
+        };
+        let (spawns_t, spawns_ct) = (spawns("info_player_deathmatch"), spawns("info_player_start"));
         Ok(Server {
             socket: Socket::bind(bind)?,
             map: map.to_string(),
@@ -141,8 +175,9 @@ impl Server {
             assets,
             vars: MoveVars::default(),
             clients: HashMap::new(),
-            spawns,
-            next_spawn: 0,
+            spawns_t,
+            spawns_ct,
+            rules: Rules::default(),
             tick: 0,
             history: VecDeque::new(),
             events: Vec::new(),
@@ -167,16 +202,51 @@ impl Server {
         self.clients.len()
     }
 
-    fn next_spawn_point(&mut self) -> [f32; 3] {
-        let spawn = self.spawns.get(self.next_spawn % self.spawns.len().max(1)).copied().unwrap_or([0.0; 3]);
-        self.next_spawn += 1;
-        spawn
+    /// Practice room, dummies, respawn time and so on.
+    pub fn set_rules(&mut self, rules: Rules) {
+        self.rules = rules;
+        self.clients.retain(|_, c| !c.bot);
+        for i in 0..self.rules.dummies {
+            let id = (0..=u8::MAX).find(|i| self.clients.values().all(|c| c.id != *i)).unwrap_or(0);
+            let addr = SocketAddr::from(([0, 0, 0, 0], 60000 + i as u16)); // never sent to
+            let mut r = Remote::new(id, format!("Dummy {}", i + 1), self.tick);
+            r.bot = true;
+            self.clients.insert(addr, r);
+        }
+        self.place_dummies();
     }
 
-    /// Starting weapons: T (even ids) Glock + 40, CT USP + 24, plus the server's extras.
-    fn spawn_state(&mut self, id: u8) -> PlayerState {
-        let origin = self.next_spawn_point();
-        let mut loadout = if id % 2 == 0 { Loadout::spawn(Id::Glock, 40) } else { Loadout::spawn(Id::Usp, 24) };
+    /// Dummies go on the other side from the earliest-joined real player (T if nobody has picked).
+    fn place_dummies(&mut self) {
+        let human = self.clients.values().filter(|c| !c.bot && c.team != Team::Spectator).min_by_key(|c| c.id).map(|c| c.team);
+        let side = if human == Some(Team::T) { Team::Ct } else { Team::T };
+        let tick = self.tick;
+        for c in self.clients.values_mut().filter(|c| c.bot && c.team != side) {
+            c.team = side;
+            c.vitals.health = 0.0;
+            c.respawn_at = Some(tick);
+        }
+    }
+
+    /// A free spawn point for the team (not on top of someone else).
+    fn spawn_point(&self, team: Team) -> [f32; 3] {
+        let list = if team == Team::Ct { &self.spawns_ct } else { &self.spawns_t };
+        let taken = |p: &[f32; 3]| {
+            self.clients.values().filter(|c| c.vitals.alive()).any(|c| {
+                let o = c.state.movement.origin;
+                (o[0] - p[0]).abs() < 40.0 && (o[1] - p[1]).abs() < 40.0 && (o[2] - p[2]).abs() < 80.0
+            })
+        };
+        list.iter().find(|p| !taken(p)).or(list.first()).copied().unwrap_or([0.0; 3])
+    }
+
+    /// CS starting weapons: T Glock + 40 rounds, CT USP + 24; dummies hold a rifle.
+    fn spawn_state(&self, team: Team, bot: bool) -> PlayerState {
+        let origin = self.spawn_point(team);
+        let mut loadout = if team == Team::Ct { Loadout::spawn(Id::Usp, 24) } else { Loadout::spawn(Id::Glock, 40) };
+        if bot {
+            loadout.give(if team == Team::Ct { Id::M4a1 } else { Id::Ak47 }, 0.0);
+        }
         for &w in &self.give {
             loadout.give(w, 0.0);
         }
@@ -248,15 +318,24 @@ impl Server {
             }
         }
 
-        // Respawn the dead whose wait is over.
+        // Respawn the dead whose wait is over (spectators never do).
         let tick = self.tick;
-        let due: Vec<(SocketAddr, u8)> = self.clients.iter().filter(|(_, c)| c.respawn_at.is_some_and(|t| t <= tick)).map(|(a, c)| (*a, c.id)).collect();
-        for (addr, id) in due {
-            let state = self.spawn_state(id);
+        let due: Vec<(SocketAddr, Team, bool)> =
+            self.clients.iter().filter(|(_, c)| c.team != Team::Spectator && c.respawn_at.is_some_and(|t| t <= tick)).map(|(a, c)| (*a, c.team, c.bot)).collect();
+        for (addr, team, bot) in due {
+            let state = self.spawn_state(team, bot);
             let c = self.clients.get_mut(&addr).unwrap();
             c.state = state;
             c.vitals = Vitals::default();
             c.respawn_at = None;
+        }
+        // Dummies "send" an input every tick: stand still, or strafe left and right.
+        let strafe = if self.rules.dummy_move { if (tick / TICK_RATE) % 2 == 0 { 250.0 } else { -250.0 } } else { 0.0 };
+        for c in self.clients.values_mut().filter(|c| c.bot) {
+            let seq = c.last_queued + 1;
+            c.queue.push_back((seq, TimedInput { input: sim::pmove::Input { side: strafe, ..Default::default() }, view_tick: tick as f32 }));
+            c.last_queued = seq;
+            c.last_heard = tick;
         }
 
         let mut actors = Vec::new();
@@ -280,7 +359,7 @@ impl Server {
                     self.events.push(GameEvent::Footstep { player: c.id, at: c.state.movement.origin });
                 }
                 if ev.fall_damage > 0.0 && c.vitals.hurt(ev.fall_damage, 0.0) {
-                    c.respawn_at = Some(tick + RESPAWN_TICKS);
+                    c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
                     self.events.push(GameEvent::Kill { killer: c.id, victim: c.id, weapon: None, headshot: false });
                 }
                 if let Some(gun) = fired.dropped {
@@ -306,6 +385,12 @@ impl Server {
         for p in pending {
             self.resolve(p);
         }
+        if self.rules.infinite_ammo {
+            for c in self.clients.values_mut() {
+                c.state.loadout.refill_ammo(true);
+                c.state.loadout.refill_ammo(false);
+            }
+        }
         self.world.update(TICK, &actors);
         self.grenades_step();
         self.settle_deaths();
@@ -325,17 +410,17 @@ impl Server {
         }
 
         let tick = self.tick;
-        self.clients.retain(|_, c| tick - c.last_heard < TIMEOUT_TICKS);
+        self.clients.retain(|_, c| c.bot || tick - c.last_heard < TIMEOUT_TICKS);
 
         if self.tick % (TICK_RATE / 4) == 0 {
             let mut scores: Vec<Score> = self
                 .clients
                 .values()
-                .map(|c| Score { id: c.id, name: c.name.clone(), kills: c.kills, deaths: c.deaths, alive: c.vitals.alive() })
+                .map(|c| Score { id: c.id, name: c.name.clone(), kills: c.kills, deaths: c.deaths, alive: c.vitals.alive(), team: c.team, bot: c.bot })
                 .collect();
             scores.sort_by_key(|s| (-s.kills, s.deaths));
             let msg = encode(&ServerMsg::Scores(scores));
-            let addrs: Vec<_> = self.clients.keys().copied().collect();
+            let addrs: Vec<_> = self.clients.iter().filter(|(_, c)| !c.bot).map(|(a, _)| *a).collect();
             for a in addrs {
                 self.socket.send(a, msg.clone());
             }
@@ -351,6 +436,7 @@ impl Server {
                     yaw: c.view.0,
                     pitch: c.view.1,
                     weapon: c.state.loadout.active_id(),
+                    team: c.team,
                 })
                 .collect();
             let doors = self.world.doors.net_state();
@@ -360,7 +446,7 @@ impl Server {
             let grenades: Vec<_> = self.grenades.iter().map(|g| (g.kind, g.origin)).collect();
             let smokes: Vec<SmokeNet> = self.smokes.iter().map(|s| SmokeNet { at: s.0, left: (s.1 - now) as f32 }).collect();
             let ground: Vec<(Id, [f32; 3])> = self.ground.iter().map(|g| (g.gun.id, g.origin)).collect();
-            let sends: Vec<_> = self.clients.iter().map(|(a, c)| (*a, c.last_run, c.state.loadout.clone())).collect();
+            let sends: Vec<_> = self.clients.iter().filter(|(_, c)| !c.bot).map(|(a, c)| (*a, c.last_run, c.state.loadout.clone())).collect();
             for (addr, ack, loadout) in sends {
                 let msg = ServerMsg::Snapshot {
                     tick,
@@ -453,7 +539,7 @@ impl Server {
                         let killed = c.vitals.hurt(health, armor);
                         self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion });
                         if killed {
-                            c.respawn_at = Some(tick + RESPAWN_TICKS);
+                            c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
                             self.events.push(GameEvent::Kill { killer: g.owner, victim: c.id, weapon: Some(Id::HeGrenade), headshot: false });
                         }
                     }
@@ -535,7 +621,7 @@ impl Server {
             let killed = c.vitals.hurt(health, armor);
             self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group, sound });
             if killed {
-                c.respawn_at = Some(tick + RESPAWN_TICKS);
+                c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
                 self.events.push(GameEvent::Kill { killer: p.shooter, victim, weapon: Some(weapon), headshot: group == HitGroup::Head });
             }
         }
@@ -574,30 +660,12 @@ impl Server {
                         return;
                     }
                     let id = (0..=u8::MAX).find(|i| self.clients.values().all(|c| c.id != *i)).unwrap_or(0);
-                    let state = self.spawn_state(id);
-                    self.clients.insert(
-                        from,
-                        Remote {
-                            id,
-                            name: name.chars().filter(|c| !c.is_control()).take(24).collect(),
-                            kills: 0,
-                            deaths: 0,
-                            state,
-                            vitals: Vitals::default(),
-                            respawn_at: None,
-                            queue: VecDeque::new(),
-                            last_queued: 0,
-                            last_run: 0,
-                            budget: 0.0,
-                            last_heard: self.tick,
-                            use_held: false,
-                            used: false,
-                            view: (0.0, 0.0),
-                        },
-                    );
+                    // Everyone starts as a spectator and picks a side (JoinTeam), like CS.
+                    let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
+                    self.clients.insert(from, Remote::new(id, name, self.tick));
                 }
                 let id = self.clients[&from].id;
-                self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), tick_rate: TICK_RATE }));
+                self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), tick_rate: TICK_RATE, practice: self.rules.practice }));
             }
             ClientMsg::Inputs { first_seq, inputs } => {
                 let Some(c) = self.clients.get_mut(&from) else { return };
@@ -649,9 +717,51 @@ impl Server {
                     BuyItem::DefuseKit | BuyItem::NightVision => {} // with the bomb / later
                 }
             }
+            ClientMsg::JoinTeam { team } => {
+                let (t, ct) = self.clients.values().filter(|c| !c.bot).fold((0, 0), |(t, ct), c| match c.team {
+                    Team::T => (t + 1, ct),
+                    Team::Ct => (t, ct + 1),
+                    Team::Spectator => (t, ct),
+                });
+                let tick = self.tick;
+                let Some(c) = self.clients.get_mut(&from) else { return };
+                let team = team.unwrap_or(if t <= ct { Team::T } else { Team::Ct });
+                if c.team == team {
+                    return;
+                }
+                c.team = team;
+                c.vitals.health = 0.0; // switching sides respawns you (or makes you watch)
+                c.respawn_at = if team == Team::Spectator { None } else { Some(tick) };
+                self.place_dummies();
+            }
             ClientMsg::Bye => {
                 self.clients.remove(&from);
             }
+        }
+    }
+}
+
+impl Remote {
+    /// A newly connected player: spectating until they pick a side.
+    fn new(id: u8, name: String, tick: u32) -> Remote {
+        Remote {
+            id,
+            name,
+            team: Team::Spectator,
+            bot: false,
+            kills: 0,
+            deaths: 0,
+            state: PlayerState { movement: Player::new([0.0; 3]), loadout: Loadout::knife_only() },
+            vitals: Vitals { health: 0.0, ..Vitals::default() },
+            respawn_at: None,
+            queue: VecDeque::new(),
+            last_queued: 0,
+            last_run: 0,
+            budget: 0.0,
+            last_heard: tick,
+            use_held: false,
+            used: false,
+            view: (0.0, 0.0),
         }
     }
 }

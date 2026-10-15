@@ -1,15 +1,23 @@
 //! Dedicated server. Usage: `server [map] [port] [--give ak47,awp]` (defaults: de_dust2, 27015).
 //! Reads the map from the CS 1.6 install in `BOOTLEG16_DIR` (default: Steam's).
-//! `--give` hands every player extra weapons on spawn (until there's a buy menu).
+//! `--give` hands every player extra weapons on spawn.
+//! `--practice <dummies>` runs the practice room (infinite ammo, quick respawn, dummies);
+//! add `--move` to make the dummies strafe.
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
 fn main() {
     let mut positional = Vec::new();
     let mut give = Vec::new();
+    let mut practice: Option<u8> = None;
+    let mut dummy_move = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
-        if a == "--give" {
+        if a == "--practice" {
+            practice = Some(args.next().and_then(|n| n.parse().ok()).unwrap_or(5));
+        } else if a == "--move" {
+            dummy_move = true;
+        } else if a == "--give" {
             for w in args.next().unwrap_or_default().split(',') {
                 give.push(sim::weapons::data::by_name(w).unwrap_or_else(|| panic!("unknown weapon {w}")));
             }
@@ -28,6 +36,9 @@ fn main() {
     let assets = net::server::Assets::load(&dir).unwrap_or_else(|e| panic!("loading game files: {e}"));
     let mut server = net::Server::new(addr, &map, &bsp, assets).unwrap_or_else(|e| panic!("binding {addr}: {e}"));
     server.set_give(give);
+    if let Some(n) = practice {
+        server.set_rules(net::server::Rules::practice(n, dummy_move));
+    }
     println!("bootleg16 server: {map} on {} at {} tick", server.local_addr(), net::protocol::TICK_RATE);
     server.run();
 }

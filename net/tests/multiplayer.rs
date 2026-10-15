@@ -49,12 +49,27 @@ impl Game {
         std::thread::sleep(Duration::from_micros(150));
     }
 
+    /// Connect and pick sides (auto puts them on opposite teams).
     fn connect(&mut self) {
-        for _ in 0..256 {
+        self.connect_as(None, None);
+    }
+
+    /// Connect and join the given teams (same team = neighbouring spawns, handy for shooting tests).
+    fn connect_as(&mut self, a: Option<net::protocol::Team>, b: Option<net::protocol::Team>) {
+        for _ in 0..128 {
+            self.tick(Input::default(), Input::default());
+        }
+        self.a.join_team(a);
+        for _ in 0..8 {
+            self.tick(Input::default(), Input::default());
+        }
+        self.b.join_team(b);
+        for _ in 0..128 {
             self.tick(Input::default(), Input::default());
         }
         assert!(self.a.id().is_some() && self.b.id().is_some(), "{:?} {:?}", self.a.status, self.b.status);
-        assert_eq!(self.server.player_count(), 2);
+        assert!(self.server.player_count() >= 2);
+        assert!(self.server.vitals(self.a.id().unwrap()).unwrap().alive(), "A spawned");
     }
 }
 
@@ -151,7 +166,7 @@ fn ak_kills_another_player_and_everyone_hears_about_it() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 60, 0.0);
     g.server.set_give(vec![sim::weapons::Id::Ak47]);
-    g.connect();
+    g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
     // The give applies on spawn; respawn both by waiting? They spawned before set_give took
     // effect only if connect happened first, so check what A holds.
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
@@ -185,7 +200,7 @@ fn he_hurts_and_flash_blinds_across_the_network() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 40, 0.0);
     g.server.set_give(vec![Id::HeGrenade, Id::Flashbang]);
-    g.connect();
+    g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
     let target = g.server.player(b).unwrap().origin;
     let eye = g.server.player(a).unwrap().eye();
@@ -300,4 +315,35 @@ fn dropped_guns_land_and_everyone_sees_them() {
     let at = g.b.ground[0].1;
     assert_ne!(g.a.world.point_contents([at[0], at[1], at[2] + 1.0]), sim::collision::Contents::Solid, "not inside a wall");
     assert!(g.a.world.trace_line(at, [at[0], at[1], at[2] - 4.0]).fraction < 1.0, "resting on something: {at:?}");
+}
+
+
+#[test]
+fn practice_room_dummies_and_infinite_ammo() {
+    use sim::weapons::Id;
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 0, 0.0);
+    g.server.set_rules(net::server::Rules::practice(3, true));
+    g.server.set_give(vec![Id::Ak47]);
+    g.connect();
+    assert_eq!(g.server.player_count(), 5, "2 players + 3 dummies");
+    assert!(g.a.practice);
+    let me = g.a.team();
+    let dummies: Vec<_> = g.a.scores.iter().filter(|s| s.bot).collect();
+    assert_eq!(dummies.len(), 3);
+    assert!(dummies.iter().all(|d| d.team != me && d.team != net::protocol::Team::Spectator), "dummies are on the other side");
+    // Dummies strafe.
+    let d = dummies[0].id;
+    let before = g.server.player(d).unwrap().origin;
+    for _ in 0..200 {
+        g.tick(Input::default(), Input::default());
+    }
+    let after = g.server.player(d).unwrap().origin;
+    assert!((before[0] - after[0]).abs() + (before[1] - after[1]).abs() > 10.0, "dummy didn't move");
+    // Infinite reserve: spray a whole clip and the reserve stays full.
+    for _ in 0..512 {
+        g.tick(Input { attack: true, ..Default::default() }, Input::default());
+    }
+    let gun = *g.server.player_state(g.a.id().unwrap()).unwrap().loadout.active_gun().unwrap();
+    assert_eq!((gun.id, gun.reserve), (Id::Ak47, 90));
 }

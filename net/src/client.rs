@@ -37,6 +37,7 @@ pub struct Remote {
     pub yaw: f32,
     pub pitch: f32,
     pub weapon: sim::weapons::Id,
+    pub team: Team,
 }
 
 pub struct Client {
@@ -70,6 +71,8 @@ pub struct Client {
     pub ground: Vec<(sim::weapons::Id, [f32; 3])>,
     /// Scoreboard as last sent.
     pub scores: Vec<Score>,
+    /// The server runs practice rules.
+    pub practice: bool,
 }
 
 impl Client {
@@ -97,6 +100,7 @@ impl Client {
             smokes: Vec::new(),
             ground: Vec::new(),
             scores: Vec::new(),
+            practice: false,
         })
     }
 
@@ -165,9 +169,10 @@ impl Client {
 
     fn handle(&mut self, msg: ServerMsg) {
         match msg {
-            ServerMsg::Welcome { id, .. } => {
+            ServerMsg::Welcome { id, practice, .. } => {
                 if self.status == Status::Connecting {
                     self.status = Status::Connected { id };
+                    self.practice = practice;
                 }
             }
             ServerMsg::Scores(s) => self.scores = s,
@@ -246,16 +251,26 @@ impl Client {
                         Some(pa) => pa.yaw + ((pb.yaw - pa.yaw + 540.0).rem_euclid(360.0) - 180.0) * t,
                         None => pb.yaw,
                     };
-                    out.push(Remote { id: pb.id, origin, crouched: pb.player.crouched, alive: pb.vitals.alive(), yaw, pitch: pb.pitch, weapon: pb.weapon });
+                    out.push(Remote { id: pb.id, origin, crouched: pb.player.crouched, alive: pb.vitals.alive(), yaw, pitch: pb.pitch, weapon: pb.weapon, team: pb.team });
                 }
             }
             None => {
                 for p in newest.players.iter().filter(|p| Some(p.id) != me) {
-                    out.push(Remote { id: p.id, origin: p.player.origin, crouched: p.player.crouched, alive: p.vitals.alive(), yaw: p.yaw, pitch: p.pitch, weapon: p.weapon });
+                    out.push(Remote { id: p.id, origin: p.player.origin, crouched: p.player.crouched, alive: p.vitals.alive(), yaw: p.yaw, pitch: p.pitch, weapon: p.weapon, team: p.team });
                 }
             }
         }
         out
+    }
+
+    /// Pick a side (None = auto).
+    pub fn join_team(&mut self, team: Option<Team>) {
+        self.socket.send(self.server, encode(&ClientMsg::JoinTeam { team }));
+    }
+
+    /// Our team according to the scoreboard (Spectator until we pick).
+    pub fn team(&self) -> Team {
+        self.scores.iter().find(|s| Some(s.id) == self.id()).map(|s| s.team).unwrap_or(Team::Spectator)
     }
 
     /// Ask the server for a weapon (the buy menu).

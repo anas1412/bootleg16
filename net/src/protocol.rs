@@ -7,7 +7,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 8;
+pub const PROTOCOL_VERSION: u32 = 9;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -26,7 +26,16 @@ pub enum ClientMsg {
     Inputs { first_seq: u32, inputs: Vec<TimedInput> },
     /// Buy something (free while there's no economy).
     Buy { item: BuyItem },
+    /// Pick a side; None = auto (the smaller team).
+    JoinTeam { team: Option<Team> },
     Bye,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Team {
+    Spectator,
+    T,
+    Ct,
 }
 
 /// What the buy menu can buy.
@@ -49,6 +58,9 @@ pub struct Score {
     pub kills: i32,
     pub deaths: u32,
     pub alive: bool,
+    pub team: Team,
+    /// A practice dummy.
+    pub bot: bool,
 }
 
 /// An input plus the server time the client was showing other players at, so
@@ -72,6 +84,7 @@ pub struct PlayerNet {
     pub pitch: f32,
     /// Weapon in hand.
     pub weapon: Id,
+    pub team: Team,
 }
 
 /// Things that happened since the last snapshot (effects, kill feed).
@@ -111,7 +124,8 @@ pub struct SmokeNet {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ServerMsg {
-    Welcome { id: u8, map: String, tick_rate: u32 },
+    /// `practice`: practice room rules (no rounds, free buys, infinite ammo, dummies).
+    Welcome { id: u8, map: String, tick_rate: u32, practice: bool },
     Reject { reason: String },
     /// Scoreboard, sent a few times a second.
     Scores(Vec<Score>),
