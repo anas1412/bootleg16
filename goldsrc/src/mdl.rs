@@ -160,10 +160,18 @@ impl Model {
     /// Pose of every bone in model space for `seq` at `frame`, at position `blend`
     /// (0..1) across its blend sets (e.g. aim pitch; 0.5 = level).
     pub fn pose(&self, seq: usize, frame: usize, blend: f32) -> Vec<BoneTransform> {
+        self.pose_at(seq, frame as f32, blend)
+    }
+
+    /// Like `pose`, at a fractional frame: neighbouring frames are blended, as the
+    /// engine does, so animations are smooth at any frame rate.
+    pub fn pose_at(&self, seq: usize, frame: f32, blend: f32) -> Vec<BoneTransform> {
         let s = &self.sequences[seq];
-        let frame = frame.min(s.frames - 1);
+        let frame = frame.clamp(0.0, (s.frames - 1) as f32);
+        let (f0, ft) = (frame.floor() as usize, frame.fract());
+        let f1 = (f0 + 1).min(s.frames - 1);
         let per_blend = self.bones.len() * 12;
-        let local = |set: usize| -> Vec<(Quat, Vec3)> {
+        let local = |set: usize, frame: usize| -> Vec<(Quat, Vec3)> {
             let anim = s.anim_index + set.min(s.blends - 1) * per_blend;
             (0..self.bones.len())
                 .map(|b| {
@@ -172,16 +180,21 @@ impl Model {
                 })
                 .collect()
         };
+        let mix = |a: Vec<(Quat, Vec3)>, b: Vec<(Quat, Vec3)>, t: f32| -> Vec<(Quat, Vec3)> {
+            a.iter().zip(&b).map(|(x, y)| (slerp(x.0, y.0, t), std::array::from_fn(|i| x.1[i] + (y.1[i] - x.1[i]) * t))).collect()
+        };
         // `blend` spans all blend sets (CS player models use 9 for aim pitch; 0.5 = the middle one).
         let pos = blend.clamp(0.0, 1.0) * (s.blends - 1) as f32;
-        let (lo, t) = (pos.floor() as usize, pos.fract());
-        let a = local(lo);
-        let mixed: Vec<(Quat, Vec3)> = if t > 0.0 && lo + 1 < s.blends {
-            let b = local(lo + 1);
-            a.iter().zip(&b).map(|(x, y)| (slerp(x.0, y.0, t), std::array::from_fn(|i| x.1[i] + (y.1[i] - x.1[i]) * t))).collect()
-        } else {
-            a
+        let (lo, bt) = (pos.floor() as usize, pos.fract());
+        let at_frame = |frame: usize| {
+            let a = local(lo, frame);
+            if bt > 0.0 && lo + 1 < s.blends {
+                mix(a, local(lo + 1, frame), bt)
+            } else {
+                a
+            }
         };
+        let mixed = if ft > 0.0 && f1 != f0 { mix(at_frame(f0), at_frame(f1), ft) } else { at_frame(f0) };
         let mut out: Vec<BoneTransform> = Vec::with_capacity(self.bones.len());
         for (i, (q, p)) in mixed.into_iter().enumerate() {
             let t = BoneTransform { rot: quat_matrix(q), pos: p };
@@ -189,6 +202,18 @@ impl Model {
             out.push(if parent >= 0 && (parent as usize) < out.len() { concat(&out[parent as usize], &t) } else { t });
         }
         out
+    }
+
+    /// Bone transforms for this model taken from another model's posed skeleton by
+    /// bone name (how GoldSrc puts a `p_` weapon model in a player's hand). Bones the
+    /// other skeleton doesn't have stay at their rest pose.
+    pub fn borrow_pose(&self, other: &Model, other_pose: &[BoneTransform]) -> Vec<BoneTransform> {
+        let rest = self.pose(0, 0, 0.0);
+        self.bones
+            .iter()
+            .enumerate()
+            .map(|(i, b)| other.bones.iter().position(|o| o.name == b.name).and_then(|j| other_pose.get(j).copied()).unwrap_or(rest[i]))
+            .collect()
     }
 }
 

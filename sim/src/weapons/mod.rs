@@ -81,6 +81,11 @@ impl GunState {
         }
     }
 
+    /// A shotgun is loading shells one by one.
+    pub fn loading_shells(&self) -> bool {
+        self.shell_state != 0
+    }
+
     pub fn fov(&self) -> u8 {
         match gun(self.id).map(|g| g.secondary) {
             Some(Secondary::Zoom(steps)) if self.zoom > 0 => steps[self.zoom as usize - 1],
@@ -288,6 +293,11 @@ impl Loadout {
         if let Some(g) = g {
             g.reserve = gun(g.id).map(|d| d.reserve).unwrap_or(g.reserve);
         }
+    }
+
+    /// The pin is pulled on the grenade in hand.
+    pub fn pin_pulled(&self) -> bool {
+        self.pin_until.is_some()
     }
 
     /// The grenade type in hand (or that slot 4 would draw).

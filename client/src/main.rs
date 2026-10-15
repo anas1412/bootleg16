@@ -10,6 +10,8 @@
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead).
 //! `--give ak47,awp` (offline) hands you extra weapons until there's a buy menu.
 mod map;
+mod models;
+mod viewmodel;
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -49,9 +51,9 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.45, 0.6, 0.8)))
         // The movement simulation runs at a fixed 128 ticks per second, like the server will.
         .insert_resource(Time::<Fixed>::from_hz(128.0))
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, viewmodel::setup).chain())
         .add_systems(FixedUpdate, walk)
-        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, grab_cursor, buy_menu, scoreboard, hud, screenshot).chain())
+        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, ground_guns, viewmodel::update, grab_cursor, buy_menu, scoreboard, hud, screenshot).chain())
         .run();
 }
 
@@ -216,42 +218,17 @@ fn setup(
     ));
     // Player models from the install: one T and one CT look, posed standing and crouched.
     let mut looks = Vec::new();
+    let mut cache = models::ModelCache::new(root.clone());
     for name in ["arctic", "urban"] {
-        let path = root.join(format!("cstrike/models/player/{name}/{name}.mdl"));
-        let Ok(model) = goldsrc::mdl::Model::load(&path) else {
-            warn!("missing player model {}", path.display());
-            continue;
-        };
-        let textures: Vec<Handle<StandardMaterial>> = model
-            .textures()
-            .into_iter()
-            .map(|t| {
-                let image = images.add(rgba_image(t.width, t.height, t.rgba, false, TextureFormat::Rgba8UnormSrgb));
-                // ⚠ Unlit until models are lit from the map's lightmaps like GoldSrc does.
-                materials.add(StandardMaterial { base_color_texture: Some(image), unlit: true, alpha_mode: AlphaMode::Mask(0.5), ..default() })
-            })
-            .collect();
-        let mut stance = |seq: &str| -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
-            let Some(seq) = model.sequence(seq) else { return Vec::new() };
-            model
-                .posed_mesh(&model.pose(seq, 0, 0.5))
-                .into_iter()
-                .filter(|p| !p.indices.is_empty())
-                .map(|p| {
-                    let positions: Vec<[f32; 3]> = p.positions.iter().map(|v| map::to_y_up(*v)).collect();
-                    let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-                        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-                        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
-                        .with_inserted_indices(Indices::U32(p.indices))
-                        .with_computed_normals();
-                    (meshes.add(mesh), textures.get(p.texture).cloned().unwrap_or_default())
-                })
-                .collect()
-        };
-        let standing = stance("ref_aim_carbine");
-        looks.push([standing, stance("crouch_aim_carbine")]);
+        let Some(l) = cache.get(&format!("player/{name}/{name}.mdl"), &mut images, &mut materials) else { continue };
+        let pose = |seq: &str| l.model.sequence(seq).map(|s| l.model.pose(s, 0, 0.5)).unwrap_or_default();
+        let poses = [pose("ref_aim_carbine"), pose("crouch_aim_carbine")];
+        let parts = [models::static_parts(&l, &poses[0], &mut meshes), models::static_parts(&l, &poses[1], &mut meshes)];
+        looks.push(Look { model: l, poses, parts });
     }
-    commands.insert_resource(OtherPlayers { looks });
+    commands.insert_resource(cache);
+    commands.insert_resource(viewmodel::ViewModel::default());
+    commands.insert_resource(OtherPlayers { looks, weapons: Default::default() });
 
     // Grenade world models and effect materials.
     let mut grenade_parts = Vec::new();
@@ -396,6 +373,36 @@ struct Effects {
 #[derive(Component)]
 struct GrenadeView;
 
+#[derive(Component)]
+struct GroundGunView;
+
+/// Guns lying on the ground (CS `w_` models), redrawn from the latest snapshot.
+fn ground_guns(
+    mut commands: Commands,
+    w: Res<Walker>,
+    mut cache: ResMut<models::ModelCache>,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut parts: Local<std::collections::HashMap<sim::weapons::Id, Parts>>,
+    views: Query<Entity, With<GroundGunView>>,
+) {
+    for e in &views {
+        commands.entity(e).despawn();
+    }
+    for &(id, at) in &w.client.ground {
+        let p = parts.entry(id).or_insert_with(|| match cache.get(&models::weapon_model("w", id), &mut images, &mut materials) {
+            Some(m) => models::static_parts(&m, &m.model.pose(0, 0, 0.0), &mut meshes),
+            None => Vec::new(),
+        });
+        let parent = commands.spawn((GroundGunView, Transform::from_translation(Vec3::from(map::to_y_up(at))), Visibility::default())).id();
+        for (mesh, mat) in p.iter() {
+            let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(mat.clone()))).id();
+            commands.entity(parent).add_child(child);
+        }
+    }
+}
+
 /// An HE fireball: age in seconds.
 #[derive(Component)]
 struct Fireball(f32);
@@ -504,29 +511,50 @@ fn grenade_effects(
     }
 }
 
-/// Player model meshes: [look][standing, crouched] -> parts.
-#[derive(Resource)]
-struct OtherPlayers {
-    looks: Vec<[Vec<(Handle<Mesh>, Handle<StandardMaterial>)>; 2]>,
+type Parts = Vec<(Handle<Mesh>, Handle<StandardMaterial>)>;
+
+/// One player model (T or CT look) with its standing and crouched aim poses.
+struct Look {
+    model: std::sync::Arc<models::Loaded>,
+    poses: [Vec<goldsrc::mdl::BoneTransform>; 2],
+    parts: [Parts; 2],
 }
 
-/// Another player's model; `crouched` is the stance its children were built for.
+#[derive(Resource)]
+struct OtherPlayers {
+    looks: Vec<Look>,
+    /// Weapon-in-hand meshes, posed with each look and stance: (look, crouched, weapon).
+    weapons: std::collections::HashMap<(usize, bool, sim::weapons::Id), Parts>,
+}
+
+/// Another player's model; `crouched` and `weapon` are what its children were built for.
 #[derive(Component)]
 struct OtherPlayer {
     id: u8,
     crouched: bool,
+    weapon: sim::weapons::Id,
 }
 
 /// Each other player's model, where the server (interpolated) says they are.
-fn draw_others(mut commands: Commands, w: Res<Walker>, look: Res<OtherPlayers>, mut drawn: Query<(Entity, &OtherPlayer, &mut Transform)>) {
+#[allow(clippy::too_many_arguments)]
+fn draw_others(
+    mut commands: Commands,
+    w: Res<Walker>,
+    mut look: ResMut<OtherPlayers>,
+    mut cache: ResMut<models::ModelCache>,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut drawn: Query<(Entity, &OtherPlayer, &mut Transform)>,
+) {
     let others: Vec<_> = w.client.others().into_iter().filter(|o| o.alive).collect();
     let place = |o: &net::client::Remote| {
         Transform::from_translation(Vec3::from(map::to_y_up(o.origin))).with_rotation(Quat::from_rotation_y(o.yaw.to_radians()))
     };
     for (e, p, mut tf) in &mut drawn {
         match others.iter().find(|o| o.id == p.id) {
-            // Stance changed: rebuild with the other pose.
-            Some(o) if o.crouched != p.crouched => commands.entity(e).despawn(),
+            // Stance or weapon changed: rebuild.
+            Some(o) if o.crouched != p.crouched || o.weapon != p.weapon => commands.entity(e).despawn(),
             Some(o) => *tf = place(o),
             None => {
                 info!("player {} left", p.id);
@@ -534,13 +562,29 @@ fn draw_others(mut commands: Commands, w: Res<Walker>, look: Res<OtherPlayers>, 
             }
         }
     }
-    for o in others.iter().filter(|o| !drawn.iter().any(|(_, d, _)| d.id == o.id && d.crouched == o.crouched)) {
+    for o in others.iter().filter(|o| !drawn.iter().any(|(_, d, _)| d.id == o.id && d.crouched == o.crouched && d.weapon == o.weapon)) {
         if !drawn.iter().any(|(_, d, _)| d.id == o.id) {
             info!("player {} is in the game at {:?}", o.id, o.origin);
         }
-        let Some(parts) = look.looks.get(o.id as usize % look.looks.len().max(1)) else { continue };
-        let parent = commands.spawn((OtherPlayer { id: o.id, crouched: o.crouched }, place(o), Visibility::default())).id();
-        for (mesh, material) in &parts[o.crouched as usize] {
+        if look.looks.is_empty() {
+            continue;
+        }
+        let li = o.id as usize % look.looks.len();
+        // The p_ weapon model takes its pose from the player's skeleton (matching bone names).
+        let key = (li, o.crouched, o.weapon);
+        if !look.weapons.contains_key(&key) {
+            let parts = match cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials) {
+                Some(wm) => {
+                    let l = &look.looks[li];
+                    let pose = wm.model.borrow_pose(&l.model.model, &l.poses[o.crouched as usize]);
+                    models::static_parts(&wm, &pose, &mut meshes)
+                }
+                None => Vec::new(),
+            };
+            look.weapons.insert(key, parts);
+        }
+        let parent = commands.spawn((OtherPlayer { id: o.id, crouched: o.crouched, weapon: o.weapon }, place(o), Visibility::default())).id();
+        for (mesh, material) in look.looks[li].parts[o.crouched as usize].iter().chain(&look.weapons[&key]) {
             let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
             commands.entity(parent).add_child(child);
         }
@@ -572,7 +616,9 @@ fn mouse_look(
 
 /// One simulation tick from the keyboard and mouse. WASD move, Space jump, Ctrl crouch,
 /// Shift walk, E use, mouse fire, R reload, 1-5 weapon slots.
+#[allow(clippy::too_many_arguments)]
 fn walk(
+    mut vm: ResMut<viewmodel::ViewModel>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     wheel: Res<bevy::input::mouse::AccumulatedMouseScroll>,
@@ -626,6 +672,7 @@ fn walk(
     let input = if w.noclip { sim::pmove::Input { yaw: input.yaw, pitch: input.pitch, ..default() } } else { input };
     w.prev_eye = w.client.me().eye();
     let (_events, fired) = w.client.tick(input);
+    vm.cues.add(&fired);
     // Our own shots show at once (predicted); other players' come from server events.
     for shot in fired.shots {
         let eye = w.client.me().eye();
