@@ -64,7 +64,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Main menu: practice (map, dummies, strafe), join server, settings (name, sensitivity, volume); Esc menu
 - [ ] HUD: money, round timer, team score (with the round system)
 - [ ] Settings: FOV, key binds, crosshair style
-- [ ] Spawn view angle from the spawn point (camera starts at yaw 0 now)
+- [x] Spawn view angle from the spawn point
 
 ### Networking (`docs/NETWORKING.md`)
 - [ ] Anti-wallhack: don't send players the client can't see (server-side visibility)
