@@ -1,7 +1,7 @@
 //! CS 1.6 player movement: friction, ground/air acceleration, stepping, jumping
 //! with stamina, the bunny-hop speed cap, and crouching. Clean-room; constants
 //! are read from the game's own `cs.so` (see docs/MOVEMENT.md).
-use crate::collision::{Hull, World};
+use crate::collision::{Contents, Hull, Ladder, World};
 use crate::{add, dot, length, scale, sub, Vec3};
 
 /// Server movement settings. Defaults are what CS 1.6 forces every round.
@@ -15,6 +15,8 @@ pub struct MoveVars {
     pub edge_friction: f32,
     pub step_size: f32,
     pub max_velocity: f32,
+    pub water_accelerate: f32,
+    pub water_friction: f32,
 }
 
 impl Default for MoveVars {
@@ -28,6 +30,8 @@ impl Default for MoveVars {
             edge_friction: 2.0,
             step_size: 18.0,
             max_velocity: 2000.0,
+            water_accelerate: 10.0,
+            water_friction: 1.0,
         }
     }
 }
@@ -48,6 +52,19 @@ const FLOOR_NORMAL_Z: f32 = 0.7;
 const LIFT_OFF_SPEED: f32 = 180.0;
 /// Origin difference between the standing and crouched hulls (box centres).
 const CROUCH_OFFSET: f32 = 18.0;
+/// Seconds to crouch on the ground (`PM_Duck`).
+const TIME_TO_DUCK: f32 = 0.4;
+/// Ladders (`PM_LadderMove`).
+const LADDER_CLIMB_SPEED: f32 = 200.0;
+const LADDER_JUMP_SPEED: f32 = 270.0;
+/// Water (`PM_WaterMove`, `PM_Jump`). Swimming is at 0.8x max speed.
+const WATER_SPEED: f32 = 0.8;
+const WATER_SINK_SPEED: f32 = 60.0;
+const WATER_SWIM_UP_SPEED: f32 = 100.0;
+/// Falling (`PM_CheckFalling`, `CBasePlayer::PostThink`, `FlPlayerFallDamage`).
+const LAND_SPEED: f32 = 250.0;
+const SAFE_FALL_SPEED: f32 = 500.0;
+const FALL_DAMAGE_PER_SPEED: f32 = 100.0 / 600.0 * 1.25;
 
 pub const VIEW_HEIGHT_STANDING: f32 = 17.0;
 pub const VIEW_HEIGHT_CROUCHED: f32 = 12.0;
@@ -60,6 +77,8 @@ pub struct Input {
     pub side: f32,
     /// View yaw in degrees (GoldSrc: 0 = +X, counter-clockwise).
     pub yaw: f32,
+    /// View pitch in degrees (GoldSrc: positive looks down). Used on ladders and in water.
+    pub pitch: f32,
     pub jump: bool,
     pub crouch: bool,
 }
@@ -68,17 +87,52 @@ pub struct Input {
 pub struct Player {
     pub origin: Vec3,
     pub velocity: Vec3,
+    /// Fully crouched (small hull).
     pub crouched: bool,
     pub on_ground: bool,
+    pub on_ladder: bool,
+    /// 0 = dry, 1 = feet, 2 = waist (swimming), 3 = head under.
+    pub water_level: u8,
     /// Weapon-dependent max speed (250 knife/pistols, 221 AK...).
     pub max_speed: f32,
+    /// Eye height above the origin; animates while crouching.
+    pub view_height: f32,
     stamina: f32,
     jump_held: bool,
+    /// Crouch is held but the 0.4 s crouch hasn't finished yet.
+    ducking: bool,
+    /// Counts down from 1000 ms while crouching.
+    duck_time: f32,
+    /// Downward speed while airborne, for landing and fall damage.
+    fall_velocity: f32,
+}
+
+/// Things that happened during a step, for the game rules to act on.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Events {
+    /// Landed hard enough for a landing sound/view punch.
+    pub landed: bool,
+    /// Health to subtract (0 when the fall was safe).
+    pub fall_damage: f32,
 }
 
 impl Player {
     pub fn new(origin: Vec3) -> Player {
-        Player { origin, velocity: [0.0; 3], crouched: false, on_ground: false, max_speed: 250.0, stamina: 0.0, jump_held: false }
+        Player {
+            origin,
+            velocity: [0.0; 3],
+            crouched: false,
+            on_ground: false,
+            on_ladder: false,
+            water_level: 0,
+            max_speed: 250.0,
+            view_height: VIEW_HEIGHT_STANDING,
+            stamina: 0.0,
+            jump_held: false,
+            ducking: false,
+            duck_time: 0.0,
+            fall_velocity: 0.0,
+        }
     }
 
     pub fn hull(&self) -> Hull {
@@ -90,8 +144,7 @@ impl Player {
     }
 
     pub fn eye(&self) -> Vec3 {
-        let h = if self.crouched { VIEW_HEIGHT_CROUCHED } else { VIEW_HEIGHT_STANDING };
-        add(self.origin, [0.0, 0.0, h])
+        add(self.origin, [0.0, 0.0, self.view_height])
     }
 
     /// Horizontal speed, as shown on speed meters.
@@ -100,11 +153,26 @@ impl Player {
     }
 }
 
+/// GoldSrc view vectors (roll is always 0 for movement).
+fn view_vectors(yaw: f32, pitch: f32) -> (Vec3, Vec3) {
+    let (sy, cy) = yaw.to_radians().sin_cos();
+    let (sp, cp) = pitch.to_radians().sin_cos();
+    ([cp * cy, cp * sy, -sp], [sy, -cy, 0.0])
+}
+
 /// Advance one player by `dt` seconds.
-pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVars) {
-    p.stamina = (p.stamina - 1000.0 * dt).max(0.0);
-    crouch(p, input, world);
+pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVars) -> Events {
+    let ms = dt * 1000.0;
+    p.stamina = (p.stamina - ms).max(0.0);
+    p.duck_time = (p.duck_time - ms).max(0.0);
+    let was_on_ground = p.on_ground;
     categorize(p, world);
+    check_water(p, world);
+    if !p.on_ground {
+        p.fall_velocity = -p.velocity[2];
+    }
+
+    duck(p, input, world);
 
     // The client clamps input to the weapon's max speed before crouching scales it.
     let (mut fmove, mut smove) = (input.forward, input.side);
@@ -113,52 +181,85 @@ pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVa
         fmove *= p.max_speed / len;
         smove *= p.max_speed / len;
     }
-    if p.crouched {
+    if p.crouched || p.ducking {
         fmove *= CROUCH_SPEED;
         smove *= CROUCH_SPEED;
     }
 
-    if input.jump {
-        if !p.jump_held && p.on_ground {
+    let jump_pressed = input.jump && !p.jump_held;
+    p.jump_held = input.jump;
+
+    p.on_ladder = world.ladder_at(p.hull(), p.origin).is_some();
+    if let Some(ladder) = world.ladder_at(p.hull(), p.origin).copied() {
+        ladder_move(p, input, &ladder, dt, world);
+    } else if p.water_level >= 2 {
+        if input.jump {
+            p.velocity[2] = WATER_SWIM_UP_SPEED;
+        }
+        water_move(p, input, fmove, smove, dt, world, vars);
+    } else {
+        if jump_pressed && p.on_ground {
             jump(p);
         }
-        p.jump_held = true;
-    } else {
-        p.jump_held = false;
-    }
+        // Gravity is applied in two halves around the move (more accurate arcs).
+        if !p.on_ground {
+            p.velocity[2] -= vars.gravity * 0.5 * dt;
+        } else {
+            p.velocity[2] = 0.0;
+            friction(p, dt, world, vars);
+        }
 
-    // Gravity is applied in two halves around the move (more accurate arcs).
-    if !p.on_ground {
-        p.velocity[2] -= vars.gravity * 0.5 * dt;
-    }
-    if p.on_ground {
-        p.velocity[2] = 0.0;
-        friction(p, dt, world, vars);
-    }
-
-    let yaw = input.yaw.to_radians();
-    let (fwd, right) = ([yaw.cos(), yaw.sin(), 0.0], [yaw.sin(), -yaw.cos(), 0.0]);
-    let wish = add(scale(fwd, fmove), scale(right, smove));
-    let wish_speed = length(wish).min(p.max_speed);
-    let wish_dir = if wish_speed > 0.0 { scale(wish, 1.0 / length(wish)) } else { [0.0; 3] };
-
-    if p.on_ground {
-        accelerate(p, wish_dir, wish_speed, vars.accelerate, dt);
-        clamp_velocity(p, vars);
-        walk_move(p, dt, world, vars);
-    } else {
-        air_accelerate(p, wish_dir, wish_speed, vars.air_accelerate, dt);
-        clamp_velocity(p, vars);
-        fly_move(p, dt, world);
-    }
-
-    categorize(p, world);
-    if !p.on_ground {
-        p.velocity[2] -= vars.gravity * 0.5 * dt;
-    } else {
-        p.velocity[2] = 0.0;
+        let (fwd, right) = view_vectors(input.yaw, 0.0);
+        let wish = add(scale(fwd, fmove), scale(right, smove));
+        let wish_speed = length(wish).min(p.max_speed);
+        let wish_dir = if wish_speed > 0.0 { scale(wish, 1.0 / length(wish)) } else { [0.0; 3] };
+        if p.on_ground {
+            accelerate(p, wish_dir, wish_speed, vars.accelerate, dt);
+            clamp_velocity(p, vars);
+            walk_move(p, dt, world, vars);
+        } else {
+            air_accelerate(p, wish_dir, wish_speed, vars.air_accelerate, dt);
+            clamp_velocity(p, vars);
+            fly_move(p, dt, world);
+        }
+        categorize(p, world);
+        if !p.on_ground {
+            p.velocity[2] -= vars.gravity * 0.5 * dt;
+        } else {
+            p.velocity[2] = 0.0;
+        }
     }
     clamp_velocity(p, vars);
+    categorize(p, world);
+    check_water(p, world);
+
+    let mut ev = Events::default();
+    if p.on_ground && !was_on_ground && p.fall_velocity >= LAND_SPEED {
+        ev.landed = true;
+        if p.water_level == 0 && p.fall_velocity > SAFE_FALL_SPEED {
+            ev.fall_damage = (p.fall_velocity - SAFE_FALL_SPEED) * FALL_DAMAGE_PER_SPEED;
+        }
+    }
+    if p.on_ground || p.on_ladder || p.water_level >= 2 {
+        p.fall_velocity = 0.0;
+    }
+    ev
+}
+
+/// Water depth from three probe points: feet, box centre, eyes.
+fn check_water(p: &mut Player, world: &World) {
+    let wet = |z: f32| world.point_contents([p.origin[0], p.origin[1], z]) == Contents::Water;
+    let feet = p.origin[2] + p.hull().mins()[2] + 1.0;
+    let mid = p.origin[2] + (p.hull().mins()[2] + p.hull().maxs()[2]) * 0.5;
+    p.water_level = if !wet(feet) {
+        0
+    } else if !wet(mid) {
+        1
+    } else if !wet(p.origin[2] + p.view_height) {
+        2
+    } else {
+        3
+    };
 }
 
 fn clamp_velocity(p: &mut Player, vars: &MoveVars) {
@@ -200,27 +301,119 @@ fn stamina_factor(stamina: f32) -> f32 {
     (100.0 - stamina * 0.001 * 19.0) * 0.01
 }
 
-/// Instant crouch. Grounded players keep their feet in place; airborne players pull
-/// their legs up (the classic crouch-jump).
-fn crouch(p: &mut Player, input: &Input, world: &World) {
-    if input.crouch && !p.crouched {
-        if p.on_ground {
-            p.origin[2] -= CROUCH_OFFSET;
-        } else {
-            p.origin[2] += CROUCH_OFFSET;
-            if world.is_solid(Hull::Crouched, p.origin) {
-                p.origin[2] -= CROUCH_OFFSET;
+/// Smooth 0..1 ease used for the crouch view animation.
+fn spline_fraction(t: f32, scale: f32) -> f32 {
+    let v = (t * scale).clamp(0.0, 1.0);
+    3.0 * v * v - 2.0 * v * v * v
+}
+
+/// Crouching takes 0.4 s on the ground (instant in the air): the eye lowers
+/// smoothly, then the hull shrinks. Grounded players keep their feet in place;
+/// airborne players pull their legs up (the classic crouch-jump).
+fn duck(p: &mut Player, input: &Input, world: &World) {
+    if input.crouch {
+        if !p.crouched && !p.ducking {
+            p.ducking = true;
+            p.duck_time = 1000.0;
+        }
+        if p.ducking {
+            let elapsed = (1000.0 - p.duck_time) / 1000.0;
+            if elapsed >= TIME_TO_DUCK || !p.on_ground {
+                if p.on_ground {
+                    p.origin[2] -= CROUCH_OFFSET;
+                }
+                p.crouched = true;
+                p.ducking = false;
+                p.view_height = VIEW_HEIGHT_CROUCHED;
+            } else {
+                // Eye height relative to the still-standing origin: 17 down to 12 - 18.
+                let f = spline_fraction(elapsed, 1.0 / TIME_TO_DUCK);
+                p.view_height = (VIEW_HEIGHT_CROUCHED - CROUCH_OFFSET) * f + VIEW_HEIGHT_STANDING * (1.0 - f);
             }
         }
-        p.crouched = true;
-    } else if !input.crouch && p.crouched {
+    } else if p.ducking {
+        p.ducking = false;
+        p.view_height = VIEW_HEIGHT_STANDING;
+    } else if p.crouched {
         // Stand up only if there is room.
-        let up = add(p.origin, [0.0, 0.0, if p.on_ground { CROUCH_OFFSET } else { -CROUCH_OFFSET }]);
+        let up = add(p.origin, [0.0, 0.0, if p.on_ground { CROUCH_OFFSET } else { 0.0 }]);
         if !world.is_solid(Hull::Standing, up) {
             p.origin = up;
             p.crouched = false;
+            p.view_height = VIEW_HEIGHT_STANDING;
         }
     }
+}
+
+/// Climbing: no gravity; look direction and keys move you along the ladder face.
+fn ladder_move(p: &mut Player, input: &Input, ladder: &Ladder, dt: f32, world: &World) {
+    // The ladder's face normal: its thin horizontal axis, pointing at the player.
+    let size = sub(ladder.maxs, ladder.mins);
+    let centre = scale(add(ladder.mins, ladder.maxs), 0.5);
+    let axis = if size[0] < size[1] { 0 } else { 1 };
+    let mut normal = [0.0; 3];
+    normal[axis] = if p.origin[axis] >= centre[axis] { 1.0 } else { -1.0 };
+
+    if input.jump {
+        p.velocity = scale(normal, LADDER_JUMP_SPEED);
+        p.on_ladder = false;
+        fly_move(p, dt, world);
+        return;
+    }
+    let mut climb = LADDER_CLIMB_SPEED;
+    if p.crouched || p.ducking {
+        climb *= CROUCH_SPEED;
+    }
+    let forward = climb * input.forward.signum() * (input.forward != 0.0) as i32 as f32;
+    let right = climb * input.side.signum() * (input.side != 0.0) as i32 as f32;
+    if forward == 0.0 && right == 0.0 {
+        p.velocity = [0.0; 3];
+        return;
+    }
+    let (vpn, vright) = view_vectors(input.yaw, input.pitch);
+    let vel = add(scale(vpn, forward), scale(vright, right));
+    // Split into "into the ladder" and "along it"; pushing into it climbs up.
+    let up = [0.0, 0.0, 1.0];
+    let perp = {
+        let c = [up[1] * normal[2] - up[2] * normal[1], up[2] * normal[0] - up[0] * normal[2], up[0] * normal[1] - up[1] * normal[0]];
+        scale(c, 1.0 / length(c).max(1e-6))
+    };
+    let normal_comp = dot(vel, normal);
+    let lateral = sub(vel, scale(normal, normal_comp));
+    let tmp = [normal[1] * perp[2] - normal[2] * perp[1], normal[2] * perp[0] - normal[0] * perp[2], normal[0] * perp[1] - normal[1] * perp[0]];
+    p.velocity = add(lateral, scale(tmp, -normal_comp));
+    // Walking backwards off a ladder that reaches the floor.
+    let feet = add(p.origin, [0.0, 0.0, p.hull().mins()[2] - 1.0]);
+    if world.point_contents(feet) == Contents::Solid && normal_comp > 0.0 {
+        p.velocity = add(p.velocity, scale(normal, LADDER_CLIMB_SPEED));
+    }
+    fly_move(p, dt, world);
+}
+
+/// Swimming: 3D movement along the view direction, slow sinking, heavy drag.
+fn water_move(p: &mut Player, input: &Input, fmove: f32, smove: f32, dt: f32, world: &World, vars: &MoveVars) {
+    let (vpn, vright) = view_vectors(input.yaw, input.pitch);
+    let mut wish = add(scale(vpn, fmove), scale(vright, smove));
+    if fmove == 0.0 && smove == 0.0 && !input.jump {
+        wish[2] -= WATER_SINK_SPEED;
+    }
+    let mut wish_speed = length(wish);
+    let wish_dir = if wish_speed > 0.0 { scale(wish, 1.0 / wish_speed) } else { [0.0; 3] };
+    wish_speed = wish_speed.min(p.max_speed) * WATER_SPEED;
+
+    let speed = length(p.velocity);
+    let new_speed = if speed > 0.0 { (speed - dt * speed * vars.friction * vars.water_friction).max(0.0) } else { 0.0 };
+    if speed > 0.0 {
+        p.velocity = scale(p.velocity, new_speed / speed);
+    }
+    if wish_speed >= 0.1 {
+        let add_speed = wish_speed - new_speed;
+        if add_speed > 0.0 {
+            let a = (vars.water_accelerate * wish_speed * dt).min(add_speed);
+            p.velocity = add(p.velocity, scale(wish_dir, a));
+        }
+    }
+    fly_move(p, dt, world);
 }
 
 fn friction(p: &mut Player, dt: f32, world: &World, vars: &MoveVars) {
@@ -232,7 +425,7 @@ fn friction(p: &mut Player, dt: f32, world: &World, vars: &MoveVars) {
     let ahead = add(p.origin, scale(p.velocity, 16.0 / speed));
     let start = [ahead[0], ahead[1], p.origin[2] + p.hull().mins()[2]];
     let mut fric = vars.friction;
-    if world.trace(Hull::Standing, add(start, [0.0, 0.0, 36.0]), add(start, [0.0, 0.0, 36.0 - 34.0])).fraction == 1.0 {
+    if world.trace(p.hull(), start, sub(start, [0.0, 0.0, 34.0])).fraction == 1.0 {
         fric *= vars.edge_friction;
     }
     let control = speed.max(vars.stop_speed);
@@ -464,11 +657,39 @@ mod tests {
         let sim = || {
             let mut p = Player::new([0.0, 0.0, 100.0]);
             for i in 0..512 {
-                let input = Input { forward: 400.0, side: if i % 64 < 32 { 400.0 } else { -400.0 }, yaw: i as f32, jump: i % 50 == 0, crouch: false };
+                let input = Input { forward: 400.0, side: if i % 64 < 32 { 400.0 } else { -400.0 }, yaw: i as f32, jump: i % 50 == 0, ..Default::default() };
                 step(&mut p, &input, DT, &w, &MoveVars::default());
             }
             (p.origin, p.velocity)
         };
         assert_eq!(sim(), sim());
+    }
+
+    #[test]
+    fn crouch_takes_point_four_seconds_on_ground() {
+        let (mut p, w) = standing_on_floor();
+        let crouch = Input { crouch: true, ..Default::default() };
+        run(&mut p, crouch, 0.2, &w);
+        assert!(!p.crouched && p.view_height < VIEW_HEIGHT_STANDING, "mid-crouch eye {}", p.view_height);
+        run(&mut p, crouch, 0.25, &w);
+        assert!(p.crouched && p.view_height == VIEW_HEIGHT_CROUCHED);
+    }
+
+    #[test]
+    fn fall_damage_matches_cs() {
+        let w = World::flat_floor(0.0);
+        let mut events = Vec::new();
+        for height in [100.0, 300.0, 1000.0] {
+            let mut p = Player::new([0.0, 0.0, 36.0 + height]);
+            let mut dmg = 0.0;
+            for _ in 0..1024 {
+                dmg += step(&mut p, &Input::default(), DT, &w, &MoveVars::default()).fall_damage;
+            }
+            events.push(dmg);
+        }
+        // 100 units: safe. 300 units: ~693 u/s at landing -> ~40 HP. 1000 units: lethal.
+        assert_eq!(events[0], 0.0);
+        assert!((events[1] - 40.0).abs() < 3.0, "{events:?}");
+        assert!(events[2] > 100.0, "{events:?}");
     }
 }

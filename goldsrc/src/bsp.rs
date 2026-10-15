@@ -8,10 +8,12 @@ const L_ENTITIES: usize = 0;
 const L_PLANES: usize = 1;
 const L_TEXTURES: usize = 2;
 const L_VERTICES: usize = 3;
+const L_NODES: usize = 5;
 const L_TEXINFO: usize = 6;
 const L_FACES: usize = 7;
 const L_LIGHTING: usize = 8;
 const L_CLIPNODES: usize = 9;
+const L_LEAVES: usize = 10;
 const L_EDGES: usize = 12;
 const L_SURFEDGES: usize = 13;
 const L_MODELS: usize = 14;
@@ -104,6 +106,16 @@ pub struct Bsp {
     pub lighting: Vec<u8>,
     pub models: Vec<Model>,
     pub clipnodes: Vec<ClipNode>,
+    pub nodes: Vec<Node>,
+    /// Contents of each leaf (-1 empty, -2 solid, -3 water, -4 slime, -5 lava, -16 ladder...).
+    pub leaf_contents: Vec<i32>,
+}
+
+/// Render/point BSP node (hull 0). Children >= 0 are nodes; negative child c is leaf -(c + 1).
+#[derive(Debug, Clone, Copy)]
+pub struct Node {
+    pub plane: u32,
+    pub children: [i16; 2],
 }
 
 /// Collision-hull BSP node. Negative children are leaf contents (-1 empty, -2 solid).
@@ -240,6 +252,20 @@ impl Bsp {
                 let pixels = decode_miptex(&tex[off as usize..]);
                 bsp.textures.push(MipTex { name, width, height, pixels });
             }
+        }
+
+        let mut r = lump(L_NODES, "nodes")?;
+        while r.more() {
+            let plane = r.u32()?;
+            let children = [r.u16()? as i16, r.u16()? as i16];
+            r.take::<16>()?; // bounds, face range
+            bsp.nodes.push(Node { plane, children });
+        }
+
+        let mut r = lump(L_LEAVES, "leaves")?;
+        while r.more() {
+            bsp.leaf_contents.push(r.i32()?);
+            r.take::<24>()?; // vis offset, bounds, mark surfaces, ambient sounds
         }
 
         let mut r = lump(L_CLIPNODES, "clipnodes")?;

@@ -59,10 +59,31 @@ struct Model {
     offset: Vec3,
 }
 
+/// Point contents a player can be in.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Contents {
+    Empty,
+    Solid,
+    Water,
+}
+
+/// Axis-aligned box of a ladder brush, in world space.
+#[derive(Clone, Copy, Debug)]
+pub struct Ladder {
+    pub mins: Vec3,
+    pub maxs: Vec3,
+}
+
 /// Everything the movement code collides with.
 pub struct World {
     nodes: Vec<Node>,
     models: Vec<Model>,
+    /// Hull-0 BSP (render nodes): the only tree that knows about water.
+    point_nodes: Vec<Node>,
+    leaf_contents: Vec<i32>,
+    /// Hull-0 roots to test for water: the world plus `func_water` brushes.
+    water_roots: Vec<(i32, Vec3)>,
+    pub ladders: Vec<Ladder>,
 }
 
 /// Brush entities players walk through.
@@ -85,18 +106,35 @@ impl World {
                 Node { normal: p.normal, dist: p.dist, children: [c.children[0] as i32, c.children[1] as i32] }
             })
             .collect();
+        // Point nodes: map leaf children to the clip-node convention (negative = contents).
+        let point_nodes = bsp
+            .nodes
+            .iter()
+            .map(|n| {
+                let p = bsp.planes[n.plane as usize];
+                Node { normal: p.normal, dist: p.dist, children: [n.children[0] as i32, n.children[1] as i32] }
+            })
+            .collect();
         let mut models = vec![Model { heads: bsp.models[0].head_nodes, offset: [0.0; 3] }];
+        let mut water_roots = vec![(bsp.models[0].head_nodes[0], [0.0; 3])];
+        let mut ladders = Vec::new();
         for e in bsp.entity_list() {
             let class = e.get("classname").map(String::as_str).unwrap_or("");
             let Some(i) = e.get("model").and_then(|m| m.strip_prefix('*')?.parse::<usize>().ok()) else { continue };
-            if i == 0 || i >= bsp.models.len() || non_solid(class) {
+            if i == 0 || i >= bsp.models.len() {
                 continue;
             }
             let o: Vec<f32> = e.get("origin").map(|o| o.split_whitespace().filter_map(|x| x.parse().ok()).collect()).unwrap_or_default();
             let offset = [o.first().copied().unwrap_or(0.0), o.get(1).copied().unwrap_or(0.0), o.get(2).copied().unwrap_or(0.0)];
-            models.push(Model { heads: bsp.models[i].head_nodes, offset });
+            let m = bsp.models[i];
+            match class {
+                "func_ladder" => ladders.push(Ladder { mins: crate::add(m.mins, offset), maxs: crate::add(m.maxs, offset) }),
+                "func_water" => water_roots.push((m.head_nodes[0], offset)),
+                c if non_solid(c) => {}
+                _ => models.push(Model { heads: m.head_nodes, offset }),
+            }
         }
-        World { nodes, models }
+        World { nodes, models, point_nodes, leaf_contents: bsp.leaf_contents.clone(), water_roots, ladders }
     }
 
     fn contents(&self, mut num: i32, p: Vec3) -> i32 {
@@ -105,6 +143,43 @@ impl World {
             num = n.children[(dot(n.normal, p) - n.dist < 0.0) as usize];
         }
         num
+    }
+
+    /// What a single point is in (water comes from the hull-0 tree and `func_water`).
+    pub fn point_contents(&self, p: Vec3) -> Contents {
+        if self.is_solid_point(p) {
+            return Contents::Solid;
+        }
+        for &(root, offset) in &self.water_roots {
+            let mut num = root;
+            let q = sub(p, offset);
+            while num >= 0 {
+                let n = &self.point_nodes[num as usize];
+                num = n.children[(dot(n.normal, q) - n.dist < 0.0) as usize];
+            }
+            // Leaf index is -(num + 1); its contents say what it is.
+            let c = self.leaf_contents.get((-(num + 1)) as usize).copied().unwrap_or(CONTENTS_EMPTY);
+            // func_water brushes are marked solid/water in their own tree.
+            if matches!(c, -5..=-3) || (root != self.water_roots[0].0 && c == CONTENTS_SOLID) {
+                return Contents::Water;
+            }
+        }
+        Contents::Empty
+    }
+
+    fn is_solid_point(&self, p: Vec3) -> bool {
+        let mut num = self.water_roots[0].0;
+        while num >= 0 {
+            let n = &self.point_nodes[num as usize];
+            num = n.children[(dot(n.normal, p) - n.dist < 0.0) as usize];
+        }
+        self.leaf_contents.get((-(num + 1)) as usize) == Some(&CONTENTS_SOLID)
+    }
+
+    /// The ladder the player box at `origin` is touching, if any.
+    pub fn ladder_at(&self, hull: Hull, origin: Vec3) -> Option<&Ladder> {
+        let (mins, maxs) = (crate::add(origin, hull.mins()), crate::add(origin, hull.maxs()));
+        self.ladders.iter().find(|l| (0..3).all(|i| mins[i] <= l.maxs[i] + 1.0 && maxs[i] >= l.mins[i] - 1.0))
     }
 
     /// Is the player box at `origin` stuck in something?
@@ -133,7 +208,11 @@ impl World {
                 best.end = lerp(start, end, t.fraction);
             }
         }
-        if best.fraction == 1.0 {
+        if best.start_solid {
+            // GoldSrc's player trace: starting inside solid counts as blocked at once.
+            best.fraction = 0.0;
+            best.end = start;
+        } else if best.fraction == 1.0 {
             best.end = end;
         }
         best
@@ -198,7 +277,14 @@ impl World {
             Node { normal: [0.0, 0.0, 1.0], dist: z + 36.0, children: [CONTENTS_EMPTY, CONTENTS_SOLID] },
             Node { normal: [0.0, 0.0, 1.0], dist: z + 18.0, children: [CONTENTS_EMPTY, CONTENTS_SOLID] },
         ];
-        World { nodes, models: vec![Model { heads: [-1, 0, -1, 1], offset: [0.0; 3] }] }
+        World {
+            nodes,
+            models: vec![Model { heads: [-1, 0, -1, 1], offset: [0.0; 3] }],
+            point_nodes: vec![Node { normal: [0.0, 0.0, 1.0], dist: z, children: [-1, -2] }],
+            leaf_contents: vec![CONTENTS_EMPTY, CONTENTS_SOLID],
+            water_roots: vec![(0, [0.0; 3])],
+            ladders: Vec::new(),
+        }
     }
 }
 

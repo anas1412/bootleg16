@@ -172,12 +172,14 @@ fn walk(keys: Res<ButtonInput<KeyCode>>, cam: Single<&FlyCam>, mut w: ResMut<Wal
         side: axis(KeyCode::KeyD, KeyCode::KeyA),
         // Bevy yaw 0 looks down -Z, which is GoldSrc yaw 90.
         yaw: cam.yaw.to_degrees() + 90.0,
+        // Bevy pitch is positive looking up; GoldSrc is positive looking down.
+        pitch: -cam.pitch.to_degrees(),
         jump: keys.pressed(KeyCode::Space),
         crouch: keys.pressed(KeyCode::ControlLeft),
     };
     let w = &mut *w;
     w.prev_eye = w.player.eye();
-    sim::pmove::step(&mut w.player, &input, 1.0 / 128.0, &w.world, &sim::pmove::MoveVars::default());
+    let _events = sim::pmove::step(&mut w.player, &input, 1.0 / 128.0, &w.world, &sim::pmove::MoveVars::default());
 }
 
 fn move_camera(
