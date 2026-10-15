@@ -116,6 +116,9 @@ pub struct Bsp {
 pub struct Node {
     pub plane: u32,
     pub children: [i16; 2],
+    /// Faces lying on this node's plane.
+    pub first_face: u16,
+    pub num_faces: u16,
 }
 
 /// Collision-hull BSP node. Negative children are leaf contents (-1 empty, -2 solid).
@@ -258,8 +261,9 @@ impl Bsp {
         while r.more() {
             let plane = r.u32()?;
             let children = [r.u16()? as i16, r.u16()? as i16];
-            r.take::<16>()?; // bounds, face range
-            bsp.nodes.push(Node { plane, children });
+            r.take::<12>()?; // bounds
+            let (first_face, num_faces) = (r.u16()?, r.u16()?);
+            bsp.nodes.push(Node { plane, children, first_face, num_faces });
         }
 
         let mut r = lump(L_LEAVES, "leaves")?;

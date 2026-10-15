@@ -158,6 +158,21 @@ pub struct World {
     water_roots: Vec<(i32, Vec3)>,
     pub ladders: Vec<Ladder>,
     pub doors: Doors,
+    /// Faces on each point node, for finding the texture a bullet hit.
+    node_faces: Vec<(u32, u32)>,
+    surfaces: Vec<Surface>,
+    textures: Vec<String>,
+}
+
+/// Enough of a face to tell whether a point on its plane is inside it.
+#[derive(Clone, Copy)]
+struct Surface {
+    s: [f32; 4],
+    t: [f32; 4],
+    /// Texture-space extents of the face.
+    min: [f32; 2],
+    max: [f32; 2],
+    texture: u32,
 }
 
 /// Brush entities players walk through.
@@ -209,7 +224,67 @@ impl World {
                 _ => models.push(Model { heads: m.head_nodes, offset, door: doors.door_for_model(i), bsp_model: i }),
             }
         }
-        World { nodes, models, point_nodes, leaf_contents: bsp.leaf_contents.clone(), water_roots, ladders, doors }
+        let surfaces = bsp
+            .faces
+            .iter()
+            .map(|f| {
+                let ti = bsp.texinfo[f.texinfo as usize];
+                let (mut min, mut max) = ([f32::MAX; 2], [f32::MIN; 2]);
+                for v in bsp.face_vertices(f) {
+                    for (k, axis) in [ti.s, ti.t].iter().enumerate() {
+                        let x = dot(v, [axis[0], axis[1], axis[2]]) + axis[3];
+                        min[k] = min[k].min(x);
+                        max[k] = max[k].max(x);
+                    }
+                }
+                Surface { s: ti.s, t: ti.t, min, max, texture: ti.miptex }
+            })
+            .collect();
+        World {
+            nodes,
+            models,
+            point_nodes,
+            leaf_contents: bsp.leaf_contents.clone(),
+            water_roots,
+            ladders,
+            doors,
+            node_faces: bsp.nodes.iter().map(|n| (n.first_face as u32, n.num_faces as u32)).collect(),
+            surfaces,
+            textures: bsp.textures.iter().map(|t| t.name.clone()).collect(),
+        }
+    }
+
+    /// Name of the world texture hit by the line `start`..`end` (first surface crossed).
+    pub fn texture_at(&self, start: Vec3, end: Vec3) -> Option<&str> {
+        let root = self.water_roots.first()?.0;
+        let face = self.surface_at(root, start, end)?;
+        self.textures.get(self.surfaces[face].texture as usize).map(String::as_str)
+    }
+
+    fn surface_at(&self, num: i32, start: Vec3, end: Vec3) -> Option<usize> {
+        if num < 0 {
+            return None;
+        }
+        let n = self.point_nodes[num as usize];
+        let (d1, d2) = (dot(n.normal, start) - n.dist, dot(n.normal, end) - n.dist);
+        let side = (d1 < 0.0) as usize;
+        if (d2 < 0.0) as usize == side {
+            return self.surface_at(n.children[side], start, end);
+        }
+        let mid = lerp(start, end, d1 / (d1 - d2));
+        if let Some(f) = self.surface_at(n.children[side], start, mid) {
+            return Some(f);
+        }
+        let (first, count) = self.node_faces[num as usize];
+        for i in first..first + count {
+            let sf = &self.surfaces[i as usize];
+            let s = dot(mid, [sf.s[0], sf.s[1], sf.s[2]]) + sf.s[3];
+            let t = dot(mid, [sf.t[0], sf.t[1], sf.t[2]]) + sf.t[3];
+            if s >= sf.min[0] - 0.5 && s <= sf.max[0] + 0.5 && t >= sf.min[1] - 0.5 && t <= sf.max[1] + 0.5 {
+                return Some(i as usize);
+            }
+        }
+        self.surface_at(n.children[side ^ 1], mid, end)
     }
 
     /// Advance doors and triggers one tick.
@@ -409,6 +484,9 @@ impl World {
             water_roots: vec![(0, [0.0; 3])],
             ladders: Vec::new(),
             doors: Doors::default(),
+            node_faces: vec![(0, 0)],
+            surfaces: Vec::new(),
+            textures: Vec::new(),
         }
     }
 }

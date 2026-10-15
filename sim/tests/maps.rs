@@ -200,3 +200,19 @@ fn hitboxes_from_the_real_player_model() {
     let d = [0.0, 0.0, -1.0];
     assert_eq!(hb.trace([0.0; 3], 90.0, 0.0, false, from, d, 1000.0).map(|h| h.group), Some(HitGroup::Head));
 }
+
+#[test]
+fn bullets_know_what_texture_they_hit() {
+    let Some(bsp) = load("de_dust2") else { return };
+    let world = World::from_bsp(&bsp);
+    let s = bsp.entity_list().iter().find(|e| e.get("classname").map(String::as_str) == Some("info_player_deathmatch")).map(|e| vec3(&e["origin"])).unwrap();
+    let below = [s[0], s[1], s[2] - 500.0];
+    let floor = world.texture_at(s, below).expect("floor texture");
+    // Every texture name the trace can return comes from the map's own texture list.
+    assert!(bsp.textures.iter().any(|t| t.name == floor), "{floor}");
+    let mats = goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!(
+        "{}/.steam/steam/steamapps/common/Half-Life/cstrike/sound/materials.txt",
+        std::env::var("HOME").unwrap()
+    )).unwrap_or_default());
+    eprintln!("dust2 T spawn floor: {floor} -> material {}", mats.kind(floor));
+}
