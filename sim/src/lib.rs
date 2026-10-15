@@ -1,5 +1,6 @@
 //! Deterministic game simulation (GoldSrc units, Z up). No engine or rendering code.
 pub mod collision;
+pub mod doors;
 pub mod pmove;
 
 pub type Vec3 = [f32; 3];

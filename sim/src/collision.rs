@@ -3,7 +3,8 @@
 //! GoldSrc compiles each map with "expanded" hulls: the world grown by the player
 //! box. Tracing the player's centre point through that hull equals sweeping the
 //! box through the real world.
-use crate::{dot, lerp, sub, Vec3};
+use crate::doors::{angle_vectors, local_to_world, world_to_local, Actor, Doors};
+use crate::{add, dot, lerp, sub, Vec3};
 use goldsrc::bsp::Bsp;
 
 const CONTENTS_EMPTY: i32 = -1;
@@ -57,6 +58,29 @@ struct Node {
 struct Model {
     heads: [i32; 4],
     offset: Vec3,
+    /// Index into `World::doors` when this model moves.
+    door: Option<usize>,
+    bsp_model: usize,
+}
+
+/// Point `p` in a model's own space, given where its door (if any) currently is.
+fn to_local(m: &Model, door: Option<&crate::doors::Door>, p: Vec3) -> Vec3 {
+    let Some(d) = door else { return sub(p, m.offset) };
+    let (off, ang) = d.transform();
+    let rel = sub(p, add(m.offset, off));
+    if ang == [0.0; 3] {
+        return rel;
+    }
+    let (f, r, u) = angle_vectors(ang);
+    world_to_local(rel, f, r, u)
+}
+
+fn contents(nodes: &[Node], mut num: i32, p: Vec3) -> i32 {
+    while num >= 0 {
+        let n = &nodes[num as usize];
+        num = n.children[(dot(n.normal, p) - n.dist < 0.0) as usize];
+    }
+    num
 }
 
 /// Point contents a player can be in.
@@ -84,6 +108,7 @@ pub struct World {
     /// Hull-0 roots to test for water: the world plus `func_water` brushes.
     water_roots: Vec<(i32, Vec3)>,
     pub ladders: Vec<Ladder>,
+    pub doors: Doors,
 }
 
 /// Brush entities players walk through.
@@ -115,7 +140,8 @@ impl World {
                 Node { normal: p.normal, dist: p.dist, children: [n.children[0] as i32, n.children[1] as i32] }
             })
             .collect();
-        let mut models = vec![Model { heads: bsp.models[0].head_nodes, offset: [0.0; 3] }];
+        let doors = Doors::from_bsp(bsp);
+        let mut models = vec![Model { heads: bsp.models[0].head_nodes, offset: [0.0; 3], door: None, bsp_model: 0 }];
         let mut water_roots = vec![(bsp.models[0].head_nodes[0], [0.0; 3])];
         let mut ladders = Vec::new();
         for e in bsp.entity_list() {
@@ -131,18 +157,31 @@ impl World {
                 "func_ladder" => ladders.push(Ladder { mins: crate::add(m.mins, offset), maxs: crate::add(m.maxs, offset) }),
                 "func_water" => water_roots.push((m.head_nodes[0], offset)),
                 c if non_solid(c) => {}
-                _ => models.push(Model { heads: m.head_nodes, offset }),
+                _ => models.push(Model { heads: m.head_nodes, offset, door: doors.door_for_model(i), bsp_model: i }),
             }
         }
-        World { nodes, models, point_nodes, leaf_contents: bsp.leaf_contents.clone(), water_roots, ladders }
+        World { nodes, models, point_nodes, leaf_contents: bsp.leaf_contents.clone(), water_roots, ladders, doors }
     }
 
-    fn contents(&self, mut num: i32, p: Vec3) -> i32 {
-        while num >= 0 {
-            let n = &self.nodes[num as usize];
-            num = n.children[(dot(n.normal, p) - n.dist < 0.0) as usize];
-        }
-        num
+    /// Advance doors and triggers one tick.
+    pub fn update(&mut self, dt: f32, actors: &[Actor]) {
+        let (nodes, models) = (&self.nodes, &self.models);
+        self.doors.update(dt, actors, |door, a| {
+            let origin = crate::scale(add(a.mins, a.maxs), 0.5);
+            let hull = if a.maxs[2] - a.mins[2] > 40.0 { Hull::Standing } else { Hull::Crouched };
+            models
+                .iter()
+                .filter(|m| m.bsp_model == door.model)
+                .any(|m| contents(nodes, m.heads[hull as usize], to_local(m, Some(door), origin)) == CONTENTS_SOLID)
+        });
+    }
+
+    fn contents(&self, num: i32, p: Vec3) -> i32 {
+        contents(&self.nodes, num, p)
+    }
+
+    fn door_of(&self, m: &Model) -> Option<&crate::doors::Door> {
+        m.door.map(|i| &self.doors.doors[i])
     }
 
     /// What a single point is in (water comes from the hull-0 tree and `func_water`).
@@ -184,7 +223,7 @@ impl World {
 
     /// Is the player box at `origin` stuck in something?
     pub fn is_solid(&self, hull: Hull, origin: Vec3) -> bool {
-        self.models.iter().any(|m| self.contents(m.heads[hull as usize], sub(origin, m.offset)) == CONTENTS_SOLID)
+        self.models.iter().any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
     }
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
@@ -192,9 +231,15 @@ impl World {
         let mut best = Trace { start_solid: false, all_solid: false, fraction: 1.0, end, normal: [0.0; 3] };
         for m in &self.models {
             let head = m.heads[hull as usize];
-            let (s, e) = (sub(start, m.offset), sub(end, m.offset));
+            let door = self.door_of(m);
+            let (s, e) = (to_local(m, door, start), to_local(m, door, end));
             let mut t = Trace { start_solid: false, all_solid: true, fraction: 1.0, end: e, normal: [0.0; 3] };
             self.recursive(head, head, 0.0, 1.0, s, e, &mut t);
+            // Rotated door: bring the hit normal back to world space.
+            if let Some(ang) = door.map(|d| d.transform().1).filter(|a| *a != [0.0; 3]) {
+                let (f, r, u) = angle_vectors(ang);
+                t.normal = local_to_world(t.normal, f, r, u);
+            }
             if t.all_solid {
                 t.start_solid = true;
             }
@@ -279,11 +324,12 @@ impl World {
         ];
         World {
             nodes,
-            models: vec![Model { heads: [-1, 0, -1, 1], offset: [0.0; 3] }],
+            models: vec![Model { heads: [-1, 0, -1, 1], offset: [0.0; 3], door: None, bsp_model: 0 }],
             point_nodes: vec![Node { normal: [0.0, 0.0, 1.0], dist: z, children: [-1, -2] }],
             leaf_contents: vec![CONTENTS_EMPTY, CONTENTS_SOLID],
             water_roots: vec![(0, [0.0; 3])],
             ladders: Vec::new(),
+            doors: Doors::default(),
         }
     }
 }
