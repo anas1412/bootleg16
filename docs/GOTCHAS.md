@@ -48,6 +48,13 @@ something surprises you.
   Mirroring flips triangle winding, so swap two indices per triangle.
 - `p_` weapon models have no animation of their own: pose them from the player's
   skeleton by bone name (`Model::borrow_pose`).
+- `p_` models have extra bones the player lacks (`flash`, `Line02`, carrying the
+  gun's vertices). Merge like GoldSrc: borrow matching bones, rebuild unmatched
+  ones as `borrowed parent x own local`, never leave them at their rest pose.
+- Each weapon has its own player body animation set (`ref_aim_ak47`, `_carbine`,
+  `_rifle`, `_mp5`, `_onehanded`, ...): pose the body for the weapon in hand.
+- Seen from the front, a rifle pointing at the camera looks like a vertical stick.
+  Measure model extents before "fixing" orientation.
 - `materials.txt` compares the first 12 characters of a texture name; a short
   listed name does *not* match a longer texture name.
 
@@ -82,6 +89,8 @@ something surprises you.
 - Lag compensation must rewind through **snapshot ticks only** (what clients
   actually blend between), or there's a ~0.6 unit error even on LAN.
 - `HashMap` iteration order on the server is random: never rely on client order.
+- After bumping `PROTOCOL_VERSION`, rebuild **all** binaries (client, server,
+  examples). A stale server rejects new clients, which then just sit "connecting".
 - Reload is ignored until the current fire cycle (`next_primary`) has passed.
 
 ## Tests
