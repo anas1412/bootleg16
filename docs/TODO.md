@@ -11,7 +11,11 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Hit groups (head/chest/stomach/arms/legs) and armor (kevlar/helmet) damage rules
 - [ ] Fire rate, ammo, reloads, deploy times, weapon switching, dropping/picking up
 - [ ] Spread/inaccuracy (moving, jumping, crouching) and recoil patterns from `cs.so`
-- [ ] Lag compensation: rewind other players to what the shooter saw
+- [x] Lag compensation history: server rewinds players to what the shooter saw (`Server::rewind`)
+- [x] Bullet line traces through exact geometry (`World::trace_line`)
+- [x] Hit zones from the real player model's 21 hitboxes, posed (`sim::hitbox`)
+- [ ] ⚠ Hitbox pitch: which end of the 9 aim poses is "looking up"
+- [ ] Hitboxes follow running/walking leg animation (gait) and per-weapon aim poses; per-model (T vs CT) hitboxes
 - [ ] Knife, grenades (HE damage/radius, flash, smoke), shotguns (pellets, `FireBullets`)
 - [ ] Weapon move speeds into `Player::max_speed`
 - [ ] Breakables (`func_breakable`: dust2 glass/boxes), `func_button`

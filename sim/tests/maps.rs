@@ -167,3 +167,36 @@ fn bullets_hit_floor_walls_and_sky_on_dust2() {
     // T spawn on dust2 is outdoors.
     assert!(sky_hits > 0, "no spawn has open sky above it");
 }
+
+#[test]
+fn hitboxes_from_the_real_player_model() {
+    let Some(home) = std::env::var("HOME").ok() else { return };
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
+    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")) else { return };
+    use sim::hitbox::{HitGroup, Hitboxes};
+    let hb = Hitboxes::from_model(&model, "carbine").expect("aim sequences");
+    // Aim at the posed head's real centre (the rifle aim pose leans the head forward).
+    let seq = model.sequence("ref_aim_carbine").unwrap();
+    let pose = model.pose(seq, 0, 0.5);
+    let head = model.hitboxes.iter().find(|h| h.group == 1).unwrap();
+    let c = pose[head.bone].apply([(head.mins[0] + head.maxs[0]) / 2.0, (head.mins[1] + head.maxs[1]) / 2.0, (head.mins[2] + head.maxs[2]) / 2.0]);
+    assert!(c[2] > 14.0 && c[2] < 24.0, "head centre at {c:?}");
+    let shot = |from: [f32; 3], yaw: f32| {
+        let d = [c[0] - from[0], c[1] - from[1], c[2] - from[2]];
+        let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        hb.trace([0.0; 3], yaw, 0.0, false, from, [d[0] / l, d[1] / l, d[2] / l], 1000.0).map(|h| h.group)
+    };
+    // From the front-above and from above, the head is the first thing hit.
+    assert_eq!(shot([200.0, c[1], c[2] + 60.0], 0.0), Some(HitGroup::Head));
+    assert_eq!(shot([c[0], c[1], 300.0], 0.0), Some(HitGroup::Head));
+    // Horizontal shots by height: legs low, body in the middle, nothing over the head.
+    let level = |z: f32, crouched: bool| hb.trace([0.0; 3], 0.0, 0.0, crouched, [200.0, 0.0, z], [-1.0, 0.0, 0.0], 400.0).map(|h| h.group);
+    assert!(matches!(level(-15.0, false), Some(HitGroup::LeftLeg | HitGroup::RightLeg)));
+    assert!(matches!(level(10.0, false), Some(HitGroup::Chest | HitGroup::LeftArm | HitGroup::RightArm)));
+    assert_eq!(level(30.0, false), None);
+    // A rotated player is hit the same way: shooting the head of a player facing +y.
+    let rotated = [-c[1], c[0], c[2]];
+    let from = [rotated[0], rotated[1], 300.0];
+    let d = [0.0, 0.0, -1.0];
+    assert_eq!(hb.trace([0.0; 3], 90.0, 0.0, false, from, d, 1000.0).map(|h| h.group), Some(HitGroup::Head));
+}
