@@ -111,7 +111,7 @@ on round end (winner W, loser L):
 Resulting payouts for a losing streak: **$1,400 → $1,900 → $2,400 → $2,900 → $3,400**
 (cap). After a team breaks a streak of 2+ losses, the next loss pays $1,500.
 
-⚠ **Decision needed:** because the bonus is one shared number, alternating
+Because the bonus is one shared number, alternating
 wins and losses give amounts that depend on what the *other* team did. That is
 a 1.6 quirk. Options:
 
@@ -120,8 +120,8 @@ a 1.6 quirk. Options:
   amounts ($1,400 + $500 per loss, cap $3,400), reset on a win. This is easier
   for players to predict. CS2 also tracks this per team.
 
-The plan is to implement both behind the config value. The default is still
-open; my recommendation is `per_team` for fairness.
+**Decided (2026-10-15): default is `per_team`.** `cs16` stays available as a
+config option for purists.
 
 ### 3.4 Personal rewards and penalties
 
