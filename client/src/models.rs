@@ -1,6 +1,7 @@
 //! Loading CS studio models (weapons, grenades) from the install and turning
 //! posed models into Bevy meshes.
-use crate::{map, rgba_image};
+use crate::level::rgba_image;
+use crate::map;
 use bevy::{
     asset::RenderAssetUsages,
     mesh::{Indices, PrimitiveTopology},

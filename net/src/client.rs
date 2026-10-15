@@ -73,6 +73,8 @@ pub struct Client {
     pub scores: Vec<Score>,
     /// The server runs practice rules.
     pub practice: bool,
+    /// The server's map, once welcomed.
+    pub map: Option<String>,
 }
 
 impl Client {
@@ -101,6 +103,7 @@ impl Client {
             ground: Vec::new(),
             scores: Vec::new(),
             practice: false,
+            map: None,
         })
     }
 
@@ -169,10 +172,11 @@ impl Client {
 
     fn handle(&mut self, msg: ServerMsg) {
         match msg {
-            ServerMsg::Welcome { id, practice, .. } => {
+            ServerMsg::Welcome { id, map, practice, .. } => {
                 if self.status == Status::Connecting {
                     self.status = Status::Connected { id };
                     self.practice = practice;
+                    self.map = Some(map);
                 }
             }
             ServerMsg::Scores(s) => self.scores = s,

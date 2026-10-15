@@ -1,7 +1,8 @@
 //! The weapon in your hands (CS `v_` models): drawn by its own camera so it never
 //! sinks into walls, animated from what you do (draw, shoot, reload, ...).
 use crate::models::{part_mesh, weapon_model, Loaded, ModelCache};
-use crate::{FlyCam, Walker};
+use crate::game::{Frame, Walker};
+use crate::menu::AppState;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use sim::weapons::{Fired, Id};
@@ -52,7 +53,7 @@ pub struct ViewModelCamera;
 
 /// Second camera, child of the main one, that only sees the view model and draws it
 /// on top of the world. Fixed 90 degree field of view, like CS.
-pub fn setup(mut commands: Commands, cam: Single<Entity, With<FlyCam>>) {
+pub fn attach(commands: &mut Commands, cam: Entity) {
     let vm = commands
         .spawn((
             ViewModelCamera,
@@ -64,7 +65,7 @@ pub fn setup(mut commands: Commands, cam: Single<Entity, With<FlyCam>>) {
             Transform::default(),
         ))
         .id();
-    commands.entity(*cam).add_child(vm);
+    commands.entity(cam).add_child(vm);
 }
 
 /// GoldSrc view model space (x forward, y left, z up) to camera space (-z forward, x right,
@@ -79,7 +80,7 @@ fn find(model: &goldsrc::mdl::Model, names: &[&str]) -> Option<usize> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn update(
+fn update(
     mut commands: Commands,
     time: Res<Time>,
     mut w: ResMut<Walker>,
@@ -242,5 +243,16 @@ fn play(vm: &mut ViewModel, seq: Option<usize>, now: f32, looping: bool) {
         vm.started = now;
         vm.looping = looping;
         vm.last_frame = -1.0;
+    }
+}
+
+pub struct ViewModelPlugin;
+
+impl Plugin for ViewModelPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<ViewModel>()
+            // A fresh match starts with no weapon shown (the old entities went with the camera).
+            .add_systems(OnEnter(AppState::InGame), |mut commands: Commands| commands.insert_resource(ViewModel::default()))
+            .add_systems(Update, update.in_set(Frame::World));
     }
 }

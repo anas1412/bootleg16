@@ -1,6 +1,8 @@
 //! Sound from the install's WAV files: GoldSrc-style distance falloff, panned by
 //! direction, random pitch like CS's gunshots.
-use crate::{map, Walker};
+use crate::game::{Frame, Walker};
+use crate::map;
+use crate::menu::Settings;
 use bevy::audio::{PlaybackSettings, Volume};
 use bevy::prelude::*;
 use goldsrc::materials::Materials;
@@ -130,7 +132,7 @@ struct Play {
 }
 
 /// Play this frame's cues.
-pub fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>) {
+fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settings>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>) {
     let cues = std::mem::take(&mut w.cues);
     if cues.is_empty() {
         return;
@@ -203,23 +205,31 @@ pub fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, mut sounds: ResM
         }
         for p in plays {
             let Some(handle) = sounds.get(&p.file, &mut assets) else { continue };
-            let mut settings = PlaybackSettings::DESPAWN.with_speed(p.pitch);
+            let mut play = PlaybackSettings::DESPAWN.with_speed(p.pitch);
             match p.at {
                 Some(at) => {
                     // GoldSrc falloff: full at the source, silent at 1000 / attn units.
                     let d = ((at[0] - ear[0]).powi(2) + (at[1] - ear[1]).powi(2) + (at[2] - ear[2]).powi(2)).sqrt();
-                    let gain = p.volume * (1.0 - d * p.attn / 1000.0);
+                    let gain = settings.volume * p.volume * (1.0 - d * p.attn / 1000.0);
                     if gain <= 0.01 {
                         continue;
                     }
-                    settings = settings.with_volume(Volume::Linear(gain)).with_spatial(true);
-                    commands.spawn((AudioPlayer(handle), settings, Transform::from_translation(Vec3::from(map::to_y_up(at)))));
+                    play = play.with_volume(Volume::Linear(gain)).with_spatial(true);
+                    commands.spawn((AudioPlayer(handle), play, Transform::from_translation(Vec3::from(map::to_y_up(at)))));
                 }
                 None => {
-                    settings = settings.with_volume(Volume::Linear(p.volume));
-                    commands.spawn((AudioPlayer(handle), settings));
+                    play = play.with_volume(Volume::Linear(settings.volume * p.volume));
+                    commands.spawn((AudioPlayer(handle), play));
                 }
             }
         }
+    }
+}
+
+pub struct SoundPlugin;
+
+impl Plugin for SoundPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, play_cues.in_set(Frame::Sound));
     }
 }

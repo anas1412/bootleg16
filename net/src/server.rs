@@ -294,9 +294,14 @@ impl Server {
 
     /// Run forever at the tick rate.
     pub fn run(&mut self) {
+        self.run_until(&std::sync::atomic::AtomicBool::new(false));
+    }
+
+    /// Run at the tick rate until `stop` is set (the game's built-in server stops when you leave).
+    pub fn run_until(&mut self, stop: &std::sync::atomic::AtomicBool) {
         let tick = Duration::from_secs_f64(1.0 / TICK_RATE as f64);
         let mut next = Instant::now();
-        loop {
+        while !stop.load(std::sync::atomic::Ordering::Relaxed) {
             self.step();
             next += tick;
             let now = Instant::now();
