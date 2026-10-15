@@ -1,5 +1,6 @@
 //! GoldSrc BSP v30 reader: geometry, texture refs, lightmaps, entities, models.
-use std::{fmt, fs, io, path::Path};
+use crate::texture::{decode_miptex, Texture};
+use std::{collections::HashMap, fmt, fs, io, path::Path};
 
 pub const BSP_VERSION: i32 = 30;
 
@@ -72,8 +73,8 @@ pub struct MipTex {
     pub name: String,
     pub width: u32,
     pub height: u32,
-    /// False when the pixels live in an external WAD (offsets are zero).
-    pub embedded: bool,
+    /// Decoded pixels when embedded in the map; None means look it up in a WAD.
+    pub pixels: Option<Texture>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -217,15 +218,15 @@ impl Bsp {
                 let off = r.i32()?;
                 if off < 0 {
                     // Unused slot; keep indices aligned with texinfo.
-                    bsp.textures.push(MipTex { name: String::new(), width: 0, height: 0, embedded: false });
+                    bsp.textures.push(MipTex { name: String::new(), width: 0, height: 0, pixels: None });
                     continue;
                 }
                 let mut m = Reader::new(tex.get(off as usize..).ok_or(BspError::Truncated("miptex"))?, "miptex");
                 let raw = m.take::<16>()?;
-                let name = String::from_utf8_lossy(&raw).trim_end_matches('\0').to_string();
+                let name = crate::texture::cstr(&raw);
                 let (width, height) = (m.u32()?, m.u32()?);
-                let embedded = m.u32()? != 0;
-                bsp.textures.push(MipTex { name, width, height, embedded });
+                let pixels = decode_miptex(&tex[off as usize..]);
+                bsp.textures.push(MipTex { name, width, height, pixels });
             }
         }
 
@@ -240,6 +241,45 @@ impl Bsp {
         }
 
         Ok(bsp)
+    }
+
+    /// Parse the entity lump into key/value maps, in file order.
+    pub fn entity_list(&self) -> Vec<HashMap<String, String>> {
+        let mut out = Vec::new();
+        let mut cur: Option<HashMap<String, String>> = None;
+        let mut key: Option<String> = None;
+        let mut chars = self.entities.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '{' => cur = Some(HashMap::new()),
+                '}' => out.extend(cur.take()),
+                '"' => {
+                    let s: String = chars.by_ref().take_while(|&c| c != '"').collect();
+                    match key.take() {
+                        None => key = Some(s),
+                        Some(k) => {
+                            if let Some(e) = cur.as_mut() {
+                                e.insert(k, s);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// WAD file names (no directories) listed in worldspawn's "wad" key.
+    pub fn wad_names(&self) -> Vec<String> {
+        let list = self.entity_list().into_iter().find(|e| e.get("classname").map(String::as_str) == Some("worldspawn"));
+        list.and_then(|e| e.get("wad").cloned())
+            .unwrap_or_default()
+            .split(';')
+            .filter_map(|p| p.rsplit(['\\', '/']).next())
+            .filter(|n| !n.is_empty())
+            .map(str::to_string)
+            .collect()
     }
 
     /// Vertex positions of a face, in winding order.

@@ -10,7 +10,7 @@ fn main() {
         match Bsp::load(p) {
             Ok(b) => {
                 let ents = b.entities.matches("\"classname\"").count();
-                let ext = b.textures.iter().filter(|t| !t.embedded).count();
+                let ext = b.textures.iter().filter(|t| t.pixels.is_none()).count();
                 // every face must resolve to a polygon
                 let ok = b.faces.iter().all(|f| b.face_vertices(f).len() >= 3);
                 println!(
