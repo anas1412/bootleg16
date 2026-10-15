@@ -7,7 +7,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 6;
+pub const PROTOCOL_VERSION: u32 = 7;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -24,9 +24,31 @@ pub enum ClientMsg {
     Hello { version: u32, name: String },
     /// Inputs numbered `first_seq`, `first_seq + 1`, ...
     Inputs { first_seq: u32, inputs: Vec<TimedInput> },
-    /// Get a weapon (free while there's no economy; becomes the buy menu).
-    Buy { item: Id },
+    /// Buy something (free while there's no economy).
+    Buy { item: BuyItem },
     Bye,
+}
+
+/// What the buy menu can buy.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub enum BuyItem {
+    Weapon(Id),
+    PrimaryAmmo,
+    SecondaryAmmo,
+    Kevlar,
+    KevlarHelmet,
+    DefuseKit,
+    NightVision,
+}
+
+/// One scoreboard row.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Score {
+    pub id: u8,
+    pub name: String,
+    pub kills: i32,
+    pub deaths: u32,
+    pub alive: bool,
 }
 
 /// An input plus the server time the client was showing other players at, so
@@ -77,6 +99,8 @@ pub struct SmokeNet {
 pub enum ServerMsg {
     Welcome { id: u8, map: String, tick_rate: u32 },
     Reject { reason: String },
+    /// Scoreboard, sent a few times a second.
+    Scores(Vec<Score>),
     Snapshot {
         tick: u32,
         /// Last of your inputs the server has run; replay the ones after it.
@@ -89,6 +113,8 @@ pub enum ServerMsg {
         /// Grenades in flight or lying around, and smoke clouds.
         grenades: Vec<(sim::grenades::Kind, [f32; 3])>,
         smokes: Vec<SmokeNet>,
+        /// Guns lying on the ground.
+        ground: Vec<(Id, [f32; 3])>,
     },
 }
 

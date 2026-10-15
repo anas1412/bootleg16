@@ -47,8 +47,24 @@ impl Assets {
     }
 }
 
+/// A gun on the ground (dropped, or left by a dead player).
+struct GroundGun {
+    gun: sim::weapons::GunState,
+    origin: [f32; 3],
+    velocity: [f32; 3],
+    /// Who dropped it, and until when they can't pick it straight back up.
+    dropper: u8,
+    dropper_wait_until: u32,
+}
+
+/// Seconds before the dropper can pick their own gun back up.
+const REPICK_TICKS: u32 = TICK_RATE / 2;
+
 struct Remote {
     id: u8,
+    name: String,
+    kills: i32,
+    deaths: u32,
     state: PlayerState,
     vitals: Vitals,
     /// Tick to respawn at while dead.
@@ -102,6 +118,9 @@ pub struct Server {
     grenades: Vec<sim::grenades::Grenade>,
     /// Smoke clouds: where and until when (server seconds).
     smokes: Vec<([f32; 3], f64)>,
+    ground: Vec<GroundGun>,
+    /// Kill events in `events` already counted (events are cleared at each snapshot).
+    kills_settled: usize,
 }
 
 impl Server {
@@ -130,6 +149,8 @@ impl Server {
             give: Vec::new(),
             grenades: Vec::new(),
             smokes: Vec::new(),
+            ground: Vec::new(),
+            kills_settled: 0,
         })
     }
 
@@ -259,6 +280,18 @@ impl Server {
                     c.respawn_at = Some(tick + RESPAWN_TICKS);
                     self.events.push(GameEvent::Kill { killer: c.id, victim: c.id, weapon: None, headshot: false });
                 }
+                if let Some(gun) = fired.dropped {
+                    let (f, _, _) = bullets::view_vectors(input.pitch, input.yaw);
+                    let eye = c.state.movement.eye();
+                    let v = c.state.movement.velocity;
+                    self.ground.push(GroundGun {
+                        gun,
+                        origin: eye,
+                        velocity: std::array::from_fn(|i| f[i] * 400.0 + v[i]),
+                        dropper: c.id,
+                        dropper_wait_until: tick + REPICK_TICKS,
+                    });
+                }
                 if !fired.shots.is_empty() || fired.swing.is_some() || fired.throw.is_some() {
                     pending.push(Pending { shooter: c.id, eye: c.state.movement.eye(), yaw: input.yaw, velocity: c.state.movement.velocity, fired, view_tick });
                 }
@@ -272,6 +305,8 @@ impl Server {
         }
         self.world.update(TICK, &actors);
         self.grenades_step();
+        self.settle_deaths();
+        self.ground_step();
 
         self.history.push_back(PastPositions {
             tick: self.tick,
@@ -289,6 +324,19 @@ impl Server {
         let tick = self.tick;
         self.clients.retain(|_, c| tick - c.last_heard < TIMEOUT_TICKS);
 
+        if self.tick % (TICK_RATE / 4) == 0 {
+            let mut scores: Vec<Score> = self
+                .clients
+                .values()
+                .map(|c| Score { id: c.id, name: c.name.clone(), kills: c.kills, deaths: c.deaths, alive: c.vitals.alive() })
+                .collect();
+            scores.sort_by_key(|s| (-s.kills, s.deaths));
+            let msg = encode(&ServerMsg::Scores(scores));
+            let addrs: Vec<_> = self.clients.keys().copied().collect();
+            for a in addrs {
+                self.socket.send(a, msg.clone());
+            }
+        }
         if self.tick % SNAPSHOT_EVERY == 0 {
             let players: Vec<PlayerNet> = self
                 .clients
@@ -304,9 +352,11 @@ impl Server {
                 .collect();
             let doors = self.world.doors.net_state();
             let events = std::mem::take(&mut self.events);
+            self.kills_settled = 0;
             let now = self.tick as f64 * TICK as f64;
             let grenades: Vec<_> = self.grenades.iter().map(|g| (g.kind, g.origin)).collect();
             let smokes: Vec<SmokeNet> = self.smokes.iter().map(|s| SmokeNet { at: s.0, left: (s.1 - now) as f32 }).collect();
+            let ground: Vec<(Id, [f32; 3])> = self.ground.iter().map(|g| (g.gun.id, g.origin)).collect();
             let sends: Vec<_> = self.clients.iter().map(|(a, c)| (*a, c.last_run, c.state.loadout.clone())).collect();
             for (addr, ack, loadout) in sends {
                 let msg = ServerMsg::Snapshot {
@@ -318,9 +368,58 @@ impl Server {
                     events: events.clone(),
                     grenades: grenades.clone(),
                     smokes: smokes.clone(),
+                    ground: ground.clone(),
                 };
                 self.socket.send(addr, encode(&msg));
             }
+        }
+    }
+
+    /// Dropped guns fall and slide to a stop; walking over one picks it up if that slot is free.
+    fn ground_step(&mut self) {
+        for g in &mut self.ground {
+            if g.velocity == [0.0; 3] {
+                continue;
+            }
+            g.velocity[2] -= self.vars.gravity * TICK;
+            let end = std::array::from_fn(|i| g.origin[i] + g.velocity[i] * TICK);
+            let t = self.world.trace_line(g.origin, end);
+            g.origin = t.end;
+            if t.fraction < 1.0 {
+                if t.normal[2] > 0.7 {
+                    g.velocity = [0.0; 3];
+                } else {
+                    let d = g.velocity[0] * t.normal[0] + g.velocity[1] * t.normal[1] + g.velocity[2] * t.normal[2];
+                    g.velocity = std::array::from_fn(|i| g.velocity[i] - t.normal[i] * d);
+                }
+            }
+        }
+        let tick = self.tick;
+        let mut i = 0;
+        while i < self.ground.len() {
+            let g = &self.ground[i];
+            let taker = self.clients.values_mut().find(|c| {
+                let o = c.state.movement.origin;
+                let h = c.state.movement.hull();
+                let near = (0..3).all(|k| g.origin[k] >= o[k] + h.mins()[k] - 8.0 && g.origin[k] <= o[k] + h.maxs()[k] + 8.0);
+                near && c.vitals.alive() && !(c.id == g.dropper && tick < g.dropper_wait_until)
+            });
+            let gun = g.gun;
+            if taker.is_some_and(|c| c.state.loadout.pick_up(gun)) {
+                self.ground.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    /// A player died: their primary (or pistol) falls where they were.
+    fn drop_on_death(&mut self, victim: u8) {
+        let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { return };
+        let l = &mut c.state.loadout;
+        let gun = l.primary.take().or_else(|| l.secondary.take());
+        if let Some(gun) = gun {
+            self.ground.push(GroundGun { gun, origin: c.state.movement.origin, velocity: [0.0, 0.0, -1.0], dropper: victim, dropper_wait_until: 0 });
         }
     }
 
@@ -428,11 +527,30 @@ impl Server {
                 self.events.push(GameEvent::Kill { killer: p.shooter, victim, weapon: Some(weapon), headshot: group == HitGroup::Head });
             }
         }
+        self.settle_deaths();
+    }
+
+    /// Bookkeeping for kill events raised this tick: scores and dropped guns.
+    fn settle_deaths(&mut self) {
+        let kills: Vec<(u8, u8)> = self.events.iter().filter_map(|e| match e {
+            GameEvent::Kill { killer, victim, .. } => Some((*killer, *victim)),
+            _ => None,
+        }).collect();
+        for (killer, victim) in kills.into_iter().skip(self.kills_settled) {
+            if let Some(v) = self.clients.values_mut().find(|c| c.id == victim) {
+                v.deaths += 1;
+            }
+            if let Some(k) = self.clients.values_mut().find(|c| c.id == killer) {
+                k.kills += if killer == victim { -1 } else { 1 };
+            }
+            self.drop_on_death(victim);
+            self.kills_settled += 1;
+        }
     }
 
     fn handle(&mut self, from: SocketAddr, msg: ClientMsg) {
         match msg {
-            ClientMsg::Hello { version, .. } => {
+            ClientMsg::Hello { version, name } => {
                 if version != PROTOCOL_VERSION {
                     let reason = format!("server runs protocol {PROTOCOL_VERSION}, you have {version}");
                     self.socket.send(from, encode(&ServerMsg::Reject { reason }));
@@ -449,6 +567,9 @@ impl Server {
                         from,
                         Remote {
                             id,
+                            name: name.chars().filter(|c| !c.is_control()).take(24).collect(),
+                            kills: 0,
+                            deaths: 0,
                             state,
                             vitals: Vitals::default(),
                             respawn_at: None,
@@ -484,9 +605,36 @@ impl Server {
             ClientMsg::Buy { item } => {
                 // Free for everyone until rounds and money exist.
                 let Some(c) = self.clients.get_mut(&from) else { return };
-                if c.vitals.alive() {
-                    let now = c.last_run as f64 * TICK as f64;
-                    c.state.loadout.give(item, now);
+                if !c.vitals.alive() {
+                    return;
+                }
+                let now = c.last_run as f64 * TICK as f64;
+                let l = &mut c.state.loadout;
+                match item {
+                    BuyItem::Weapon(id) => {
+                        // Buying a gun for a taken slot drops the old one, like CS.
+                        let taken = match data::def(id).slot {
+                            data::Slot::Primary => l.primary.is_some(),
+                            data::Slot::Secondary => l.secondary.is_some(),
+                            _ => false,
+                        };
+                        if taken && sim::weapons::is_gun(id) {
+                            l.switch_to(data::def(id).slot, now);
+                            if let Some(old) = l.drop_active(now) {
+                                let o = c.state.movement.origin;
+                                self.ground.push(GroundGun { gun: old, origin: o, velocity: [0.0, 0.0, -1.0], dropper: c.id, dropper_wait_until: self.tick + REPICK_TICKS });
+                            }
+                        }
+                        c.state.loadout.give(id, now);
+                    }
+                    BuyItem::PrimaryAmmo => l.refill_ammo(true),
+                    BuyItem::SecondaryAmmo => l.refill_ammo(false),
+                    BuyItem::Kevlar => c.vitals.armor = combat::MAX_ARMOR,
+                    BuyItem::KevlarHelmet => {
+                        c.vitals.armor = combat::MAX_ARMOR;
+                        c.vitals.helmet = true;
+                    }
+                    BuyItem::DefuseKit | BuyItem::NightVision => {} // with the bomb / later
                 }
             }
             ClientMsg::Bye => {

@@ -66,6 +66,10 @@ pub struct Client {
     /// Grenades and smoke clouds as of the last snapshot.
     pub grenades: Vec<(sim::grenades::Kind, [f32; 3])>,
     pub smokes: Vec<SmokeNet>,
+    /// Guns on the ground.
+    pub ground: Vec<(sim::weapons::Id, [f32; 3])>,
+    /// Scoreboard as last sent.
+    pub scores: Vec<Score>,
 }
 
 impl Client {
@@ -91,6 +95,8 @@ impl Client {
             events: Vec::new(),
             grenades: Vec::new(),
             smokes: Vec::new(),
+            ground: Vec::new(),
+            scores: Vec::new(),
         })
     }
 
@@ -164,11 +170,12 @@ impl Client {
                     self.status = Status::Connected { id };
                 }
             }
+            ServerMsg::Scores(s) => self.scores = s,
             ServerMsg::Reject { reason } => {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
             }
-            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, grenades, smokes } => {
+            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, grenades, smokes, ground } => {
                 let Status::Connected { id } = self.status else { return };
                 if tick <= self.latest_tick {
                     return; // old or duplicate
@@ -178,6 +185,7 @@ impl Client {
                 self.events.extend(events);
                 self.grenades = grenades;
                 self.smokes = smokes;
+                self.ground = ground;
 
                 // Correct our prediction: take the server's state, replay what it hasn't run yet.
                 if let Some(mine) = players.iter().find(|p| p.id == id) {
@@ -251,7 +259,7 @@ impl Client {
     }
 
     /// Ask the server for a weapon (the buy menu).
-    pub fn buy(&mut self, item: sim::weapons::Id) {
+    pub fn buy(&mut self, item: BuyItem) {
         self.socket.send(self.server, encode(&ClientMsg::Buy { item }));
     }
 

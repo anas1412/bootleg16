@@ -269,8 +269,9 @@ fn weapon_menu_gives_the_weapon() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 60, 0.0);
     g.connect();
-    g.a.buy(Id::Awp);
-    g.a.buy(Id::Flashbang);
+    g.a.buy(net::protocol::BuyItem::Weapon(Id::Awp));
+    g.a.buy(net::protocol::BuyItem::Weapon(Id::Flashbang));
+    g.a.buy(net::protocol::BuyItem::KevlarHelmet);
     for _ in 0..64 {
         g.tick(Input::default(), Input::default());
     }
@@ -278,4 +279,25 @@ fn weapon_menu_gives_the_weapon() {
     assert_eq!(server.active_id(), Id::Awp);
     assert_eq!(server.grenades, [0, 1, 0]);
     assert_eq!(g.a.state.loadout.active_id(), Id::Awp, "the client sees it too");
+    assert_eq!((g.a.vitals.armor, g.a.vitals.helmet), (100.0, true));
+}
+
+#[test]
+fn dropped_guns_land_and_everyone_sees_them() {
+    use sim::weapons::Id;
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 40, 0.0);
+    g.server.set_give(vec![Id::Ak47]);
+    g.connect();
+    let a = g.a.id().unwrap();
+    g.tick(Input { drop: true, ..Default::default() }, Input::default());
+    for _ in 0..256 {
+        g.tick(Input::default(), Input::default());
+    }
+    assert_ne!(g.server.player_state(a).unwrap().loadout.active_id(), Id::Ak47);
+    assert_eq!(g.b.ground.iter().map(|x| x.0).collect::<Vec<_>>(), vec![Id::Ak47], "B sees the AK on the ground");
+    // It came to rest on the floor (not inside it, not floating).
+    let at = g.b.ground[0].1;
+    assert_ne!(g.a.world.point_contents([at[0], at[1], at[2] + 1.0]), sim::collision::Contents::Solid, "not inside a wall");
+    assert!(g.a.world.trace_line(at, [at[0], at[1], at[2] - 4.0]).fraction < 1.0, "resting on something: {at:?}");
 }

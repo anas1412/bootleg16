@@ -76,6 +76,10 @@ const FALL_DAMAGE_PER_SPEED: f32 = 100.0 / 600.0 * 1.25;
 pub const VIEW_HEIGHT_STANDING: f32 = 17.0;
 pub const VIEW_HEIGHT_CROUCHED: f32 = 12.0;
 
+pub const SLOT_LAST: u8 = 6;
+pub const SLOT_NEXT: u8 = 7;
+pub const SLOT_PREV: u8 = 8;
+
 /// One tick of player input.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Input {
@@ -96,8 +100,11 @@ pub struct Input {
     pub attack: bool,
     pub attack2: bool,
     pub reload: bool,
-    /// Weapon slot pressed this tick (1 primary .. 5 bomb), 0 = none.
+    /// Weapon selection this tick: 1 primary .. 5 bomb, `SLOT_LAST` (Q),
+    /// `SLOT_NEXT` / `SLOT_PREV` (mouse wheel); 0 = none.
     pub slot: u8,
+    /// G: drop the weapon in hand.
+    pub drop: bool,
 }
 
 /// Full movement state; the server sends it so clients can correct their prediction.

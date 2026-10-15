@@ -30,6 +30,7 @@ impl Sim {
             attack2: false,
             reload: false,
             slot: 0,
+            drop: false,
             can_shoot: true,
             seed: self.tick,
         }
@@ -263,4 +264,28 @@ fn grenades_throw_on_release_and_cycle() {
     let later: Vec<_> = (0..64).filter_map(|_| s.step(|_| {}).throw).collect();
     assert_eq!(later.len(), 1);
     assert_eq!(s.l.grenades, [1, 0, 0]);
+}
+
+#[test]
+fn q_wheel_and_drop() {
+    let mut s = Sim::with(Id::Ak47);
+    s.step(|c| c.slot = 3);
+    s.idle(1.0);
+    assert_eq!(s.l.active, Slot::Knife);
+    s.step(|c| c.slot = crate::pmove::SLOT_LAST);
+    s.idle(1.0);
+    assert_eq!(s.l.active, Slot::Primary, "Q goes back to the AK");
+    s.step(|c| c.slot = crate::pmove::SLOT_NEXT);
+    s.idle(1.0);
+    assert_eq!(s.l.active, Slot::Knife, "no pistol in this test: next is the knife");
+    s.step(|c| c.slot = crate::pmove::SLOT_PREV);
+    s.idle(1.0);
+    assert_eq!(s.l.active, Slot::Primary);
+    s.hold(0.3, attack);
+    let clip = s.gun().clip;
+    let dropped = s.step(|c| c.drop = true).dropped.expect("dropped the AK");
+    assert_eq!((dropped.id, dropped.clip), (Id::Ak47, clip));
+    assert_eq!(s.l.active, Slot::Knife);
+    assert!(s.l.pick_up(dropped));
+    assert!(!s.l.pick_up(GunState::new(Id::M4a1)), "slot taken");
 }

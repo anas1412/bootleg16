@@ -51,7 +51,7 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(128.0))
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, walk)
-        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, grab_cursor, buy_menu, hud, screenshot).chain())
+        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, grenade_effects, grab_cursor, buy_menu, scoreboard, hud, screenshot).chain())
         .run();
 }
 
@@ -167,6 +167,8 @@ fn setup(
         prev_eye: [0.0; 3],
         noclip: false,
         slot_held: 0,
+        drop_held: false,
+        wheel: 0.0,
         tracers: Vec::new(),
         feed: Vec::new(),
         menu: None,
@@ -196,6 +198,14 @@ fn setup(
         TextFont { font_size: bevy::text::FontSize::Px(20.0), ..default() },
         TextColor(Color::srgb(1.0, 0.85, 0.3)),
         Node { position_type: PositionType::Absolute, left: px(24), top: percent(30), ..default() },
+    ));
+    commands.spawn((
+        HudScores,
+        Text::new(""),
+        TextFont { font_size: bevy::text::FontSize::Px(20.0), ..default() },
+        TextColor(Color::WHITE),
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        Node { position_type: PositionType::Absolute, left: percent(30), top: percent(20), ..default() },
     ));
     commands.spawn((
         HudFeed,
@@ -325,6 +335,9 @@ struct Walker {
     noclip: bool,
     /// Weapon slot key held (to send each press once).
     slot_held: u8,
+    drop_held: bool,
+    /// Mouse wheel movement not yet turned into a weapon switch.
+    wheel: f32,
     /// Bullet tracers: from, to, seconds left.
     tracers: Vec<([f32; 3], [f32; 3], f32)>,
     /// Kill feed lines and seconds left.
@@ -559,18 +572,38 @@ fn mouse_look(
 
 /// One simulation tick from the keyboard and mouse. WASD move, Space jump, Ctrl crouch,
 /// Shift walk, E use, mouse fire, R reload, 1-5 weapon slots.
-fn walk(keys: Res<ButtonInput<KeyCode>>, mouse: Res<ButtonInput<MouseButton>>, cursor: Single<&CursorOptions>, cam: Single<&FlyCam>, mut w: ResMut<Walker>) {
+fn walk(
+    keys: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    wheel: Res<bevy::input::mouse::AccumulatedMouseScroll>,
+    cursor: Single<&CursorOptions>,
+    cam: Single<&FlyCam>,
+    mut w: ResMut<Walker>,
+) {
     // Mouse buttons only count while the mouse is captured (the first click just captures it).
     let captured = cursor.grab_mode != CursorGrabMode::None;
     // Automated screenshot runs ignore the keyboard too (the window may pop up while you type).
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
     let keys = if auto { &ButtonInput::<KeyCode>::default() } else { &*keys };
     let slot_keys = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5];
-    // While the weapon menu is open, number keys belong to the menu.
-    let slot = if w.menu.is_some() { 0 } else { slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0) };
+    // While the buy menu is open, number keys belong to the menu.
+    let mut slot = if w.menu.is_some() { 0 } else { slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0) };
+    if keys.pressed(KeyCode::KeyQ) {
+        slot = sim::pmove::SLOT_LAST;
+    }
+    // Mouse wheel: up = previous weapon, down = next (CS invprev / invnext).
+    let scroll = if captured && !auto { wheel.delta.y } else { 0.0 };
+    w.wheel += scroll;
     // Several ticks can run per frame: send a slot press once.
-    let slot = if slot == w.slot_held { 0 } else { slot };
-    w.slot_held = slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0);
+    let held = slot;
+    let mut slot = if slot == w.slot_held { 0 } else { slot };
+    w.slot_held = held;
+    if slot == 0 && w.wheel.abs() >= 1.0 {
+        slot = if w.wheel > 0.0 { sim::pmove::SLOT_PREV } else { sim::pmove::SLOT_NEXT };
+        w.wheel = 0.0;
+    }
+    let drop = keys.pressed(KeyCode::KeyG) && !w.drop_held;
+    w.drop_held = keys.pressed(KeyCode::KeyG);
     let axis = |pos: KeyCode, neg: KeyCode| 400.0 * (keys.pressed(pos) as i32 - keys.pressed(neg) as i32) as f32;
     let input = sim::pmove::Input {
         forward: axis(KeyCode::KeyW, KeyCode::KeyS),
@@ -587,6 +620,7 @@ fn walk(keys: Res<ButtonInput<KeyCode>>, mouse: Res<ButtonInput<MouseButton>>, c
         attack2: captured && mouse.pressed(MouseButton::Right),
         reload: keys.pressed(KeyCode::KeyR),
         slot,
+        drop,
     };
     // Free flight: keep the connection alive but stand still.
     let input = if w.noclip { sim::pmove::Input { yaw: input.yaw, pitch: input.pitch, ..default() } } else { input };
@@ -659,61 +693,142 @@ fn move_camera(
     let speed = if keys.pressed(KeyCode::ShiftLeft) { 1200.0 } else { 400.0 };
     tf.translation += dir.normalize_or_zero() * speed * time.delta_secs();
 }
-/// The weapon menu (B): categories, then items, chosen with number keys.
-const MENU: &[(&str, &[sim::weapons::Id])] = {
+/// One buy menu entry.
+#[derive(Clone)]
+enum Entry {
+    /// Buys straight away from the category list (6 and 7: ammo).
+    Direct(&'static str, net::protocol::BuyItem),
+    Category(&'static str, Vec<(&'static str, net::protocol::BuyItem)>),
+}
+
+/// The CS 1.6 buy menu (B). Terrorists and counter-terrorists see different guns.
+fn buy_menu_layout(ct: bool) -> Vec<Entry> {
+    use net::protocol::BuyItem::*;
     use sim::weapons::Id::*;
-    &[
-        ("Pistols", &[Glock, Usp, P228, Deagle, FiveSeven, Elite]),
-        ("Shotguns", &[M3, Xm1014]),
-        ("SMGs", &[Mac10, Tmp, Mp5, Ump45, P90]),
-        ("Rifles", &[Galil, Famas, Ak47, M4a1, Sg552, Aug]),
-        ("Snipers", &[Scout, Awp, G3sg1, Sg550]),
-        ("Machine gun", &[M249]),
-        ("Grenades", &[HeGrenade, Flashbang, Smoke]),
+    let side = |t: (&'static str, sim::weapons::Id), c: (&'static str, sim::weapons::Id)| if ct { (c.0, Weapon(c.1)) } else { (t.0, Weapon(t.1)) };
+    let mut equipment = vec![("Kevlar", Kevlar), ("Kevlar + Helmet", KevlarHelmet), ("Flashbang", Weapon(Flashbang)), ("HE Grenade", Weapon(HeGrenade)), ("Smoke Grenade", Weapon(Smoke))];
+    if ct {
+        equipment.push(("Defuse Kit", DefuseKit));
+    }
+    equipment.push(("NightVision", NightVision));
+    vec![
+        Entry::Category(
+            "Pistols",
+            vec![("Glock-18", Weapon(Glock)), ("USP", Weapon(Usp)), ("P228", Weapon(P228)), ("Desert Eagle", Weapon(Deagle)), side(("Dual Elites", Elite), ("Five-SeveN", FiveSeven))],
+        ),
+        Entry::Category("Shotguns", vec![("M3", Weapon(M3)), ("XM1014", Weapon(Xm1014))]),
+        Entry::Category("Sub-Machine Guns", vec![side(("MAC-10", Mac10), ("TMP", Tmp)), ("MP5", Weapon(Mp5)), ("UMP45", Weapon(Ump45)), ("P90", Weapon(P90))]),
+        Entry::Category(
+            "Rifles",
+            if ct {
+                vec![("FAMAS", Weapon(Famas)), ("Scout", Weapon(Scout)), ("M4A1", Weapon(M4a1)), ("AUG", Weapon(Aug)), ("SG550", Weapon(Sg550)), ("AWP", Weapon(Awp))]
+            } else {
+                vec![("Galil", Weapon(Galil)), ("AK-47", Weapon(Ak47)), ("Scout", Weapon(Scout)), ("SG552", Weapon(Sg552)), ("AWP", Weapon(Awp)), ("G3SG1", Weapon(G3sg1))]
+            },
+        ),
+        Entry::Category("Machine Gun", vec![("M249", Weapon(M249))]),
+        Entry::Direct("Primary Ammo", PrimaryAmmo),
+        Entry::Direct("Secondary Ammo", SecondaryAmmo),
+        Entry::Category("Equipment", equipment),
     ]
-};
+}
+
+impl Entry {
+    fn name(&self) -> &'static str {
+        match self {
+            Entry::Direct(n, _) | Entry::Category(n, _) => n,
+        }
+    }
+}
 
 #[derive(Component)]
 struct HudMenu;
 
-/// B opens and closes the menu; a number picks a category, then a weapon.
+#[derive(Component)]
+struct HudScores;
+
+/// CS 1.6 buy menu: B opens/closes, a number picks, 0 cancels, buying closes it.
+/// `,` / `.` buy primary / secondary ammo without the menu.
 fn buy_menu(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Walker>, mut text: Single<&mut Text, With<HudMenu>>) {
-    if std::env::var_os("BOOTLEG16_SCREENSHOT").is_some() && std::env::var_os("BOOTLEG16_MENU").is_none() {
+    let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
+    if auto && std::env::var_os("BOOTLEG16_MENU").is_none() {
         return;
     }
-    let digits = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9];
+    // Counter-terrorists are the odd player numbers until teams exist (as for the spawn pistol).
+    let ct = w.client.id().is_some_and(|id| id % 2 == 1);
+    let layout = buy_menu_layout(ct);
+    let digits = [KeyCode::Digit0, KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9];
     let pressed = digits.iter().position(|k| keys.just_pressed(*k));
+    if keys.just_pressed(KeyCode::Comma) {
+        w.client.buy(net::protocol::BuyItem::PrimaryAmmo);
+    }
+    if keys.just_pressed(KeyCode::Period) {
+        w.client.buy(net::protocol::BuyItem::SecondaryAmmo);
+    }
     if keys.just_pressed(KeyCode::KeyB) {
         w.menu = if w.menu.is_some() { None } else { Some(None) };
     } else if let (Some(state), Some(n)) = (w.menu, pressed) {
-        match state {
-            None if n < MENU.len() => w.menu = Some(Some(n)),
-            Some(cat) if n < MENU[cat].1.len() => {
-                w.client.buy(MENU[cat].1[n]);
-                w.menu = None;
+        if n == 0 {
+            w.menu = None; // 0. Cancel
+        } else {
+            let i = n - 1;
+            match state {
+                None => match layout.get(i) {
+                    Some(Entry::Category(..)) => w.menu = Some(Some(i)),
+                    Some(Entry::Direct(_, item)) => {
+                        w.client.buy(*item);
+                        w.menu = None;
+                    }
+                    None => {}
+                },
+                Some(cat) => {
+                    if let Some(Entry::Category(_, items)) = layout.get(cat) {
+                        if let Some((_, item)) = items.get(i) {
+                            w.client.buy(*item);
+                            w.menu = None;
+                        }
+                    }
+                }
             }
-            _ => {}
         }
     }
-    if std::env::var_os("BOOTLEG16_MENU").is_some() && w.menu.is_none() {
+    if auto && w.menu.is_none() {
         w.menu = Some(Some(3)); // screenshot check: show the rifles page
     }
     text.0 = match w.menu {
         None => String::new(),
         Some(None) => {
-            let mut t = String::from("Weapons (free for now)\n");
-            for (i, (name, _)) in MENU.iter().enumerate() {
-                t += &format!("\n{}. {name}", i + 1);
+            let mut t = format!("Buy Menu ({}, free for now)\n", if ct { "CT" } else { "T" });
+            for (i, e) in layout.iter().enumerate() {
+                t += &format!("\n{}. {}", i + 1, e.name());
             }
-            t + "\n\nB. close"
+            t + "\n\n0. Cancel"
         }
-        Some(Some(cat)) => {
-            let mut t = format!("{}\n", MENU[cat].0);
-            for (i, id) in MENU[cat].1.iter().enumerate() {
-                t += &format!("\n{}. {}", i + 1, sim::weapons::def(*id).name);
+        Some(Some(cat)) => match layout.get(cat) {
+            Some(Entry::Category(name, items)) => {
+                let mut t = format!("{name}\n");
+                for (i, (item, _)) in items.iter().enumerate() {
+                    t += &format!("\n{}. {item}", i + 1);
+                }
+                t + "\n\n0. Cancel"
             }
-            t + "\n\nB. close"
+            _ => String::new(),
+        },
+    };
+}
+
+/// Tab: scoreboard while held.
+fn scoreboard(keys: Res<ButtonInput<KeyCode>>, w: Res<Walker>, mut text: Single<&mut Text, With<HudScores>>) {
+    text.0 = if keys.pressed(KeyCode::Tab) {
+        let mut t = format!("{:<24} {:>6} {:>6}\n", "Player", "Kills", "Deaths");
+        for s in &w.client.scores {
+            let me = if Some(s.id) == w.client.id() { " (you)" } else { "" };
+            let dead = if s.alive { "" } else { "  dead" };
+            t += &format!("\n{:<24} {:>6} {:>6}{dead}", format!("{}{me}", s.name), s.kills, s.deaths);
         }
+        t
+    } else {
+        String::new()
     };
 }
 

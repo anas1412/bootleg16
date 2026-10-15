@@ -154,6 +154,8 @@ pub struct Fired {
     pub dry_fire: bool,
     /// A grenade left the hand: which, and the view angles (pitch, yaw) incl. punch.
     pub throw: Option<(crate::grenades::Kind, [f32; 2])>,
+    /// A gun was dropped (G), with its ammo.
+    pub dropped: Option<GunState>,
 }
 
 /// What the weapon code needs to know about the player this tick.
@@ -169,8 +171,10 @@ pub struct Context {
     pub attack: bool,
     pub attack2: bool,
     pub reload: bool,
-    /// Slot key pressed this tick (0 = none).
+    /// Slot key pressed this tick (0 = none; see `pmove::SLOT_*`).
     pub slot: u8,
+    /// G pressed this tick.
+    pub drop: bool,
     /// Freeze time etc.: no shooting.
     pub can_shoot: bool,
     /// Per-tick random seed (player and input number).
@@ -242,6 +246,48 @@ impl Loadout {
         }
         self.switch_to(def(id).slot, now);
         true
+    }
+
+    /// Take the gun in hand out of the inventory (G, or on death) and draw the best
+    /// remaining weapon. Knife and grenades can't be dropped.
+    pub fn drop_active(&mut self, now: f64) -> Option<GunState> {
+        let gun = match self.active {
+            Slot::Primary => self.primary.take(),
+            Slot::Secondary => self.secondary.take(),
+            _ => None,
+        }?;
+        let mut g = gun;
+        g.reloading = false;
+        g.burst = None;
+        g.zoom = 0;
+        g.resume_zoom = 0;
+        g.shell_state = 0;
+        let best = [Slot::Primary, Slot::Secondary, Slot::Knife, Slot::Grenade].into_iter().find(|s| self.has(*s)).unwrap_or(Slot::Knife);
+        self.active = Slot::Knife; // nothing in hand to holster
+        self.switch_to(best, now);
+        Some(g)
+    }
+
+    /// Pick up a dropped gun if its slot is free (keeps its ammo). Returns false if not.
+    pub fn pick_up(&mut self, g: GunState) -> bool {
+        let slot = match def(g.id).slot {
+            Slot::Primary => &mut self.primary,
+            Slot::Secondary => &mut self.secondary,
+            _ => return false,
+        };
+        if slot.is_some() {
+            return false;
+        }
+        *slot = Some(g);
+        true
+    }
+
+    /// Fill the reserve ammo of the primary (or pistol) to the most it can carry.
+    pub fn refill_ammo(&mut self, primary: bool) {
+        let g = if primary { self.primary.as_mut() } else { self.secondary.as_mut() };
+        if let Some(g) = g {
+            g.reserve = gun(g.id).map(|d| d.reserve).unwrap_or(g.reserve);
+        }
     }
 
     /// The grenade type in hand (or that slot 4 would draw).
@@ -330,13 +376,22 @@ impl Loadout {
             self.punch = self.punch.map(|p| p * new / len);
         }
 
+        if c.drop {
+            out.dropped = self.drop_active(c.now);
+        }
         if c.slot != 0 {
+            let order = [Slot::Primary, Slot::Secondary, Slot::Knife, Slot::Grenade, Slot::Bomb];
+            let pos = order.iter().position(|s| *s == self.active).unwrap_or(0);
+            let cycle = |step: usize| (1..=5).map(|k| order[(pos + k * step) % 5]).find(|s| self.has(*s)).unwrap_or(self.active);
             let slot = match c.slot {
                 1 => Slot::Primary,
                 2 => Slot::Secondary,
                 3 => Slot::Knife,
                 4 => Slot::Grenade,
-                _ => Slot::Bomb,
+                5 => Slot::Bomb,
+                crate::pmove::SLOT_LAST => self.last_slot,
+                crate::pmove::SLOT_NEXT => cycle(1),
+                _ => cycle(4), // previous = four steps forward round the five slots
             };
             if slot != self.active {
                 self.switch_to(slot, c.now);

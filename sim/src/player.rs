@@ -29,6 +29,7 @@ pub fn step(s: &mut PlayerState, input: &Input, dt: f32, cmd_time: f64, seed: u6
         attack2: input.attack2,
         reload: input.reload,
         slot: input.slot,
+        drop: input.drop,
         can_shoot,
         seed,
     };

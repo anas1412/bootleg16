@@ -25,7 +25,10 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Knife: GoldSrc hull sweep and 8-corner search (approximated by 5 rays now)
 - [ ] Shield
 - [ ] Breakables (`func_breakable`: dust2 glass/boxes), `func_button`
-- [ ] Weapon drop/pickup on the ground; dropping on death
+- [x] CS 1.6 keys: B buy menu (CS layout per side, 0 cancel), Q last weapon, wheel, G drop,
+      `,`/`.` ammo, Tab scoreboard; drop/pickup on the ground; gun drops on death
+- [ ] hud_fastswitch 0 (CS default: number keys show a selection, mouse1 confirms); only fastswitch 1 now
+- [ ] Ground guns are never cleaned up (CS removes them at round start)
 - [ ] First-person weapon models (viewmodels) and third-person weapon models
 - [ ] Weapon sounds; blood/sparks/decals
 - [ ] Kill feed and other events are sent unreliably (a lost snapshot loses them)
