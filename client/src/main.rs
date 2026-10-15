@@ -676,7 +676,7 @@ const MENU: &[(&str, &[sim::weapons::Id])] = {
 #[derive(Component)]
 struct HudMenu;
 
-/// B opens the menu; a number picks a category, then a weapon; Esc/B closes it.
+/// B opens and closes the menu; a number picks a category, then a weapon.
 fn buy_menu(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Walker>, mut text: Single<&mut Text, With<HudMenu>>) {
     if std::env::var_os("BOOTLEG16_SCREENSHOT").is_some() && std::env::var_os("BOOTLEG16_MENU").is_none() {
         return;
@@ -685,8 +685,6 @@ fn buy_menu(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Walker>, mut text: Si
     let pressed = digits.iter().position(|k| keys.just_pressed(*k));
     if keys.just_pressed(KeyCode::KeyB) {
         w.menu = if w.menu.is_some() { None } else { Some(None) };
-    } else if keys.just_pressed(KeyCode::Escape) {
-        w.menu = None;
     } else if let (Some(state), Some(n)) = (w.menu, pressed) {
         match state {
             None if n < MENU.len() => w.menu = Some(Some(n)),
@@ -707,14 +705,14 @@ fn buy_menu(keys: Res<ButtonInput<KeyCode>>, mut w: ResMut<Walker>, mut text: Si
             for (i, (name, _)) in MENU.iter().enumerate() {
                 t += &format!("\n{}. {name}", i + 1);
             }
-            t + "\n\nEsc. close"
+            t + "\n\nB. close"
         }
         Some(Some(cat)) => {
             let mut t = format!("{}\n", MENU[cat].0);
             for (i, id) in MENU[cat].1.iter().enumerate() {
                 t += &format!("\n{}. {}", i + 1, sim::weapons::def(*id).name);
             }
-            t + "\n\nEsc. close"
+            t + "\n\nB. close"
         }
     };
 }
@@ -774,20 +772,18 @@ fn hud(w: Res<Walker>, mut status: Single<&mut Text, (With<HudStatus>, Without<H
     feed.0 = w.feed.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join("\n");
 }
 
-/// Click to capture the mouse, Escape to release it (runs before `buy_menu`).
+/// Click to capture the mouse, Escape to release it.
 fn grab_cursor(
     mut cursor: Single<&mut CursorOptions>,
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
-    w: Res<Walker>,
 ) {
     // Automated screenshot runs never take the user's mouse.
     if mouse.just_pressed(MouseButton::Left) && std::env::var_os("BOOTLEG16_SCREENSHOT").is_none() {
         cursor.grab_mode = CursorGrabMode::Locked;
         cursor.visible = false;
     }
-    // Esc closes the weapon menu first (in `buy_menu`); only then does it free the mouse.
-    if keys.just_pressed(KeyCode::Escape) && w.menu.is_none() {
+    if keys.just_pressed(KeyCode::Escape) {
         cursor.grab_mode = CursorGrabMode::None;
         cursor.visible = true;
     }
