@@ -138,3 +138,32 @@ fn train_ladder_can_be_climbed() {
     }
     assert!(climbed == ladders.len(), "climbed {climbed} of {} ladders", ladders.len());
 }
+
+#[test]
+fn bullets_hit_floor_walls_and_sky_on_dust2() {
+    let Some(bsp) = load("de_dust2") else { return };
+    let world = World::from_bsp(&bsp);
+    let spawns: Vec<[f32; 3]> = bsp
+        .entity_list()
+        .iter()
+        .filter(|e| e.get("classname").map(String::as_str) == Some("info_player_deathmatch"))
+        .map(|e| vec3(&e["origin"]))
+        .collect();
+    let mut sky_hits = 0;
+    for s in &spawns {
+        // Where a player lands, the floor is 36 units below its origin.
+        let landed = world.trace(Hull::Standing, *s, [s[0], s[1], s[2] - 200.0]).end;
+        let down = world.trace_line(landed, [s[0], s[1], s[2] - 200.0]);
+        assert!(!down.start_solid && (down.end[2] - (landed[2] - 36.0)).abs() < 1.0, "floor under {landed:?} at {:?}", down.end);
+        assert!(down.normal[2] > 0.7);
+        // Every direction on the ground plane ends at a wall within the map.
+        for yaw in (0..360).step_by(45) {
+            let (y, x) = (yaw as f32).to_radians().sin_cos();
+            let t = world.trace_line(*s, [s[0] + x * 8192.0, s[1] + y * 8192.0, s[2]]);
+            assert!(t.fraction < 1.0, "shot from {s:?} at yaw {yaw} left the map");
+        }
+        sky_hits += world.trace_line(*s, [s[0], s[1], s[2] + 8192.0]).hit_sky as i32;
+    }
+    // T spawn on dust2 is outdoors.
+    assert!(sky_hits > 0, "no spawn has open sky above it");
+}

@@ -45,6 +45,7 @@ pub struct Trace {
     pub end: Vec3,
     /// Normal of the surface hit (valid when fraction < 1).
     pub normal: Vec3,
+    hit_contents: i32,
 }
 
 #[derive(Clone, Copy)]
@@ -61,6 +62,54 @@ struct Model {
     /// Index into `World::doors` when this model moves.
     door: Option<usize>,
     bsp_model: usize,
+}
+
+/// Which BSP tree a trace walks: the player-sized clip hulls, or the exact
+/// geometry (hull 0, the render tree) that bullets use.
+#[derive(Clone, Copy)]
+enum Tree<'a> {
+    Clip(&'a [Node]),
+    Point(&'a [Node], &'a [i32]),
+}
+
+const CONTENTS_SKY: i32 = -6;
+
+impl Tree<'_> {
+    fn nodes(&self) -> &[Node] {
+        match self {
+            Tree::Clip(n) | Tree::Point(n, _) => n,
+        }
+    }
+    /// Contents of a leaf reached as child `num` (< 0).
+    fn leaf(&self, num: i32) -> i32 {
+        match self {
+            Tree::Clip(_) => num,
+            Tree::Point(_, leaves) => leaves.get((-(num + 1)) as usize).copied().unwrap_or(CONTENTS_EMPTY),
+        }
+    }
+    fn blocks(&self, contents: i32) -> bool {
+        contents == CONTENTS_SOLID || (matches!(self, Tree::Point(..)) && contents == CONTENTS_SKY)
+    }
+    fn contents(&self, mut num: i32, p: Vec3) -> i32 {
+        let nodes = self.nodes();
+        while num >= 0 {
+            let n = &nodes[num as usize];
+            num = n.children[(dot(n.normal, p) - n.dist < 0.0) as usize];
+        }
+        self.leaf(num)
+    }
+}
+
+/// A bullet trace through the exact map geometry.
+#[derive(Clone, Copy, Debug)]
+pub struct LineTrace {
+    pub fraction: f32,
+    pub end: Vec3,
+    pub normal: Vec3,
+    /// Started inside solid (e.g. the muzzle is in a wall).
+    pub start_solid: bool,
+    /// Stopped by the sky (no decal, no penetration).
+    pub hit_sky: bool,
 }
 
 /// Point `p` in a model's own space, given where its door (if any) currently is.
@@ -228,13 +277,13 @@ impl World {
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
     pub fn trace(&self, hull: Hull, start: Vec3, end: Vec3) -> Trace {
-        let mut best = Trace { start_solid: false, all_solid: false, fraction: 1.0, end, normal: [0.0; 3] };
+        let mut best = Trace { start_solid: false, all_solid: false, fraction: 1.0, end, normal: [0.0; 3], hit_contents: CONTENTS_EMPTY };
         for m in &self.models {
             let head = m.heads[hull as usize];
             let door = self.door_of(m);
             let (s, e) = (to_local(m, door, start), to_local(m, door, end));
-            let mut t = Trace { start_solid: false, all_solid: true, fraction: 1.0, end: e, normal: [0.0; 3] };
-            self.recursive(head, head, 0.0, 1.0, s, e, &mut t);
+            let mut t = Trace { start_solid: false, all_solid: true, fraction: 1.0, end: e, normal: [0.0; 3], hit_contents: CONTENTS_EMPTY };
+            self.recursive(Tree::Clip(&self.nodes), head, head, 0.0, 1.0, s, e, &mut t);
             // Rotated door: bring the hit normal back to world space.
             if let Some(ang) = door.map(|d| d.transform().1).filter(|a| *a != [0.0; 3]) {
                 let (f, r, u) = angle_vectors(ang);
@@ -263,24 +312,52 @@ impl World {
         best
     }
 
+    /// A bullet-style line trace through the exact geometry (world + doors).
+    pub fn trace_line(&self, start: Vec3, end: Vec3) -> LineTrace {
+        let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
+        let mut best = LineTrace { fraction: 1.0, end, normal: [0.0; 3], start_solid: false, hit_sky: false };
+        for m in &self.models {
+            let head = m.heads[0];
+            if head < 0 {
+                continue;
+            }
+            let door = self.door_of(m);
+            let (s, e) = (to_local(m, door, start), to_local(m, door, end));
+            let mut t = Trace { start_solid: false, all_solid: true, fraction: 1.0, end: e, normal: [0.0; 3], hit_contents: CONTENTS_EMPTY };
+            self.recursive(tree, head, head, 0.0, 1.0, s, e, &mut t);
+            if let Some(ang) = door.map(|d| d.transform().1).filter(|a| *a != [0.0; 3]) {
+                let (f, r, u) = angle_vectors(ang);
+                t.normal = local_to_world(t.normal, f, r, u);
+            }
+            best.start_solid |= t.start_solid || t.all_solid;
+            if t.fraction < best.fraction {
+                best.fraction = t.fraction;
+                best.normal = t.normal;
+                best.end = lerp(start, end, t.fraction);
+                best.hit_sky = t.hit_contents == CONTENTS_SKY;
+            }
+        }
+        best
+    }
+
     /// Returns false once the move is blocked (the hit is recorded in `t`).
     #[allow(clippy::too_many_arguments)]
-    fn recursive(&self, head: i32, num: i32, f1: f32, f2: f32, p1: Vec3, p2: Vec3, t: &mut Trace) -> bool {
+    fn recursive(&self, tree: Tree, head: i32, num: i32, f1: f32, f2: f32, p1: Vec3, p2: Vec3, t: &mut Trace) -> bool {
         if num < 0 {
-            if num != CONTENTS_SOLID {
+            if !tree.blocks(tree.leaf(num)) {
                 t.all_solid = false;
             } else {
                 t.start_solid = true;
             }
             return true;
         }
-        let n = self.nodes[num as usize];
+        let n = tree.nodes()[num as usize];
         let (d1, d2) = (dot(n.normal, p1) - n.dist, dot(n.normal, p2) - n.dist);
         if d1 >= 0.0 && d2 >= 0.0 {
-            return self.recursive(head, n.children[0], f1, f2, p1, p2, t);
+            return self.recursive(tree, head, n.children[0], f1, f2, p1, p2, t);
         }
         if d1 < 0.0 && d2 < 0.0 {
-            return self.recursive(head, n.children[1], f1, f2, p1, p2, t);
+            return self.recursive(tree, head, n.children[1], f1, f2, p1, p2, t);
         }
         // The move crosses this plane: split it, stopping just short of the plane.
         let mut frac = if d1 < 0.0 { (d1 + DIST_EPSILON) / (d1 - d2) } else { (d1 - DIST_EPSILON) / (d1 - d2) }.clamp(0.0, 1.0);
@@ -288,19 +365,21 @@ impl World {
         let mut mid = lerp(p1, p2, frac);
         let side = (d1 < 0.0) as usize;
 
-        if !self.recursive(head, n.children[side], f1, midf, p1, mid, t) {
+        if !self.recursive(tree, head, n.children[side], f1, midf, p1, mid, t) {
             return false;
         }
-        if self.contents(n.children[side ^ 1], mid) != CONTENTS_SOLID {
-            return self.recursive(head, n.children[side ^ 1], midf, f2, mid, p2, t);
+        let beyond = tree.contents(n.children[side ^ 1], mid);
+        if !tree.blocks(beyond) {
+            return self.recursive(tree, head, n.children[side ^ 1], midf, f2, mid, p2, t);
         }
+        t.hit_contents = beyond;
         if t.all_solid {
             return false; // never left solid
         }
         // Hit the plane from `side`.
         t.normal = if side == 0 { n.normal } else { [-n.normal[0], -n.normal[1], -n.normal[2]] };
         // Back off until outside solid (float error can land the midpoint inside).
-        while self.contents(head, mid) == CONTENTS_SOLID {
+        while tree.blocks(tree.contents(head, mid)) {
             frac -= 0.1;
             if frac < 0.0 {
                 t.fraction = midf;
