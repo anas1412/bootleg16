@@ -49,13 +49,19 @@ land, and add new ones here instead of leaving them only in chat.
 ### Players and bots
 - [ ] Bots to fill empty slots (navigation on the four maps)
 - [x] Player models drawn from the install's MDL files (static aim pose per stance)
-- [ ] Player animations (run/walk/jump/crouch-walk, aim pitch, weapon-specific poses), T vs CT models per team
+- [x] T vs CT models per team (4 classes each, picked by id)
+- [ ] Player animations (run/walk/jump/crouch-walk, aim pitch); class choice menu
 - [ ] Light models from the map's lightmaps like GoldSrc (they're unlit now)
 - [ ] First-person weapon models (viewmodels)
 
 ### HUD and UI
-- [ ] HUD: health, armor, ammo, money, round timer, score, kill feed
-- [ ] Scoreboard, buy menu UI, team select, main menu, settings (sensitivity, FOV, keys)
+- [x] HUD: health, armor, ammo, grenades, kill feed (with names), notices
+- [x] Crosshair gap = real spread of the next shot; none on snipers; sniper scope overlay
+- [x] Scoreboard by team, clickable buy panel with prices (free in practice), team select (M, 1/2/5/6)
+- [x] Main menu: practice (map, dummies, strafe), join server, settings (name, sensitivity, volume); Esc menu
+- [ ] HUD: money, round timer, team score (with the round system)
+- [ ] Settings: FOV, key binds, crosshair style
+- [ ] Spawn view angle from the spawn point (camera starts at yaw 0 now)
 
 ### Networking (`docs/NETWORKING.md`)
 - [ ] Anti-wallhack: don't send players the client can't see (server-side visibility)

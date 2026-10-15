@@ -308,6 +308,14 @@ impl Loadout {
         (0..3).map(|k| (self.grenade as usize + k) % 3).find(|&i| self.grenades[i] > 0).map(|i| kinds[i])
     }
 
+    /// Spread the next shot would have in this movement state (for the crosshair).
+    pub fn spread_now(&self, on_ground: bool, crouched: bool, speed_2d: f32) -> Option<f32> {
+        let g = self.active_gun()?;
+        let gd = gun(g.id)?;
+        let c = Context { now: 0.0, dt: 0.0, on_ground, crouched, speed_2d, yaw: 0.0, pitch: 0.0, attack: false, attack2: false, reload: false, slot: 0, drop: false, can_shoot: true, seed: 0 };
+        Some(spread(&gd.modes[g.mode as usize].spread, g.accuracy, &c, g.zoom > 0))
+    }
+
     pub fn active_gun(&self) -> Option<&GunState> {
         match self.active {
             Slot::Primary => self.primary.as_ref(),

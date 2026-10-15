@@ -282,10 +282,10 @@ fn move_camera(
     tf.translation += dir.normalize_or_zero() * speed * time.delta_secs();
 }
 
-/// Click to capture the mouse (not while a menu is over the game). Esc is the pause menu.
-fn grab_cursor(mut cursor: Single<&mut CursorOptions>, mouse: Res<ButtonInput<MouseButton>>, overlay: Option<Res<Overlay>>) {
+/// Click to capture the mouse (not while a menu or the buy menu is open). Esc is the pause menu.
+fn grab_cursor(mut cursor: Single<&mut CursorOptions>, mouse: Res<ButtonInput<MouseButton>>, overlay: Option<Res<Overlay>>, buy: Res<BuyMenu>) {
     // Automated screenshot runs never take the user's mouse.
-    if mouse.just_pressed(MouseButton::Left) && std::env::var_os("BOOTLEG16_SCREENSHOT").is_none() && !overlay_open(overlay) {
+    if mouse.just_pressed(MouseButton::Left) && std::env::var_os("BOOTLEG16_SCREENSHOT").is_none() && !overlay_open(overlay) && !buy.is_open() {
         cursor.grab_mode = CursorGrabMode::Locked;
         cursor.visible = false;
     }
