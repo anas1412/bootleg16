@@ -478,7 +478,8 @@ impl World {
         ];
         World {
             nodes,
-            models: vec![Model { heads: [-1, 0, -1, 1], offset: [0.0; 3], door: None, bsp_model: 0 }],
+            // Hull 0 (exact geometry) root is point node 0; hulls 1 and 3 are clip nodes 0 and 1.
+            models: vec![Model { heads: [0, 0, -1, 1], offset: [0.0; 3], door: None, bsp_model: 0 }],
             point_nodes: vec![Node { normal: [0.0, 0.0, 1.0], dist: z, children: [-1, -2] }],
             leaf_contents: vec![CONTENTS_EMPTY, CONTENTS_SOLID],
             water_roots: vec![(0, [0.0; 3])],
