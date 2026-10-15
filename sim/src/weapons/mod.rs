@@ -113,6 +113,11 @@ pub struct Loadout {
     pub punch: [f32; 3],
     knife_next_primary: f64,
     knife_next_secondary: f64,
+    /// Grenade in hand: index into `grenades` (0 HE, 1 flash, 2 smoke).
+    pub grenade: u8,
+    /// Pin pulled; the throw happens on release once this time has passed.
+    pin_until: Option<f64>,
+    grenade_next: f64,
 }
 
 /// A bullet (or pellet volley) to trace, decided by the weapon update.
@@ -147,6 +152,8 @@ pub struct Fired {
     pub swing: Option<Swing>,
     /// The empty-clip click.
     pub dry_fire: bool,
+    /// A grenade left the hand: which, and the view angles (pitch, yaw) incl. punch.
+    pub throw: Option<(crate::grenades::Kind, [f32; 2])>,
 }
 
 /// What the weapon code needs to know about the player this tick.
@@ -185,6 +192,9 @@ impl Loadout {
             punch: [0.0; 3],
             knife_next_primary: 0.0,
             knife_next_secondary: 0.0,
+            grenade: 0,
+            pin_until: None,
+            grenade_next: 0.0,
         }
     }
 
@@ -198,15 +208,46 @@ impl Loadout {
         l
     }
 
-    /// Put a gun in its slot (replacing what was there) and draw it.
-    pub fn give(&mut self, id: Id, now: f64) {
+    /// Add a weapon: a gun replaces what's in its slot and is drawn; grenades stack
+    /// up to their carry limit (1 HE, 2 flash, 1 smoke). Returns false if it didn't fit.
+    pub fn give(&mut self, id: Id, now: f64) -> bool {
+        match id {
+            Id::HeGrenade | Id::Flashbang | Id::Smoke => {
+                let (i, max) = match id {
+                    Id::HeGrenade => (0, 1),
+                    Id::Flashbang => (1, 2),
+                    _ => (2, 1),
+                };
+                if self.grenades[i] >= max {
+                    return false;
+                }
+                self.grenades[i] += 1;
+                return true;
+            }
+            Id::C4 => {
+                self.c4 = true;
+                return true;
+            }
+            Id::Knife => {
+                self.knife = true;
+                return true;
+            }
+            _ => {}
+        }
         let g = GunState::new(id);
         match def(id).slot {
             Slot::Primary => self.primary = Some(g),
             Slot::Secondary => self.secondary = Some(g),
-            _ => return,
+            _ => return false,
         }
         self.switch_to(def(id).slot, now);
+        true
+    }
+
+    /// The grenade type in hand (or that slot 4 would draw).
+    pub fn grenade_id(&self) -> Option<Id> {
+        let kinds = [Id::HeGrenade, Id::Flashbang, Id::Smoke];
+        (0..3).map(|k| (self.grenade as usize + k) % 3).find(|&i| self.grenades[i] > 0).map(|i| kinds[i])
     }
 
     pub fn active_gun(&self) -> Option<&GunState> {
@@ -226,7 +267,11 @@ impl Loadout {
     }
 
     pub fn active_id(&self) -> Id {
-        self.active_gun().map(|g| g.id).unwrap_or(Id::Knife)
+        match self.active {
+            Slot::Grenade => self.grenade_id().unwrap_or(Id::Knife),
+            Slot::Bomb => Id::C4,
+            _ => self.active_gun().map(|g| g.id).unwrap_or(Id::Knife),
+        }
     }
 
     /// Movement speed with the current weapon.
@@ -256,6 +301,7 @@ impl Loadout {
             g.zoom = 0;
             g.resume_zoom = 0;
         }
+        self.pin_until = None;
         self.last_slot = self.active;
         self.active = slot;
         let deploy = match self.active_gun_mut() {
@@ -294,6 +340,12 @@ impl Loadout {
             };
             if slot != self.active {
                 self.switch_to(slot, c.now);
+            } else if slot == Slot::Grenade && self.pin_until.is_none() {
+                // Pressing 4 again picks the next grenade type you carry.
+                if let Some(i) = (1..=3).map(|k| (self.grenade as usize + k) % 3).find(|&i| self.grenades[i] > 0) {
+                    self.grenade = i as u8;
+                    self.next_attack = c.now + 0.75;
+                }
             }
         }
 
@@ -302,6 +354,10 @@ impl Loadout {
         }
         if self.active == Slot::Knife {
             self.knife(c, &mut out);
+            return out;
+        }
+        if self.active == Slot::Grenade {
+            self.grenade_update(c, &mut out);
             return out;
         }
         let mut punch = self.punch;
@@ -501,6 +557,36 @@ impl Loadout {
             out.swing = Some(Swing { stab: false, angles: [c.pitch, c.yaw] });
             self.knife_next_primary = c.now + 0.35;
             self.knife_next_secondary = c.now + 0.5;
+        }
+    }
+
+    /// Hold fire to pull the pin; the throw happens when you let go (at least 0.5 s
+    /// after pulling it). After the last of a type, the next type or the last weapon.
+    fn grenade_update(&mut self, c: &Context, out: &mut Fired) {
+        let Some(id) = self.grenade_id() else {
+            self.switch_to(self.last_slot, c.now);
+            return;
+        };
+        self.grenade = match id {
+            Id::HeGrenade => 0,
+            Id::Flashbang => 1,
+            _ => 2,
+        };
+        match self.pin_until {
+            None if c.attack && c.now >= self.grenade_next && c.can_shoot => self.pin_until = Some(c.now + 0.5),
+            Some(t) if !c.attack && c.now >= t => {
+                let kind = [crate::grenades::Kind::He, crate::grenades::Kind::Flash, crate::grenades::Kind::Smoke][self.grenade as usize];
+                out.throw = Some((kind, [c.pitch + self.punch[0], c.yaw + self.punch[1]]));
+                self.grenades[self.grenade as usize] -= 1;
+                self.pin_until = None;
+                self.grenade_next = c.now + 0.5;
+                self.next_attack = c.now + 0.5;
+                if self.grenade_id().is_none() {
+                    let back = if self.last_slot == Slot::Grenade { Slot::Knife } else { self.last_slot };
+                    self.switch_to(back, c.now + 0.5);
+                }
+            }
+            _ => {}
         }
     }
 

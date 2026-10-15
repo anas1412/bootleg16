@@ -7,7 +7,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 4;
+pub const PROTOCOL_VERSION: u32 = 5;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -58,6 +58,17 @@ pub enum GameEvent {
     Damage { attacker: u8, victim: u8, amount: f32, group: HitGroup },
     /// `weapon` None = fell to death.
     Kill { killer: u8, victim: u8, weapon: Option<Id>, headshot: bool },
+    /// An HE went off here.
+    Explosion { at: [f32; 3] },
+    /// A flashbang went off here; `blinded` lists who it caught and how badly.
+    Flash { at: [f32; 3], blinded: Vec<(u8, sim::grenades::Blind)> },
+}
+
+/// A smoke cloud: where, and how many seconds it has left.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct SmokeNet {
+    pub at: [f32; 3],
+    pub left: f32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -73,6 +84,9 @@ pub enum ServerMsg {
         /// Your own weapons, for prediction and the HUD.
         loadout: Loadout,
         events: Vec<GameEvent>,
+        /// Grenades in flight or lying around, and smoke clouds.
+        grenades: Vec<(sim::grenades::Kind, [f32; 3])>,
+        smokes: Vec<SmokeNet>,
     },
 }
 

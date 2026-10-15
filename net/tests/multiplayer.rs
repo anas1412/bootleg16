@@ -177,3 +177,51 @@ fn ak_kills_another_player_and_everyone_hears_about_it() {
     let server_clip_now = g.server.player_state(a).unwrap().loadout.active_gun().unwrap().clip;
     assert_eq!(g.a.state.loadout.active_gun().unwrap().clip, server_clip_now, "predicted clip matches (was {server_clip})");
 }
+
+#[test]
+fn he_hurts_and_flash_blinds_across_the_network() {
+    use net::protocol::GameEvent;
+    use sim::weapons::Id;
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 40, 0.0);
+    g.server.set_give(vec![Id::HeGrenade, Id::Flashbang]);
+    g.connect();
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
+    let target = g.server.player(b).unwrap().origin;
+    let eye = g.server.player(a).unwrap().eye();
+    let d = [target[0] - eye[0], target[1] - eye[1]];
+    let yaw = d[1].atan2(d[0]).to_degrees();
+    // Aim a little down so the grenade lands near B; B looks at A for the flash.
+    let look = |pitch| Input { yaw, pitch, ..Default::default() };
+    let b_looks = Input { yaw: yaw + 180.0, ..Default::default() };
+    let mut events = Vec::new();
+    let run = |g: &mut Game, events: &mut Vec<GameEvent>, input: Input, ticks: usize| {
+        for _ in 0..ticks {
+            g.tick(input, b_looks);
+            events.extend(g.b.take_events());
+        }
+    };
+    run(&mut g, &mut events, Input { slot: 4, ..look(30.0) }, 1);
+    run(&mut g, &mut events, look(30.0), 128);
+    assert_eq!(g.a.state.loadout.active_id(), Id::HeGrenade);
+    run(&mut g, &mut events, Input { attack: true, ..look(30.0) }, 80); // pull the pin
+    run(&mut g, &mut events, look(30.0), 300); // release, 1.5 s fuse
+    let health = g.server.vitals(b).unwrap().health;
+    assert!(events.iter().any(|e| matches!(e, GameEvent::Explosion { .. })), "no explosion");
+    assert!(health < 100.0, "B unhurt by the HE: {health}");
+    // A now holds the flashbang (the HE is gone).
+    assert_eq!(g.a.state.loadout.active_id(), Id::Flashbang);
+    run(&mut g, &mut events, Input { attack: true, ..look(10.0) }, 80);
+    run(&mut g, &mut events, look(10.0), 300);
+    let flashed = events.iter().find_map(|e| match e {
+        GameEvent::Flash { at, blinded } => blinded.iter().find(|(id, _)| *id == b).map(|x| (*at, x.1)),
+        _ => None,
+    });
+    let (at, blind) = flashed.expect("B should be blinded");
+    // Full white only if the flash went off in front of B (it may fly past them).
+    let eye_b = g.server.player(b).unwrap().eye();
+    let (f, _, _) = sim::weapons::bullets::view_vectors(0.0, yaw + 180.0);
+    let in_front = (at[0] - eye_b[0]) * f[0] + (at[1] - eye_b[1]) * f[1] + (at[2] + 1.0 - eye_b[2]) * f[2] >= 0.0;
+    assert_eq!(blind.alpha, if in_front { 255 } else { 200 }, "flash at {at:?}");
+    assert!(blind.hold > 0.0 && blind.fade > blind.hold);
+}

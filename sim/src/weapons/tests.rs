@@ -235,3 +235,32 @@ fn spread_offsets_are_triangular_and_bounded() {
     assert!(mean.abs() < 0.01);
     assert!((var - 1.0 / 6.0).abs() < 0.01, "triangular(-1,1) variance is 1/6, got {var}");
 }
+
+#[test]
+fn grenades_throw_on_release_and_cycle() {
+    let mut l = Loadout::knife_only();
+    assert!(l.give(Id::Flashbang, 0.0) && l.give(Id::Flashbang, 0.0));
+    assert!(!l.give(Id::Flashbang, 0.0), "only two flashes");
+    assert!(l.give(Id::HeGrenade, 0.0));
+    let mut s = Sim { l, now: 0.0, tick: 0 };
+    s.step(|c| c.slot = 4);
+    s.idle(1.0);
+    assert_eq!(s.l.active_id(), Id::HeGrenade);
+    s.step(|c| c.slot = 4); // next type
+    s.idle(1.0);
+    assert_eq!(s.l.active_id(), Id::Flashbang);
+    // Holding the pin never throws; letting go does.
+    let held: Vec<_> = (0..128).filter_map(|_| s.step(attack).throw).collect();
+    assert!(held.is_empty());
+    let thrown = s.step(|_| {}).throw;
+    assert_eq!(thrown.map(|t| t.0), Some(crate::grenades::Kind::Flash));
+    assert_eq!(s.l.grenades, [1, 1, 0]);
+    // A quick tap still throws, once the pin time (0.5 s) is up.
+    s.idle(1.0);
+    s.step(attack);
+    let early: Vec<_> = (0..32).filter_map(|_| s.step(|_| {}).throw).collect();
+    assert!(early.is_empty(), "not before 0.5 s");
+    let later: Vec<_> = (0..64).filter_map(|_| s.step(|_| {}).throw).collect();
+    assert_eq!(later.len(), 1);
+    assert_eq!(s.l.grenades, [1, 0, 0]);
+}

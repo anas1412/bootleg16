@@ -78,6 +78,7 @@ struct Pending {
     shooter: u8,
     eye: [f32; 3],
     yaw: f32,
+    velocity: [f32; 3],
     fired: Fired,
     view_tick: f32,
 }
@@ -98,6 +99,9 @@ pub struct Server {
     events: Vec<GameEvent>,
     /// Extra weapons everyone spawns with (server option, for testing).
     give: Vec<Id>,
+    grenades: Vec<sim::grenades::Grenade>,
+    /// Smoke clouds: where and until when (server seconds).
+    smokes: Vec<([f32; 3], f64)>,
 }
 
 impl Server {
@@ -124,6 +128,8 @@ impl Server {
             history: VecDeque::new(),
             events: Vec::new(),
             give: Vec::new(),
+            grenades: Vec::new(),
+            smokes: Vec::new(),
         })
     }
 
@@ -253,8 +259,8 @@ impl Server {
                     c.respawn_at = Some(tick + RESPAWN_TICKS);
                     self.events.push(GameEvent::Kill { killer: c.id, victim: c.id, weapon: None, headshot: false });
                 }
-                if !fired.shots.is_empty() || fired.swing.is_some() {
-                    pending.push(Pending { shooter: c.id, eye: c.state.movement.eye(), yaw: input.yaw, fired, view_tick });
+                if !fired.shots.is_empty() || fired.swing.is_some() || fired.throw.is_some() {
+                    pending.push(Pending { shooter: c.id, eye: c.state.movement.eye(), yaw: input.yaw, velocity: c.state.movement.velocity, fired, view_tick });
                 }
             }
             if c.vitals.alive() {
@@ -265,6 +271,7 @@ impl Server {
             self.resolve(p);
         }
         self.world.update(TICK, &actors);
+        self.grenades_step();
 
         self.history.push_back(PastPositions {
             tick: self.tick,
@@ -297,16 +304,80 @@ impl Server {
                 .collect();
             let doors = self.world.doors.net_state();
             let events = std::mem::take(&mut self.events);
+            let now = self.tick as f64 * TICK as f64;
+            let grenades: Vec<_> = self.grenades.iter().map(|g| (g.kind, g.origin)).collect();
+            let smokes: Vec<SmokeNet> = self.smokes.iter().map(|s| SmokeNet { at: s.0, left: (s.1 - now) as f32 }).collect();
             let sends: Vec<_> = self.clients.iter().map(|(a, c)| (*a, c.last_run, c.state.loadout.clone())).collect();
             for (addr, ack, loadout) in sends {
-                let msg = ServerMsg::Snapshot { tick, ack, players: players.clone(), doors: doors.clone(), loadout, events: events.clone() };
+                let msg = ServerMsg::Snapshot {
+                    tick,
+                    ack,
+                    players: players.clone(),
+                    doors: doors.clone(),
+                    loadout,
+                    events: events.clone(),
+                    grenades: grenades.clone(),
+                    smokes: smokes.clone(),
+                };
                 self.socket.send(addr, encode(&msg));
+            }
+        }
+    }
+
+    /// Fly grenades and set off the ones that are due.
+    fn grenades_step(&mut self) {
+        use sim::grenades::{self, Kind};
+        let now = self.tick as f64 * TICK as f64;
+        for g in &mut self.grenades {
+            g.physics(TICK, &self.world, self.vars.gravity);
+        }
+        let (due, flying): (Vec<_>, Vec<_>) = self.grenades.drain(..).partition(|g| g.due(now));
+        self.grenades = flying;
+        self.smokes.retain(|s| s.1 > now);
+        let tick = self.tick;
+        for g in due {
+            match g.kind {
+                Kind::He => {
+                    let blast = g.blast_point(&self.world);
+                    self.events.push(GameEvent::Explosion { at: blast });
+                    for c in self.clients.values_mut().filter(|c| c.vitals.alive()) {
+                        let dmg = grenades::he_damage(blast, c.state.movement.origin);
+                        if dmg <= 0.0 {
+                            continue;
+                        }
+                        let (health, armor) = combat::explosion_damage(&c.vitals, dmg);
+                        let killed = c.vitals.hurt(health, armor);
+                        self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic });
+                        if killed {
+                            c.respawn_at = Some(tick + RESPAWN_TICKS);
+                            self.events.push(GameEvent::Kill { killer: g.owner, victim: c.id, weapon: Some(Id::HeGrenade), headshot: false });
+                        }
+                    }
+                }
+                Kind::Flash => {
+                    let blinded = self
+                        .clients
+                        .values()
+                        .filter(|c| c.vitals.alive())
+                        .filter_map(|c| {
+                            let (yaw, pitch) = c.view;
+                            let (f, _, _) = bullets::view_vectors(pitch, yaw);
+                            grenades::flash(&self.world, g.origin, c.state.movement.eye(), f).map(|b| (c.id, b))
+                        })
+                        .collect();
+                    self.events.push(GameEvent::Flash { at: g.origin, blinded });
+                }
+                Kind::Smoke => self.smokes.push((g.origin, now + grenades::SMOKE_SECONDS)),
             }
         }
     }
 
     /// Trace a player's shots/swing against everyone else as the shooter saw them.
     fn resolve(&mut self, p: Pending) {
+        if let Some((kind, angles)) = p.fired.throw {
+            let now = self.tick as f64 * TICK as f64;
+            self.grenades.push(sim::grenades::throw(kind, p.shooter, p.eye, angles[0], angles[1], p.velocity, now));
+        }
         let targets: Vec<Target> = self.rewind(p.view_tick).into_iter().filter(|t| t.id != p.shooter).collect();
         let mut hits: Vec<(u8, f32, HitGroup, Id)> = Vec::new();
         for shot in &p.fired.shots {

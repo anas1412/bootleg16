@@ -63,6 +63,9 @@ pub struct Client {
     pub last_correction: f32,
     /// Server events not yet taken by the game (see `take_events`).
     events: Vec<GameEvent>,
+    /// Grenades and smoke clouds as of the last snapshot.
+    pub grenades: Vec<(sim::grenades::Kind, [f32; 3])>,
+    pub smokes: Vec<SmokeNet>,
 }
 
 impl Client {
@@ -86,6 +89,8 @@ impl Client {
             ticks: 0,
             last_correction: 0.0,
             events: Vec::new(),
+            grenades: Vec::new(),
+            smokes: Vec::new(),
         })
     }
 
@@ -163,7 +168,7 @@ impl Client {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
             }
-            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events } => {
+            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, grenades, smokes } => {
                 let Status::Connected { id } = self.status else { return };
                 if tick <= self.latest_tick {
                     return; // old or duplicate
@@ -171,6 +176,8 @@ impl Client {
                 self.latest_tick = tick;
                 self.world.doors.apply_net_state(&doors);
                 self.events.extend(events);
+                self.grenades = grenades;
+                self.smokes = smokes;
 
                 // Correct our prediction: take the server's state, replay what it hasn't run yet.
                 if let Some(mine) = players.iter().find(|p| p.id == id) {
