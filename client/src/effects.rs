@@ -3,7 +3,9 @@
 use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::menu::AppState;
-use crate::players::Parts;
+use crate::impacts::Hit;
+use crate::models::Parts;
+use crate::players::PlayerAnim;
 use crate::{game_dir, map, models, sound};
 use bevy::{
     asset::RenderAssetUsages,
@@ -250,26 +252,49 @@ fn grenade_effects(
     }
 }
 
-/// Server events: tracers, sounds, the kill feed; explosions and flashes go on to `grenade_effects`.
-fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos) {
+/// Server events: tracers, sounds, the kill feed, bullet holes and blood (`impacts`), player
+/// animations (`players`); explosions and flashes go on to `grenade_effects`.
+fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>) {
     let me = w.client.id();
+    // Where a player is now (for sounds and the direction blood flies).
+    let eye_of = |w: &Walker, id: u8| -> Option<[f32; 3]> {
+        if Some(id) == me {
+            return Some(w.client.me().eye());
+        }
+        w.client.others().iter().find(|o| o.id == id).map(|o| [o.origin[0], o.origin[1], o.origin[2] + 17.0])
+    };
     for e in w.client.take_events() {
         match e {
-            GameEvent::Shot { shooter, weapon, silenced, from, to } if Some(shooter) != me => {
-                w.tracers.push((from, to, 0.08));
-                w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from) });
+            GameEvent::Shot { shooter, weapon, silenced, from, to, holes } => {
+                for (at, normal) in holes {
+                    hits.write(Hit::Wall { at, normal });
+                }
+                if Some(shooter) != me {
+                    w.tracers.push((from, to, 0.08));
+                    w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from) });
+                    anims.write(PlayerAnim::Shot(shooter));
+                }
             }
             GameEvent::Footstep { player, at } if Some(player) != me => {
                 w.cues.push(sound::Cue::Footstep { feet: [at[0], at[1], at[2] - 36.0], own: false, ladder: false, water: false });
             }
-            GameEvent::Damage { victim, sound, .. } => {
-                let at = if Some(victim) == me { None } else { w.client.others().iter().find(|o| o.id == victim).map(|o| o.origin) };
-                w.cues.push(sound::Cue::Hit { sound, at });
+            GameEvent::Damage { attacker, victim, sound, group, at, .. } => {
+                let victim_at = eye_of(&w, victim);
+                w.cues.push(sound::Cue::Hit { sound, at: if Some(victim) == me { None } else { victim_at } });
+                anims.write(PlayerAnim::Hurt(victim, group));
+                // Knife hits have no exact point: their middle.
+                let at = at.or_else(|| (sound != net::protocol::HitSound::Explosion).then_some(victim_at).flatten());
+                if let (Some(at), Some(from)) = (at, eye_of(&w, attacker)) {
+                    let d = [at[0] - from[0], at[1] - from[1], at[2] - from[2]];
+                    let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-3);
+                    hits.write(Hit::Player { at, dir: d.map(|v| v / l), head: group == sim::hitbox::HitGroup::Head });
+                }
             }
             GameEvent::GrenadeBounce { kind, at } => w.cues.push(sound::Cue::Bounce { kind, at }),
             GameEvent::Kill { killer, victim, weapon, headshot } => {
                 let at = if Some(victim) == me { None } else { w.client.others().iter().find(|o| o.id == victim).map(|o| o.origin) };
                 w.cues.push(sound::Cue::Death { at });
+                anims.write(PlayerAnim::Died(victim));
                 let name = |id: u8| {
                     if Some(id) == me {
                         return "you".to_string();

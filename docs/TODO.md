@@ -30,7 +30,9 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] hud_fastswitch 0 (CS default: number keys show a selection, mouse1 confirms); only fastswitch 1 now
 - [ ] Ground guns are never cleaned up (CS removes them at round start)
 - [ ] First-person weapon models (viewmodels) and third-person weapon models
-- [ ] Weapon sounds; blood/sparks/decals
+- [x] Weapon sounds
+- [x] Bullet holes + dust for every bullet/pellet (server sends wall hits), blood spray (bigger on headshots), blood on the wall behind
+- [ ] Own bullet holes predicted locally (now they come back from the server, one ping late); CS decal textures from decals.wad; sparks on metal
 - [ ] Kill feed and other events are sent unreliably (a lost snapshot loses them)
 - [ ] ⚠ Shotgun ground-recoil ranges (source-only); FAMAS/Glock follow-up timings per spec
 
@@ -50,7 +52,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Bots to fill empty slots (navigation on the four maps)
 - [x] Player models drawn from the install's MDL files (static aim pose per stance)
 - [x] T vs CT models per team (4 classes each, picked by id)
-- [ ] Player animations (run/walk/jump/crouch-walk, aim pitch); class choice menu
+- [x] Player animations: gait (idle/walk/run/crouch) + upper body (aim pitch blend, shoot, flinch), death animation by hit place, corpses (16 kept)
+- [ ] Legs turned toward movement direction (gaityaw), jump/swim/ladder gaits, reload anims for others; class choice menu; corpses cleared each round
 - [ ] Light models from the map's lightmaps like GoldSrc (they're unlit now)
 - [ ] First-person weapon models (viewmodels)
 

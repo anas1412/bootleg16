@@ -23,6 +23,8 @@ pub struct BulletHit {
     pub victim: u8,
     pub damage: f32,
     pub group: HitGroup,
+    /// Where it hit them (for blood).
+    pub point: Vec3,
 }
 
 /// Where a bullet hit the world (for decals and sparks).
@@ -30,6 +32,8 @@ pub struct BulletHit {
 pub struct Impact {
     pub point: Vec3,
     pub normal: Vec3,
+    /// Hit the sky brush (no hole to draw).
+    pub sky: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -127,7 +131,7 @@ pub fn fire_bullet(world: &World, materials: &Materials, hitboxes: &Hitboxes, ey
         }
         let hit_point = add(src, scale(sub(end, src), fraction));
         if player.is_none() {
-            out.impacts.push(Impact { point: hit_point, normal: wt.normal });
+            out.impacts.push(Impact { point: hit_point, normal: wt.normal, sky: wt.hit_sky });
             if wt.hit_sky {
                 break; // nothing behind the sky
             }
@@ -143,7 +147,7 @@ pub fn fire_bullet(world: &World, materials: &Materials, hitboxes: &Hitboxes, ey
             0.5
         };
         if let Some((id, group)) = player {
-            out.hits.push(BulletHit { victim: id, damage: dmg as f32 * hitgroup_multiplier(group), group });
+            out.hits.push(BulletHit { victim: id, damage: dmg as f32 * hitgroup_multiplier(group), group, point: hit_point });
             hit_players.push(id);
         }
         src = add(hit_point, scale(dir, power as f32));
@@ -179,6 +183,7 @@ pub fn fire_pellets(world: &World, hitboxes: &Hitboxes, eye: Vec3, shot: &Shot, 
             continue;
         }
         let dmg = ((1.0 - fraction) * p.damage) as i32 as f32;
+        let point = add(eye, scale(sub(end, eye), fraction));
         match player {
             Some((id, group)) => {
                 let d = dmg * hitgroup_multiplier(group);
@@ -186,11 +191,12 @@ pub fn fire_pellets(world: &World, hitboxes: &Hitboxes, eye: Vec3, shot: &Shot, 
                     Some(h) => {
                         h.damage += d;
                         h.group = group;
+                        h.point = point;
                     }
-                    None => out.hits.push(BulletHit { victim: id, damage: d, group }),
+                    None => out.hits.push(BulletHit { victim: id, damage: d, group, point }),
                 }
             }
-            None => out.impacts.push(Impact { point: add(eye, scale(sub(end, eye), fraction)), normal: wt.normal }),
+            None => out.impacts.push(Impact { point, normal: wt.normal, sky: wt.hit_sky }),
         }
     }
     out

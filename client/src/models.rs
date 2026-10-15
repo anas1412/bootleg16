@@ -23,6 +23,9 @@ pub fn weapon_model(prefix: &str, id: Id) -> String {
     format!("{prefix}_{name}.mdl")
 }
 
+/// Meshes with their materials, ready to spawn.
+pub type Parts = Vec<(Handle<Mesh>, Handle<StandardMaterial>)>;
+
 /// A model and the materials for its textures.
 pub struct Loaded {
     pub model: Model,

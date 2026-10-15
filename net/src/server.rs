@@ -542,7 +542,7 @@ impl Server {
                         }
                         let (health, armor) = combat::explosion_damage(&c.vitals, dmg);
                         let killed = c.vitals.hurt(health, armor);
-                        self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion });
+                        self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion, at: None });
                         if killed {
                             c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
                             self.events.push(GameEvent::Kill { killer: g.owner, victim: c.id, weapon: Some(Id::HeGrenade), headshot: false });
@@ -574,7 +574,7 @@ impl Server {
             self.grenades.push(sim::grenades::throw(kind, p.shooter, p.eye, angles[0], angles[1], p.velocity, now));
         }
         let targets: Vec<Target> = self.rewind(p.view_tick).into_iter().filter(|t| t.id != p.shooter).collect();
-        let mut hits: Vec<(u8, f32, HitGroup, Id)> = Vec::new();
+        let mut hits: Vec<(u8, f32, HitGroup, Id, Option<[f32; 3]>)> = Vec::new();
         for shot in &p.fired.shots {
             let r = if shot.pellets.is_some() {
                 bullets::fire_pellets(&self.world, &self.assets.hitboxes, p.eye, shot, p.shooter, &targets)
@@ -585,8 +585,9 @@ impl Server {
                 let (f, _, _) = bullets::view_vectors(shot.angles[0], shot.angles[1]);
                 std::array::from_fn(|i| p.eye[i] + f[i] * 2048.0)
             });
-            self.events.push(GameEvent::Shot { shooter: p.shooter, weapon: shot.weapon, silenced: shot.silenced, from: p.eye, to: end });
-            hits.extend(r.hits.into_iter().map(|h| (h.victim, h.damage, h.group, shot.weapon)));
+            let holes = r.impacts.iter().filter(|i| !i.sky).map(|i| (i.point, i.normal)).collect();
+            self.events.push(GameEvent::Shot { shooter: p.shooter, weapon: shot.weapon, silenced: shot.silenced, from: p.eye, to: end, holes });
+            hits.extend(r.hits.into_iter().map(|h| (h.victim, h.damage, h.group, shot.weapon, Some(h.point))));
         }
         if let Some(swing) = p.fired.swing {
             let range = if swing.stab { STAB_RANGE } else { SLASH_RANGE };
@@ -603,14 +604,14 @@ impl Server {
                         }
                     }
                 }
-                hits.push((victim, dmg * combat::hitgroup_multiplier(group), group, Id::Knife));
+                hits.push((victim, dmg * combat::hitgroup_multiplier(group), group, Id::Knife, None));
             }
             if let Some(c) = self.clients.values_mut().find(|c| c.id == p.shooter) {
                 c.state.loadout.knife_result(swing.stab, hit.is_some(), c.last_run as f64 * TICK as f64);
             }
         }
         let tick = self.tick;
-        for (victim, damage, group, weapon) in hits {
+        for (victim, damage, group, weapon, at) in hits {
             let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { continue };
             if !c.vitals.alive() {
                 continue;
@@ -624,7 +625,7 @@ impl Server {
                 _ => HitSound::Flesh,
             };
             let killed = c.vitals.hurt(health, armor);
-            self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group, sound });
+            self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group, sound, at });
             if killed {
                 c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
                 self.events.push(GameEvent::Kill { killer: p.shooter, victim, weapon: Some(weapon), headshot: group == HitGroup::Head });

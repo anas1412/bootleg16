@@ -177,6 +177,22 @@ impl Model {
     /// Like `pose`, at a fractional frame: neighbouring frames are blended, as the
     /// engine does, so animations are smooth at any frame rate.
     pub fn pose_at(&self, seq: usize, frame: f32, blend: f32) -> Vec<BoneTransform> {
+        self.to_model_space(self.local_pose(seq, frame, blend))
+    }
+
+    /// A player pose the way GoldSrc draws one: the legs (every bone before "Bip01 Spine")
+    /// from the gait sequence (run, walk, crouch...), the rest from the upper-body one
+    /// (aim, shoot, reload, flinch). `gait` and `upper` are (sequence, frame).
+    pub fn player_pose(&self, gait: (usize, f32), upper: (usize, f32), blend: f32) -> Vec<BoneTransform> {
+        let mut local = self.local_pose(upper.0, upper.1, blend);
+        let legs = self.local_pose(gait.0, gait.1, 0.5);
+        let spine = self.bones.iter().position(|b| b.name == "Bip01 Spine").unwrap_or(0);
+        local[..spine].copy_from_slice(&legs[..spine]);
+        self.to_model_space(local)
+    }
+
+    /// Each bone's rotation and position relative to its parent.
+    fn local_pose(&self, seq: usize, frame: f32, blend: f32) -> Vec<(Quat, Vec3)> {
         let s = &self.sequences[seq];
         let frame = frame.clamp(0.0, (s.frames - 1) as f32);
         let (f0, ft) = (frame.floor() as usize, frame.fract());
@@ -205,9 +221,16 @@ impl Model {
                 a
             }
         };
-        let mixed = if ft > 0.0 && f1 != f0 { mix(at_frame(f0), at_frame(f1), ft) } else { at_frame(f0) };
+        if ft > 0.0 && f1 != f0 {
+            mix(at_frame(f0), at_frame(f1), ft)
+        } else {
+            at_frame(f0)
+        }
+    }
+
+    fn to_model_space(&self, local: Vec<(Quat, Vec3)>) -> Vec<BoneTransform> {
         let mut out: Vec<BoneTransform> = Vec::with_capacity(self.bones.len());
-        for (i, (q, p)) in mixed.into_iter().enumerate() {
+        for (i, (q, p)) in local.into_iter().enumerate() {
             let t = BoneTransform { rot: quat_matrix(q), pos: p };
             let parent = self.bones[i].parent;
             out.push(if parent >= 0 && (parent as usize) < out.len() { concat(&out[parent as usize], &t) } else { t });

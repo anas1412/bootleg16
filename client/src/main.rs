@@ -14,6 +14,7 @@ mod buy;
 mod effects;
 mod game;
 mod hud;
+mod impacts;
 mod level;
 mod map;
 mod menu;
@@ -59,6 +60,7 @@ fn main() {
             level::LevelPlugin,
             players::PlayersPlugin,
             effects::EffectsPlugin,
+            impacts::ImpactsPlugin,
             viewmodel::ViewModelPlugin,
             sound::SoundPlugin,
             buy::BuyPlugin,

@@ -7,7 +7,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 9;
+pub const PROTOCOL_VERSION: u32 = 10;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -90,9 +90,11 @@ pub struct PlayerNet {
 /// Things that happened since the last snapshot (effects, kill feed).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum GameEvent {
-    /// A bullet from `from` that ended at `to` (wall impact or far away).
-    Shot { shooter: u8, weapon: Id, silenced: bool, from: [f32; 3], to: [f32; 3] },
-    Damage { attacker: u8, victim: u8, amount: f32, group: HitGroup, sound: HitSound },
+    /// A bullet (or a shotgun's pellets) from `from` that ended at `to` (wall impact or far
+    /// away). `holes`: every wall hit, as (point, surface normal), for bullet holes and dust.
+    Shot { shooter: u8, weapon: Id, silenced: bool, from: [f32; 3], to: [f32; 3], holes: Vec<([f32; 3], [f32; 3])> },
+    /// `at`: where a bullet or knife hit them (None for explosions and falls).
+    Damage { attacker: u8, victim: u8, amount: f32, group: HitGroup, sound: HitSound, at: Option<[f32; 3]> },
     /// Someone's footstep (everyone else hears it; you hear your own predicted ones).
     Footstep { player: u8, at: [f32; 3] },
     GrenadeBounce { kind: sim::grenades::Kind, at: [f32; 3] },

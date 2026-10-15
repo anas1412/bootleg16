@@ -105,3 +105,14 @@ something surprises you.
   fails: several "bugs" were wrong expectations (zoom lockout, shotgun cycle
   count, spawn heights, flash going off behind the victim).
 - Prefer path length over displacement when checking that a player moved (walls).
+
+## Client structure / UI (2026-10-15)
+- Bevy 0.20: `BorderRadius` is a field of `Node` (`border_radius`), not a component.
+- An `OnEnter` system that fails and sets `NextState` still lets that frame's `Update` run in the old state:
+  in-game sets also need `run_if(resource_exists::<Walker>)` or they panic on the missing resource.
+- Player models: GoldSrc draws legs from the gait sequence and the rest from the upper-body one,
+  split at the first "Bip01 Spine" bone, in *local* bone space (`Model::player_pose`); mixing model-space
+  matrices detaches the torso.
+- Player aim blend: 0.5 + pitch/180 with GoldSrc pitch (down positive) — checked: -60 points the gun up.
+- Death events arrive before the interpolated snapshot shows the player dead (4 ticks later):
+  keep a "dying" set or the live model is redrawn on top of the corpse.
