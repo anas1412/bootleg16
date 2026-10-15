@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 goldsrc = { path = "../goldsrc" }
 sim = { path = "../sim" }
+net = { path = "../net" }
 bevy = "0.20"

@@ -1,9 +1,11 @@
-//! Map viewer: loads a GoldSrc map from the user's install and walks around it
-//! with CS 1.6 movement (V toggles free flight).
+//! The game client. Loads the map from the user's CS 1.6 install, connects to a
+//! server (or starts one inside the game when playing alone) and plays with
+//! CS 1.6 movement. V toggles free flight.
 //!
-//! Usage: `client [map]` (default de_dust2). The game directory comes from
-//! `BOOTLEG16_DIR` (default: the Steam Half-Life install). Set `BOOTLEG16_SCREENSHOT=path.png`
-//! to save one frame and exit (used for automated checks).
+//! Usage: `client [map] [--connect host:port] [--name name]` (default de_dust2, offline).
+//! The game directory comes from `BOOTLEG16_DIR` (default: the Steam Half-Life install).
+//! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.
+//! `BOOTLEG16_SCREENSHOT=path.png` saves one frame and exits (used for automated checks).
 mod map;
 
 use bevy::{
@@ -46,7 +48,7 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(128.0))
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, walk)
-        .add_systems(Update, (mouse_look, move_camera, move_doors, grab_cursor, screenshot).chain())
+        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, grab_cursor, screenshot).chain())
         .run();
 }
 
@@ -77,7 +79,9 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
 ) {
     let root = game_dir();
-    let name = std::env::args().nth(1).unwrap_or_else(|| "de_dust2".into());
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let flag = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1)).cloned();
+    let name = args.first().filter(|a| !a.starts_with("--")).cloned().unwrap_or_else(|| "de_dust2".into());
     let path = root.join("cstrike/maps").join(format!("{name}.bsp"));
     let geo = map::load(&path, &[&root.join("cstrike"), &root.join("valve")])
         .unwrap_or_else(|e| panic!("loading {}: {e}", path.display()));
@@ -128,10 +132,32 @@ fn setup(
     }
 
     let (pos, yaw) = geo.spawns.first().copied().unwrap_or(([0.0; 3], 0.0));
-    let world = sim::collision::World::from_bsp(&goldsrc::bsp::Bsp::load(&path).expect("map loaded above"));
-    let player = sim::pmove::Player::new(map::from_y_up(pos));
-    let eye = Vec3::from(map::to_y_up(player.eye()));
-    commands.insert_resource(Walker { world, player, prev_eye: player.eye(), noclip: false, use_held: false });
+    let bsp = goldsrc::bsp::Bsp::load(&path).expect("map loaded above");
+    // Playing alone still goes through a server, started inside the game.
+    let server_addr = match flag("--connect") {
+        Some(a) => std::net::ToSocketAddrs::to_socket_addrs(&a)
+            .ok()
+            .and_then(|mut it| it.next())
+            .unwrap_or_else(|| panic!("can't resolve server address {a}")),
+        None => {
+            let mut server = net::Server::new(([127, 0, 0, 1], 0).into(), &name, &bsp).expect("starting local server");
+            let addr = server.local_addr();
+            std::thread::spawn(move || server.run());
+            addr
+        }
+    };
+    let player_name = flag("--name").unwrap_or_else(|| "player".into());
+    let mut client = net::Client::connect(server_addr, &player_name, sim::collision::World::from_bsp(&bsp)).expect("opening socket");
+    let ping = std::env::var("BOOTLEG16_FAKE_PING").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let loss = std::env::var("BOOTLEG16_FAKE_LOSS").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0);
+    client.simulate_network(ping, loss);
+    info!("connecting to {server_addr} as {player_name} (fake ping {ping} ms, loss {loss})");
+    let eye = Vec3::from(pos) + Vec3::Y * sim::pmove::VIEW_HEIGHT_STANDING;
+    commands.insert_resource(Walker { client, prev_eye: [0.0; 3], noclip: false });
+    commands.insert_resource(OtherPlayers {
+        mesh: meshes.add(Cuboid::new(32.0, 72.0, 32.0)),
+        material: materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.45, 0.1), unlit: true, ..default() }),
+    });
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection {
@@ -171,7 +197,7 @@ fn door_transform(d: &sim::doors::Door) -> Transform {
 
 fn move_doors(w: Res<Walker>, mut doors: Query<(&DoorMesh, &mut Transform)>) {
     for (DoorMesh(model), mut tf) in &mut doors {
-        if let Some(d) = w.world.doors.doors.iter().find(|d| d.model == *model) {
+        if let Some(d) = w.client.world.doors.doors.iter().find(|d| d.model == *model) {
             *tf = door_transform(d);
         }
     }
@@ -183,16 +209,46 @@ struct FlyCam {
     pitch: f32,
 }
 
-/// The local player, simulated with the same code the server will run.
+/// The connection to the server; it also predicts our own player.
 #[derive(Resource)]
 struct Walker {
-    world: sim::collision::World,
-    player: sim::pmove::Player,
+    client: net::Client,
     /// Eye position at the previous tick, for smoothing between ticks.
     prev_eye: [f32; 3],
-    /// V toggles free flying (no collision).
+    /// V detaches the camera for free flight (the player stays put).
     noclip: bool,
-    use_held: bool,
+}
+
+/// Placeholder look for other players until there are character models.
+#[derive(Resource)]
+struct OtherPlayers {
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+}
+
+#[derive(Component)]
+struct OtherPlayer(u8);
+
+/// One box per other player, where the server (interpolated) says they are.
+fn draw_others(mut commands: Commands, w: Res<Walker>, look: Res<OtherPlayers>, mut drawn: Query<(Entity, &OtherPlayer, &mut Transform)>) {
+    let others = w.client.others();
+    for (e, OtherPlayer(id), mut tf) in &mut drawn {
+        match others.iter().find(|o| o.id == *id) {
+            Some(o) => {
+                // Crouched boxes are half height, still centred on the origin.
+                tf.translation = Vec3::from(map::to_y_up(o.origin));
+                tf.scale = Vec3::new(1.0, if o.crouched { 0.5 } else { 1.0 }, 1.0);
+            }
+            None => {
+                info!("player {id} left");
+                commands.entity(e).despawn();
+            }
+        }
+    }
+    for o in others.iter().filter(|o| !drawn.iter().any(|(_, d, _)| d.0 == o.id)) {
+        info!("player {} is in the game at {:?}", o.id, o.origin);
+        commands.spawn((Mesh3d(look.mesh.clone()), MeshMaterial3d(look.material.clone()), OtherPlayer(o.id), Transform::from_translation(Vec3::from(map::to_y_up(o.origin)))));
+    }
 }
 
 fn mouse_look(motion: Res<AccumulatedMouseMotion>, cursor: Single<&CursorOptions>, mut cam: Single<(&mut Transform, &mut FlyCam)>) {
@@ -206,9 +262,6 @@ fn mouse_look(motion: Res<AccumulatedMouseMotion>, cursor: Single<&CursorOptions
 
 /// One simulation tick from the keyboard. WASD move, Space jump, Ctrl crouch, Shift walk, E use.
 fn walk(keys: Res<ButtonInput<KeyCode>>, cam: Single<&FlyCam>, mut w: ResMut<Walker>) {
-    if w.noclip {
-        return;
-    }
     let axis = |pos: KeyCode, neg: KeyCode| 400.0 * (keys.pressed(pos) as i32 - keys.pressed(neg) as i32) as f32;
     let input = sim::pmove::Input {
         forward: axis(KeyCode::KeyW, KeyCode::KeyS),
@@ -220,24 +273,12 @@ fn walk(keys: Res<ButtonInput<KeyCode>>, cam: Single<&FlyCam>, mut w: ResMut<Wal
         jump: keys.pressed(KeyCode::Space),
         crouch: keys.pressed(KeyCode::ControlLeft),
         walk: keys.pressed(KeyCode::ShiftLeft),
+        use_key: keys.pressed(KeyCode::KeyE),
     };
-    let w = &mut *w;
-    w.prev_eye = w.player.eye();
-    let _events = sim::pmove::step(&mut w.player, &input, 1.0 / 128.0, &w.world, &sim::pmove::MoveVars::default());
-    let h = w.player.hull();
-    let o = w.player.origin;
-    let (s, c) = ((-cam.pitch).sin(), (-cam.pitch).cos());
-    let (sy, cy) = input.yaw.to_radians().sin_cos();
-    let actor = sim::doors::Actor {
-        mins: [o[0] + h.mins()[0], o[1] + h.mins()[1], o[2] + h.mins()[2]],
-        maxs: [o[0] + h.maxs()[0], o[1] + h.maxs()[1], o[2] + h.maxs()[2]],
-        eye: w.player.eye(),
-        forward: [c * cy, c * sy, -s],
-        // Several ticks can run per frame, so take the key edge per tick.
-        using: keys.pressed(KeyCode::KeyE) && !w.use_held,
-    };
-    w.use_held = keys.pressed(KeyCode::KeyE);
-    w.world.update(1.0 / 128.0, &[actor]);
+    // Free flight: keep the connection alive but stand still.
+    let input = if w.noclip { sim::pmove::Input { yaw: input.yaw, pitch: input.pitch, ..default() } } else { input };
+    w.prev_eye = w.client.me.eye();
+    let _events = w.client.tick(input);
 }
 
 fn move_camera(
@@ -249,16 +290,13 @@ fn move_camera(
 ) {
     if keys.just_pressed(KeyCode::KeyV) {
         w.noclip = !w.noclip;
-        if !w.noclip {
-            // Drop the player where the camera is.
-            let feet = map::from_y_up(tf.translation.into());
-            w.player = sim::pmove::Player::new([feet[0], feet[1], feet[2] - sim::pmove::VIEW_HEIGHT_STANDING]);
-            w.prev_eye = w.player.eye();
-        }
     }
     if !w.noclip {
+        if w.client.id().is_none() {
+            return; // still connecting
+        }
         let a = fixed.overstep_fraction();
-        let (p, c) = (Vec3::from(map::to_y_up(w.prev_eye)), Vec3::from(map::to_y_up(w.player.eye())));
+        let (p, c) = (Vec3::from(map::to_y_up(w.prev_eye)), Vec3::from(map::to_y_up(w.client.me.eye())));
         tf.translation = p.lerp(c, a);
         return;
     }
