@@ -66,11 +66,15 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Encryption/authentication, NAT traversal, server browser
 - [ ] Prediction error smoothing (corrections are applied instantly)
 
+### Voice
+- [ ] Proximity voice chat (positional, fades with distance like game sounds).
+      **No radio commands/callouts**: decided 2026-10-15, voice replaces them.
+
 ### Sound
 - [x] Gunshots (silenced variants, random pitch), reload/draw/pin sounds from model events,
       footsteps by surface/ladder/water, hits (flesh/kevlar/helmet/headshot), deaths,
       grenades (bounce, HE, flash, smoke), knife, dry fire, zoom; 3D with GoldSrc falloff
-- [ ] Doors, ambience (`ambient_generic`), radio ("fire in the hole"), bullet ricochets/impacts,
+- [ ] Doors, ambience (`ambient_generic`), bullet ricochets/impacts,
       knife hit sounds, jump/land variants, menu sounds; other players' reload sounds
 - [ ] ⚠ Silenced shot loudness/attenuation and footstep volumes are estimates
 - [ ] Muzzle flash (view model event 5001)
