@@ -195,3 +195,26 @@ pub fn fire_pellets(world: &World, hitboxes: &Hitboxes, eye: Vec3, shot: &Shot, 
     }
     out
 }
+
+/// Knife reach test: a line along the view, then four rays offset by 8 units to
+/// approximate GoldSrc's fallback hull sweep. Returns the player hit, if any.
+pub fn trace_melee(world: &World, hitboxes: &Hitboxes, src: Vec3, end: Vec3, shooter: u8, targets: &[Target]) -> Option<(u8, HitGroup)> {
+    let dir = sub(end, src);
+    let (_, right, up) = {
+        let l = length(dir).max(1e-6);
+        let d = scale(dir, 1.0 / l);
+        let yaw = d[1].atan2(d[0]).to_degrees();
+        let pitch = -d[2].asin().to_degrees();
+        view_vectors(pitch, yaw)
+    };
+    let offsets = [[0.0, 0.0], [8.0, 0.0], [-8.0, 0.0], [0.0, 8.0], [0.0, -8.0]];
+    offsets.iter().find_map(|o| {
+        let shift = add(scale(right, o[0]), scale(up, o[1]));
+        let (f, player, _) = nearest(world, hitboxes, add(src, shift), add(end, shift), targets, &[shooter]);
+        if f < 1.0 {
+            player
+        } else {
+            None
+        }
+    })
+}

@@ -4965,6 +4965,7 @@ version = "0.1.0"
 dependencies = [
  "goldsrc",
  "net",
+ "sim",
 ]
 
 [[package]]

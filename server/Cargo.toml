@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 goldsrc = { path = "../goldsrc" }
 net = { path = "../net" }
+sim = { path = "../sim" }

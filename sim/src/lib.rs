@@ -3,6 +3,7 @@ pub mod collision;
 pub mod combat;
 pub mod doors;
 pub mod hitbox;
+pub mod player;
 pub mod pmove;
 pub mod weapons;
 

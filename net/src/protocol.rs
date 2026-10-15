@@ -2,10 +2,12 @@
 use serde::{Deserialize, Serialize};
 use sim::doors::DoorNet;
 use sim::combat::Vitals;
+use sim::hitbox::HitGroup;
 use sim::pmove::{Input, Player};
+use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -44,6 +46,18 @@ pub struct PlayerNet {
     /// View angles (degrees), so others can be drawn facing the right way.
     pub yaw: f32,
     pub pitch: f32,
+    /// Weapon in hand.
+    pub weapon: Id,
+}
+
+/// Things that happened since the last snapshot (effects, kill feed).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum GameEvent {
+    /// A bullet from `from` that ended at `to` (wall impact or far away).
+    Shot { shooter: u8, weapon: Id, from: [f32; 3], to: [f32; 3] },
+    Damage { attacker: u8, victim: u8, amount: f32, group: HitGroup },
+    /// `weapon` None = fell to death.
+    Kill { killer: u8, victim: u8, weapon: Option<Id>, headshot: bool },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -56,6 +70,9 @@ pub enum ServerMsg {
         ack: u32,
         players: Vec<PlayerNet>,
         doors: Vec<DoorNet>,
+        /// Your own weapons, for prediction and the HUD.
+        loadout: Loadout,
+        events: Vec<GameEvent>,
     },
 }
 

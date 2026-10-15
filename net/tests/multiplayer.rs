@@ -6,10 +6,22 @@ use sim::pmove::Input;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-fn dust2() -> Option<Bsp> {
+fn game_dir() -> Option<String> {
     let home = std::env::var("HOME").ok()?;
-    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
-    Bsp::load(format!("{dir}/cstrike/maps/de_dust2.bsp")).ok()
+    Some(std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life")))
+}
+
+fn dust2() -> Option<Bsp> {
+    Bsp::load(format!("{}/cstrike/maps/de_dust2.bsp", game_dir()?)).ok()
+}
+
+fn assets() -> net::server::Assets {
+    let dir = game_dir().unwrap();
+    let model = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")).expect("player model");
+    net::server::Assets {
+        hitboxes: sim::hitbox::Hitboxes::from_model(&model, "carbine").unwrap(),
+        materials: goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!("{dir}/cstrike/sound/materials.txt")).unwrap_or_default()),
+    }
 }
 
 struct Game {
@@ -19,7 +31,7 @@ struct Game {
 }
 
 fn setup(bsp: &Bsp, ping_ms: u32, loss: f32) -> Game {
-    let server = Server::new(SocketAddr::from(([127, 0, 0, 1], 0)), "de_dust2", bsp).unwrap();
+    let server = Server::new(SocketAddr::from(([127, 0, 0, 1], 0)), "de_dust2", bsp, assets()).unwrap();
     let addr = server.local_addr();
     let mut a = Client::connect(addr, "a", World::from_bsp(bsp)).unwrap();
     let mut b = Client::connect(addr, "b", World::from_bsp(bsp)).unwrap();
@@ -67,7 +79,7 @@ fn run_and_check(g: &mut Game, label: &str, unlag_tolerance: f32) {
         // Lag compensation: rewinding to B's view time puts A exactly where B is drawing A.
         if t > 64 {
             if let Some(seen) = g.b.others().into_iter().find(|r| r.id == id) {
-                let rewound = g.server.rewind(g.b.view_tick()).into_iter().find(|p| p.0 == id).unwrap().1;
+                let rewound = g.server.rewind(g.b.view_tick()).into_iter().find(|p| p.id == id).unwrap().origin;
                 worst_unlag = worst_unlag.max(dist(seen.origin, rewound));
             }
         }
@@ -81,7 +93,7 @@ fn run_and_check(g: &mut Game, label: &str, unlag_tolerance: f32) {
     let server_a = *g.server.player(g.a.id().unwrap()).unwrap();
     assert!(travelled > 200.0, "{label}: A only travelled {travelled} units on the server");
     // A's prediction ends exactly where the server says (same code, same inputs).
-    assert!(dist(g.a.me.origin, server_a.origin) < 0.01, "{label}: prediction {:?} vs server {:?}", g.a.me.origin, server_a.origin);
+    assert!(dist(g.a.me().origin, server_a.origin) < 0.01, "{label}: prediction {:?} vs server {:?}", g.a.me().origin, server_a.origin);
     assert!(worst_unlag < unlag_tolerance, "{label}: rewound position off by {worst_unlag} from what B saw");
     // Mid-run corrections stay tiny: prediction was right the whole way.
     assert!(worst_correction < 1.0, "{label}: worst correction {worst_correction}");
@@ -132,4 +144,36 @@ fn speed_hack_gains_nothing() {
     // Honest max: 2 s at 250 u/s = 500 units (+ the 16-input burst allowance). Walls may cut it short.
     assert!(moved < 540.0, "speed hack moved {moved} units in 2 s");
     assert!(moved > 300.0, "player should still move at normal speed, moved {moved}");
+}
+
+#[test]
+fn ak_kills_another_player_and_everyone_hears_about_it() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 60, 0.0);
+    g.server.set_give(vec![sim::weapons::Id::Ak47]);
+    g.connect();
+    // The give applies on spawn; respawn both by waiting? They spawned before set_give took
+    // effect only if connect happened first, so check what A holds.
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
+    assert_eq!(g.server.player_state(a).unwrap().loadout.active_id(), sim::weapons::Id::Ak47);
+    let target = g.server.player(b).unwrap().origin;
+    let eye = g.server.player(a).unwrap().eye();
+    let d = [target[0] - eye[0], target[1] - eye[1], target[2] + 8.0 - eye[2]];
+    let yaw = d[1].atan2(d[0]).to_degrees();
+    let pitch = -(d[2] / (d[0] * d[0] + d[1] * d[1]).sqrt()).atan().to_degrees();
+    let mut kills = Vec::new();
+    for _ in 0..384 {
+        g.tick(Input { yaw, pitch, attack: true, ..Default::default() }, Input::default());
+        kills.extend(g.b.take_events().into_iter().filter(|e| matches!(e, net::protocol::GameEvent::Kill { .. })));
+        let _ = g.a.take_events();
+    }
+    assert!(!kills.is_empty(), "B never died; health {:?}", g.server.vitals(b));
+    assert!(matches!(kills[0], net::protocol::GameEvent::Kill { killer, victim, weapon: Some(sim::weapons::Id::Ak47), .. } if killer == a && victim == b));
+    // A's own predicted ammo matches the server's.
+    let server_clip = g.server.player_state(a).unwrap().loadout.active_gun().unwrap().clip;
+    for _ in 0..64 {
+        g.tick(Input { yaw, pitch, ..Default::default() }, Input::default());
+    }
+    let server_clip_now = g.server.player_state(a).unwrap().loadout.active_gun().unwrap().clip;
+    assert_eq!(g.a.state.loadout.active_gun().unwrap().clip, server_clip_now, "predicted clip matches (was {server_clip})");
 }

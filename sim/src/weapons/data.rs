@@ -820,3 +820,10 @@ pub fn armor_factor(id: Id) -> f32 {
         _ => 1.0,
     }
 }
+
+/// Look a weapon up by its CS name ("ak47", "awp", "deagle", ...).
+pub fn by_name(name: &str) -> Option<Id> {
+    let n = name.trim().to_ascii_lowercase();
+    let n = n.strip_prefix("weapon_").unwrap_or(&n);
+    WEAPONS.iter().find(|d| d.name == n || (n == "mp5" && d.name == "mp5navy") || (n == "glock" && d.name == "glock18")).map(|d| d.id)
+}

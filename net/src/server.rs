@@ -1,12 +1,17 @@
-//! The authoritative server: owns the world, runs every player's movement from
-//! their inputs, and sends snapshots.
+//! The authoritative server: owns the world, runs every player's movement and
+//! weapons from their inputs, resolves shots with lag compensation, and sends snapshots.
 use crate::protocol::*;
 use crate::socket::Socket;
 use goldsrc::bsp::Bsp;
+use goldsrc::materials::Materials;
 use sim::collision::World;
-use sim::combat::Vitals;
+use sim::combat::{self, Vitals};
 use sim::doors::Actor;
-use sim::pmove::{step, MoveVars, Player};
+use sim::hitbox::{HitGroup, Hitboxes};
+use sim::player::{self, PlayerState};
+use sim::pmove::{MoveVars, Player};
+use sim::weapons::bullets::{self, Target};
+use sim::weapons::{data, Fired, Id, Loadout};
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -18,9 +23,33 @@ const MAX_INPUT_BUDGET: f32 = 16.0;
 /// Seconds a dead player waits before respawning (until rounds exist).
 const RESPAWN_TICKS: u32 = 3 * TICK_RATE;
 
+/// Knife reach (slash / stab) and damage.
+const SLASH_RANGE: f32 = 48.0;
+const STAB_RANGE: f32 = 32.0;
+const SLASH_DAMAGE: f32 = 15.0;
+const STAB_DAMAGE: f32 = 65.0;
+
+/// What the server needs from the game install besides the map.
+pub struct Assets {
+    pub hitboxes: Hitboxes,
+    pub materials: Materials,
+}
+
+impl Assets {
+    /// From a Half-Life install (the directory containing `cstrike/`).
+    pub fn load(game_dir: &std::path::Path) -> Result<Assets, String> {
+        let mdl = game_dir.join("cstrike/models/player/arctic/arctic.mdl");
+        let model = goldsrc::mdl::Model::load(&mdl).map_err(|e| format!("{}: {e}", mdl.display()))?;
+        let hitboxes = Hitboxes::from_model(&model, "carbine").ok_or("player model has no aim animations")?;
+        // materials.txt is optional: without it every surface counts as concrete.
+        let materials = std::fs::read_to_string(game_dir.join("cstrike/sound/materials.txt")).map(|t| Materials::parse(&t)).unwrap_or_default();
+        Ok(Assets { hitboxes, materials })
+    }
+}
+
 struct Remote {
     id: u8,
-    player: Player,
+    state: PlayerState,
     vitals: Vitals,
     /// Tick to respawn at while dead.
     respawn_at: Option<u32>,
@@ -35,21 +64,29 @@ struct Remote {
     /// +use pressed during this tick (for doors).
     used: bool,
     view: (f32, f32),
-    /// Server time this client was seeing others at, as of its latest input.
-    view_tick: f32,
 }
 
 /// Where everyone was at one tick (for lag compensation).
 #[derive(Clone, Debug)]
 pub struct PastPositions {
     pub tick: u32,
-    pub players: Vec<(u8, [f32; 3], bool)>,
+    pub players: Vec<Target>,
+}
+
+/// A shot or swing waiting to be traced at the end of the input loop.
+struct Pending {
+    shooter: u8,
+    eye: [f32; 3],
+    yaw: f32,
+    fired: Fired,
+    view_tick: f32,
 }
 
 pub struct Server {
     socket: Socket,
     map: String,
     world: World,
+    assets: Assets,
     vars: MoveVars,
     clients: HashMap<SocketAddr, Remote>,
     spawns: Vec<[f32; 3]>,
@@ -57,10 +94,14 @@ pub struct Server {
     tick: u32,
     /// The last second of positions, newest last.
     history: VecDeque<PastPositions>,
+    /// Happened since the last snapshot.
+    events: Vec<GameEvent>,
+    /// Extra weapons everyone spawns with (server option, for testing).
+    give: Vec<Id>,
 }
 
 impl Server {
-    pub fn new(bind: SocketAddr, map: &str, bsp: &Bsp) -> std::io::Result<Server> {
+    pub fn new(bind: SocketAddr, map: &str, bsp: &Bsp, assets: Assets) -> std::io::Result<Server> {
         let spawns = bsp
             .entity_list()
             .iter()
@@ -74,13 +115,21 @@ impl Server {
             socket: Socket::bind(bind)?,
             map: map.to_string(),
             world: World::from_bsp(bsp),
+            assets,
             vars: MoveVars::default(),
             clients: HashMap::new(),
             spawns,
             next_spawn: 0,
             tick: 0,
             history: VecDeque::new(),
+            events: Vec::new(),
+            give: Vec::new(),
         })
+    }
+
+    /// Weapons every player gets on (re)spawn, on top of the starting pistol.
+    pub fn set_give(&mut self, weapons: Vec<Id>) {
+        self.give = weapons;
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -97,6 +146,16 @@ impl Server {
         spawn
     }
 
+    /// Starting weapons: T (even ids) Glock + 40, CT USP + 24, plus the server's extras.
+    fn spawn_state(&mut self, id: u8) -> PlayerState {
+        let origin = self.next_spawn_point();
+        let mut loadout = if id % 2 == 0 { Loadout::spawn(Id::Glock, 40) } else { Loadout::spawn(Id::Usp, 24) };
+        for &w in &self.give {
+            loadout.give(w, 0.0);
+        }
+        PlayerState { movement: Player::new(origin), loadout }
+    }
+
     /// Server-side health of a player.
     pub fn vitals(&self, id: u8) -> Option<&Vitals> {
         self.clients.values().find(|c| c.id == id).map(|c| &c.vitals)
@@ -104,12 +163,16 @@ impl Server {
 
     /// Server-side state of a player (for tests and admin tools).
     pub fn player(&self, id: u8) -> Option<&Player> {
-        self.clients.values().find(|c| c.id == id).map(|c| &c.player)
+        self.clients.values().find(|c| c.id == id).map(|c| &c.state.movement)
     }
 
-    /// Everyone's positions as a client saw them at `view_tick` (interpolated, like the
+    pub fn player_state(&self, id: u8) -> Option<&PlayerState> {
+        self.clients.values().find(|c| c.id == id).map(|c| &c.state)
+    }
+
+    /// Everyone alive as a client saw them at `view_tick` (interpolated, like the
     /// client draws them), capped at `MAX_UNLAG_TICKS` into the past.
-    pub fn rewind(&self, view_tick: f32) -> Vec<(u8, [f32; 3], bool)> {
+    pub fn rewind(&self, view_tick: f32) -> Vec<Target> {
         let oldest = self.tick.saturating_sub(MAX_UNLAG_TICKS) as f32;
         let t = view_tick.clamp(oldest, self.tick as f32);
         // Only the ticks that went out as snapshots: that's exactly what clients blend between.
@@ -121,9 +184,9 @@ impl Server {
         let f = (t - a.tick as f32) / (b.tick - a.tick) as f32;
         b.players
             .iter()
-            .map(|&(id, pb, crouched)| match a.players.iter().find(|p| p.0 == id) {
-                Some(&(_, pa, _)) => (id, std::array::from_fn(|i| pa[i] + (pb[i] - pa[i]) * f), crouched),
-                None => (id, pb, crouched),
+            .map(|pb| match a.players.iter().find(|p| p.id == pb.id) {
+                Some(pa) => Target { origin: std::array::from_fn(|i| pa.origin[i] + (pb.origin[i] - pa.origin[i]) * f), ..*pb },
+                None => *pb,
             })
             .collect()
     }
@@ -148,7 +211,7 @@ impl Server {
         }
     }
 
-    /// One server tick: read packets, run inputs, move doors, send snapshots.
+    /// One server tick: read packets, run inputs, resolve shots, move doors, send snapshots.
     pub fn step(&mut self) {
         self.tick += 1;
         self.socket.tick();
@@ -160,27 +223,22 @@ impl Server {
 
         // Respawn the dead whose wait is over.
         let tick = self.tick;
-        let mut respawns = Vec::new();
-        for (addr, c) in &self.clients {
-            if c.respawn_at.is_some_and(|t| t <= tick) {
-                respawns.push(*addr);
-            }
-        }
-        for addr in respawns {
-            let spawn = self.next_spawn_point();
+        let due: Vec<(SocketAddr, u8)> = self.clients.iter().filter(|(_, c)| c.respawn_at.is_some_and(|t| t <= tick)).map(|(a, c)| (*a, c.id)).collect();
+        for (addr, id) in due {
+            let state = self.spawn_state(id);
             let c = self.clients.get_mut(&addr).unwrap();
-            c.player = Player::new(spawn);
+            c.state = state;
             c.vitals = Vitals::default();
             c.respawn_at = None;
         }
 
         let mut actors = Vec::new();
+        let mut pending = Vec::new();
         for c in self.clients.values_mut() {
             c.budget = (c.budget + 1.0).min(MAX_INPUT_BUDGET);
             c.used = false;
             while c.budget >= 1.0 {
                 let Some((seq, TimedInput { input, view_tick })) = c.queue.pop_front() else { break };
-                c.view_tick = view_tick;
                 c.budget -= 1.0;
                 c.used |= input.use_key && !c.use_held;
                 c.use_held = input.use_key;
@@ -189,20 +247,33 @@ impl Server {
                 if !c.vitals.alive() {
                     continue; // the dead don't move (their inputs are still acknowledged)
                 }
-                let ev = step(&mut c.player, &input, TICK, &self.world, &self.vars);
+                let cmd_time = seq as f64 * TICK as f64;
+                let (ev, fired) = player::step(&mut c.state, &input, TICK, cmd_time, player::seed(c.id, seq), true, &self.world, &self.vars);
                 if ev.fall_damage > 0.0 && c.vitals.hurt(ev.fall_damage, 0.0) {
                     c.respawn_at = Some(tick + RESPAWN_TICKS);
+                    self.events.push(GameEvent::Kill { killer: c.id, victim: c.id, weapon: None, headshot: false });
+                }
+                if !fired.shots.is_empty() || fired.swing.is_some() {
+                    pending.push(Pending { shooter: c.id, eye: c.state.movement.eye(), yaw: input.yaw, fired, view_tick });
                 }
             }
             if c.vitals.alive() {
-                actors.push(actor(&c.player, c.view, c.used));
+                actors.push(actor(&c.state.movement, c.view, c.used));
             }
+        }
+        for p in pending {
+            self.resolve(p);
         }
         self.world.update(TICK, &actors);
 
         self.history.push_back(PastPositions {
             tick: self.tick,
-            players: self.clients.values().map(|c| (c.id, c.player.origin, c.player.crouched)).collect(),
+            players: self
+                .clients
+                .values()
+                .filter(|c| c.vitals.alive())
+                .map(|c| Target { id: c.id, origin: c.state.movement.origin, yaw: c.view.0, pitch: c.view.1, crouched: c.state.movement.crouched })
+                .collect(),
         });
         while self.history.len() > TICK_RATE as usize {
             self.history.pop_front();
@@ -212,12 +283,78 @@ impl Server {
         self.clients.retain(|_, c| tick - c.last_heard < TIMEOUT_TICKS);
 
         if self.tick % SNAPSHOT_EVERY == 0 {
-            let players: Vec<PlayerNet> = self.clients.values().map(|c| PlayerNet { id: c.id, player: c.player, vitals: c.vitals, yaw: c.view.0, pitch: c.view.1 }).collect();
+            let players: Vec<PlayerNet> = self
+                .clients
+                .values()
+                .map(|c| PlayerNet {
+                    id: c.id,
+                    player: c.state.movement,
+                    vitals: c.vitals,
+                    yaw: c.view.0,
+                    pitch: c.view.1,
+                    weapon: c.state.loadout.active_id(),
+                })
+                .collect();
             let doors = self.world.doors.net_state();
-            let sends: Vec<_> = self.clients.iter().map(|(a, c)| (*a, c.last_run)).collect();
-            for (addr, ack) in sends {
-                let msg = ServerMsg::Snapshot { tick, ack, players: players.clone(), doors: doors.clone() };
+            let events = std::mem::take(&mut self.events);
+            let sends: Vec<_> = self.clients.iter().map(|(a, c)| (*a, c.last_run, c.state.loadout.clone())).collect();
+            for (addr, ack, loadout) in sends {
+                let msg = ServerMsg::Snapshot { tick, ack, players: players.clone(), doors: doors.clone(), loadout, events: events.clone() };
                 self.socket.send(addr, encode(&msg));
+            }
+        }
+    }
+
+    /// Trace a player's shots/swing against everyone else as the shooter saw them.
+    fn resolve(&mut self, p: Pending) {
+        let targets: Vec<Target> = self.rewind(p.view_tick).into_iter().filter(|t| t.id != p.shooter).collect();
+        let mut hits: Vec<(u8, f32, HitGroup, Id)> = Vec::new();
+        for shot in &p.fired.shots {
+            let r = if shot.pellets.is_some() {
+                bullets::fire_pellets(&self.world, &self.assets.hitboxes, p.eye, shot, p.shooter, &targets)
+            } else {
+                bullets::fire_bullet(&self.world, &self.assets.materials, &self.assets.hitboxes, p.eye, shot, p.shooter, &targets)
+            };
+            let end = r.impacts.last().map(|i| i.point).unwrap_or_else(|| {
+                let (f, _, _) = bullets::view_vectors(shot.angles[0], shot.angles[1]);
+                std::array::from_fn(|i| p.eye[i] + f[i] * 2048.0)
+            });
+            self.events.push(GameEvent::Shot { shooter: p.shooter, weapon: shot.weapon, from: p.eye, to: end });
+            hits.extend(r.hits.into_iter().map(|h| (h.victim, h.damage, h.group, shot.weapon)));
+        }
+        if let Some(swing) = p.fired.swing {
+            let range = if swing.stab { STAB_RANGE } else { SLASH_RANGE };
+            let (f, _, _) = bullets::view_vectors(swing.angles[0], swing.angles[1]);
+            let end = std::array::from_fn(|i| p.eye[i] + f[i] * range);
+            let hit = bullets::trace_melee(&self.world, &self.assets.hitboxes, p.eye, end, p.shooter, &targets);
+            if let Some((victim, group)) = hit {
+                let mut dmg = if swing.stab { STAB_DAMAGE } else { SLASH_DAMAGE };
+                // Backstab: both facing the same way (within ~37 degrees).
+                if swing.stab {
+                    if let Some(t) = targets.iter().find(|t| t.id == victim) {
+                        if (p.yaw - t.yaw).to_radians().cos() > 0.8 {
+                            dmg *= 3.0;
+                        }
+                    }
+                }
+                hits.push((victim, dmg * combat::hitgroup_multiplier(group), group, Id::Knife));
+            }
+            if let Some(c) = self.clients.values_mut().find(|c| c.id == p.shooter) {
+                c.state.loadout.knife_result(swing.stab, hit.is_some(), c.last_run as f64 * TICK as f64);
+            }
+        }
+        let tick = self.tick;
+        for (victim, damage, group, weapon) in hits {
+            let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { continue };
+            if !c.vitals.alive() {
+                continue;
+            }
+            let (health, armor) = combat::bullet_damage(&c.vitals, damage, group, data::armor_factor(weapon), false);
+            let killed = c.vitals.hurt(health, armor);
+            self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group });
+            if killed {
+                c.respawn_at = Some(tick + RESPAWN_TICKS);
+                self.events.push(GameEvent::Kill { killer: p.shooter, victim, weapon: Some(weapon), headshot: group == HitGroup::Head });
             }
         }
     }
@@ -236,12 +373,12 @@ impl Server {
                         return;
                     }
                     let id = (0..=u8::MAX).find(|i| self.clients.values().all(|c| c.id != *i)).unwrap_or(0);
-                    let spawn = self.next_spawn_point();
+                    let state = self.spawn_state(id);
                     self.clients.insert(
                         from,
                         Remote {
                             id,
-                            player: Player::new(spawn),
+                            state,
                             vitals: Vitals::default(),
                             respawn_at: None,
                             queue: VecDeque::new(),
@@ -252,7 +389,6 @@ impl Server {
                             use_held: false,
                             used: false,
                             view: (0.0, 0.0),
-                            view_tick: 0.0,
                         },
                     );
                 }
