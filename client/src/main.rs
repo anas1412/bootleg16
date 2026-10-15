@@ -7,6 +7,7 @@
 //! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.
 //! `BOOTLEG16_SCREENSHOT=path.png` saves one frame and exits (used for automated checks).
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead).
+//! `--give ak47,awp` (offline) hands you extra weapons until there's a buy menu.
 mod map;
 
 use bevy::{
@@ -49,7 +50,7 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(128.0))
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, walk)
-        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, grab_cursor, screenshot).chain())
+        .add_systems(Update, (mouse_look, move_camera, move_doors, draw_others, effects, hud, grab_cursor, screenshot).chain())
         .run();
 }
 
@@ -143,7 +144,11 @@ fn setup(
             .and_then(|mut it| it.next())
             .unwrap_or_else(|| panic!("can't resolve server address {a}")),
         None => {
-            let mut server = net::Server::new(([127, 0, 0, 1], 0).into(), &name, &bsp).expect("starting local server");
+            let assets = net::server::Assets::load(&root).unwrap_or_else(|e| panic!("loading game files: {e}"));
+            let mut server = net::Server::new(([127, 0, 0, 1], 0).into(), &name, &bsp, assets).expect("starting local server");
+            if let Some(list) = flag("--give") {
+                server.set_give(list.split(',').filter_map(sim::weapons::data::by_name).collect());
+            }
             let addr = server.local_addr();
             std::thread::spawn(move || server.run());
             addr
@@ -156,7 +161,28 @@ fn setup(
     client.simulate_network(ping, loss);
     info!("connecting to {server_addr} as {player_name} (fake ping {ping} ms, loss {loss})");
     let eye = Vec3::from(pos) + Vec3::Y * sim::pmove::VIEW_HEIGHT_STANDING;
-    commands.insert_resource(Walker { client, prev_eye: [0.0; 3], noclip: false, slot_held: 0 });
+    commands.insert_resource(Walker { client, prev_eye: [0.0; 3], noclip: false, slot_held: 0, tracers: Vec::new(), feed: Vec::new() });
+    // HUD: crosshair, status line, kill feed.
+    commands.spawn((
+        Text::new("+"),
+        TextFont { font_size: bevy::text::FontSize::Px(22.0), ..default() },
+        TextColor(Color::srgb(0.2, 1.0, 0.2)),
+        Node { position_type: PositionType::Absolute, left: percent(50), top: percent(50), margin: UiRect { left: px(-6), top: px(-14), ..default() }, ..default() },
+    ));
+    commands.spawn((
+        HudStatus,
+        Text::new(""),
+        TextFont { font_size: bevy::text::FontSize::Px(22.0), ..default() },
+        TextColor(Color::srgb(1.0, 0.85, 0.3)),
+        Node { position_type: PositionType::Absolute, left: px(16), bottom: px(12), ..default() },
+    ));
+    commands.spawn((
+        HudFeed,
+        Text::new(""),
+        TextFont { font_size: bevy::text::FontSize::Px(18.0), ..default() },
+        TextColor(Color::WHITE),
+        Node { position_type: PositionType::Absolute, right: px(16), top: px(12), ..default() },
+    ));
     // Player models from the install: one T and one CT look, posed standing and crouched.
     let mut looks = Vec::new();
     for name in ["arctic", "urban"] {
@@ -256,6 +282,10 @@ struct Walker {
     noclip: bool,
     /// Weapon slot key held (to send each press once).
     slot_held: u8,
+    /// Bullet tracers: from, to, seconds left.
+    tracers: Vec<([f32; 3], [f32; 3], f32)>,
+    /// Kill feed lines and seconds left.
+    feed: Vec<(String, f32)>,
 }
 
 /// Player model meshes: [look][standing, crouched] -> parts.
@@ -301,13 +331,27 @@ fn draw_others(mut commands: Commands, w: Res<Walker>, look: Res<OtherPlayers>, 
     }
 }
 
-fn mouse_look(motion: Res<AccumulatedMouseMotion>, cursor: Single<&CursorOptions>, mut cam: Single<(&mut Transform, &mut FlyCam)>) {
-    let (ref mut tf, ref mut fc) = *cam;
+fn mouse_look(
+    motion: Res<AccumulatedMouseMotion>,
+    cursor: Single<&CursorOptions>,
+    w: Res<Walker>,
+    mut cam: Single<(&mut Transform, &mut FlyCam, &mut Projection)>,
+) {
+    let (ref mut tf, ref mut fc, ref mut proj) = *cam;
+    // Zoomed weapons slow the mouse down in proportion, like CS.
+    let fov = w.client.state.loadout.active_gun().map(|g| g.fov()).unwrap_or(90) as f32;
+    let sens = 0.002 * fov / 90.0;
     if cursor.grab_mode != CursorGrabMode::None {
-        fc.yaw -= motion.delta.x * 0.002;
-        fc.pitch = (fc.pitch - motion.delta.y * 0.002).clamp(-1.55, 1.55);
+        fc.yaw -= motion.delta.x * sens;
+        fc.pitch = (fc.pitch - motion.delta.y * sens).clamp(-1.55, 1.55);
     }
-    tf.rotation = Quat::from_euler(EulerRot::YXZ, fc.yaw, fc.pitch, 0.0);
+    // Recoil punch moves the view (GoldSrc pitch is positive downwards).
+    let punch = w.client.state.loadout.punch;
+    tf.rotation = Quat::from_euler(EulerRot::YXZ, fc.yaw + punch[1].to_radians(), fc.pitch - punch[0].to_radians(), punch[2].to_radians());
+    // Horizontal FOV (90 = normal) at 4:3, as a vertical FOV.
+    if let Projection::Perspective(p) = &mut **proj {
+        p.fov = 2.0 * ((fov.to_radians() / 2.0).tan() * 0.75).atan();
+    }
 }
 
 /// One simulation tick from the keyboard and mouse. WASD move, Space jump, Ctrl crouch,
@@ -339,8 +383,15 @@ fn walk(keys: Res<ButtonInput<KeyCode>>, mouse: Res<ButtonInput<MouseButton>>, c
     };
     // Free flight: keep the connection alive but stand still.
     let input = if w.noclip { sim::pmove::Input { yaw: input.yaw, pitch: input.pitch, ..default() } } else { input };
-    w.prev_eye = w.client.me.eye();
-    let _events = w.client.tick(input);
+    w.prev_eye = w.client.me().eye();
+    let (_events, fired) = w.client.tick(input);
+    // Our own shots show at once (predicted); other players' come from server events.
+    for shot in fired.shots {
+        let eye = w.client.me().eye();
+        let (f, _, _) = sim::weapons::bullets::view_vectors(shot.angles[0], shot.angles[1]);
+        let end = w.client.world.trace_line(eye, std::array::from_fn(|i| eye[i] + f[i] * 8192.0)).end;
+        w.tracers.push((eye, end, 0.08));
+    }
 }
 
 fn move_camera(
@@ -381,7 +432,7 @@ fn move_camera(
             return; // still connecting
         }
         let a = fixed.overstep_fraction();
-        let (p, c) = (Vec3::from(map::to_y_up(w.prev_eye)), Vec3::from(map::to_y_up(w.client.me.eye())));
+        let (p, c) = (Vec3::from(map::to_y_up(w.prev_eye)), Vec3::from(map::to_y_up(w.client.me().eye())));
         tf.translation = p.lerp(c, a);
         return;
     }
@@ -401,6 +452,58 @@ fn move_camera(
     let speed = if keys.pressed(KeyCode::ShiftLeft) { 1200.0 } else { 400.0 };
     tf.translation += dir.normalize_or_zero() * speed * time.delta_secs();
 }
+#[derive(Component)]
+struct HudStatus;
+
+#[derive(Component)]
+struct HudFeed;
+
+/// Tracers and the kill feed from server events.
+fn effects(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos) {
+    let me = w.client.id();
+    for e in w.client.take_events() {
+        match e {
+            net::protocol::GameEvent::Shot { shooter, from, to, .. } if Some(shooter) != me => w.tracers.push((from, to, 0.08)),
+            net::protocol::GameEvent::Kill { killer, victim, weapon, headshot } => {
+                let name = |id: u8| if Some(id) == me { "you".to_string() } else { format!("player {id}") };
+                let line = match weapon {
+                    None => format!("{} fell", name(victim)),
+                    Some(w) => format!("{} [{}{}] {}", name(killer), sim::weapons::def(w).name, if headshot { " HS" } else { "" }, name(victim)),
+                };
+                w.feed.push((line, 6.0));
+            }
+            _ => {}
+        }
+    }
+    let dt = time.delta_secs();
+    for (from, to, left) in &mut w.tracers {
+        gizmos.line(Vec3::from(map::to_y_up(*from)), Vec3::from(map::to_y_up(*to)), Color::srgba(1.0, 0.9, 0.5, 0.8));
+        *left -= dt;
+    }
+    w.tracers.retain(|t| t.2 > 0.0);
+    for (_, left) in &mut w.feed {
+        *left -= dt;
+    }
+    w.feed.retain(|f| f.1 > 0.0);
+    let n = w.feed.len();
+    if n > 5 {
+        w.feed.drain(..n - 5);
+    }
+}
+
+fn hud(w: Res<Walker>, mut status: Single<&mut Text, (With<HudStatus>, Without<HudFeed>)>, mut feed: Single<&mut Text, (With<HudFeed>, Without<HudStatus>)>) {
+    let v = w.client.vitals;
+    let l = &w.client.state.loadout;
+    let weapon = sim::weapons::def(l.active_id()).name;
+    let ammo = l.active_gun().map(|g| format!("{} / {}", g.clip, g.reserve)).unwrap_or_default();
+    status.0 = if v.alive() {
+        format!("+ {:.0}   armor {:.0}{}      {weapon}  {ammo}", v.health, v.armor, if v.helmet { " (helmet)" } else { "" })
+    } else {
+        "dead - respawning".into()
+    };
+    feed.0 = w.feed.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join("\n");
+}
+
 /// Click to capture the mouse, Escape to release it.
 fn grab_cursor(
     mut cursor: Single<&mut CursorOptions>,

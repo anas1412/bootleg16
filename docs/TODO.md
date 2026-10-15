@@ -6,22 +6,24 @@ land, and add new ones here instead of leaving them only in chat.
 
 ## Milestone 1: full 5v5 Competitive match (current goal)
 
-### Weapons (in progress)
-- [ ] Server-side shooting: hitscan through map + players, damage, range falloff, penetration
-- [ ] Hit groups (head/chest/stomach/arms/legs) and armor (kevlar/helmet) damage rules
-- [ ] Fire rate, ammo, reloads, deploy times, weapon switching, dropping/picking up
-- [ ] Spread/inaccuracy (moving, jumping, crouching) and recoil patterns from `cs.so`
-- [x] Lag compensation history: server rewinds players to what the shooter saw (`Server::rewind`)
-- [x] Bullet line traces through exact geometry (`World::trace_line`)
-- [x] Hit zones from the real player model's 21 hitboxes, posed (`sim::hitbox`)
-- [ ] ⚠ Hitbox pitch: which end of the 9 aim poses is "looking up"
-- [ ] Hitboxes follow running/walking leg animation (gait) and per-weapon aim poses; per-model (T vs CT) hitboxes
-- [ ] Knife, grenades (HE damage/radius, flash, smoke), shotguns (pellets, `FireBullets`)
-- [ ] Weapon move speeds into `Player::max_speed`
+### Weapons (`docs/WEAPONS.md`)
+- [x] All 22 guns: fire rate, ammo, reloads (shotguns shell by shell), deploy, switching
+- [x] Accuracy, spread, KickBack recoil and punch, fire modes (silencers, bursts), scopes
+- [x] Server-side bullets: FireBullets3 penetration, range falloff, materials, hit zones,
+      pass-through players; shotgun pellets; armor and hit group damage; kills
+- [x] Lag compensation; client predicts its own weapons (ammo/recoil) on the command clock
+- [x] Knife slash/stab with backstab
+- [x] HUD (health/armor/ammo/weapon), crosshair, tracers, kill feed
+- [ ] Grenades: HE (damage 100, radius 350), flash (radius 1500, facing rules), smoke (~21 s), bounce physics
+- [ ] Hit flinch/slow-down (`velocity_modifier`) and victim view punch on hit
+- [ ] Knife: GoldSrc hull sweep and 8-corner search (approximated by 5 rays now)
+- [ ] Shield
 - [ ] Breakables (`func_breakable`: dust2 glass/boxes), `func_button`
-- [x] Health/armor/death plumbing; spectator camera when dead (deathmatch respawn until rounds exist)
-- [ ] ⚠ Shotgun stats (separate fire function), M4A1 silenced-vs-unsilenced call sites
-- [ ] ⚠ Pistol/knife move speeds other than Deagle (set in each weapon's `Spawn`)
+- [ ] Weapon drop/pickup on the ground; dropping on death
+- [ ] First-person weapon models (viewmodels) and third-person weapon models
+- [ ] Weapon sounds; blood/sparks/decals
+- [ ] Kill feed and other events are sent unreliably (a lost snapshot loses them)
+- [ ] ⚠ Shotgun ground-recoil ranges (source-only); FAMAS/Glock follow-up timings per spec
 
 ### Rounds and economy (`docs/RULES.md`)
 - [ ] Teams (T/CT spawns), round flow: freeze time, buy time, round time, round end
