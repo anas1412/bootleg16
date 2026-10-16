@@ -1,6 +1,6 @@
 //! CS2's "Show Team ID Through Walls": a team-coloured pip, and optionally the name, over
 //! each teammate's head, seen through walls, so you know where your team is without a radar.
-//! Settings: off / pips / names (`Settings::team_ids`). Markers fade with distance.
+//! Settings: off / pips / names and health (`Settings::team_ids`). Markers fade with distance.
 //!
 //! Safe against "make everyone a teammate" memory hacks: the server decides who your team is
 //! and never sends enemies you can't see (server/visibility.rs), so there's nothing hidden to mark.
@@ -27,6 +27,11 @@ struct TeamId(u8);
 struct TeamName;
 #[derive(Component)]
 struct Pip;
+/// The health bar under the name (with names on): its fill.
+#[derive(Component)]
+struct Health;
+#[derive(Component)]
+struct HealthTrack;
 
 /// Distance (game units) where markers start to fade, where they reach their faintest, and how
 /// faint that is.
@@ -42,7 +47,9 @@ fn team_ids(
     cam: Single<(&Camera, &GlobalTransform), With<FlyCam>>,
     mut ids: Query<(Entity, &TeamId, &mut Node, &mut Visibility, &Children)>,
     mut names: Query<(&mut Visibility, &mut TextColor), (With<TeamName>, Without<TeamId>)>,
-    mut pips: Query<&mut BackgroundColor, With<Pip>>,
+    mut pips: Query<&mut BackgroundColor, (With<Pip>, Without<Health>)>,
+    mut tracks: Query<(&mut Visibility, &Children), (With<HealthTrack>, Without<TeamId>, Without<TeamName>)>,
+    mut fills: Query<(&mut Node, &mut BackgroundColor), (With<Health>, Without<TeamId>, Without<Pip>)>,
     kit: Res<crate::ui::Kit>,
 ) {
     let mine = w.client.team();
@@ -75,6 +82,21 @@ fn team_ids(
             if let Ok(mut bg) = pips.get_mut(*c) {
                 bg.set_if_neq(BackgroundColor(color.with_alpha(fade)));
             }
+            // health (the server sends it for teammates): red when low
+            if let Ok((mut tv, kids)) = tracks.get_mut(*c) {
+                let hp = o.mate.map(|m| m.health as f32 / 100.0);
+                tv.set_if_neq(if settings.team_ids >= 2 && hp.is_some() { Visibility::Inherited } else { Visibility::Hidden });
+                for k in kids {
+                    if let (Ok((mut n, mut bg)), Some(hp)) = (fills.get_mut(*k), hp) {
+                        let w = percent(hp.clamp(0.0, 1.0) * 100.0);
+                        if n.width != w {
+                            n.width = w;
+                        }
+                        let c = if hp <= 0.25 { crate::ui::BAD } else { color };
+                        bg.set_if_neq(BackgroundColor(c.with_alpha(fade)));
+                    }
+                }
+            }
         }
     }
     for o in &mates {
@@ -92,6 +114,10 @@ fn team_ids(
             .with_children(|c| {
                 // Dark shadow (from `text`) and outline so they read on any wall.
                 c.spawn((TeamName, kit_text(name, 15.0, color, &kit.text), TextShadow { offset: Vec2::splat(1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.9) }));
+                c.spawn((HealthTrack, Visibility::Hidden, Node { width: px(44), height: px(3), margin: UiRect::top(px(2)), border_radius: BorderRadius::all(px(1)), overflow: Overflow::clip(), ..default() }, BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.6))))
+                    .with_children(|t| {
+                        t.spawn((Health, Node { width: percent(100), height: percent(100), ..default() }, BackgroundColor(color)));
+                    });
                 // The pip: a small diamond pointing down at them.
                 c.spawn((
                     Pip,
