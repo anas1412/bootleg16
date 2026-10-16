@@ -64,6 +64,11 @@ struct Model {
     bsp_model: usize,
     /// False once broken (a `func_breakable` that was shot or blown up): no longer solid.
     enabled: bool,
+    /// Drawn normally (`rendermode` 0): you can't see through it. Glass, fences and other
+    /// see-through brushes aren't.
+    opaque: bool,
+    /// World-space bounds (where it sits closed, for doors), for skipping far-off models.
+    bounds: (Vec3, Vec3),
 }
 
 /// Which BSP tree a trace walks: the player-sized clip hulls, or the exact
@@ -211,7 +216,7 @@ impl World {
             })
             .collect();
         let doors = Doors::from_bsp(bsp);
-        let mut models = vec![Model { heads: bsp.models[0].head_nodes, offset: [0.0; 3], door: None, bsp_model: 0, enabled: true }];
+        let mut models = vec![Model { heads: bsp.models[0].head_nodes, offset: [0.0; 3], door: None, bsp_model: 0, enabled: true, opaque: true, bounds: ([f32::MIN; 3], [f32::MAX; 3]) }];
         let mut water_roots = vec![(bsp.models[0].head_nodes[0], [0.0; 3])];
         let mut ladders = Vec::new();
         for e in bsp.entity_list() {
@@ -227,7 +232,10 @@ impl World {
                 "func_ladder" => ladders.push(Ladder { mins: crate::add(m.mins, offset), maxs: crate::add(m.maxs, offset) }),
                 "func_water" => water_roots.push((m.head_nodes[0], offset)),
                 c if non_solid(c) => {}
-                _ => models.push(Model { heads: m.head_nodes, offset, door: doors.door_for_model(i), bsp_model: i, enabled: true }),
+                _ => {
+                    let opaque = e.get("rendermode").and_then(|v| v.parse::<i32>().ok()).unwrap_or(0) == 0;
+                    models.push(Model { heads: m.head_nodes, offset, door: doors.door_for_model(i), bsp_model: i, enabled: true, opaque, bounds: (crate::add(m.mins, offset), crate::add(m.maxs, offset)) })
+                }
             }
         }
         let surfaces = bsp
@@ -402,14 +410,23 @@ impl World {
         }
     }
 
-    /// Whether the static world (no doors, glass or other brush entities) blocks a line of
-    /// sight. For hiding players you can't see: anything see-through must not count.
+    /// Whether anything you can't see through blocks a line of sight: the world, closed doors,
+    /// crates (as they are now: open doors and broken pieces don't). For hiding players you
+    /// can't see: anything see-through (glass, fences) must not count.
     pub fn sight_blocked(&self, start: Vec3, end: Vec3) -> bool {
         let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
-        let head = self.models[0].heads[0];
-        let mut t = Trace { start_solid: false, all_solid: true, fraction: 1.0, end, normal: [0.0; 3], hit_contents: CONTENTS_EMPTY };
-        self.recursive(tree, head, head, 0.0, 1.0, start, end, &mut t);
-        t.fraction < 1.0
+        let near = |m: &Model| (0..3).all(|i| start[i].min(end[i]) <= m.bounds.1[i] && start[i].max(end[i]) >= m.bounds.0[i]);
+        self.models.iter().filter(|m| m.enabled && m.opaque && m.heads[0] >= 0).any(|m| {
+            let door = self.door_of(m);
+            if door.is_none() && !near(m) {
+                return false;
+            }
+            let (s, e) = (to_local(m, door, start), to_local(m, door, end));
+            let head = m.heads[0];
+            let mut t = Trace { start_solid: false, all_solid: true, fraction: 1.0, end: e, normal: [0.0; 3], hit_contents: CONTENTS_EMPTY };
+            self.recursive(tree, head, head, 0.0, 1.0, s, e, &mut t);
+            t.fraction < 1.0
+        })
     }
 
     pub fn trace_line(&self, start: Vec3, end: Vec3) -> LineTrace {
@@ -504,7 +521,7 @@ impl World {
         World {
             nodes,
             // Hull 0 (exact geometry) root is point node 0; hulls 1 and 3 are clip nodes 0 and 1.
-            models: vec![Model { heads: [0, 0, -1, 1], offset: [0.0; 3], door: None, bsp_model: 0, enabled: true }],
+            models: vec![Model { heads: [0, 0, -1, 1], offset: [0.0; 3], door: None, bsp_model: 0, enabled: true, opaque: true, bounds: ([f32::MIN; 3], [f32::MAX; 3]) }],
             point_nodes: vec![Node { normal: [0.0, 0.0, 1.0], dist: z, children: [-1, -2] }],
             leaf_contents: vec![CONTENTS_EMPTY, CONTENTS_SOLID],
             water_roots: vec![(0, [0.0; 3])],

@@ -88,7 +88,6 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] A review tool for reports: list reports.jsonl, open the recording at the tick
 - [ ] de_mirage (community map, BubkeZ): on hold (2026-10-16); loads, plays and has its A/B table; add to MAP_POOL when wanted
 - [ ] de_train: check in game which bomb site is A (its map file doesn't name them; sim::zones::sites_a_first guesses east)
-- [ ] 64-tick server option (tick rate is a constant 128 today)
 - [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)
 - [x] Official servers only (decided 2026-10-16), no community servers, no server list:
       casual queue (solo or party of 2-5, party on one team, no mid-match joins, reconnect to your match),

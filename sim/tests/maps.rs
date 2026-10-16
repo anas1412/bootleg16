@@ -326,3 +326,43 @@ fn bomb_site_a_is_the_right_one_on_each_map() {
         assert!(near(sites[0], a) && near(sites[1], b), "{map}: {sites:?}");
     }
 }
+
+#[test]
+fn closed_doors_block_sight_open_ones_and_glass_dont() {
+    let Some(bsp) = load("de_inferno") else { return };
+    let mut world = World::from_bsp(&bsp);
+    let (lo, hi) = world.doors.doors[0].bounds();
+    // A line straight through the middle of the closed door.
+    let thin = if hi[0] - lo[0] < hi[1] - lo[1] { 0 } else { 1 };
+    let mid = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2] + 40.0];
+    let (mut a, mut b) = (mid, mid);
+    a[thin] = lo[thin] - 40.0;
+    b[thin] = hi[thin] + 40.0;
+    assert!(world.sight_blocked(a, b), "seen through a closed door");
+    let mut p = Player::new(a);
+    p.origin[thin] = lo[thin] - 17.0;
+    for _ in 0..(128 * 2) {
+        world.update(DT, &[actor(&p, false)]);
+    }
+    assert!(matches!(world.doors.doors[0].state, DoorState::Open(_)), "{:?}", world.doors.doors[0].state);
+    assert!(!world.sight_blocked(a, b), "an open door still blocks sight");
+
+    // Nuke's glass doors: closed, but see-through.
+    let Some(bsp) = load("de_nuke") else { return };
+    let world = World::from_bsp(&bsp);
+    let d = world.doors.doors.iter().find(|d| d.name.as_deref() == Some("GlassDoor1")).unwrap();
+    let (lo, hi) = d.bounds();
+    let thin = if hi[0] - lo[0] < hi[1] - lo[1] { 0 } else { 1 };
+    // Somewhere across its face a line meets the glass first (not its frame) and still sees through.
+    let wide = 1 - thin;
+    let through_glass = (1..10).flat_map(|i| (1..10).map(move |k| (i, k))).any(|(i, k)| {
+        let mut a = [0.0; 3];
+        a[wide] = lo[wide] + (hi[wide] - lo[wide]) * i as f32 / 10.0;
+        a[2] = lo[2] + (hi[2] - lo[2]) * k as f32 / 10.0;
+        let mut b = a;
+        a[thin] = lo[thin] - 40.0;
+        b[thin] = hi[thin] + 40.0;
+        world.trace_line(a, b).model == d.model && !world.sight_blocked(a, b)
+    });
+    assert!(through_glass, "glass hides players");
+}
