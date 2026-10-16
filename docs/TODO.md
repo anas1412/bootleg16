@@ -55,7 +55,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] ⚠ Hostage money formulas (only for cs_ maps, not milestone 1)
 
 ### Players and bots
-- [ ] Bots to fill empty slots (navigation on the four maps)
+- [x] ~~Bots~~: decided 2026-10-16: no bots, ever. Only standing dummies in practice.
 - [x] Player models drawn from the install's MDL files (static aim pose per stance)
 - [x] T vs CT models per team (4 classes each, picked by id)
 - [x] Player animations: gait (idle/walk/run/crouch) + upper body (aim pitch blend, shoot, flinch), death animation by hit place, corpses (16 kept)
@@ -67,7 +67,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] HUD: health, armor, ammo, grenades, kill feed (with names), notices
 - [x] Crosshair gap = real spread of the next shot; none on snipers; sniper scope overlay
 - [x] Scoreboard by team, clickable buy panel with prices (free in practice), team select (M, 1/2/5/6)
-- [x] Main menu: practice (map, dummies, strafe), join server, settings (name, sensitivity, volume); Esc menu
+- [x] Main menu: practice (map, standing dummies), join server, settings (name, sensitivity, volume); Esc menu
 - [x] FPS + ping counter (top left); Max FPS and VSync settings
 - [ ] Settings: FOV, key binds, crosshair style
 - [x] Viewmodel GPU-skinned (mirrored bones through a reflection transform)

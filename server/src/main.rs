@@ -1,11 +1,10 @@
 //! Dedicated server. Usage: `server [map] [port] [--config server.cfg] [--give ak47,awp]`
 //! (defaults: de_dust2, 27015). Match rules come from the config file (see `config/server.cfg`);
 //! without `--config`, `server.cfg` in the current directory is used if it exists.
-//! `--dummies <n>` adds standing dummies to the other team (until there are bots).
 //! Reads the map from the CS 1.6 install in `BOOTLEG16_DIR` (default: Steam's).
 //! `--give` hands every player extra weapons on spawn.
-//! `--practice <dummies>` runs the practice room (infinite ammo, quick respawn, dummies);
-//! add `--move` to make the dummies strafe.
+//! `--practice <dummies>` runs the practice room (infinite ammo, quick respawn, standing dummies).
+//! There are no bots: matches are people only.
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -13,8 +12,6 @@ fn main() {
     let mut positional = Vec::new();
     let mut give = Vec::new();
     let mut practice: Option<u8> = None;
-    let mut dummy_move = false;
-    let mut dummies = 0u8;
     let mut config: Option<PathBuf> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -22,10 +19,6 @@ fn main() {
             practice = Some(args.next().and_then(|n| n.parse().ok()).unwrap_or(5));
         } else if a == "--config" {
             config = args.next().map(PathBuf::from);
-        } else if a == "--dummies" {
-            dummies = args.next().and_then(|n| n.parse().ok()).unwrap_or(0);
-        } else if a == "--move" {
-            dummy_move = true;
         } else if a == "--give" {
             for w in args.next().unwrap_or_default().split(',') {
                 give.push(sim::weapons::data::by_name(w).unwrap_or_else(|| panic!("unknown weapon {w}")));
@@ -52,9 +45,7 @@ fn main() {
         server.set_config(cfg);
     }
     if let Some(n) = practice {
-        server.set_rules(net::server::Rules::practice(n, dummy_move));
-    } else if dummies > 0 {
-        server.set_rules(net::server::Rules { dummies, dummy_move, ..Default::default() });
+        server.set_rules(net::server::Rules::practice(n));
     }
     println!("bootleg16 server: {map} on {} at {} tick", server.local_addr(), net::protocol::TICK_RATE);
     server.run();

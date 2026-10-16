@@ -18,8 +18,6 @@ pub enum UiAction {
     Page(crate::menu::Page),
     PickMap(String),
     Dummies(i32),
-    ToggleDummyMove,
-    ToggleMatch,
     StartPractice,
     Connect,
     Sensitivity(f32),

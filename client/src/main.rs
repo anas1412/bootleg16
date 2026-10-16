@@ -1,7 +1,7 @@
 //! The game client. Opens on the main menu; practice starts a server inside the game,
 //! "Join server" connects to one. Each part of the game is its own plugin module.
 //!
-//! Usage: `client [map] [--connect host:port] [--name name] [--give ak47,awp] [--practice N | --dummies N]`
+//! Usage: `client [map] [--connect host:port] [--name name] [--give ak47,awp] [--practice N]`
 //! (any argument skips the menu). The game directory comes from `BOOTLEG16_DIR`
 //! (default: the Steam Half-Life install).
 //! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.

@@ -42,21 +42,20 @@ pub struct Rules {
     pub respawn_ticks: u32,
     /// Reserve ammo is topped up all the time (you still reload).
     pub infinite_ammo: bool,
-    /// Practice dummies on the other team.
+    /// Practice only: standing dummies on the other team to shoot at. (No bots: by decision,
+    /// matches are people only.)
     pub dummies: u8,
-    /// Dummies strafe left and right instead of standing still.
-    pub dummy_move: bool,
 }
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { practice: false, respawn_ticks: 3 * TICK_RATE, infinite_ammo: false, dummies: 0, dummy_move: false }
+        Rules { practice: false, respawn_ticks: 3 * TICK_RATE, infinite_ammo: false, dummies: 0 }
     }
 }
 
 impl Rules {
-    pub fn practice(dummies: u8, dummy_move: bool) -> Rules {
-        Rules { practice: true, respawn_ticks: TICK_RATE / 2, infinite_ammo: true, dummies, dummy_move }
+    pub fn practice(dummies: u8) -> Rules {
+        Rules { practice: true, respawn_ticks: TICK_RATE / 2, infinite_ammo: true, dummies }
     }
 }
 
@@ -232,7 +231,8 @@ impl Server {
     pub fn set_rules(&mut self, rules: Rules) {
         self.rules = rules;
         self.clients.retain(|_, c| !c.bot);
-        for i in 0..self.rules.dummies {
+        let dummies = if self.rules.practice { self.rules.dummies } else { 0 };
+        for i in 0..dummies {
             let id = (0..=u8::MAX).find(|i| self.clients.values().all(|c| c.id != *i)).unwrap_or(0);
             let addr = SocketAddr::from(([0, 0, 0, 0], 60000 + i as u16)); // never sent to
             let mut r = Remote::new(id, format!("Dummy {}", i + 1), self.tick);
@@ -377,11 +377,10 @@ impl Server {
             c.vitals = Vitals::default();
             c.respawn_at = None;
         }
-        // Dummies "send" an input every tick: stand still, or strafe left and right.
-        let strafe = if self.rules.dummy_move { if (tick / TICK_RATE) % 2 == 0 { 250.0 } else { -250.0 } } else { 0.0 };
+        // Dummies "send" an input every tick: stand still.
         for c in self.clients.values_mut().filter(|c| c.bot) {
             let seq = c.last_queued + 1;
-            c.queue.push_back((seq, TimedInput { input: sim::pmove::Input { side: strafe, ..Default::default() }, view_tick: tick as f32 }));
+            c.queue.push_back((seq, TimedInput { input: sim::pmove::Input::default(), view_tick: tick as f32 }));
             c.last_queued = seq;
             c.last_heard = tick;
         }

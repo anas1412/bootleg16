@@ -250,7 +250,7 @@ fn practice_room_dummies_and_infinite_ammo() {
     use sim::weapons::Id;
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 0, 0.0);
-    g.server.set_rules(net::server::Rules::practice(3, true));
+    g.server.set_rules(net::server::Rules::practice(3));
     g.server.set_give(vec![Id::Ak47]);
     g.connect();
     assert_eq!(g.server.player_count(), 5, "2 players + 3 dummies");
@@ -259,14 +259,14 @@ fn practice_room_dummies_and_infinite_ammo() {
     let dummies: Vec<_> = g.a.scores.iter().filter(|s| s.bot).collect();
     assert_eq!(dummies.len(), 3);
     assert!(dummies.iter().all(|d| d.team != me && d.team != net::protocol::Team::Spectator), "dummies are on the other side");
-    // Dummies strafe.
+    // Dummies stand still.
     let d = dummies[0].id;
     let before = g.server.player(d).unwrap().origin;
     for _ in 0..200 {
         g.tick(Input::default(), Input::default());
     }
     let after = g.server.player(d).unwrap().origin;
-    assert!((before[0] - after[0]).abs() + (before[1] - after[1]).abs() > 10.0, "dummy didn't move");
+    assert!((before[0] - after[0]).abs() + (before[1] - after[1]).abs() < 1.0, "dummy moved");
     // Infinite reserve: spray a whole clip and the reserve stays full.
     for _ in 0..512 {
         g.tick(Input { attack: true, ..Default::default() }, Input::default());

@@ -38,7 +38,7 @@ before step 3 (weapons/rounds).
 
 | Setting | Value | Notes |
 |---|---|---|
-| Players | 5v5 | bots fill empty slots |
+| Players | 5v5 | people only: no bots (practice has standing dummies) |
 | Max rounds | 24 (MR12) | first to 13 wins |
 | Halftime | after round 12 | teams swap sides; money resets to start money |
 | Tie at 12–12 | overtime | MR3: 6 rounds (3 per half), first to 4; repeats until a winner |
