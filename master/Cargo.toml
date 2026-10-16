@@ -1,0 +1,8 @@
+[package]
+name = "master"
+version = "0.1.0"
+edition = "2021"
+
+# The master server: keeps the server list (see net/src/master.rs).
+[dependencies]
+net = { path = "../net" }

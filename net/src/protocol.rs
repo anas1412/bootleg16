@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 18;
+pub const PROTOCOL_VERSION: u32 = 19;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -20,10 +20,15 @@ pub const INPUT_REDUNDANCY: usize = 8;
 /// Dropped after this long without a packet.
 pub const TIMEOUT_TICKS: u32 = 5 * TICK_RATE;
 pub const MAX_PLAYERS: usize = 32;
+/// Minimum padding of an info request (see `ClientMsg::Info`).
+pub const INFO_PAD: usize = 96;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ClientMsg {
     Hello { version: u32, name: String },
+    /// Server browser: tell me about yourself (no connection made). `pad` must be at least
+    /// `INFO_PAD` bytes so the answer is never bigger than the question (no amplification).
+    Info { pad: Vec<u8> },
     /// Inputs numbered `first_seq`, `first_seq + 1`, ...
     /// `events`: the last reliable event number received (the server resends newer ones).
     Inputs { first_seq: u32, inputs: Vec<TimedInput>, events: u32 },
@@ -247,6 +252,8 @@ pub enum ServerMsg {
     /// `map_hash`: the server's map file (`Bsp::hash`); a client with a different file must leave.
     Welcome { id: u8, map: String, map_hash: u64, tick_rate: u32, practice: bool },
     Reject { reason: String },
+    /// Answer to `ClientMsg::Info`.
+    Info { version: u32, name: String, map: String, players: u8, max: u8 },
     /// Scoreboard, sent a few times a second.
     Scores(Vec<Score>),
     /// Someone talking. `gain`: how loud (proximity voice fades with distance; 255 = full).

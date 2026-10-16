@@ -209,6 +209,7 @@ impl Client {
                 }
             }
             ServerMsg::Scores(s) => self.scores = s,
+            ServerMsg::Info { .. } => {} // for the server browser, not a connection
             ServerMsg::Voice { from, channel, gain, data } => self.voice.push((from, channel, gain, data)),
             ServerMsg::Reject { reason } => {
                 self.status = Status::Rejected;

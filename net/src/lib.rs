@@ -5,8 +5,10 @@
 //! moves doors, and sends snapshots of everything back. The client shows its own
 //! movement immediately (prediction) and corrects itself from each snapshot by
 //! rewinding to the server's state and replaying the inputs the server hasn't seen.
+pub mod browser;
 pub mod client;
 pub mod config;
+pub mod master;
 pub mod protocol;
 pub mod rounds;
 pub mod server;

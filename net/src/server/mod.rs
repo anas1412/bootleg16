@@ -315,6 +315,25 @@ impl Server {
         }
     }
 
+    /// Announce this server to the master (if one is set), so it shows in the server list.
+    fn heartbeat(&mut self) {
+        let cfg = &self.round.cfg;
+        if cfg.master.is_empty() {
+            return;
+        }
+        let Some(master) = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next()) else { return };
+        let players = self.clients.values().filter(|c| !c.bot).count() as u8;
+        let msg = crate::master::MasterMsg::Heartbeat {
+            name: cfg.name.clone(),
+            map: self.map.clone(),
+            players,
+            max: cfg.max_players,
+            region: cfg.region.clone(),
+            token: cfg.official_token.clone(),
+        };
+        self.socket.send(master, encode(&msg));
+    }
+
     /// Bytes in the last snapshot sent to a client.
     pub fn snapshot_bytes(&self) -> usize {
         self.snapshot_bytes
@@ -530,6 +549,9 @@ impl Server {
             for a in addrs {
                 self.socket.send(a, msg.clone());
             }
+        }
+        if self.tick % (crate::master::HEARTBEAT_SECONDS as u32 * TICK_RATE) == 1 {
+            self.heartbeat();
         }
         if self.tick % SNAPSHOT_EVERY == 0 {
             let players: Vec<PlayerNet> = self
@@ -765,7 +787,8 @@ impl Server {
                     return;
                 }
                 if !self.clients.contains_key(&from) {
-                    if self.clients.len() >= MAX_PLAYERS {
+                    let humans = self.clients.values().filter(|c| !c.bot).count();
+                    if self.clients.len() >= MAX_PLAYERS || humans >= self.round.cfg.max_players as usize {
                         self.socket.send(from, encode(&ServerMsg::Reject { reason: "server full".into() }));
                         return;
                     }
@@ -820,6 +843,15 @@ impl Server {
                 self.place_dummies();
             }
             ClientMsg::Voice { channel, data } => self.relay_voice(from, channel, data),
+            ClientMsg::Info { pad } => {
+                // Padded requests only: the answer must not be bigger than the question.
+                if pad.len() >= INFO_PAD {
+                    let players = self.clients.values().filter(|c| !c.bot).count() as u8;
+                    let cfg = &self.round.cfg;
+                    let info = ServerMsg::Info { version: PROTOCOL_VERSION, name: cfg.name.clone(), map: self.map.clone(), players, max: cfg.max_players };
+                    self.socket.send(from, encode(&info));
+                }
+            }
             ClientMsg::Bye => {
                 self.clients.remove(&from);
             }
