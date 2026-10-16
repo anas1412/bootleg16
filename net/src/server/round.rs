@@ -117,6 +117,7 @@ impl Server {
         self.ground.clear();
         self.grenades.clear();
         self.smokes.clear();
+        self.restore_pieces();
         let mut ids: Vec<(SocketAddr, u8)> = self.clients.iter().filter(|(_, c)| c.team != Team::Spectator).map(|(a, c)| (*a, c.id)).collect();
         ids.sort_by_key(|(_, id)| *id); // spawn points handed out in a fixed order
         for (addr, _) in ids {

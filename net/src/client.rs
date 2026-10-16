@@ -80,6 +80,8 @@ pub struct Client {
     pub ping_ms: f32,
     /// A side we asked for, until the server confirms it.
     wanted_team: Option<Option<Team>>,
+    /// Breakables broken as of the last snapshot.
+    pub broken: Vec<u16>,
     /// Highest reliable event number received (each is kept once).
     reliable_seen: u32,
     /// Voice frames received and not yet taken: (from, channel, gain 0..255, Opus data).
@@ -121,6 +123,7 @@ impl Client {
             ping_ms: 0.0,
             voice: Vec::new(),
             reliable_seen: 0,
+            broken: Vec::new(),
             wanted_team: None,
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0 },
             bomb: BombNet::None,
@@ -208,13 +211,21 @@ impl Client {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
             }
-            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, reliable, grenades, smokes, ground, round, bomb, me } => {
+            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, reliable, broken, grenades, smokes, ground, round, bomb, me } => {
                 let Status::Connected { id } = self.status else { return };
                 if tick <= self.latest_tick {
                     return; // old or duplicate
                 }
                 self.latest_tick = tick;
                 self.world.doors.apply_net_state(&doors);
+                // Broken glass and crates stop blocking (and come back at round start).
+                for m in self.broken.iter().filter(|m| !broken.contains(m)) {
+                    self.world.set_broken(*m as usize, false);
+                }
+                for m in &broken {
+                    self.world.set_broken(*m as usize, true);
+                }
+                self.broken = broken;
                 self.events.extend(events);
                 for (n, e) in reliable {
                     if n > self.reliable_seen {

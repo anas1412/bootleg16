@@ -36,6 +36,8 @@ pub struct Impact {
     pub normal: Vec3,
     /// Hit the sky brush (no hole to draw).
     pub sky: bool,
+    /// The BSP model hit (0 = world): lets the server damage breakables.
+    pub model: usize,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -133,7 +135,7 @@ pub fn fire_bullet(world: &World, materials: &Materials, hitboxes: &Hitboxes, ey
         }
         let hit_point = add(src, scale(sub(end, src), fraction));
         if player.is_none() {
-            out.impacts.push(Impact { point: hit_point, normal: wt.normal, sky: wt.hit_sky });
+            out.impacts.push(Impact { point: hit_point, normal: wt.normal, sky: wt.hit_sky, model: wt.model });
             if wt.hit_sky {
                 break; // nothing behind the sky
             }
@@ -198,7 +200,7 @@ pub fn fire_pellets(world: &World, hitboxes: &Hitboxes, eye: Vec3, shot: &Shot, 
                     None => out.hits.push(BulletHit { victim: id, damage: d, group, point }),
                 }
             }
-            None => out.impacts.push(Impact { point, normal: wt.normal, sky: wt.hit_sky }),
+            None => out.impacts.push(Impact { point, normal: wt.normal, sky: wt.hit_sky, model: wt.model }),
         }
     }
     out

@@ -1,6 +1,7 @@
 //! The authoritative server: owns the world, runs every player's movement and
 //! weapons from their inputs, resolves shots with lag compensation, and sends snapshots.
 mod bomb;
+mod breakables;
 pub mod buy;
 mod ground;
 mod round;
@@ -179,6 +180,7 @@ pub struct Server {
     kills_settled: usize,
     round: Match,
     bomb: Bomb,
+    pieces: breakables::Pieces,
     /// Anti-wallhack: when each (viewer, target) pair last had line of sight.
     last_seen: HashMap<(u8, u8), u32>,
 }
@@ -218,6 +220,7 @@ impl Server {
             round: Match::new(MatchConfig::default(), TICK_RATE),
             bomb: Bomb::None,
             last_seen: HashMap::new(),
+            pieces: breakables::Pieces::from_bsp(bsp),
         })
     }
 
@@ -534,6 +537,7 @@ impl Server {
             let smokes: Vec<SmokeNet> = self.smokes.iter().map(|s| SmokeNet { at: s.0, left: (s.1 - now) as f32 }).collect();
             let ground: Vec<(Id, [f32; 3])> = self.ground.iter().map(|g| (g.gun.id, g.origin)).collect();
             let round = self.round_net();
+            let broken = self.broken_models();
             let viewers: Vec<u8> = self.clients.values().filter(|c| !c.bot).map(|c| c.id).collect();
             let sights: HashMap<u8, std::collections::HashSet<u8>> = viewers.iter().map(|id| (*id, self.visible_to(*id))).collect();
             let sends: Vec<_> = self
@@ -568,6 +572,7 @@ impl Server {
                     loadout,
                     events,
                     reliable,
+                    broken: broken.clone(),
                     grenades: grenades.clone(),
                     smokes: smokes.clone(),
                     ground: ground.clone(),
@@ -598,6 +603,7 @@ impl Server {
                 Kind::He => {
                     let blast = g.blast_point(&self.world);
                     self.events.push(GameEvent::Explosion { at: blast });
+                    self.blast_pieces(blast, 350.0, 100.0);
                     // Without friendly fire your own HE still hurts you, not your team.
                     let owner_team = self.clients.values().find(|c| c.id == g.owner).map(|c| c.team);
                     let ff = self.round.cfg.friendly_fire;
@@ -652,6 +658,9 @@ impl Server {
                 std::array::from_fn(|i| p.eye[i] + f[i] * 2048.0)
             });
             let holes = r.impacts.iter().filter(|i| !i.sky).map(|i| (i.point, i.normal)).collect();
+            for i in r.impacts.iter().filter(|i| i.model != 0) {
+                self.shoot_piece(i.model, shot.damage as f32);
+            }
             self.events.push(GameEvent::Shot { shooter: p.shooter, weapon: shot.weapon, silenced: shot.silenced, from: p.eye, to: end, holes });
             hits.extend(r.hits.into_iter().map(|h| (h.victim, h.damage, h.group, shot.weapon, Some(h.point))));
         }

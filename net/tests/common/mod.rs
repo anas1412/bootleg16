@@ -13,6 +13,10 @@ pub fn game_dir() -> Option<String> {
     Some(std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life")))
 }
 
+pub fn map(name: &str) -> Option<Bsp> {
+    Bsp::load(format!("{}/cstrike/maps/{name}.bsp", game_dir()?)).ok()
+}
+
 pub fn dust2() -> Option<Bsp> {
     Bsp::load(format!("{}/cstrike/maps/de_dust2.bsp", game_dir()?)).ok()
 }
@@ -39,7 +43,7 @@ pub fn setup(bsp: &Bsp, ping_ms: u32, loss: f32) -> Game {
 }
 
 pub fn setup_with(bsp: &Bsp, ping_ms: u32, loss: f32, cfg: net::config::MatchConfig) -> Game {
-    let mut server = Server::new(SocketAddr::from(([127, 0, 0, 1], 0)), "de_dust2", bsp, assets()).unwrap();
+    let mut server = Server::new(SocketAddr::from(([127, 0, 0, 1], 0)), "test", bsp, assets()).unwrap();
     server.set_config(cfg);
     let addr = server.local_addr();
     let mut a = Client::connect(addr, "a", World::from_bsp(bsp)).unwrap();

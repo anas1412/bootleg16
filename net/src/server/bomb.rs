@@ -150,6 +150,8 @@ impl Server {
         self.bomb = Bomb::Gone;
         self.events.push(GameEvent::BombExploded { at });
         let radius = self.world.zones.bomb_radius;
+        self.bomb_triggers(at);
+        self.blast_pieces(at, radius * 3.5, radius);
         for c in self.clients.values_mut().filter(|c| c.vitals.alive()) {
             let o = c.state.movement.origin;
             let d = ((o[0] - at[0]).powi(2) + (o[1] - at[1]).powi(2) + (o[2] - at[2]).powi(2)).sqrt();

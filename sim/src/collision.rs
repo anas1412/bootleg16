@@ -62,6 +62,8 @@ struct Model {
     /// Index into `World::doors` when this model moves.
     door: Option<usize>,
     bsp_model: usize,
+    /// False once broken (a `func_breakable` that was shot or blown up): no longer solid.
+    enabled: bool,
 }
 
 /// Which BSP tree a trace walks: the player-sized clip hulls, or the exact
@@ -110,6 +112,8 @@ pub struct LineTrace {
     pub start_solid: bool,
     /// Stopped by the sky (no decal, no penetration).
     pub hit_sky: bool,
+    /// The BSP model hit (0 = the world, else a brush entity such as a breakable).
+    pub model: usize,
 }
 
 /// Point `p` in a model's own space, given where its door (if any) currently is.
@@ -207,7 +211,7 @@ impl World {
             })
             .collect();
         let doors = Doors::from_bsp(bsp);
-        let mut models = vec![Model { heads: bsp.models[0].head_nodes, offset: [0.0; 3], door: None, bsp_model: 0 }];
+        let mut models = vec![Model { heads: bsp.models[0].head_nodes, offset: [0.0; 3], door: None, bsp_model: 0, enabled: true }];
         let mut water_roots = vec![(bsp.models[0].head_nodes[0], [0.0; 3])];
         let mut ladders = Vec::new();
         for e in bsp.entity_list() {
@@ -223,7 +227,7 @@ impl World {
                 "func_ladder" => ladders.push(Ladder { mins: crate::add(m.mins, offset), maxs: crate::add(m.maxs, offset) }),
                 "func_water" => water_roots.push((m.head_nodes[0], offset)),
                 c if non_solid(c) => {}
-                _ => models.push(Model { heads: m.head_nodes, offset, door: doors.door_for_model(i), bsp_model: i }),
+                _ => models.push(Model { heads: m.head_nodes, offset, door: doors.door_for_model(i), bsp_model: i, enabled: true }),
             }
         }
         let surfaces = bsp
@@ -350,13 +354,13 @@ impl World {
 
     /// Is the player box at `origin` stuck in something?
     pub fn is_solid(&self, hull: Hull, origin: Vec3) -> bool {
-        self.models.iter().any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
+        self.models.iter().filter(|m| m.enabled).any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
     }
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
     pub fn trace(&self, hull: Hull, start: Vec3, end: Vec3) -> Trace {
         let mut best = Trace { start_solid: false, all_solid: false, fraction: 1.0, end, normal: [0.0; 3], hit_contents: CONTENTS_EMPTY };
-        for m in &self.models {
+        for m in self.models.iter().filter(|m| m.enabled) {
             let head = m.heads[hull as usize];
             let door = self.door_of(m);
             let (s, e) = (to_local(m, door, start), to_local(m, door, end));
@@ -391,6 +395,13 @@ impl World {
     }
 
     /// A bullet-style line trace through the exact geometry (world + doors).
+    /// A breakable broke (false) or was put back at round start (true).
+    pub fn set_broken(&mut self, bsp_model: usize, broken: bool) {
+        for m in self.models.iter_mut().filter(|m| m.bsp_model == bsp_model) {
+            m.enabled = !broken;
+        }
+    }
+
     /// Whether the static world (no doors, glass or other brush entities) blocks a line of
     /// sight. For hiding players you can't see: anything see-through must not count.
     pub fn sight_blocked(&self, start: Vec3, end: Vec3) -> bool {
@@ -403,8 +414,8 @@ impl World {
 
     pub fn trace_line(&self, start: Vec3, end: Vec3) -> LineTrace {
         let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
-        let mut best = LineTrace { fraction: 1.0, end, normal: [0.0; 3], start_solid: false, hit_sky: false };
-        for m in &self.models {
+        let mut best = LineTrace { fraction: 1.0, end, normal: [0.0; 3], start_solid: false, hit_sky: false, model: 0 };
+        for m in self.models.iter().filter(|m| m.enabled) {
             let head = m.heads[0];
             if head < 0 {
                 continue;
@@ -423,6 +434,7 @@ impl World {
                 best.normal = t.normal;
                 best.end = lerp(start, end, t.fraction);
                 best.hit_sky = t.hit_contents == CONTENTS_SKY;
+                best.model = m.bsp_model;
             }
         }
         best
@@ -492,7 +504,7 @@ impl World {
         World {
             nodes,
             // Hull 0 (exact geometry) root is point node 0; hulls 1 and 3 are clip nodes 0 and 1.
-            models: vec![Model { heads: [0, 0, -1, 1], offset: [0.0; 3], door: None, bsp_model: 0 }],
+            models: vec![Model { heads: [0, 0, -1, 1], offset: [0.0; 3], door: None, bsp_model: 0, enabled: true }],
             point_nodes: vec![Node { normal: [0.0, 0.0, 1.0], dist: z, children: [-1, -2] }],
             leaf_contents: vec![CONTENTS_EMPTY, CONTENTS_SOLID],
             water_roots: vec![(0, [0.0; 3])],

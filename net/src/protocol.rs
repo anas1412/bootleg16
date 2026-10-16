@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 16;
+pub const PROTOCOL_VERSION: u32 = 17;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -131,6 +131,8 @@ pub enum GameEvent {
     Defusing { by: u8, kit: bool },
     BombDefused { by: u8 },
     BombExploded { at: [f32; 3] },
+    /// A breakable broke (for its sound and debris; the state itself is `Snapshot::broken`).
+    Broke { model: u16, material: sim::breakables::Material, at: [f32; 3] },
 }
 
 impl GameEvent {
@@ -228,6 +230,8 @@ pub enum ServerMsg {
         events: Vec<GameEvent>,
         /// Kill feed, round and bomb news, numbered: resent in every snapshot until acknowledged.
         reliable: Vec<(u32, GameEvent)>,
+        /// Breakables currently broken (their brush model numbers).
+        broken: Vec<u16>,
         /// Grenades in flight or lying around, and smoke clouds.
         grenades: Vec<(sim::grenades::Kind, [f32; 3])>,
         smokes: Vec<SmokeNet>,

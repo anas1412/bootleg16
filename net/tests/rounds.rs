@@ -133,4 +133,9 @@ fn bomb_explodes_wins_the_round_and_kills_nearby() {
     assert!(ev.iter().any(|e| matches!(e, GameEvent::BombExploded { .. })), "{ev:?}");
     assert!(ev.iter().any(|e| *e == GameEvent::RoundEnd { winner: Team::T, reason: EndReason::BombExploded }));
     assert!(ev.iter().any(|e| matches!(e, GameEvent::Kill { victim, weapon: Some(sim::weapons::Id::C4), .. } if *victim == b)), "{ev:?}");
+    // dust2's crates at that site go with it, and are back next round.
+    assert!(ev.iter().any(|e| matches!(e, GameEvent::Broke { .. })), "no crates broke: {ev:?}");
+    assert!(!g.a.broken.is_empty());
+    wait(&mut g, 2.0, Input::default(), Input::default(), &mut ev);
+    assert!(g.a.broken.is_empty(), "crates not restored: {:?}", g.a.broken);
 }
