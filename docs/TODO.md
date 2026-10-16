@@ -103,7 +103,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Kernel flood filtering: ./host.sh firewall (nftables)
 - [ ] Host-side DDoS filtering: choose a provider with game DDoS protection (OVH Game, Path.net); a user decision
 - [x] Encryption/authentication (X25519 + ChaCha20-Poly1305, per-seat keys, sealed server <-> lobby)
-- [ ] Prediction error smoothing (corrections are applied instantly)
+- [x] Prediction error smoothing (corrections glide out over ~0.1 s, big jumps snap: client game.rs)
 
 ### Voice
 - [x] Voice chat, two push-to-talk keys (decided 2026-10-16): team voice (K) reaches your team
