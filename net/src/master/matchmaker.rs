@@ -286,14 +286,8 @@ fn best_split<'a>(seed: &'a Entry, near: &[&'a Entry], side: usize) -> Option<(f
 }
 
 pub fn save_ratings(ratings: &HashMap<u64, Rating>, path: &std::path::Path) -> std::io::Result<()> {
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
     let list: Vec<(u64, Rating)> = ratings.iter().map(|(k, v)| (*k, *v)).collect();
-    let tmp = path.with_extension("tmp");
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
-    f.write_all(&encode(&list))?;
-    f.sync_all()?;
-    std::fs::rename(tmp, path)
+    crate::secure::write_private(path, &encode(&list))
 }
 
 impl Master {

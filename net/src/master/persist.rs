@@ -111,13 +111,7 @@ impl Master {
 
     /// Save to `path` now (atomically: a crash mid-write never leaves half a file).
     pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
-        use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
-        let tmp = path.with_extension("tmp");
-        let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
-        f.write_all(&self.snapshot())?;
-        f.sync_all()?;
-        std::fs::rename(tmp, path)
+        crate::secure::write_private(path, &self.snapshot())
     }
 
     /// Load what was saved at `path` (nothing there: a fresh start).

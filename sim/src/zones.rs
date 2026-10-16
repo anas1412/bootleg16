@@ -67,6 +67,12 @@ impl Zones {
         self.buy.iter().any(|(s, lo, hi)| *s == side && inside(at, *lo, *hi))
     }
 
+    /// A side's spawn points (`info_player_deathmatch`: terrorists, `info_player_start`:
+    /// counter-terrorists), in map order.
+    pub fn spawns(&self, side: Side) -> Vec<Vec3> {
+        self.spawn_buy.iter().filter(|(s, _)| *s == side).map(|(_, o)| *o).collect()
+    }
+
     pub fn in_bomb_site(&self, at: Vec3) -> bool {
         self.bomb_sites.iter().any(|(lo, hi)| inside(at, *lo, *hi))
     }

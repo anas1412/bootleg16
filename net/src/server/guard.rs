@@ -18,7 +18,7 @@ pub(super) const MAX_PER_IP: usize = 6;
 const MAX_TRACKED: usize = 8192;
 
 pub(super) struct Guard {
-    secret: u64,
+    cookies: crate::secure::Cookies,
     /// Budgets per IP, separate for players and strangers: players can't starve joins, and a
     /// flood of made-up addresses (filling the strangers' table) can't touch players.
     players: crate::secure::Buckets<IpAddr>,
@@ -28,7 +28,7 @@ pub(super) struct Guard {
 impl Guard {
     pub(super) fn new() -> Guard {
         // From the OS random source: nobody can work out the cookies (and fake addresses).
-        Guard { secret: crate::secure::random(), players: crate::secure::Buckets::new(usize::MAX), strangers: crate::secure::Buckets::new(MAX_TRACKED) }
+        Guard { cookies: crate::secure::Cookies::new(), players: crate::secure::Buckets::new(usize::MAX), strangers: crate::secure::Buckets::new(MAX_TRACKED) }
     }
 
     /// May this packet be looked at? `players`: how many players are in the game from this
@@ -52,26 +52,14 @@ impl Guard {
         self.strangers.tidy(now, 5.0);
     }
 
-    /// The join cookie for an address in a 10-second window (stateless: nothing is stored).
-    pub(super) fn cookie(&self, addr: SocketAddr, tick: u32, previous: bool) -> u64 {
-        let window = (tick / (10 * TICK_RATE)) as u64 - previous as u64;
-        let a = match addr.ip() {
-            IpAddr::V4(v) => u32::from(v) as u64,
-            IpAddr::V6(v) => (u128::from(v) as u64) ^ ((u128::from(v) >> 64) as u64),
-        };
-        mix(self.secret ^ mix(a ^ ((addr.port() as u64) << 48) ^ window.rotate_left(17)))
+    /// The join cookie for an address now (stateless: nothing is stored).
+    pub(super) fn cookie(&self, addr: SocketAddr, tick: u32) -> u64 {
+        self.cookies.make(addr, (tick / TICK_RATE) as u64)
     }
 
     pub(super) fn cookie_ok(&self, addr: SocketAddr, tick: u32, cookie: u64) -> bool {
-        cookie != 0 && (cookie == self.cookie(addr, tick, false) || (tick >= 10 * TICK_RATE && cookie == self.cookie(addr, tick, true)))
+        self.cookies.check(addr, (tick / TICK_RATE) as u64, cookie)
     }
-}
-
-/// splitmix64 finaliser: a cheap, well-mixed 64-bit hash step.
-fn mix(mut z: u64) -> u64 {
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    z ^ (z >> 31)
 }
 
 #[cfg(test)]

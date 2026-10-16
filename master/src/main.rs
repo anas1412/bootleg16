@@ -80,10 +80,7 @@ fn load_key(path: &str) -> net::crypto::LobbyKey {
         return net::crypto::LobbyKey::from_hex(&hex).unwrap_or_else(|| panic!("{path}: not a lobby key"));
     }
     let key = net::crypto::LobbyKey::generate();
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path).unwrap_or_else(|e| panic!("{path}: {e}"));
-    writeln!(f, "{}", key.to_hex()).unwrap();
+    net::secure::write_private(std::path::Path::new(path), format!("{}\n", key.to_hex()).as_bytes()).unwrap_or_else(|e| panic!("{path}: {e}"));
     println!("made a new lobby key in {path}");
     key
 }

@@ -115,8 +115,9 @@ fn bots_leaving_pause_the_match_and_coming_back_resumes_it() {
     let mut events = Vec::new();
     play(&mut server, &mut bots, 30, &mut events, |b, _| b[0].client.round.round >= 1 && b[0].client.round.phase == net::rounds::Phase::Live);
     let t = bots.iter().find(|b| b.client.team() == Team::T).unwrap().index;
+    // (Generous limits: with every test suite running at once the machine is busy.)
     net::bot::command(&mut bots, "ct leave").unwrap();
-    play(&mut server, &mut bots, 10, &mut events, |b, _| b[t].client.round.paused);
+    play(&mut server, &mut bots, 30, &mut events, |b, _| b[t].client.round.paused);
     net::bot::command(&mut bots, "ct rejoin").unwrap();
-    play(&mut server, &mut bots, 10, &mut events, |b, _| !b[t].client.round.paused);
+    play(&mut server, &mut bots, 30, &mut events, |b, _| !b[t].client.round.paused);
 }

@@ -137,6 +137,20 @@ impl MatchConfig {
     }
 }
 
+/// The addresses in a comma-separated list ("host:port, host:port"). `look_up`: names too
+/// (blocking: a DNS lookup each; off the game loop!), else only literal addresses.
+pub fn addresses(list: &str, look_up: bool) -> Vec<std::net::SocketAddr> {
+    list.split(',')
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .filter_map(|a| match a.parse() {
+            Ok(addr) => Some(addr),
+            Err(_) if look_up => std::net::ToSocketAddrs::to_socket_addrs(a).ok()?.next(),
+            Err(_) => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

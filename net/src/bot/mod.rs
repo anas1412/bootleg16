@@ -38,7 +38,7 @@ impl BotMap {
         let mut sites: Vec<[f32; 3]> = zones.bomb_sites.iter().map(|(a, b)| [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, a[2] + 36.0]).collect();
         // ponytail: maps don't name their sites; east (bigger x) is A, as on de_dust2.
         sites.sort_by(|a, b| b[0].total_cmp(&a[0]));
-        Arc::new(BotMap { spawns: spawns_of(&bsp), nav, sites, zones, bsp })
+        Arc::new(BotMap { spawns: spawns_of(&zones), nav, sites, zones, bsp })
     }
 
     pub fn world(&self) -> sim::collision::World {
@@ -134,16 +134,7 @@ pub fn command(bots: &mut [Bot], line: &str) -> Result<Vec<usize>, String> {
 }
 
 /// The first terrorist and counter-terrorist spawn of a map.
-pub fn spawns_of(bsp: &goldsrc::bsp::Bsp) -> ([f32; 3], [f32; 3]) {
-    let ents = bsp.entity_list();
-    let first = |class: &str| -> [f32; 3] {
-        ents.iter()
-            .filter(|e| e.get("classname").map(String::as_str) == Some(class))
-            .find_map(|e| {
-                let v: Vec<f32> = e.get("origin")?.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-                Some([*v.first()?, *v.get(1)?, *v.get(2)?])
-            })
-            .unwrap_or_default()
-    };
-    (first("info_player_deathmatch"), first("info_player_start"))
+pub fn spawns_of(zones: &sim::zones::Zones) -> ([f32; 3], [f32; 3]) {
+    let first = |side| zones.spawns(side).first().copied().unwrap_or_default();
+    (first(sim::zones::Side::T), first(sim::zones::Side::Ct))
 }
