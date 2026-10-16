@@ -44,12 +44,24 @@ pub enum ClientMsg {
     CallSurrender,
     /// Your answer to your team's surrender vote.
     Vote { yes: bool },
+    /// Report a player in your match for review.
+    Report { player: u8, reason: ReportReason },
     /// One 20 ms Opus voice frame while a push-to-talk key is held.
     Voice { channel: VoiceChannel, data: Vec<u8> },
     Bye,
     /// Lobby -> game server: run this match. Only obeyed with our official token, from the
     /// lobby address in server.cfg.
     Reserve { token: String, setup: crate::server::MatchSetup },
+}
+
+/// Why a player was reported.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReportReason {
+    Cheating,
+    /// Throwing the game, blocking, team damage on purpose.
+    Griefing,
+    /// Abusive voice or names.
+    Abuse,
 }
 
 /// The two voice channels, each on its own push-to-talk key.

@@ -1,5 +1,6 @@
 //! The lobby (parties, matchmaking, custom games). Usage: `master [port] [--tokens file]`.
 //! `--tokens`: one secret per line; only game servers announcing with one get matches.
+//! `--reports file`: where player reports are appended (one JSON object per line).
 //! Built with `--features steam`, it checks Steam logins with Steam (`--steam-app <id>`,
 //! default 480, Valve's test app until we have our own).
 use std::net::SocketAddr;
@@ -15,6 +16,7 @@ fn main() {
         .map(|f| std::fs::read_to_string(f).unwrap_or_else(|e| panic!("{f}: {e}")).lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect())
         .unwrap_or_default();
     let mut m = net::master::Master::bind(SocketAddr::from(([0, 0, 0, 0], port)), tokens).unwrap_or_else(|e| panic!("binding port {port}: {e}"));
+    m.reports = flag("--reports").map(std::path::PathBuf::from);
     println!("bootleg16 lobby on {}", m.local_addr());
     #[cfg(feature = "steam")]
     {

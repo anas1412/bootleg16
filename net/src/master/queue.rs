@@ -60,6 +60,7 @@ impl Master {
         for (id, ticket, _) in tickets {
             if let Some(p) = self.players.values_mut().find(|p| p.id == id) {
                 p.found = Some((public, ticket));
+                self.seats.insert(ticket, (p.steam, p.name.clone(), Instant::now()));
             }
             if let Some(party) = self.parties.values_mut().find(|q| q.members.iter().any(|(m, _)| *m == id)) {
                 party.queued = None;

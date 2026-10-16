@@ -45,6 +45,8 @@ pub enum LobbyMsg {
     State(LobbyState),
     /// Lobby -> player: unknown session (the lobby restarted, or you timed out): sign in again.
     Expired,
+    /// Game server -> lobby: a player reported another (by their match tickets).
+    Report { token: String, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: String, round: u32 },
 }
 
 /// Steam sign-in: who you say you are and Steam's ticket proving it.
@@ -189,6 +191,10 @@ pub struct Master {
     pub steam_mode: SteamMode,
     /// Steam logins waiting for Steam's answer: (session, Steam id, ticket).
     steam_checks: Vec<(u64, u64, Vec<u8>)>,
+    /// Who holds each match ticket (Steam id, name), for reports; kept a few hours.
+    pub(super) seats: HashMap<u64, (u64, String, Instant)>,
+    /// Where reports are written (one JSON object per line); None = only printed.
+    pub reports: Option<std::path::PathBuf>,
 }
 
 impl Master {
@@ -196,7 +202,7 @@ impl Master {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7) ^ ((std::process::id() as u64) << 32);
-        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, steam_checks: Vec::new() })
+        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, steam_checks: Vec::new(), seats: HashMap::new(), reports: None })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -257,6 +263,7 @@ impl Master {
                     }
                     self.servers.insert(from, GameServer { public, region, token, official, busy, seen: Instant::now() });
                 }
+                Some(LobbyMsg::Report { token, reporter, target, reason, map, round }) if self.tokens.contains(&token) => self.file_report(reporter, target, reason, &map, round),
                 Some(LobbyMsg::Hello { name, steam, pad }) if pad.len() >= PAD => {
                     // Signed in already (our Welcome got lost): the same session again.
                     let session = match self.players.iter().find(|(_, p)| p.addr == from) {
@@ -293,6 +300,7 @@ impl Master {
             }
         }
         let now = Instant::now();
+        self.seats.retain(|_, (_, _, at)| at.elapsed() < Duration::from_secs(6 * 3600));
         self.servers.retain(|_, s| {
             let alive = now - s.seen < SERVER_TIMEOUT;
             if !alive {
@@ -462,5 +470,26 @@ impl Master {
                 })
                 .collect(),
         })
+    }
+}
+
+impl Master {
+    /// Write a report down for review: who, whom (Steam ids and names), why, where.
+    fn file_report(&mut self, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: &str, round: u32) {
+        let (Some(by), Some(of)) = (self.seats.get(&reporter), self.seats.get(&target)) else { return };
+        let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        // Names have no control characters (see Hello), so Debug quoting is valid JSON here.
+        let line = format!(
+            "{{\"time\":{time},\"reason\":\"{reason:?}\",\"reporter\":{{\"steam\":{},\"name\":{:?}}},\"reported\":{{\"steam\":{},\"name\":{:?}}},\"map\":{map:?},\"round\":{round}}}",
+            by.0, by.1, of.0, of.1
+        );
+        println!("report: {line}");
+        if let Some(path) = &self.reports {
+            use std::io::Write;
+            match std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                Ok(mut f) => _ = writeln!(f, "{line}"),
+                Err(e) => println!("can't write reports to {}: {e}", path.display()),
+            }
+        }
     }
 }

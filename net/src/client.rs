@@ -407,6 +407,11 @@ impl Client {
         self.socket.send(self.server, encode(&ClientMsg::CallSurrender));
     }
 
+    /// Report a player in this match for review (once per player; reserved matches only).
+    pub fn report(&mut self, player: u8, reason: crate::protocol::ReportReason) {
+        self.socket.send(self.server, encode(&ClientMsg::Report { player, reason }));
+    }
+
     /// Answer your team's surrender vote.
     pub fn surrender_vote(&mut self, yes: bool) {
         self.socket.send(self.server, encode(&ClientMsg::Vote { yes }));

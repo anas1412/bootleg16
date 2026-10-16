@@ -13,8 +13,13 @@ const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
 /// A lobby (in its own thread) and an official game server announcing to it.
 fn world(bsp: &goldsrc::bsp::Bsp, match_size: usize) -> (Server, SocketAddr) {
+    world_with(bsp, match_size, None)
+}
+
+fn world_with(bsp: &goldsrc::bsp::Bsp, match_size: usize, reports: Option<std::path::PathBuf>) -> (Server, SocketAddr) {
     let mut m = Master::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     m.match_size = match_size;
+    m.reports = reports;
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
     let mut server = Server::new(SocketAddr::from(LOCAL), "test", bsp, assets()).unwrap();
@@ -167,4 +172,50 @@ fn queue_books_the_region_players_ping_best() {
     }
     both(&mut eu, &mut na, &mut [&mut a, &mut b], "match found", &|c| c.iter().all(|c| c.found.is_some()));
     assert_eq!(a.found.unwrap().0, na.local_addr(), "booked in na, where both ping 25 ms");
+}
+
+#[test]
+fn reports_are_filed_with_steam_ids() {
+    let Some(bsp) = dust2() else { return };
+    let path = std::env::temp_dir().join(format!("bootleg16-reports-{}.jsonl", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let (mut server, lobby) = world_with(&bsp, 2, Some(path.clone()));
+    let mut a = LobbyClient::new(lobby, "a").unwrap();
+    a.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 111, ticket: vec![] })));
+    let mut b = LobbyClient::new(lobby, "b \"quoted\"").unwrap();
+    b.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 222, ticket: vec![] })));
+    until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
+    a.send(Command::Play);
+    b.send(Command::Play);
+    until(&mut server, &mut [&mut a, &mut b], "match found", |c| c.iter().all(|c| c.found.is_some()));
+    let mut cs: Vec<net::Client> = [a.found.unwrap(), b.found.unwrap()]
+        .iter()
+        .map(|(addr, ticket)| {
+            let mut c = net::Client::connect(*addr, "p", sim::collision::World::from_bsp(&bsp)).unwrap();
+            c.ticket = *ticket;
+            c
+        })
+        .collect();
+    for _ in 0..256 {
+        server.step();
+        cs.iter_mut().for_each(|c| _ = c.tick(Input::default()));
+        std::thread::sleep(Duration::from_micros(150));
+    }
+    let target = cs[1].id().unwrap();
+    cs[0].report(target, net::protocol::ReportReason::Cheating);
+    cs[0].report(target, net::protocol::ReportReason::Cheating); // once per player
+    let start = Instant::now();
+    while std::fs::read_to_string(&path).unwrap_or_default().is_empty() {
+        assert!(start.elapsed() < Duration::from_secs(5), "no report filed");
+        server.step();
+        cs.iter_mut().for_each(|c| _ = c.tick(Input::default()));
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(text.lines().count(), 1, "{text}");
+    for want in ["\"reason\":\"Cheating\"", "\"steam\":111", "\"steam\":222,\"name\":\"b \\\"quoted\\\"\"", "\"map\":\"test\""] {
+        assert!(text.contains(want), "{want} in {text}");
+    }
+    let _ = std::fs::remove_file(&path);
 }

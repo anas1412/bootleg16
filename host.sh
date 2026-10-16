@@ -12,7 +12,7 @@
 # same setup back up.
 set -euo pipefail
 cd "$(dirname "$0")"
-mkdir -p hosting
+mkdir -p hosting hosting/reports
 compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
 
 [ -f hosting/settings ] && . hosting/settings
@@ -67,7 +67,7 @@ rm -f hosting/server*.cfg
   echo "# Made by host.sh: edit config/server.cfg instead, then run ./host.sh"
   echo "services:"
   if [ "$LOBBY" = here ]; then
-    echo "  lobby: {image: bootleg16, network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro]}"
+    echo "  lobby: {image: bootleg16, network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports]}"
   fi
   for i in $(seq 1 "$SERVERS"); do
     port=$((27014 + i))

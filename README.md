@@ -52,6 +52,8 @@ Its game servers join the same pool. Run `./host.sh token` on the main machine i
 
 **Regions:** the game measures each player's ping to every region. The queue puts a party in a region where all of them ping under 60 ms, widening by 2 ms per second of waiting (up to 200 ms), so nobody waits forever in a quiet region. Custom games go to the party's best region.
 
+**Leavers and reports:** one player leaving changes nothing (their seat waits, they can come back). After 5 minutes away they count as abandoned, and their team can call a surrender vote in game (F3, then F1 yes / F2 no; a majority of the team still there). If a whole side is gone the match pauses, and forfeits after 5 minutes. Player reports land in `hosting/reports/reports.jsonl` on the lobby machine, one line per report with both players' Steam ids, the reason, map and round.
+
 **Match rules** (rounds, money, timers) live in `config/server.cfg`. Edit it, then run `./host.sh` again.
 
 **Check a deployment** from any machine with the repo:

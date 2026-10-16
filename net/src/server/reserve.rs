@@ -57,6 +57,8 @@ pub(super) struct Reserved {
     pub(super) voted_in_round: [Option<u32>; 2],
     /// Since when a side has had nobody connected (the match is paused).
     pub(super) empty_since: Option<u32>,
+    /// Reports made in this match: (reporter's ticket, reported player's ticket).
+    pub(super) reports: Vec<(u64, u64)>,
 }
 
 impl Server {
@@ -64,7 +66,7 @@ impl Server {
     pub fn reserve(&mut self, setup: MatchSetup) {
         self.clients.retain(|_, c| c.bot);
         let knife = if setup.knife_round { Knife::Pending } else { Knife::Done };
-        self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T, left_at: HashMap::new(), vote: None, voted_in_round: [None; 2], empty_since: None });
+        self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T, left_at: HashMap::new(), vote: None, voted_in_round: [None; 2], empty_since: None, reports: Vec::new() });
         self.round = crate::rounds::Match::new(self.round.cfg.clone(), TICK_RATE);
     }
 
