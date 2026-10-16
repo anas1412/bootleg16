@@ -50,12 +50,14 @@ pub struct Steam {
     refresh: f32,
 }
 
+/// Fields drop in order: the callback must go before the client (dropping the client shuts
+/// Steam down; unregistering a callback after that trips Steam's asserts and a crash dump).
 #[cfg(feature = "steam")]
 struct Sdk {
-    client: steamworks::Client,
+    _join: steamworks::CallbackHandle,
     /// "Join game" / accepted Steam invites: their connect strings ("+party CODE").
     joins: std::sync::Mutex<std::sync::mpsc::Receiver<String>>,
-    _join: steamworks::CallbackHandle,
+    client: steamworks::Client,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -80,7 +80,12 @@ impl Mic {
                 }
             }
         };
-        let err = |e| eprintln!("microphone: {e}");
+        let said = std::sync::atomic::AtomicBool::new(false);
+        let err = move |e| {
+            if !said.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("microphone: {e}");
+            }
+        };
         let stream = match cfg.sample_format() {
             cpal::SampleFormat::F32 => dev.build_input_stream(&cfg.into(), move |d: &[f32], _: &_| push(&mut d.iter().copied()), err, None),
             cpal::SampleFormat::I16 => dev.build_input_stream(&cfg.into(), move |d: &[i16], _: &_| push(&mut d.iter().map(|s| *s as f32 / 32768.0)), err, None),
@@ -142,6 +147,8 @@ struct Mixer {
 pub struct Speakers {
     _stream: cpal::Stream,
     mixer: Arc<Mutex<Mixer>>,
+    /// The sound card side reported an error (the stream is dead: `Audio` opens a new one).
+    failed: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Speakers {
@@ -152,7 +159,15 @@ impl Speakers {
         let mixer: Arc<Mutex<Mixer>> = Arc::default();
         // Device rate differs from 48 kHz: step through each voice at 48k/rate per output frame.
         let step = VOICE_RATE as f64 / rate as f64;
-        let err = |e| eprintln!("voice output: {e}");
+        // An error usually means the stream is gone (device switched, sound server restarted):
+        // say so once, and let `Audio` open a fresh one instead of logging every callback.
+        let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let f2 = failed.clone();
+        let err = move |e| {
+            if !f2.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("voice output: {e} (reopening)");
+            }
+        };
         let mx2 = mixer.clone();
         let mut acc = 0.0f64;
         let mut render = move |len: usize, write: &mut dyn FnMut(usize, f32)| {
@@ -191,7 +206,11 @@ impl Speakers {
         }
         .ok()?;
         stream.play().ok()?;
-        Some(Speakers { _stream: stream, mixer })
+        Some(Speakers { _stream: stream, mixer, failed })
+    }
+
+    pub fn failed(&self) -> bool {
+        self.failed.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Queue decoded 48 kHz samples from `who`, at this volume in each ear.

@@ -151,6 +151,8 @@ pub(super) struct Audio {
     muffle: HashMap<u8, f32>,
     /// Frames left to send after the voice fell under the gate.
     gate_hold: u32,
+    /// When to try the speakers again after they failed.
+    reopen_at: f32,
 }
 
 fn open_audio(world: &mut World) {
@@ -163,6 +165,7 @@ fn open_audio(world: &mut World) {
         decoders: HashMap::new(),
         muffle: HashMap::new(),
         gate_hold: 0,
+        reopen_at: 0.0,
     };
     if audio.mic.is_none() {
         warn!("voice: no microphone");
@@ -250,6 +253,11 @@ fn listen(
     mut talking: ResMut<Talking>,
     time: Res<Time>,
 ) {
+    // The speaker stream died (it said so once): open a new one, at most every 2 s.
+    if audio.speakers.as_ref().is_some_and(|s| s.failed()) && time.elapsed_secs() > audio.reopen_at {
+        audio.reopen_at = time.elapsed_secs() + 2.0;
+        audio.speakers = audio::Speakers::open();
+    }
     let frames = w.client.take_voice();
     if !settings.on || frames.is_empty() {
         return;
