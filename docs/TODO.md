@@ -18,7 +18,8 @@ land, and add new ones here instead of leaving them only in chat.
       armor 1x), flash (1500 radius, line of sight, facing rules), smoke (21 s, pops on the ground)
 - [x] Grenade models in flight, HE fireball, flash white-out, smoke cloud, HUD counts
 - [x] Smoke: soft sprite puffs that billow and thin out; smoke blocks the server's sight checks
-- [ ] Flash "already flashed" combine rule (simplified to max); HE water rule; grenade bounce sounds
+- [x] Flash "already flashed" combine rule and the HE/flash water rule (`grenades::combine`, `blast_reaches`)
+- [ ] Grenade bounce sounds
 - [ ] ⚠ Flash white-out and HE fireball not yet checked on screen (only the smoke was)
 - [x] Tagging: hits slow you (0.5, or 0.65 large flinch) and kick the view, as cs.so (`player::hit_by`)
 - [x] Knife: GoldSrc line then crouch-box sweep (`trace_melee`); the 8-corner search only moves the impact point, skipped

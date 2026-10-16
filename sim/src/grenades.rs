@@ -171,6 +171,33 @@ pub fn flash(world: &World, blast: Vec3, eye: Vec3, forward: Vec3) -> Option<Bli
     })
 }
 
+/// A flash on someone still blinded by an earlier one (`RadiusFlash`): looking at it adds
+/// the white hold that's left; while the old one lasts, the longer fade and the stronger white
+/// win. `old`: when the last one started and how it was.
+pub fn combine(new: Blind, old: Option<(f64, Blind)>, now: f64) -> Blind {
+    let Some((start, old)) = old else { return new };
+    let mut b = new;
+    let hold_left = (start + old.hold as f64 - now) as f32;
+    if hold_left > 0.0 && b.alpha == 255 {
+        b.hold += hold_left;
+    }
+    if start + (old.fade + old.hold) as f64 > now {
+        b.fade = b.fade.max(old.fade);
+        b.alpha = b.alpha.max(old.alpha);
+    }
+    b
+}
+
+/// Flashes and HE blasts don't cross the water's surface (`RadiusFlash`, `RadiusDamage`): one
+/// in water only reaches people in it (feet at least), one out of it nobody whose head is under.
+pub fn blast_reaches(blast_in_water: bool, water_level: u8) -> bool {
+    if blast_in_water {
+        water_level > 0
+    } else {
+        water_level < 3
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,6 +227,21 @@ mod tests {
         }
         assert!(g.on_ground && g.velocity == [0.0; 3], "came to rest");
         assert!(g.origin[0] > 200.0, "travelled {:?}", g.origin);
+    }
+
+    #[test]
+    fn a_second_flash_adds_to_the_first() {
+        let full = Blind { hold: 2.0, fade: 6.0, alpha: 255 };
+        let away = Blind { hold: 0.5, fade: 2.0, alpha: 200 };
+        assert_eq!(combine(full, None, 10.0), full);
+        // 1 s into a 2 s hold: 1 s left is added; fade and white stay the stronger.
+        assert_eq!(combine(full, Some((9.0, full)), 10.0), Blind { hold: 3.0, fade: 6.0, alpha: 255 });
+        // Facing away from the second: no hold added, but the first's white and fade carry on.
+        assert_eq!(combine(away, Some((9.0, full)), 10.0), Blind { hold: 0.5, fade: 6.0, alpha: 255 });
+        // Long over: the new one alone.
+        assert_eq!(combine(away, Some((0.0, full)), 10.0), away);
+        assert!(blast_reaches(false, 2) && !blast_reaches(false, 3));
+        assert!(blast_reaches(true, 1) && !blast_reaches(true, 0));
     }
 
     #[test]

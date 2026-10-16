@@ -24,7 +24,11 @@ impl Server {
                     // Without friendly fire your own HE still hurts you, not your team.
                     let owner_team = self.clients.values().find(|c| c.id == g.owner).map(|c| c.team);
                     let ff = self.round.cfg.friendly_fire;
+                    let wet = self.world.point_contents(blast) == sim::collision::Contents::Water;
                     for c in self.clients.values_mut().filter(|c| c.vitals.alive() && (ff || c.id == g.owner || Some(c.team) != owner_team)) {
+                        if !grenades::blast_reaches(wet, c.state.movement.water_level) {
+                            continue;
+                        }
                         let dmg = grenades::he_damage(blast, c.state.movement.origin);
                         if dmg <= 0.0 {
                             continue;
@@ -39,16 +43,17 @@ impl Server {
                     }
                 }
                 Kind::Flash => {
-                    let blinded = self
-                        .clients
-                        .values()
-                        .filter(|c| c.vitals.alive())
-                        .filter_map(|c| {
-                            let (yaw, pitch) = c.view;
-                            let (f, _, _) = bullets::view_vectors(pitch, yaw);
-                            grenades::flash(&self.world, g.origin, c.state.movement.eye(), f).map(|b| (c.id, b))
-                        })
-                        .collect();
+                    let wet = self.world.point_contents(g.origin) == sim::collision::Contents::Water;
+                    let mut blinded = Vec::new();
+                    for c in self.clients.values_mut().filter(|c| c.vitals.alive() && grenades::blast_reaches(wet, c.state.movement.water_level)) {
+                        let (yaw, pitch) = c.view;
+                        let (f, _, _) = bullets::view_vectors(pitch, yaw);
+                        if let Some(b) = grenades::flash(&self.world, g.origin, c.state.movement.eye(), f) {
+                            let b = grenades::combine(b, c.blind, now);
+                            c.blind = Some((now, b));
+                            blinded.push((c.id, b));
+                        }
+                    }
                     self.events.push(GameEvent::Flash { at: g.origin, blinded });
                 }
                 Kind::Smoke => self.smokes.push((g.origin, now + grenades::SMOKE_SECONDS)),

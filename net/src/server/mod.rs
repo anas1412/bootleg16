@@ -107,6 +107,8 @@ struct Remote {
     /// go out as changes to that one.
     sent: VecDeque<(u32, Vec<u8>)>,
     snap_ack: u32,
+    /// The last flash that blinded them: when, and how (a new one combines with it).
+    blind: Option<(f64, sim::grenades::Blind)>,
     state: PlayerState,
     vitals: Vitals,
     /// Tick to respawn at while dead.
@@ -449,6 +451,7 @@ impl Remote {
             next_reliable: 0,
             sent: VecDeque::new(),
             snap_ack: 0,
+            blind: None,
             state: PlayerState { movement: Player::new([0.0; 3]), loadout: Loadout::knife_only() },
             vitals: Vitals { health: 0.0, ..Vitals::default() },
             respawn_at: None,

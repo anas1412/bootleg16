@@ -194,10 +194,10 @@ fn grenade_effects(
             }
             GameEvent::Flash { blinded, .. } => {
                 if let Some((_, b)) = blinded.iter().find(|(id, _)| Some(*id) == me) {
-                    // A new flash never shortens one that's still on (simplified "max" rule).
-                    flash.hold = flash.hold.max(b.hold);
-                    flash.fade = flash.fade.max(b.fade);
-                    flash.alpha = flash.alpha.max(b.alpha as f32 / 255.0);
+                    // The server already combined it with any flash still on (`grenades::combine`).
+                    flash.hold = b.hold;
+                    flash.fade = b.fade;
+                    flash.alpha = b.alpha as f32 / 255.0;
                     flash.total_fade = flash.fade;
                 }
             }
