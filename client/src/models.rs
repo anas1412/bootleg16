@@ -31,8 +31,8 @@ pub type Parts = Vec<(Handle<Mesh>, Handle<StandardMaterial>)>;
 pub struct Loaded {
     pub model: Model,
     pub materials: Vec<Handle<StandardMaterial>>,
-    /// GPU-skinned meshes, built on first use (see `Loaded::skin`).
-    skin: std::sync::OnceLock<Skin>,
+    /// GPU-skinned meshes, built on first use (see `Loaded::skin`); [normal, mirrored].
+    skin: [std::sync::OnceLock<Skin>; 2],
 }
 
 /// A model's meshes in bind pose (each vertex in its bone's space) for GPU skinning:
@@ -42,15 +42,26 @@ pub struct Skin {
     pub bindposes: Handle<SkinnedMeshInverseBindposes>,
 }
 
-/// A skinned model spawned under a parent: its bone entities and its mesh entities.
+/// A skinned model spawned under a parent: its bone entities and its mesh entities
+/// (plus the mirroring entity the bones hang off, if mirrored).
 pub struct SpawnedSkin {
     pub joints: Vec<Entity>,
     pub parts: Vec<Entity>,
+    pub mirror: Option<Entity>,
+}
+
+impl SpawnedSkin {
+    pub fn despawn(&self, commands: &mut Commands) {
+        for e in self.joints.iter().chain(&self.parts).chain(&self.mirror) {
+            commands.entity(*e).try_despawn();
+        }
+    }
 }
 
 impl Loaded {
-    pub fn skin(&self, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>) -> &Skin {
-        self.skin.get_or_init(|| {
+    /// `mirrored`: triangles wound the other way, for bones placed through a reflection.
+    pub fn skin(&self, mirrored: bool, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>) -> &Skin {
+        self.skin[mirrored as usize].get_or_init(|| {
             let parts = self
                 .model
                 .bind_mesh()
@@ -59,7 +70,7 @@ impl Loaded {
                 .map(|p| {
                     let joints: Vec<[u16; 4]> = p.bones.iter().map(|b| [*b, 0, 0, 0]).collect();
                     let weights = vec![[1.0f32, 0.0, 0.0, 0.0]; p.bones.len()];
-                    let mesh = part_mesh(p, map::to_y_up, false)
+                    let mesh = part_mesh(p, map::to_y_up, mirrored)
                         .with_inserted_attribute(Mesh::ATTRIBUTE_JOINT_INDEX, VertexAttributeValues::Uint16x4(joints))
                         .with_inserted_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, weights);
                     (meshes.add(mesh), self.materials.get(p.texture).cloned().unwrap_or_default())
@@ -72,16 +83,18 @@ impl Loaded {
     }
 
     /// Spawn bones and skinned meshes as children of `parent` (posed with `set_pose`).
-    pub fn spawn_skinned(&self, commands: &mut Commands, parent: Entity, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>) -> SpawnedSkin {
-        let skin = self.skin(meshes, bindposes);
-        let joints: Vec<Entity> = (0..self.model.bones.len().max(1)).map(|_| commands.spawn(Transform::default()).id()).collect();
+    /// `mirror`: the bones go through this reflection first (the first-person view model).
+    pub fn spawn_skinned(&self, commands: &mut Commands, parent: Entity, mirror: Option<Transform>, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>) -> SpawnedSkin {
+        let skin = self.skin(mirror.is_some(), meshes, bindposes);
+        let mirror = mirror.map(|t| commands.spawn((t, ChildOf(parent))).id());
+        let joints: Vec<Entity> = (0..self.model.bones.len().max(1)).map(|_| commands.spawn((Transform::default(), ChildOf(mirror.unwrap_or(parent)))).id()).collect();
         let mut parts = Vec::new();
         for (mesh, material) in &skin.parts {
             // Bounds come from the bind pose, which is nowhere near the posed body: don't cull.
             parts.push(commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), SkinnedMesh { inverse_bindposes: skin.bindposes.clone(), joints: joints.clone() }, NoFrustumCulling)).id());
         }
-        commands.entity(parent).add_children(&joints).add_children(&parts);
-        SpawnedSkin { joints, parts }
+        commands.entity(parent).add_children(&parts);
+        SpawnedSkin { joints, parts, mirror }
     }
 }
 

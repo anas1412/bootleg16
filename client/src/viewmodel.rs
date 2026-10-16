@@ -1,9 +1,10 @@
 //! The weapon in your hands (CS `v_` models): drawn by its own camera so it never
 //! sinks into walls, animated from what you do (draw, shoot, reload, ...).
-use crate::models::{part_mesh, weapon_model, Loaded, ModelCache};
+use crate::models::{set_pose, weapon_model, Loaded, ModelCache, SpawnedSkin};
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
 use bevy::camera::visibility::RenderLayers;
+use bevy::mesh::skinning::SkinnedMeshInverseBindposes;
 use bevy::prelude::*;
 use sim::weapons::{Fired, Id};
 use std::sync::Arc;
@@ -34,8 +35,8 @@ pub struct ViewModel {
     /// Which model is shown, and its silencer/burst mode.
     shown: Option<(Id, u8)>,
     model: Option<Arc<Loaded>>,
-    meshes: Vec<Handle<Mesh>>,
-    entities: Vec<Entity>,
+    /// The model's bones and parts (GPU-skinned; only the bones move).
+    skin: Option<SpawnedSkin>,
     seq: usize,
     started: f32,
     looping: bool,
@@ -71,11 +72,13 @@ pub fn attach(commands: &mut Commands, cam: Entity) {
     commands.entity(cam).add_child(vm);
 }
 
-/// GoldSrc view model space (x forward, y left, z up) to camera space (-z forward, x right,
-/// y up), mirrored left-right: CS's v_ models are stored left-handed and CS 1.6 shows them
-/// right-handed by default (`cl_righthand 1`).
-fn to_camera(v: [f32; 3]) -> [f32; 3] {
-    [v[1], v[2], -v[0]]
+/// From the model's Y-up space (`map::to_y_up`) to camera space, mirrored left-right:
+/// GoldSrc (x forward, y left, z up) ends up as (y, z, -x). CS's v_ models are stored
+/// left-handed and CS 1.6 shows them right-handed by default (`cl_righthand 1`).
+fn to_camera() -> Transform {
+    // (a, b, c) -> (-c, b, -a): a reflection, written as a mirror in x then a rotation.
+    let rotation = Quat::from_mat3(&Mat3::from_cols(Vec3::new(0.0, 0.0, 1.0), Vec3::Y, Vec3::new(-1.0, 0.0, 0.0)));
+    Transform { rotation, scale: Vec3::new(-1.0, 1.0, 1.0), ..default() }
 }
 
 fn find(model: &goldsrc::mdl::Model, names: &[&str]) -> Option<usize> {
@@ -92,7 +95,9 @@ fn update(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut bindposes: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     mut vis: Query<&mut Visibility>,
+    mut bones: Query<&mut Transform, With<ChildOf>>,
     camera: Single<Entity, With<ViewModelCamera>>,
 ) {
     let now = time.elapsed_secs();
@@ -107,23 +112,17 @@ fn update(
 
     // A different weapon (or silencer switch): load it and play draw / attach.
     if vm.shown.map(|s| s.0) != Some(id) {
-        for e in vm.entities.drain(..) {
-            commands.entity(e).despawn();
+        if let Some(old) = vm.skin.take() {
+            old.despawn(&mut commands);
         }
-        vm.meshes.clear();
         vm.model = cache.get(&weapon_model("v", id), &mut images, &mut materials);
         if let Some(m) = vm.model.clone() {
-            let pose = m.model.pose(0, 0, 0.0);
-            for p in m.model.posed_mesh(&pose).iter() {
-                let handle = meshes.add(part_mesh(p, to_camera, true));
-                // Vertices are in camera space, so the parts hang off the view model camera.
-                let e = commands
-                    .spawn((Mesh3d(handle.clone()), MeshMaterial3d(m.materials.get(p.texture).cloned().unwrap_or_default()), RenderLayers::layer(LAYER), Transform::default()))
-                    .id();
-                commands.entity(*camera).add_child(e);
-                vm.meshes.push(handle);
-                vm.entities.push(e);
+            // The parts hang off the view model camera, which only sees their layer.
+            let skin = m.spawn_skinned(&mut commands, *camera, Some(to_camera()), &mut meshes, &mut bindposes);
+            for e in &skin.parts {
+                commands.entity(*e).insert(RenderLayers::layer(LAYER));
             }
+            vm.skin = Some(skin);
             let draw: Vec<String> = names("draw").into_iter().chain(["deploy".to_string(), "draw".to_string()]).collect();
             let draw: Vec<&str> = draw.iter().map(String::as_str).collect();
             play(&mut vm, find(&m.model, &draw), now, false);
@@ -220,21 +219,16 @@ fn update(
     }
     vm.last_fov = fov;
 
-    // Pose and upload the vertices.
-    let pose = m.model.pose_at(vm.seq, frame, 0.0);
-    for (part, handle) in m.model.posed_mesh(&pose).iter().zip(&vm.meshes) {
-        if let Some(mut mesh) = meshes.get_mut(handle) {
-            let pos: Vec<[f32; 3]> = part.positions.iter().map(|v| to_camera(*v)).collect();
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos);
-            mesh.compute_normals();
-        }
+    // Pose the bones (the GPU moves the vertices).
+    if let Some(skin) = &vm.skin {
+        set_pose(&skin.joints, &m.model.pose_at(vm.seq, frame, 0.0), &mut bones);
     }
     // Hidden while dead, spectating, or looking through a sniper scope.
     let scoped = gun.is_some_and(|g| g.fov() < 90) && matches!(id, Id::Awp | Id::Scout | Id::G3sg1 | Id::Sg550);
     let show = alive && !scoped && !w.noclip && std::env::var_os("BOOTLEG16_SPECTATE").is_none();
-    for e in &vm.entities {
+    for e in vm.skin.iter().flat_map(|s| &s.parts) {
         if let Ok(mut v) = vis.get_mut(*e) {
-            *v = if show { Visibility::Inherited } else { Visibility::Hidden };
+            v.set_if_neq(if show { Visibility::Inherited } else { Visibility::Hidden });
         }
     }
     w.cues.extend(sounds);

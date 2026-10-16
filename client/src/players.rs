@@ -150,9 +150,7 @@ fn anim_events(
                 let Some((e, p)) = live.iter().find(|(_, p)| p.id == id) else { continue };
                 // The corpse keeps the body; the gun drops (the server puts it on the ground).
                 if let Some((_, g)) = &p.gun {
-                    for e in g.joints.iter().chain(&g.parts) {
-                        commands.entity(*e).despawn();
-                    }
+                    g.despawn(&mut commands);
                 }
                 let model = &look.looks[p.look].model;
                 let name = match look.last_hit.get(&id) {
@@ -210,9 +208,9 @@ fn draw_others(
         }
         let body = look.looks[*li].clone();
         let parent = commands.spawn((place(o), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
-        let joints = body.spawn_skinned(&mut commands, parent, &mut meshes, &mut bindposes).joints;
+        let joints = body.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes).joints;
         let gun = cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials).map(|wm| {
-            let s = wm.spawn_skinned(&mut commands, parent, &mut meshes, &mut bindposes);
+            let s = wm.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes);
             (wm, s)
         });
         commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, gait_frame: 0.0, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None });
