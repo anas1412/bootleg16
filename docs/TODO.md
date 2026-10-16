@@ -81,7 +81,11 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Visibility ignores doors and glass (only the static world blocks sight): safe, but leaks players behind closed doors; smoke doesn't hide either
 - [x] Map check on join: the server sends its map file's hash (FNV-1a) in Welcome; a client with a different file goes back to the menu
 - [ ] Map change / map vote; downloading the server's map
-- [ ] Stat heuristics for aimbots, match replays, reports
+- [ ] Deathmatch is de_dust2 only for now (decided 2026-10-16); later: other maps, or a new map each time someone reaches the kill limit; show the server's map on the Practice page
+- [x] Match recordings (net/src/demo.rs, replay with `server --play`), reports with recording + tick
+- [x] Aim checks (net/src/server/aimcheck.rs): inhuman reactions and snap hits flagged for review, never auto-ban
+- [ ] Tune the aim checks against real players: thresholds come from bot tests only (honest bots never trip them); check flags against recordings once people play, before trusting them
+- [ ] A review tool for reports: list reports.jsonl, open the recording at the tick
 - [ ] 64-tick server option (tick rate is a constant 128 today)
 - [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)
 - [x] Official servers only (decided 2026-10-16), no community servers, no server list:
@@ -89,12 +93,14 @@ land, and add new ones here instead of leaving them only in chat.
       custom games (invite up to 10, Team A/B lobby, knife round then winners pick side); invite codes until accounts
 - [x] Reserved-match mode on the game server (only the match's players, on their teams) + knife round + side vote
 - [x] Matchmaker / lobby service (parties, codes, queue, free-server pool); Play page replaces the server list
-- [ ] Lobby: accounts instead of fresh sessions, OS randomness for tickets, regions/ping in the queue
-- [ ] One-command hosting script (tools/host.sh: build, config, firewall, service) — after we have our own assets (decided 2026-10-16: don't install CS 1.6 files on hosts)
+- [x] Lobby: OS randomness for tickets, regions/ping in the queue, standby lobby, saved state, hidden skill matchmaking, ready check, cooldowns, vote kick, reconnect
+- [ ] Accounts: Steam (sign-in done with Valve's test app 480); our own App ID before release
+- [x] One-command hosting: ./host.sh (Docker, fleets, standby lobby, firewall, rolling updates)
 - [ ] Home hosting without port forwarding: UPnP from the server, relay through the master as fallback
 - [x] Server protection: join cookie (stateless, no spoofed slots), per-IP packet budget, max 6 players per IP, 1400-byte cap, padded info/list requests (no amplification), master list rate limit
-- [ ] Host-side DDoS filtering: choose a provider with game DDoS protection (OVH Game, Path.net)
-- [ ] Encryption/authentication
+- [x] Kernel flood filtering: ./host.sh firewall (nftables)
+- [ ] Host-side DDoS filtering: choose a provider with game DDoS protection (OVH Game, Path.net); a user decision
+- [x] Encryption/authentication (X25519 + ChaCha20-Poly1305, per-seat keys, sealed server <-> lobby)
 - [ ] Prediction error smoothing (corrections are applied instantly)
 
 ### Voice
@@ -164,9 +170,8 @@ land, and add new ones here instead of leaving them only in chat.
       Roster v1, named by archetype, all adult: Gyaru, Femme Fatale, Tsundere (F);
       Yakuza, Idol, Hacker (M).
       Character select mocked in `design/mockups/e.html?s=char`.
-      Each character has its own height, so its hitboxes scale with it (server-side
-      hitboxes per character). Balance check: a shorter character is harder to hit,
-      so keep the height spread small (about ±6 %) or adjust it if the stats show an edge.
+      Everyone has the same height, hitbox, eye height and speed (decided 2026-10-16): a
+      shorter character would be harder to hit; looks may differ a few percent only.
 - [ ] Standalone release: own assets, own name (`bootleg16` is a codename;
       pick e.g. Oxidestrike/Fuseline), legal check before selling
 
