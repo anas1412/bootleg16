@@ -34,12 +34,14 @@ pub struct MatchConfig {
     pub friendly_fire: bool,
     /// How far proximity voice carries (units); it fades out towards this distance.
     pub voice_range: f32,
-    /// Server name in the list, region (e.g. "eu", "na"), master server to announce to
-    /// (host:port, empty = not listed), and the token that marks an official server.
+    /// Server name, region (e.g. "eu", "na"), the lobby to announce to (host:port, empty =
+    /// none), the token that makes it official (only official servers get matches), and the
+    /// address players should connect to (empty = the one the lobby sees; set it behind NAT).
     pub name: String,
     pub region: String,
     pub master: String,
     pub official_token: String,
+    pub public_address: String,
     /// Player slots.
     pub max_players: u8,
 }
@@ -66,6 +68,7 @@ impl Default for MatchConfig {
             region: "eu".into(),
             master: String::new(),
             official_token: String::new(),
+            public_address: String::new(),
             max_players: 10,
         }
     }
@@ -117,6 +120,7 @@ impl MatchConfig {
                 "region" => c.region = v.to_string(),
                 "master" => c.master = v.to_string(),
                 "official_token" => c.official_token = v.to_string(),
+                "public_address" => c.public_address = v.to_string(),
                 "max_players" => c.max_players = v.parse().map_err(|_| bad())?,
                 _ => return Err(format!("line {}: unknown setting {k}", n + 1)),
             }

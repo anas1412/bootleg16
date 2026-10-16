@@ -343,6 +343,7 @@ impl Server {
             region: cfg.region.clone(),
             token: cfg.official_token.clone(),
             busy,
+            address: cfg.public_address.clone(),
         };
         self.socket.send(master, encode(&msg));
     }

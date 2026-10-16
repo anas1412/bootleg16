@@ -1,0 +1,8 @@
+target
+target-prof
+design
+hosting
+.git
+# The dev linker setup (clang + mold) isn't in the image.
+.cargo
+client/assets

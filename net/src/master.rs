@@ -28,7 +28,8 @@ pub const MAX_CUSTOM: usize = 10;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum LobbyMsg {
     /// Game server -> lobby: "I'm here", and whether it's running a match.
-    Heartbeat { name: String, map: String, players: u8, max: u8, region: String, token: String, busy: bool },
+    /// `address`: where players connect (empty = where this came from).
+    Heartbeat { name: String, map: String, players: u8, max: u8, region: String, token: String, busy: bool, address: String },
     /// Player -> lobby: sign in (no accounts yet: a fresh session each time).
     Hello { name: String, pad: Vec<u8> },
     /// Player -> lobby: do something (or just `Poll`), proving who you are with your session.
@@ -101,6 +102,8 @@ struct Party {
 }
 
 struct GameServer {
+    /// Where players connect (the heartbeat's source unless the server says otherwise).
+    public: SocketAddr,
     token: String,
     official: bool,
     busy: bool,
@@ -177,9 +180,10 @@ impl Master {
         while let Ok((n, from)) = self.udp.recv_from(&mut buf) {
             let _ = self.udp.set_nonblocking(true);
             match decode::<LobbyMsg>(&buf[..n]) {
-                Some(LobbyMsg::Heartbeat { token, busy, .. }) => {
+                Some(LobbyMsg::Heartbeat { token, busy, address, .. }) => {
+                    let public = address.parse().unwrap_or(from);
                     let official = !token.is_empty() && self.tokens.contains(&token);
-                    self.servers.insert(from, GameServer { token, official, busy, seen: Instant::now() });
+                    self.servers.insert(from, GameServer { public, token, official, busy, seen: Instant::now() });
                 }
                 Some(LobbyMsg::Hello { name, pad }) if pad.len() >= PAD => {
                     let session = self.rand();
@@ -296,7 +300,7 @@ impl Master {
 
     /// Reserve a free official server for these players and hand out tickets. False if none.
     fn start_match(&mut self, players: Vec<(u32, Group)>, knife_round: bool) -> bool {
-        let Some((addr, token)) = self.servers.iter().find(|(_, s)| s.official && !s.busy).map(|(a, s)| (*a, s.token.clone())) else { return false };
+        let Some((addr, public, token)) = self.servers.iter().find(|(_, s)| s.official && !s.busy).map(|(a, s)| (*a, s.public, s.token.clone())) else { return false };
         let tickets: Vec<(u32, u64, Group)> = players.iter().map(|(id, g)| (*id, self.rand() | 1, *g)).collect();
         let setup = MatchSetup { players: tickets.iter().map(|(_, t, g)| (*t, *g)).collect(), knife_round };
         // The server checks the token: only we can reserve official servers.
@@ -304,7 +308,7 @@ impl Master {
         self.servers.get_mut(&addr).unwrap().busy = true;
         for (id, ticket, _) in tickets {
             if let Some(p) = self.players.values_mut().find(|p| p.id == id) {
-                p.found = Some((addr, ticket));
+                p.found = Some((public, ticket));
             }
             if let Some(party) = self.parties.values_mut().find(|q| q.members.iter().any(|(m, _)| *m == id)) {
                 party.queued = None;

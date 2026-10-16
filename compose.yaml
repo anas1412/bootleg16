@@ -1,0 +1,19 @@
+# bootleg16 hosting: one lobby + game servers. See README "Hosting".
+# Host networking: plain UDP, no NAT in between (Linux hosts).
+services:
+  lobby:
+    build: .
+    command: master 27010 --tokens /bootleg16/tokens.txt
+    network_mode: host
+    volumes:
+      - ./hosting/tokens.txt:/bootleg16/tokens.txt:ro
+    restart: unless-stopped
+
+  server1:
+    build: .
+    command: server de_dust2 27015 --config /bootleg16/server.cfg
+    network_mode: host
+    volumes:
+      - ./hosting/server1.cfg:/bootleg16/server.cfg:ro
+      - ./hosting/game:/game:ro
+    restart: unless-stopped
