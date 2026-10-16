@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 12;
+pub const PROTOCOL_VERSION: u32 = 13;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -44,12 +44,9 @@ pub enum Team {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum BuyItem {
     Weapon(Id),
-    PrimaryAmmo,
-    SecondaryAmmo,
     Kevlar,
     KevlarHelmet,
     DefuseKit,
-    NightVision,
 }
 
 /// One scoreboard row.

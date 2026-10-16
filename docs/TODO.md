@@ -44,7 +44,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Loss bonus: per-team ladder (default) and 1.6 shared mode (config)
 - [x] All rule values in a server config file (config/server.cfg, `server --config`)
 - [x] Round HUD: score, clock, freeze/bomb states, money +/-, announcements, plant/defuse bars; bomb models, beeps, sounds
-- [ ] Night vision isn't sold (no effect yet)
+- [x] Shop trimmed to the chosen list (docs/RULES.md 4); ammo not sold, refilled each round
 - [ ] Defuse needs only reach + looking roughly at it; CS traces +use to the bomb entity
 - [ ] Buy menu: "you can't buy now" feedback; CS2-style team money on the scoreboard
 - [x] Hitboxes follow each weapon's aim pose (head moved up to ~7 units between poses; the old test simply aimed 9 units over the head)

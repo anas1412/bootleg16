@@ -144,6 +144,9 @@ impl Server {
             if let Some(m) = money {
                 c.money = m;
             }
+            // Ammo isn't bought: every round starts with full reserves.
+            c.state.loadout.refill_ammo(true);
+            c.state.loadout.refill_ammo(false);
             c.respawn_at = None;
         }
         self.give_bomb();

@@ -146,6 +146,12 @@ but its call sites were inlined and are not traced yet.
 
 ## 4. Prices (from CS 1.6, `enum` in debug info)
 
+**On sale (decided 2026-10-16):** knife (always carried), Glock-18, USP, Desert Eagle,
+TMP (CT), MAC-10 (T), MP5, UMP45, P90, Galil (T), FAMAS (CT), AK-47 (T), M4A1 (CT), Scout, AWP,
+HE / flash / smoke, Kevlar, Kevlar + helmet, defuse kit (CT). Everything else below is
+not sold. **Ammo is not sold**: bought guns come full, and every round starts with full
+reserves. The full 1.6 tables stay here for reference.
+
 ### Weapons (`WeaponCostType`)
 
 | Pistols | $ | SMGs | $ | Rifles | $ | Snipers | $ | Heavy | $ |

@@ -63,6 +63,9 @@ fn freeze_time_then_a_win_pays_both_teams_and_starts_the_next_round() {
     assert!(ev.iter().any(|e| matches!(e, GameEvent::RoundStart { round: 2 })), "{ev:?}");
     assert!(g.server.vitals(b).unwrap().alive());
     assert_eq!(g.a.round.score, [1, 0]);
+    // Ammo isn't bought: the new round tops everyone's reserve up.
+    let full = sim::weapons::gun(sim::weapons::Id::Glock).unwrap().reserve;
+    assert_eq!(g.server.player_state(a).unwrap().loadout.secondary.unwrap().reserve, full);
     // Freeze time of round 2 (1 s): holding forward goes nowhere (falling onto the floor is fine).
     assert_eq!(g.server.round_phase(), Phase::Freeze);
     let start = g.server.player(a).unwrap().origin;

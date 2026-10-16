@@ -1,4 +1,5 @@
 //! Buying: prices, who may buy what, and where and when (docs/RULES.md 3 and 4).
+//! Ammo isn't sold: guns come with full ammo, and everyone's is topped up each round.
 use super::*;
 use crate::rounds::Phase;
 
@@ -9,36 +10,18 @@ pub fn price(item: BuyItem) -> Option<i32> {
         BuyItem::Kevlar => Some(650),
         BuyItem::KevlarHelmet => Some(1000),
         BuyItem::DefuseKit => Some(200),
-        BuyItem::NightVision => Some(1250),
-        BuyItem::PrimaryAmmo | BuyItem::SecondaryAmmo => None, // depends on the gun: `clip_price`
     }
 }
 
-/// What one clip of a gun's ammo costs (`AmmoCostType`).
-fn clip_price(id: Id) -> i32 {
-    use Id::*;
-    match id {
-        Glock | Mp5 | Tmp | Elite => 20,           // 9mm
-        Usp | Mac10 | Ump45 => 25,                 // .45 ACP
-        P228 => 50,                                // .357 SIG
-        FiveSeven | P90 => 50,                     // 5.7mm
-        Deagle => 40,                              // .50 AE
-        Famas | Galil | M4a1 | Sg552 | Aug | Sg550 | M249 => 60, // 5.56mm
-        Ak47 | Scout | G3sg1 => 80,                // 7.62mm
-        Awp => 125,                                // .338 Magnum
-        M3 | Xm1014 => 65,                         // buckshot
-        _ => 0,
-    }
-}
-
-/// Side-only items in the CS 1.6 buy menus.
+/// The guns on sale (a trimmed CS 1.6 list), and which side may buy each.
 pub fn allowed(team: Team, item: BuyItem) -> bool {
     use Id::*;
     match item {
-        BuyItem::Weapon(Elite | Mac10 | Galil | Ak47 | Sg552 | G3sg1) => team == Team::T,
-        BuyItem::Weapon(FiveSeven | Tmp | Famas | M4a1 | Aug | Sg550) | BuyItem::DefuseKit => team == Team::Ct,
-        BuyItem::Weapon(Knife | C4) => false,
-        _ => true,
+        BuyItem::Weapon(Glock | Usp | Deagle | Mp5 | Ump45 | P90 | Scout | Awp | HeGrenade | Flashbang | Smoke) => true,
+        BuyItem::Weapon(Mac10 | Galil | Ak47) => team == Team::T,
+        BuyItem::Weapon(Tmp | Famas | M4a1) | BuyItem::DefuseKit => team == Team::Ct,
+        BuyItem::Weapon(_) => false,
+        BuyItem::Kevlar | BuyItem::KevlarHelmet => true,
     }
 }
 
@@ -67,15 +50,6 @@ impl Server {
         let now = c.last_run as f64 * TICK as f64;
         // What it costs; None = nothing to buy (already have it).
         let cost = match item {
-            BuyItem::PrimaryAmmo | BuyItem::SecondaryAmmo => {
-                let primary = item == BuyItem::PrimaryAmmo;
-                let g = if primary { c.state.loadout.primary } else { c.state.loadout.secondary };
-                g.and_then(|g| {
-                    let full = data::gun(g.id)?.reserve;
-                    let clip = data::gun(g.id)?.clip.max(1);
-                    (g.reserve < full).then(|| (full - g.reserve).div_ceil(clip) as i32 * clip_price(g.id))
-                })
-            }
             BuyItem::Kevlar if c.vitals.armor >= combat::MAX_ARMOR => None,
             // Already wearing full armor: only the helmet is paid for.
             BuyItem::KevlarHelmet if c.vitals.helmet && c.vitals.armor >= combat::MAX_ARMOR => None,
@@ -106,14 +80,6 @@ impl Server {
                 }
                 c.state.loadout.give(id, now)
             }
-            BuyItem::PrimaryAmmo => {
-                l.refill_ammo(true);
-                true
-            }
-            BuyItem::SecondaryAmmo => {
-                l.refill_ammo(false);
-                true
-            }
             BuyItem::Kevlar => {
                 c.vitals.armor = combat::MAX_ARMOR;
                 true
@@ -127,7 +93,6 @@ impl Server {
                 c.defuse_kit = true;
                 true
             }
-            BuyItem::NightVision => false, // ponytail: no night vision effect yet, so not sold
         };
         if bought {
             c.money -= cost;
