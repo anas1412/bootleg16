@@ -19,7 +19,7 @@ pub struct Listed {
 pub fn fetch(master: SocketAddr, wait: Duration) -> std::io::Result<Vec<Listed>> {
     let udp = UdpSocket::bind(if master.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" })?;
     udp.set_read_timeout(Some(Duration::from_millis(50)))?;
-    udp.send_to(&encode(&MasterMsg::List), master)?;
+    udp.send_to(&encode(&MasterMsg::List { pad: vec![0; crate::master::LIST_PAD] }), master)?;
     let mut entries = Vec::new();
     let start = Instant::now();
     let mut buf = [0u8; 4096];

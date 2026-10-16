@@ -3,6 +3,7 @@
 mod bomb;
 mod breakables;
 pub mod buy;
+mod guard;
 mod ground;
 mod round;
 mod visibility;
@@ -181,6 +182,7 @@ pub struct Server {
     round: Match,
     bomb: Bomb,
     pieces: breakables::Pieces,
+    guard: guard::Guard,
     /// Size of the last snapshot sent (bandwidth checks).
     snapshot_bytes: usize,
     /// Anti-wallhack: when each (viewer, target) pair last had line of sight.
@@ -224,6 +226,7 @@ impl Server {
             last_seen: HashMap::new(),
             pieces: breakables::Pieces::from_bsp(bsp),
             snapshot_bytes: 0,
+            guard: guard::Guard::new(),
         })
     }
 
@@ -408,10 +411,18 @@ impl Server {
     pub fn step(&mut self) {
         self.tick += 1;
         self.socket.tick();
+        let tick = self.tick;
         for (from, bytes) in self.socket.recv_all() {
+            // Budget first: floods and junk cost nothing past this line.
+            if !self.guard.allow(from, bytes.len(), self.clients.contains_key(&from), tick) {
+                continue;
+            }
             if let Some(msg) = decode::<ClientMsg>(&bytes) {
                 self.handle(from, msg);
             }
+        }
+        if tick % TICK_RATE == 0 {
+            self.guard.tidy(tick);
         }
 
         // Respawn the dead whose wait is over (spectators never do).
@@ -780,13 +791,23 @@ impl Server {
 
     fn handle(&mut self, from: SocketAddr, msg: ClientMsg) {
         match msg {
-            ClientMsg::Hello { version, name } => {
+            ClientMsg::Hello { version, name, cookie } => {
                 if version != PROTOCOL_VERSION {
                     let reason = format!("server runs protocol {PROTOCOL_VERSION}, you have {version}");
                     self.socket.send(from, encode(&ServerMsg::Reject { reason }));
                     return;
                 }
                 if !self.clients.contains_key(&from) {
+                    // A new address must first prove it's real: echo our cookie (stateless).
+                    if !self.guard.cookie_ok(from, self.tick, cookie) {
+                        let cookie = self.guard.cookie(from, self.tick, false);
+                        self.socket.send(from, encode(&ServerMsg::Challenge { cookie }));
+                        return;
+                    }
+                    if self.clients.keys().filter(|a| a.ip() == from.ip()).count() >= guard::MAX_PER_IP {
+                        self.socket.send(from, encode(&ServerMsg::Reject { reason: "too many players from your address".into() }));
+                        return;
+                    }
                     let humans = self.clients.values().filter(|c| !c.bot).count();
                     if self.clients.len() >= MAX_PLAYERS || humans >= self.round.cfg.max_players as usize {
                         self.socket.send(from, encode(&ServerMsg::Reject { reason: "server full".into() }));

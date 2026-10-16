@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 19;
+pub const PROTOCOL_VERSION: u32 = 20;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -25,7 +25,8 @@ pub const INFO_PAD: usize = 96;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ClientMsg {
-    Hello { version: u32, name: String },
+    /// `cookie`: 0 at first; then the one from `ServerMsg::Challenge` (proves our address is real).
+    Hello { version: u32, name: String, cookie: u64 },
     /// Server browser: tell me about yourself (no connection made). `pad` must be at least
     /// `INFO_PAD` bytes so the answer is never bigger than the question (no amplification).
     Info { pad: Vec<u8> },
@@ -252,6 +253,8 @@ pub enum ServerMsg {
     /// `map_hash`: the server's map file (`Bsp::hash`); a client with a different file must leave.
     Welcome { id: u8, map: String, map_hash: u64, tick_rate: u32, practice: bool },
     Reject { reason: String },
+    /// Echo this in your Hello to join (stops spoofed addresses from taking slots).
+    Challenge { cookie: u64 },
     /// Answer to `ClientMsg::Info`.
     Info { version: u32, name: String, map: String, players: u8, max: u8 },
     /// Scoreboard, sent a few times a second.

@@ -82,6 +82,8 @@ pub struct Client {
     pub ping_ms: f32,
     /// A side we asked for, until the server confirms it.
     wanted_team: Option<Option<Team>>,
+    /// The server's join cookie (0 until it challenges us).
+    cookie: u64,
     /// Breakables broken as of the last snapshot.
     pub broken: Vec<u16>,
     /// Highest reliable event number received (each is kept once).
@@ -127,6 +129,7 @@ impl Client {
             voice: Vec::new(),
             reliable_seen: 0,
             broken: Vec::new(),
+            cookie: 0,
             wanted_team: None,
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0 },
             bomb: BombNet::None,
@@ -165,7 +168,7 @@ impl Client {
 
         let Status::Connected { .. } = self.status else {
             if self.status == Status::Connecting && self.ticks % HELLO_EVERY == 1 {
-                let hello = ClientMsg::Hello { version: PROTOCOL_VERSION, name: self.name.clone() };
+                let hello = ClientMsg::Hello { version: PROTOCOL_VERSION, name: self.name.clone(), cookie: self.cookie };
                 self.socket.send(self.server, encode(&hello));
             }
             return Default::default();
@@ -210,6 +213,14 @@ impl Client {
             }
             ServerMsg::Scores(s) => self.scores = s,
             ServerMsg::Info { .. } => {} // for the server browser, not a connection
+            ServerMsg::Challenge { cookie } => {
+                // Prove our address: say hello again with the server's cookie, right away.
+                if self.status == Status::Connecting && self.cookie != cookie {
+                    self.cookie = cookie;
+                    let hello = ClientMsg::Hello { version: PROTOCOL_VERSION, name: self.name.clone(), cookie };
+                    self.socket.send(self.server, encode(&hello));
+                }
+            }
             ServerMsg::Voice { from, channel, gain, data } => self.voice.push((from, channel, gain, data)),
             ServerMsg::Reject { reason } => {
                 self.status = Status::Rejected;

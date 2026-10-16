@@ -85,6 +85,10 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] 64-tick server option (tick rate is a constant 128 today)
 - [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)
 - [ ] Official dedicated servers (decided 2026-10-16: fair, no player hosting) + casual matchmaking with competitive rules, no ranks yet; server list by region
+- [ ] One-command hosting script (tools/host.sh: build, config, firewall, service) — after we have our own assets (decided 2026-10-16: don't install CS 1.6 files on hosts)
+- [ ] Home hosting without port forwarding: UPnP from the server, relay through the master as fallback
+- [x] Server protection: join cookie (stateless, no spoofed slots), per-IP packet budget, max 6 players per IP, 1400-byte cap, padded info/list requests (no amplification), master list rate limit
+- [ ] Host-side DDoS filtering: choose a provider with game DDoS protection (OVH Game, Path.net)
 - [ ] Encryption/authentication
 - [ ] Prediction error smoothing (corrections are applied instantly)
 
