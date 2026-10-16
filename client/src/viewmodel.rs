@@ -195,7 +195,12 @@ fn update(
     // A one-shot animation that has finished goes back to idle (looping).
     let s = &m.model.sequences[vm.seq.min(m.model.sequences.len() - 1)];
     let mut frame = (now - vm.started) * s.fps;
-    if !vm.looping && frame >= (s.frames - 1) as f32 {
+    // Holding a pulled grenade (or a plant in progress): stay on the last frame, cocked,
+    // instead of dropping back to idle before the throw.
+    let holding = l.pin_pulled() || l.planting.is_some();
+    if !vm.looping && holding && frame >= (s.frames - 1) as f32 {
+        frame = (s.frames - 1) as f32;
+    } else if !vm.looping && frame >= (s.frames - 1) as f32 {
         let idle = names("idle");
         let mut want: Vec<&str> = idle.iter().map(String::as_str).collect();
         want.extend(["idle1", "idle"]);
