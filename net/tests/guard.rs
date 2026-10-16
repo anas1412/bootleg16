@@ -22,7 +22,7 @@ fn join_needs_the_cookie_and_floods_are_cut_off() {
     let addr = server.local_addr();
     let udp = UdpSocket::bind("127.0.0.1:0").unwrap();
     udp.set_read_timeout(Some(Duration::from_millis(20))).unwrap();
-    let hello = |cookie| encode(&ClientMsg::Hello { version: PROTOCOL_VERSION, name: "x".into(), cookie });
+    let hello = |cookie| encode(&ClientMsg::Hello { version: PROTOCOL_VERSION, name: "x".into(), cookie, ticket: 0 });
     // A Hello without the cookie gets a challenge, no slot.
     udp.send_to(&hello(0), addr).unwrap();
     server.step();

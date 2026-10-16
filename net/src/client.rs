@@ -84,6 +84,10 @@ pub struct Client {
     wanted_team: Option<Option<Team>>,
     /// The server's join cookie (0 until it challenges us).
     cookie: u64,
+    /// Our seat in a reserved match (0 = none), from the matchmaker.
+    pub ticket: u64,
+    /// The reserved match ended (the game goes back to the menu).
+    pub match_ended: bool,
     /// Breakables broken as of the last snapshot.
     pub broken: Vec<u16>,
     /// Highest reliable event number received (each is kept once).
@@ -130,8 +134,10 @@ impl Client {
             reliable_seen: 0,
             broken: Vec::new(),
             cookie: 0,
+            ticket: 0,
+            match_ended: false,
             wanted_team: None,
-            round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0 },
+            round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0, stage: Stage::Match },
             bomb: BombNet::None,
             me_info: Me { money: 0, limits: Default::default(), can_buy: false, defuse_kit: false },
         })
@@ -168,7 +174,7 @@ impl Client {
 
         let Status::Connected { .. } = self.status else {
             if self.status == Status::Connecting && self.ticks % HELLO_EVERY == 1 {
-                let hello = ClientMsg::Hello { version: PROTOCOL_VERSION, name: self.name.clone(), cookie: self.cookie };
+                let hello = ClientMsg::Hello { version: PROTOCOL_VERSION, name: self.name.clone(), cookie: self.cookie, ticket: self.ticket };
                 self.socket.send(self.server, encode(&hello));
             }
             return Default::default();
@@ -213,11 +219,12 @@ impl Client {
             }
             ServerMsg::Scores(s) => self.scores = s,
             ServerMsg::Info { .. } => {} // for the server browser, not a connection
+            ServerMsg::MatchEnded => self.match_ended = true,
             ServerMsg::Challenge { cookie } => {
                 // Prove our address: say hello again with the server's cookie, right away.
                 if self.status == Status::Connecting && self.cookie != cookie {
                     self.cookie = cookie;
-                    let hello = ClientMsg::Hello { version: PROTOCOL_VERSION, name: self.name.clone(), cookie };
+                    let hello = ClientMsg::Hello { version: PROTOCOL_VERSION, name: self.name.clone(), cookie, ticket: self.ticket };
                     self.socket.send(self.server, encode(&hello));
                 }
             }
@@ -388,6 +395,11 @@ impl Client {
     /// Voice frames that arrived since the last call.
     pub fn take_voice(&mut self) -> Vec<(u8, VoiceChannel, u8, Vec<u8>)> {
         std::mem::take(&mut self.voice)
+    }
+
+    /// Knife round winners: vote to switch sides (true) or stay.
+    pub fn side_vote(&mut self, switch: bool) {
+        self.socket.send(self.server, encode(&ClientMsg::SideVote { switch }));
     }
 
     pub fn disconnect(&mut self) {

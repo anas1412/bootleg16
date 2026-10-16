@@ -29,13 +29,13 @@ impl Server {
         self.clients.values().filter(|c| c.team == team).count()
     }
 
-    fn alive(&self, team: Team) -> usize {
+    pub(super) fn alive(&self, team: Team) -> usize {
         self.clients.values().filter(|c| c.team == team && c.vitals.alive()).count()
     }
 
     /// Once a tick: phase changes and round wins.
     pub(super) fn round_step(&mut self) {
-        if !self.rounds_on() {
+        if !self.rounds_on() || self.reserved_step() {
             return;
         }
         let tick = self.tick;
@@ -79,7 +79,9 @@ impl Server {
                 }
             }
             Phase::GameOver => {
-                if tick >= self.round.phase_end {
+                if tick >= self.round.phase_end && self.reserved.is_some() {
+                    self.finish_reserved();
+                } else if tick >= self.round.phase_end {
                     self.round.start(tick);
                     for c in self.clients.values_mut() {
                         c.kills = 0;
@@ -105,6 +107,9 @@ impl Server {
     /// the dead start over with a pistol. `money`: halftime/overtime reset (weapons go too).
     pub(super) fn new_round(&mut self, swap: bool, money: Option<i32>) {
         if swap {
+            if let Some(r) = &mut self.reserved {
+                r.a_side = crate::rounds::other(r.a_side);
+            }
             for c in self.clients.values_mut() {
                 c.team = match c.team {
                     Team::T => Team::Ct,
@@ -173,6 +178,6 @@ impl Server {
             Phase::Warmup => 0.0,
             _ => self.round.phase_end.saturating_sub(self.tick) as f32 * TICK,
         };
-        RoundNet { phase: if self.rounds_on() { self.round.phase } else { Phase::Warmup }, round: self.round.round, score: self.round.score, left }
+        RoundNet { phase: if self.rounds_on() { self.round.phase } else { Phase::Warmup }, round: self.round.round, score: self.round.score, left, stage: self.stage() }
     }
 }

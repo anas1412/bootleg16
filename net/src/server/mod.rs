@@ -5,6 +5,7 @@ mod breakables;
 pub mod buy;
 mod guard;
 mod ground;
+mod reserve;
 mod round;
 mod visibility;
 mod voice;
@@ -14,6 +15,7 @@ use crate::protocol::*;
 use crate::rounds::Match;
 use crate::socket::Socket;
 use bomb::Bomb;
+pub use reserve::{Group, MatchSetup};
 use goldsrc::bsp::Bsp;
 use goldsrc::materials::Materials;
 use sim::collision::World;
@@ -115,6 +117,9 @@ struct Remote {
     deaths: u32,
     money: i32,
     defuse_kit: bool,
+    /// Reserved matches: this player's ticket (0 = none) and team group.
+    ticket: u64,
+    group: Option<Group>,
     /// Reliable events not yet acknowledged, numbered (resent in every snapshot).
     outbox: VecDeque<(u32, GameEvent)>,
     next_reliable: u32,
@@ -183,6 +188,8 @@ pub struct Server {
     bomb: Bomb,
     pieces: breakables::Pieces,
     guard: guard::Guard,
+    /// Set while running a match for a fixed list of players.
+    reserved: Option<reserve::Reserved>,
     /// Size of the last snapshot sent (bandwidth checks).
     snapshot_bytes: usize,
     /// Anti-wallhack: when each (viewer, target) pair last had line of sight.
@@ -227,6 +234,7 @@ impl Server {
             pieces: breakables::Pieces::from_bsp(bsp),
             snapshot_bytes: 0,
             guard: guard::Guard::new(),
+            reserved: None,
         })
     }
 
@@ -544,7 +552,12 @@ impl Server {
         }
 
         let tick = self.tick;
-        self.clients.retain(|_, c| c.bot || tick - c.last_heard < TIMEOUT_TICKS);
+        let gone: Vec<SocketAddr> = self.clients.iter().filter(|(_, c)| !c.bot && tick - c.last_heard >= TIMEOUT_TICKS).map(|(a, _)| *a).collect();
+        for a in gone {
+            if let Some(c) = self.clients.remove(&a) {
+                self.remember(&c);
+            }
+        }
         let ids: std::collections::HashSet<u8> = self.clients.values().map(|c| c.id).collect();
         self.last_seen.retain(|(v, t), _| ids.contains(v) && ids.contains(t));
 
@@ -791,7 +804,7 @@ impl Server {
 
     fn handle(&mut self, from: SocketAddr, msg: ClientMsg) {
         match msg {
-            ClientMsg::Hello { version, name, cookie } => {
+            ClientMsg::Hello { version, name, cookie, ticket } => {
                 if version != PROTOCOL_VERSION {
                     let reason = format!("server runs protocol {PROTOCOL_VERSION}, you have {version}");
                     self.socket.send(from, encode(&ServerMsg::Reject { reason }));
@@ -808,6 +821,14 @@ impl Server {
                         self.socket.send(from, encode(&ServerMsg::Reject { reason: "too many players from your address".into() }));
                         return;
                     }
+                    // A reserved match only lets in its own players (and puts them on their team).
+                    let seat = match self.admit(ticket) {
+                        Ok(seat) => seat,
+                        Err(reason) => {
+                            self.socket.send(from, encode(&ServerMsg::Reject { reason }));
+                            return;
+                        }
+                    };
                     let humans = self.clients.values().filter(|c| !c.bot).count();
                     if self.clients.len() >= MAX_PLAYERS || humans >= self.round.cfg.max_players as usize {
                         self.socket.send(from, encode(&ServerMsg::Reject { reason: "server full".into() }));
@@ -818,6 +839,14 @@ impl Server {
                     let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
                     let mut r = Remote::new(id, name, self.tick);
                     r.money = self.round.cfg.start_money;
+                    if let Some((group, team, saved)) = seat {
+                        r.ticket = ticket;
+                        r.group = Some(group);
+                        r.team = team; // dead until the next round starts
+                        if let Some((money, kills, deaths)) = saved {
+                            (r.money, r.kills, r.deaths) = (money, kills, deaths);
+                        }
+                    }
                     self.clients.insert(from, r);
                 }
                 let id = self.clients[&from].id;
@@ -842,6 +871,8 @@ impl Server {
                 }
             }
             ClientMsg::Buy { item } => self.buy(from, item),
+            ClientMsg::SideVote { switch } => self.side_vote(from, switch),
+            ClientMsg::JoinTeam { .. } if self.reserved.is_some() => {} // teams are fixed in a reserved match
             ClientMsg::JoinTeam { team } => {
                 let (t, ct) = self.clients.values().filter(|c| !c.bot).fold((0, 0), |(t, ct), c| match c.team {
                     Team::T => (t + 1, ct),
@@ -874,7 +905,9 @@ impl Server {
                 }
             }
             ClientMsg::Bye => {
-                self.clients.remove(&from);
+                if let Some(c) = self.clients.remove(&from) {
+                    self.remember(&c);
+                }
             }
         }
     }
@@ -892,6 +925,8 @@ impl Remote {
             deaths: 0,
             money: 0,
             defuse_kit: false,
+            ticket: 0,
+            group: None,
             outbox: VecDeque::new(),
             next_reliable: 0,
             state: PlayerState { movement: Player::new([0.0; 3]), loadout: Loadout::knife_only() },

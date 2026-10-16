@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 20;
+pub const PROTOCOL_VERSION: u32 = 21;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -26,7 +26,8 @@ pub const INFO_PAD: usize = 96;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ClientMsg {
     /// `cookie`: 0 at first; then the one from `ServerMsg::Challenge` (proves our address is real).
-    Hello { version: u32, name: String, cookie: u64 },
+    /// `ticket`: your seat in a reserved match (0 = none).
+    Hello { version: u32, name: String, cookie: u64, ticket: u64 },
     /// Server browser: tell me about yourself (no connection made). `pad` must be at least
     /// `INFO_PAD` bytes so the answer is never bigger than the question (no amplification).
     Info { pad: Vec<u8> },
@@ -37,6 +38,8 @@ pub enum ClientMsg {
     Buy { item: BuyItem },
     /// Pick a side; None = auto (the smaller team).
     JoinTeam { team: Option<Team> },
+    /// After winning the knife round: switch sides (true) or stay.
+    SideVote { switch: bool },
     /// One 20 ms Opus voice frame while a push-to-talk key is held.
     Voice { channel: VoiceChannel, data: Vec<u8> },
     Bye,
@@ -169,6 +172,10 @@ pub enum GameEvent {
     Defusing { by: u8, kit: bool },
     BombDefused { by: u8 },
     BombExploded { at: [f32; 3] },
+    /// The knife round's winners (they now vote to stay or switch).
+    KnifeWon { winners: Team },
+    /// Sides are settled; the match starts.
+    SidesChosen { switched: bool },
     /// A breakable broke (for its sound and debris; the state itself is `Snapshot::broken`).
     Broke { model: u16, material: sim::breakables::Material, at: [f32; 3] },
 }
@@ -187,6 +194,8 @@ impl GameEvent {
                 | GameEvent::BombPlanted { .. }
                 | GameEvent::BombDefused { .. }
                 | GameEvent::BombExploded { .. }
+                | GameEvent::KnifeWon { .. }
+                | GameEvent::SidesChosen { .. }
         )
     }
 }
@@ -203,6 +212,18 @@ pub struct RoundNet {
     pub score: [u32; 2],
     /// Seconds left: of freeze time, of the round, or until the next round.
     pub left: f32,
+    /// Before the match proper: waiting for players, the knife round, the side vote.
+    pub stage: Stage,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub enum Stage {
+    Match,
+    /// Reserved match waiting for its players.
+    Waiting,
+    Knife,
+    /// The knife round's winners choose; seconds left.
+    SideVote { winners: Team, left: f32 },
 }
 
 /// Where the bomb is (who carries it is only told to terrorists).
@@ -255,6 +276,8 @@ pub enum ServerMsg {
     Reject { reason: String },
     /// Echo this in your Hello to join (stops spoofed addresses from taking slots).
     Challenge { cookie: u64 },
+    /// The reserved match is over: back to the menu.
+    MatchEnded,
     /// Answer to `ClientMsg::Info`.
     Info { version: u32, name: String, map: String, players: u8, max: u8 },
     /// Scoreboard, sent a few times a second.
