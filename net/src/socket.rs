@@ -66,7 +66,12 @@ impl Socket {
     /// Everything that has arrived (and finished its fake delay).
     pub fn recv_all(&mut self) -> Vec<(SocketAddr, Vec<u8>)> {
         let mut buf = vec![0u8; 65536];
-        while let Ok((n, from)) = self.udp.recv_from(&mut buf) {
+        // At most this many a call: a flood waits in (and overflows) the OS queue instead of
+        // our memory. 32 players send a few each per tick; this is far more.
+        let mut room = 4096;
+        while room > 0 {
+            let Ok((n, from)) = self.udp.recv_from(&mut buf) else { break };
+            room -= 1;
             if self.dropped() {
                 continue;
             }

@@ -115,10 +115,69 @@ fn steam_sign_in_and_lobby_restart() {
     until(&mut server, &mut [&mut a, &mut b], "party", |c| c[1].state.as_ref().unwrap().members.len() == 2);
     let m = &b.state.as_ref().unwrap().members;
     assert_eq!((m[0].steam, m[1].steam), (0, 76561197960287930), "B sees A's Steam id (for the avatar)");
-    // A signs in again from somewhere else: the old session ends, B's party is down to B.
+    // Someone else claims A's Steam id on this unchecked (trust) lobby: they get in, but
+    // without it, and A stays (a claim must never push anyone out).
     let mut a2 = LobbyClient::new(lobby, "a").unwrap();
     a2.steam = login(76561197960287930);
-    until(&mut server, &mut [&mut a2, &mut b], "old session replaced", |c| c[0].online() && c[1].state.as_ref().unwrap().members.len() == 1);
+    until(&mut server, &mut [&mut a2, &mut b], "claimer in", |c| c[0].online());
+    assert_eq!(a2.state.as_ref().unwrap().members[0].steam, 0);
+    assert_eq!(b.state.as_ref().unwrap().members.len(), 2);
+}
+
+#[test]
+fn a_checked_steam_sign_in_replaces_the_older_one() {
+    // With Steam checks, a second sign-in Steam confirmed ends the first session.
+    let mut m = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
+    m.steam_mode = net::master::SteamMode::Verify;
+    let login = || -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> { Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 5, ticket: vec![9] }))) };
+    let (mut first, mut second) = (LobbyClient::new(m.local_addr(), "x").unwrap(), LobbyClient::new(m.local_addr(), "x").unwrap());
+    first.steam = login();
+    second.steam = login();
+    let start = Instant::now();
+    let mut checked = 0;
+    while checked < 2 || !second.online() {
+        assert!(start.elapsed() < Duration::from_secs(5));
+        m.step();
+        first.tick();
+        if checked >= 1 {
+            second.tick();
+        }
+        for (session, id, _) in m.take_steam_checks() {
+            m.steam_checked(id, Some(session)); // what Steam would say for a good ticket
+            checked += 1;
+        }
+    }
+    // The first one is gone: its next poll gets Expired and it signs in afresh.
+    let code = first.state.as_ref().unwrap().code.clone();
+    while first.state.as_ref().unwrap().code == code {
+        assert!(start.elapsed() < Duration::from_secs(10));
+        m.step();
+        first.tick();
+        second.tick();
+        let _ = m.take_steam_checks();
+    }
+}
+
+#[test]
+fn answers_never_outgrow_requests() {
+    // The biggest state the lobby sends, against the smallest request it answers.
+    let long = "W".repeat(24);
+    let addr: SocketAddr = "[2001:db8::1]:27015".parse().unwrap();
+    let state = net::master::LobbyState {
+        you: u32::MAX,
+        code: "ABC-DEF".into(),
+        leader: u32::MAX,
+        mode: net::master::Mode::Custom,
+        members: (0..net::master::MAX_CUSTOM).map(|i| net::master::Member { id: u32::MAX - i as u32, name: long.clone(), group: net::server::Group::B, steam: u64::MAX }).collect(),
+        searching: Some(1e9),
+        found: Some((addr, u64::MAX)),
+        notice: "Too many players from your address, or the lobby is full. Try again later.".into(),
+        invites: (0..net::master::MAX_INVITES).map(|_| net::master::Invite { from: long.clone(), steam: u64::MAX, code: "ABC-DEF".into(), left: 30.0 }).collect(),
+        regions: (0..net::master::MAX_REGIONS).map(|_| ("x".repeat(16), addr)).collect(),
+    };
+    let answer = net::protocol::encode(&net::master::LobbyMsg::State(state)).len();
+    let request = net::protocol::encode(&net::master::LobbyMsg::Command { session: 0, cmd: Command::Poll, pad: vec![0; net::master::PAD] }).len();
+    assert!(answer <= request, "answer {answer} bytes, request {request}");
 }
 
 #[test]

@@ -11,6 +11,7 @@ pub mod config;
 pub mod master;
 pub mod protocol;
 pub mod rounds;
+pub mod secure;
 pub mod server;
 mod socket;
 

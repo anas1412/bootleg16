@@ -19,17 +19,16 @@ const MAX_TRACKED: usize = 8192;
 
 pub(super) struct Guard {
     secret: u64,
-    /// (IP, from a player?) -> (budget left, last tick it was topped up). Players and
-    /// strangers on one IP have separate budgets, so players can't starve joins and the
-    /// other way round.
-    buckets: HashMap<(IpAddr, bool), (f32, u32)>,
+    /// Budgets per IP, separate for players and strangers: players can't starve joins, and a
+    /// flood of made-up addresses (filling the strangers' table) can't touch players.
+    players: crate::secure::Buckets<IpAddr>,
+    strangers: crate::secure::Buckets<IpAddr>,
 }
 
 impl Guard {
     pub(super) fn new() -> Guard {
-        // Unpredictable enough for cookies: start time and process id, mixed.
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1);
-        Guard { secret: mix(t ^ ((std::process::id() as u64) << 32)), buckets: HashMap::new() }
+        // From the OS random source: nobody can work out the cookies (and fake addresses).
+        Guard { secret: crate::secure::random(), players: crate::secure::Buckets::new(usize::MAX), strangers: crate::secure::Buckets::new(MAX_TRACKED) }
     }
 
     /// May this packet be looked at? `players`: how many players are in the game from this
@@ -38,25 +37,19 @@ impl Guard {
         if len > MAX_PACKET {
             return false;
         }
-        let player = players > 0;
-        let rate = if player { PLAYER_RATE * players as f32 } else { STRANGER_RATE };
-        let key = (from.ip(), player);
-        if !player && self.buckets.len() >= MAX_TRACKED && !self.buckets.contains_key(&key) {
-            return false;
+        let now = tick as f64 / TICK_RATE as f64;
+        if players > 0 {
+            self.players.allow(from.ip(), PLAYER_RATE * players as f32, now)
+        } else {
+            self.strangers.allow(from.ip(), STRANGER_RATE, now)
         }
-        let (budget, last) = self.buckets.entry(key).or_insert((rate, tick));
-        *budget = (*budget + (tick - *last) as f32 * rate / TICK_RATE as f32).min(rate);
-        *last = tick;
-        if *budget < 1.0 {
-            return false;
-        }
-        *budget -= 1.0;
-        true
     }
 
     /// Forget IPs that have been quiet for a few seconds.
     pub(super) fn tidy(&mut self, tick: u32) {
-        self.buckets.retain(|_, (_, last)| tick - *last < 5 * TICK_RATE);
+        let now = tick as f64 / TICK_RATE as f64;
+        self.players.tidy(now, 5.0);
+        self.strangers.tidy(now, 5.0);
     }
 
     /// The join cookie for an address in a 10-second window (stateless: nothing is stored).

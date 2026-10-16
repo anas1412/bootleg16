@@ -25,7 +25,18 @@ const SERVER_TIMEOUT: Duration = Duration::from_secs(HEARTBEAT_SECONDS * 3);
 /// Players poll every second; ten seconds of silence and they're gone.
 const PLAYER_TIMEOUT: Duration = Duration::from_secs(10);
 /// Every player request is padded to this: the biggest state answer fits in it.
-pub const PAD: usize = 900;
+pub const PAD: usize = 1200;
+/// Packets per second one IP may send the lobby (a player polls once a second; a household
+/// of players and their clicks fit easily).
+const IP_RATE: f32 = 40.0;
+/// Signed-in players from one IP (loopback exempt: tests run many from it), and in all.
+const SESSIONS_PER_IP: usize = 10;
+const MAX_PLAYERS: usize = 50_000;
+/// Game servers in the pool (official ones only).
+const MAX_SERVERS: usize = 2_000;
+/// What a state answer may hold, so it never outgrows the padded request (see the test).
+pub const MAX_REGIONS: usize = 8;
+pub const MAX_INVITES: usize = 5;
 pub const MAX_PARTY: usize = 5;
 pub const MAX_CUSTOM: usize = 10;
 
@@ -185,7 +196,9 @@ pub struct Master {
     players: HashMap<u64, Player>,
     parties: HashMap<u32, Party>,
     next_id: u32,
-    rng: u64,
+    /// Packet budgets per IP (players and servers alike).
+    limits: crate::secure::Buckets<std::net::IpAddr>,
+    started: Instant,
     /// Players per casual match (10; tests use 2).
     pub match_size: usize,
     /// When the last status line was printed.
@@ -209,24 +222,34 @@ impl Master {
     pub fn bind(addr: SocketAddr, tokens: Vec<String>) -> std::io::Result<Master> {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
-        let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7) ^ ((std::process::id() as u64) << 32);
-        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new() })
+        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
         self.udp.local_addr().expect("bound")
     }
 
-    /// xorshift64*: tickets, sessions and codes (unguessable enough without a crypto crate;
-    /// ponytail: use OS randomness once there are accounts and money involved).
+    /// Tickets, sessions and codes come from the OS random source: seeing your own must not
+    /// tell you anyone else's.
     fn rand(&mut self) -> u64 {
-        self.rng ^= self.rng >> 12;
-        self.rng ^= self.rng << 25;
-        self.rng ^= self.rng >> 27;
-        self.rng.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        crate::secure::random()
     }
 
+    fn is_token(&self, token: &str) -> bool {
+        !token.is_empty() && self.tokens.iter().any(|t| crate::secure::same_secret(t, token))
+    }
+
+    /// A party code nobody else has.
     fn new_code(&mut self) -> String {
+        loop {
+            let code = self.random_code();
+            if !self.parties.values().any(|p| p.code == code) {
+                return code;
+            }
+        }
+    }
+
+    fn random_code(&mut self) -> String {
         // No 0/O/1/I: easy to read out to a friend.
         const ABC: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         let r = self.rand();
@@ -261,13 +284,22 @@ impl Master {
         let _ = self.udp.set_nonblocking(false);
         while let Ok((n, from)) = self.udp.recv_from(&mut buf) {
             let _ = self.udp.set_nonblocking(true);
+            // Every IP has a budget: floods cost nothing past here.
+            let now = self.started.elapsed().as_secs_f64();
+            if !self.limits.allow(from.ip(), IP_RATE, now) {
+                continue;
+            }
             match decode::<LobbyMsg>(&buf[..n]) {
                 Some(LobbyMsg::Heartbeat { token, busy, address, region, .. }) => {
                     let region: String = region.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(16).collect();
                     let public = address.parse().unwrap_or(from);
-                    let official = !token.is_empty() && self.tokens.contains(&token);
+                    // Only official servers (our token) are kept: anyone else could flood the list.
+                    let official = self.is_token(&token);
+                    if !official || (!self.servers.contains_key(&from) && self.servers.len() >= MAX_SERVERS) {
+                        continue;
+                    }
                     if !self.servers.contains_key(&from) {
-                        println!("server {public} ({region}) joined the pool{}", if official { "" } else { " (wrong token: never gets matches)" });
+                        println!("server {public} ({region}) joined the pool");
                     }
                     if busy {
                         self.booking.remove(&from); // took the match
@@ -276,7 +308,7 @@ impl Master {
                     let busy = busy || self.booking.contains_key(&from);
                     self.servers.insert(from, GameServer { public, region, token, official, busy, seen: Instant::now() });
                 }
-                Some(LobbyMsg::Report { token, reporter, target, reason, map, round }) if self.tokens.contains(&token) => self.file_report(reporter, target, reason, &map, round),
+                Some(LobbyMsg::Report { token, reporter, target, reason, map, round }) if self.is_token(&token) => self.file_report(reporter, target, reason, &map, round),
                 Some(LobbyMsg::Hello { steam: None, pad, .. }) if pad.len() >= PAD && self.require_steam => {
                     let _ = self.udp.send_to(&encode(&LobbyMsg::Refused { reason: "Start Steam to play online.".into() }), from);
                 }
@@ -284,6 +316,10 @@ impl Master {
                     // Signed in already (our Welcome got lost): the same session again.
                     let session = match self.players.iter().find(|(_, p)| p.addr == from) {
                         Some((s, _)) => *s,
+                        None if self.players.len() >= MAX_PLAYERS || (!from.ip().is_loopback() && self.players.values().filter(|p| p.addr.ip() == from.ip()).count() >= SESSIONS_PER_IP) => {
+                            let _ = self.udp.send_to(&encode(&LobbyMsg::Refused { reason: "Too many players from your address, or the lobby is full. Try again later.".into() }), from);
+                            continue;
+                        }
                         None => {
                             let session = self.rand();
                             let id = self.next_id;
@@ -293,6 +329,8 @@ impl Master {
                             self.players.insert(session, Player { id, name, steam: 0, addr: from, party, seen: Instant::now(), found: None, notice: String::new(), invites: Vec::new(), pings: HashMap::new() });
                             if let Some(login) = steam {
                                 match self.steam_mode {
+                                    // Unchecked: never let a claim push anyone else out.
+                                    SteamMode::Trust if self.players.values().any(|p| p.steam == login.steam_id) => {}
                                     SteamMode::Trust => self.steam_checked(login.steam_id, Some(session)),
                                     SteamMode::Verify => self.steam_checks.push((session, login.steam_id, login.ticket)),
                                 }
@@ -317,6 +355,8 @@ impl Master {
         }
         let now = Instant::now();
         self.seats.retain(|_, (_, _, at)| at.elapsed() < Duration::from_secs(6 * 3600));
+        let secs = self.started.elapsed().as_secs_f64();
+        self.limits.tidy(secs, 10.0);
         for (addr, (msg, first, last)) in &mut self.booking {
             if last.elapsed() > Duration::from_millis(500) {
                 let _ = self.udp.send_to(msg, addr);
@@ -394,6 +434,13 @@ impl Master {
         }
         let leader = self.parties.get(&party).is_some_and(|p| p.leader == me);
         let mut notice = String::new();
+        // Official lobbies: nothing but waiting until Steam has confirmed who you are.
+        if self.require_steam && self.players.get(&session).is_some_and(|p| p.steam == 0) && cmd != Command::Poll {
+            if let Some(p) = self.players.get_mut(&session) {
+                p.notice = "Waiting for Steam to confirm your sign-in...".into();
+            }
+            return;
+        }
         match cmd {
             Command::Poll => {}
             Command::JoinParty { code } => {
@@ -460,7 +507,9 @@ impl Master {
                 Some(friend) => {
                     friend.invites.retain(|(from, _)| *from != me);
                     friend.invites.push((me, Instant::now()));
-                    friend.invites.truncate(8);
+                    // The newest few (spamming invites can't push the answer past its size).
+                    let extra = friend.invites.len().saturating_sub(MAX_INVITES);
+                    friend.invites.drain(..extra);
                 }
                 None => notice = "They're not in the game right now.".into(),
             },
@@ -490,7 +539,7 @@ impl Master {
             searching: party.queued.map(|t| t.elapsed().as_secs_f32()),
             found,
             notice,
-            regions: self.ping_targets(),
+            regions: self.ping_targets().into_iter().take(MAX_REGIONS).collect(),
             invites: invited
                 .iter()
                 .filter_map(|(from, at)| {

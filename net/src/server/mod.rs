@@ -468,12 +468,13 @@ impl Server {
         self.socket.tick();
         let tick = self.tick;
         for (from, bytes) in self.socket.recv_all() {
-            // The lobby has its own way in: its bookings must never be crowded out by strangers.
+            // The lobby's bookings have their own way in, so strangers can't crowd them out
+            // (only bookings: its address can be faked, the token can't).
             if Some(from) == self.lobby && bytes.len() <= guard::MAX_PACKET {
-                if let Some(msg) = decode::<ClientMsg>(&bytes) {
+                if let Some(msg @ ClientMsg::Reserve { .. }) = decode::<ClientMsg>(&bytes) {
                     self.handle(from, msg);
+                    continue;
                 }
-                continue;
             }
             // Budget first: floods and junk cost nothing past this line.
             let players = if self.clients.contains_key(&from) { self.clients.keys().filter(|a| a.ip() == from.ip()).count() } else { 0 };
@@ -958,13 +959,15 @@ impl Server {
                 if pad.len() >= INFO_PAD {
                     let players = self.clients.values().filter(|c| !c.bot).count() as u8;
                     let cfg = &self.round.cfg;
-                    let info = ServerMsg::Info { version: PROTOCOL_VERSION, name: cfg.name.clone(), map: self.map.clone(), players, max: cfg.max_players };
+                    // Short names: the answer must stay smaller than the padded request.
+                    let short = |s: &str| s.chars().take(24).collect::<String>();
+                    let info = ServerMsg::Info { version: PROTOCOL_VERSION, name: short(&cfg.name), map: short(&self.map), players, max: cfg.max_players };
                     self.socket.send(from, encode(&info));
                 }
             }
             ClientMsg::Reserve { token, setup } => {
                 let cfg = &self.round.cfg;
-                if !cfg.official_token.is_empty() && token == cfg.official_token && self.lobby == Some(from) && self.reserved.is_none() {
+                if !cfg.official_token.is_empty() && crate::secure::same_secret(&token, &cfg.official_token) && self.lobby == Some(from) && self.reserved.is_none() {
                     self.reserve(setup);
                     self.heartbeat(); // tell the lobby right away that we took it
                 }

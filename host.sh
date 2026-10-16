@@ -14,8 +14,13 @@
 # same setup back up.
 set -euo pipefail
 cd "$(dirname "$0")"
+# Everything in hosting/ is private: the token (and the configs holding it) are secrets.
+umask 077
 mkdir -p hosting hosting/reports
+chmod -R go-rwx hosting
 compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
+# The containers run as you (not root): they can read the private files and nothing else.
+as_me="user: \"$(id -u):$(id -g)\", "
 
 [ -f hosting/settings ] && . hosting/settings
 LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}" TEST="${TEST:-}"
@@ -71,7 +76,7 @@ rm -f hosting/server*.cfg
   echo "# Made by host.sh: edit config/server.cfg instead, then run ./host.sh"
   echo "services:"
   if [ "$LOBBY" = here ]; then
-    echo "  lobby: {image: bootleg16, network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports]}"
+    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports]}"
   fi
   for i in $(seq 1 "$SERVERS"); do
     port=$((27014 + i))
@@ -81,7 +86,7 @@ rm -f hosting/server*.cfg
         -e "s|^name = .*|name = \"$(hostname)-$i\"|" \
         -e "s|^region = .*|region = \"$REGION\"|" \
         config/server.cfg > "hosting/server$i.cfg"
-    echo "  server$i: {image: bootleg16, network_mode: host, restart: unless-stopped, stop_grace_period: 3h, command: server de_dust2 $port --config /bootleg16/server.cfg, volumes: [./server$i.cfg:/bootleg16/server.cfg:ro, ./game:/game:ro]}"
+    echo "  server$i: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, stop_grace_period: 3h, command: server de_dust2 $port --config /bootleg16/server.cfg, volumes: [./server$i.cfg:/bootleg16/server.cfg:ro, ./game:/game:ro]}"
   done
 } > hosting/compose.yaml
 

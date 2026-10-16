@@ -12,10 +12,12 @@ RUN dpkg --add-architecture i386 && apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl lib32gcc-s1 \
  && mkdir -p /opt/steamcmd && curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar xz -C /opt/steamcmd \
  && /opt/steamcmd/steamcmd.sh +quit \
- && mkdir -p /root/.steam/sdk64 && ln -s /opt/steamcmd/linux64/steamclient.so /root/.steam/sdk64/steamclient.so \
+ && mkdir -p /opt/steamhome/.steam/sdk64 && ln -s /opt/steamcmd/linux64/steamclient.so /opt/steamhome/.steam/sdk64/steamclient.so \
+ && chmod -R a+rX /opt/steamcmd && chmod 1777 /opt/steamhome \
  && apt-get purge -y curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/libsteam_api.so /usr/local/lib/
 RUN ldconfig
 COPY --from=build /src/target/release/server /src/target/release/master /usr/local/bin/
-ENV BOOTLEG16_DIR=/game
+# The servers run as the host user (see host.sh), not root; Steam's library looks in $HOME.
+ENV BOOTLEG16_DIR=/game HOME=/opt/steamhome
 WORKDIR /bootleg16

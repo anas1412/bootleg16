@@ -9,3 +9,5 @@ goldsrc = { path = "../goldsrc" }
 sim = { path = "../sim" }
 serde = { version = "1", features = ["derive"] }
 postcard = { version = "1", features = ["alloc"] }
+# Secrets (tickets, sessions, join cookies) from the OS random source.
+getrandom = "0.3"
