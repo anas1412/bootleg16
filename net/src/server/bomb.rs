@@ -1,0 +1,186 @@
+//! The bomb: carried by a terrorist, dropped when they die (or press G), planted in a bomb
+//! site (the plant itself is weapon code in `sim`), defused by a counter-terrorist holding
+//! use on it, or it explodes.
+use super::*;
+use crate::rounds::{EndReason, Phase};
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum Bomb {
+    None,
+    Carried(u8),
+    Dropped([f32; 3]),
+    Planted {
+        at: [f32; 3],
+        explode: u32,
+        /// Who is defusing and the tick they finish.
+        defuse: Option<(u8, u32)>,
+    },
+    /// Exploded or defused this round.
+    Gone,
+}
+
+/// How close (eyes to bomb) a counter-terrorist must be to defuse, and how squarely they
+/// must look at it (cosine of the angle).
+const DEFUSE_REACH: f32 = 72.0;
+const DEFUSE_LOOK: f32 = 0.6;
+
+impl Server {
+    pub(super) fn defuser(&self) -> Option<u8> {
+        match self.bomb {
+            Bomb::Planted { defuse: Some((id, _)), .. } => Some(id),
+            _ => None,
+        }
+    }
+
+    /// Round start: the bomb goes to one terrorist (taking turns by round number).
+    pub(super) fn give_bomb(&mut self) {
+        let mut ts: Vec<&mut Remote> = self.clients.values_mut().filter(|c| c.team == Team::T && c.vitals.alive()).collect();
+        ts.sort_by_key(|c| c.id);
+        let n = ts.len();
+        self.bomb = Bomb::None;
+        if n == 0 || self.world.zones.bomb_sites.is_empty() {
+            return;
+        }
+        let c = &mut ts[self.round.round as usize % n];
+        c.state.loadout.give(Id::C4, 0.0);
+        self.bomb = Bomb::Carried(c.id);
+    }
+
+    /// Where the bomb lands from someone's hands (on the floor under them).
+    fn floor_under(&self, p: [f32; 3]) -> [f32; 3] {
+        self.world.trace_line(p, [p[0], p[1], p[2] - 4096.0]).end
+    }
+
+    /// Carrier dropped it (G) or died: it falls where they stand.
+    pub(super) fn drop_bomb(&mut self, id: u8) {
+        if self.bomb != Bomb::Carried(id) {
+            return;
+        }
+        let Some(c) = self.clients.values_mut().find(|c| c.id == id) else { return };
+        let l = &mut c.state.loadout;
+        l.c4 = false;
+        l.planting = None;
+        if l.active == data::Slot::Bomb {
+            let best = [data::Slot::Primary, data::Slot::Secondary, data::Slot::Knife].into_iter().find(|s| match s {
+                data::Slot::Primary => l.primary.is_some(),
+                data::Slot::Secondary => l.secondary.is_some(),
+                _ => true,
+            });
+            l.switch_to(best.unwrap_or(data::Slot::Knife), c.last_run as f64 * TICK as f64);
+        }
+        let at = c.state.movement.origin;
+        self.bomb = Bomb::Dropped(self.floor_under(at));
+    }
+
+    pub(super) fn bomb_planted(&mut self, by: u8, at: [f32; 3]) {
+        let at = self.floor_under(at);
+        let explode = self.tick + (self.round.cfg.c4_timer * TICK_RATE as f32) as u32;
+        self.bomb = Bomb::Planted { at, explode, defuse: None };
+        self.events.push(GameEvent::BombPlanted { by, at });
+    }
+
+    /// Pick-ups, defusing and the explosion; once a tick.
+    pub(super) fn bomb_step(&mut self) {
+        let tick = self.tick;
+        match self.bomb {
+            Bomb::Carried(id) => {
+                if !self.clients.values().any(|c| c.id == id && c.vitals.alive() && c.state.loadout.c4) {
+                    // Carrier gone or dead (death drops it in `settle_deaths`): don't lose it.
+                    if let Some(c) = self.clients.values().find(|c| c.id == id) {
+                        let at = c.state.movement.origin;
+                        self.bomb = Bomb::Dropped(self.floor_under(at));
+                    } else {
+                        self.bomb = Bomb::None;
+                    }
+                }
+            }
+            Bomb::Dropped(at) => {
+                let taker = self.clients.values_mut().find(|c| {
+                    let o = c.state.movement.origin;
+                    let h = c.state.movement.hull();
+                    c.team == Team::T && c.vitals.alive() && (0..3).all(|k| at[k] >= o[k] + h.mins()[k] - 16.0 && at[k] <= o[k] + h.maxs()[k] + 16.0)
+                });
+                if let Some(c) = taker {
+                    c.state.loadout.give(Id::C4, 0.0);
+                    self.bomb = Bomb::Carried(c.id);
+                }
+            }
+            Bomb::Planted { at, explode, defuse } => {
+                if tick >= explode {
+                    self.explode(at);
+                    return;
+                }
+                // The defuser must keep holding use, alive, close and looking at it.
+                let still = |c: &Remote| {
+                    let eye = c.state.movement.eye();
+                    let d = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
+                    let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+                    let (f, _, _) = bullets::view_vectors(c.view.1, c.view.0);
+                    let look = if len > 1.0 { (d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / len } else { 1.0 };
+                    c.team == Team::Ct && c.vitals.alive() && c.use_held && len <= DEFUSE_REACH && look >= DEFUSE_LOOK
+                };
+                match defuse {
+                    Some((id, done)) => {
+                        if !self.clients.values().any(|c| c.id == id && still(c)) {
+                            self.bomb = Bomb::Planted { at, explode, defuse: None };
+                        } else if tick >= done {
+                            self.bomb = Bomb::Gone;
+                            self.events.push(GameEvent::BombDefused { by: id });
+                            if self.round.phase == Phase::Live {
+                                self.end_round(Team::Ct, EndReason::BombDefused);
+                            }
+                        }
+                    }
+                    None => {
+                        if let Some(c) = self.clients.values().filter(|c| still(c)).min_by_key(|c| c.id) {
+                            let secs = if c.defuse_kit { self.round.cfg.defuse_kit_time } else { self.round.cfg.defuse_time };
+                            let done = tick + (secs * TICK_RATE as f32) as u32;
+                            self.events.push(GameEvent::Defusing { by: c.id, kit: c.defuse_kit });
+                            self.bomb = Bomb::Planted { at, explode, defuse: Some((c.id, done)) };
+                        }
+                    }
+                }
+            }
+            Bomb::None | Bomb::Gone => {}
+        }
+    }
+
+    /// Boom: hurts everyone out to 3.5 × the map's bomb radius, through walls (CS 1.6 C4).
+    fn explode(&mut self, at: [f32; 3]) {
+        self.bomb = Bomb::Gone;
+        self.events.push(GameEvent::BombExploded { at });
+        let radius = self.world.zones.bomb_radius;
+        for c in self.clients.values_mut().filter(|c| c.vitals.alive()) {
+            let o = c.state.movement.origin;
+            let d = ((o[0] - at[0]).powi(2) + (o[1] - at[1]).powi(2) + (o[2] - at[2]).powi(2)).sqrt();
+            let dmg = radius * (1.0 - d / (radius * 3.5));
+            if dmg <= 0.0 {
+                continue;
+            }
+            let (health, armor) = combat::explosion_damage(&c.vitals, dmg);
+            let killed = c.vitals.hurt(health, armor);
+            self.events.push(GameEvent::Damage { attacker: WORLD, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion, at: None });
+            if killed {
+                self.events.push(GameEvent::Kill { killer: WORLD, victim: c.id, weapon: Some(Id::C4), headshot: false });
+            }
+        }
+        if self.round.phase == Phase::Live {
+            self.end_round(Team::T, EndReason::BombExploded);
+        }
+    }
+
+    /// The bomb as one client may see it (only terrorists are told who carries it).
+    pub(super) fn bomb_net(&self, viewer: Team) -> BombNet {
+        let now = self.tick;
+        match self.bomb {
+            Bomb::Carried(id) if viewer == Team::T => BombNet::Carried(id),
+            Bomb::Dropped(at) => BombNet::Dropped(at),
+            Bomb::Planted { at, explode, defuse } => BombNet::Planted {
+                at,
+                left: explode.saturating_sub(now) as f32 * TICK,
+                defuse: defuse.map(|(id, done)| (id, done.saturating_sub(now) as f32 * TICK)),
+            },
+            _ => BombNet::None,
+        }
+    }
+}

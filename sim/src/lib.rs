@@ -7,6 +7,7 @@ pub mod hitbox;
 pub mod player;
 pub mod pmove;
 pub mod weapons;
+pub mod zones;
 
 pub type Vec3 = [f32; 3];
 

@@ -77,6 +77,10 @@ pub struct Client {
     pub map: Option<String>,
     /// Round trip to the server in ms (smoothed): how long until it acknowledges an input.
     pub ping_ms: f32,
+    /// The round (phase, clock, score), the bomb, and your money and limits.
+    pub round: RoundNet,
+    pub bomb: BombNet,
+    pub me_info: Me,
 }
 
 impl Client {
@@ -107,6 +111,9 @@ impl Client {
             practice: false,
             map: None,
             ping_ms: 0.0,
+            round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0 },
+            bomb: BombNet::None,
+            me_info: Me { money: 0, limits: Default::default(), can_buy: false, defuse_kit: false },
         })
     }
 
@@ -152,7 +159,7 @@ impl Client {
         self.history.push_back((self.seq, TimedInput { input, view_tick: self.render_tick }));
         let result = match self.id() {
             Some(id) if self.vitals.alive() => {
-                player::step(&mut self.state, &input, TICK, self.seq as f64 * TICK as f64, player::seed(id, self.seq), true, &self.world, &self.vars)
+                player::step(&mut self.state, &input, TICK, self.seq as f64 * TICK as f64, player::seed(id, self.seq), self.me_info.limits, &self.world, &self.vars)
             }
             _ => Default::default(),
         };
@@ -187,7 +194,7 @@ impl Client {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
             }
-            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, grenades, smokes, ground } => {
+            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, grenades, smokes, ground, round, bomb, me } => {
                 let Status::Connected { id } = self.status else { return };
                 if tick <= self.latest_tick {
                     return; // old or duplicate
@@ -198,6 +205,9 @@ impl Client {
                 self.grenades = grenades;
                 self.smokes = smokes;
                 self.ground = ground;
+                self.round = round;
+                self.bomb = bomb;
+                self.me_info = me;
 
                 // Correct our prediction: take the server's state, replay what it hasn't run yet.
                 if let Some(mine) = players.iter().find(|p| p.id == id) {
@@ -213,7 +223,7 @@ impl Client {
                     if self.vitals.alive() {
                         for (seq, timed) in &self.history {
                             let cmd_time = *seq as f64 * TICK as f64;
-                            player::step(&mut self.state, &timed.input, TICK, cmd_time, player::seed(id, *seq), true, &self.world, &self.vars);
+                            player::step(&mut self.state, &timed.input, TICK, cmd_time, player::seed(id, *seq), self.me_info.limits, &self.world, &self.vars);
                         }
                     }
                     let now = self.state.movement.origin;

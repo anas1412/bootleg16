@@ -11,11 +11,28 @@ pub struct PlayerState {
     pub loadout: Loadout,
 }
 
+/// What the round allows a player right now (sent to the client for its prediction).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Limits {
+    /// Can't move (freeze time, defusing); looking around is fine.
+    pub frozen: bool,
+    /// Can't shoot, swing, throw or plant (freeze time, round over).
+    pub no_attack: bool,
+}
+
 /// Run one input. `cmd_time` is this player's own command clock (input number x tick
 /// length), which all weapon timers use, so a client replaying its inputs gets the
 /// same timings as the server. `seed` drives spread and recoil randomness.
-pub fn step(s: &mut PlayerState, input: &Input, dt: f32, cmd_time: f64, seed: u64, can_shoot: bool, world: &World, vars: &MoveVars) -> (Events, Fired) {
+#[allow(clippy::too_many_arguments)]
+pub fn step(s: &mut PlayerState, input: &Input, dt: f32, cmd_time: f64, seed: u64, limits: Limits, world: &World, vars: &MoveVars) -> (Events, Fired) {
     s.movement.max_speed = s.loadout.max_speed();
+    let frozen_input;
+    let input = if limits.frozen {
+        frozen_input = Input { forward: 0.0, side: 0.0, jump: false, ..*input };
+        &frozen_input
+    } else {
+        input
+    };
     let events = pmove::step(&mut s.movement, input, dt, world, vars);
     let ctx = Context {
         now: cmd_time,
@@ -30,7 +47,8 @@ pub fn step(s: &mut PlayerState, input: &Input, dt: f32, cmd_time: f64, seed: u6
         reload: input.reload,
         slot: input.slot,
         drop: input.drop,
-        can_shoot,
+        can_shoot: !limits.no_attack,
+        in_bomb_site: world.zones.in_bomb_site(s.movement.origin),
         seed,
     };
     let fired = s.loadout.update(&ctx);

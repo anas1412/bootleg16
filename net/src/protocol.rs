@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 use sim::doors::DoorNet;
 use sim::combat::Vitals;
 use sim::hitbox::HitGroup;
+use crate::rounds::{EndReason, Phase};
+use sim::player::Limits;
 use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 10;
+pub const PROTOCOL_VERSION: u32 = 11;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -24,7 +26,7 @@ pub enum ClientMsg {
     Hello { version: u32, name: String },
     /// Inputs numbered `first_seq`, `first_seq + 1`, ...
     Inputs { first_seq: u32, inputs: Vec<TimedInput> },
-    /// Buy something (free while there's no economy).
+    /// Buy something (checked against money, buy time, buy zone and team).
     Buy { item: BuyItem },
     /// Pick a side; None = auto (the smaller team).
     JoinTeam { team: Option<Team> },
@@ -104,6 +106,53 @@ pub enum GameEvent {
     Explosion { at: [f32; 3] },
     /// A flashbang went off here; `blinded` lists who it caught and how badly.
     Flash { at: [f32; 3], blinded: Vec<(u8, sim::grenades::Blind)> },
+    /// Freeze time of round `round` began (everyone is back at their spawn).
+    RoundStart { round: u32 },
+    RoundEnd { winner: Team, reason: EndReason },
+    /// Teams swapped sides (halftime, overtime halves).
+    SidesSwapped,
+    /// The match is decided (None = draw); it starts over after the final scoreboard.
+    MatchOver { winner: Option<Team> },
+    BombPlanted { by: u8, at: [f32; 3] },
+    /// Someone started defusing (for the sound); `kit`: the fast way.
+    Defusing { by: u8, kit: bool },
+    BombDefused { by: u8 },
+    BombExploded { at: [f32; 3] },
+}
+
+/// Killer id for deaths nobody caused (the bomb).
+pub const WORLD: u8 = u8::MAX;
+
+/// The round as the HUD shows it.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct RoundNet {
+    pub phase: Phase,
+    pub round: u32,
+    /// Rounds won: terrorists, counter-terrorists.
+    pub score: [u32; 2],
+    /// Seconds left: of freeze time, of the round, or until the next round.
+    pub left: f32,
+}
+
+/// Where the bomb is (who carries it is only told to terrorists).
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub enum BombNet {
+    None,
+    Carried(u8),
+    Dropped([f32; 3]),
+    /// `left`: seconds to the explosion; `defuse`: who is defusing and seconds they still need.
+    Planted { at: [f32; 3], left: f32, defuse: Option<(u8, f32)> },
+}
+
+/// Things only you need to know about yourself.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct Me {
+    pub money: i32,
+    /// What the round allows you (your prediction applies it too).
+    pub limits: Limits,
+    /// Buy time and in your buy zone (or practice).
+    pub can_buy: bool,
+    pub defuse_kit: bool,
 }
 
 /// Which impact sound a hit makes.
@@ -145,6 +194,9 @@ pub enum ServerMsg {
         smokes: Vec<SmokeNet>,
         /// Guns lying on the ground.
         ground: Vec<(Id, [f32; 3])>,
+        round: RoundNet,
+        bomb: BombNet,
+        me: Me,
     },
 }
 

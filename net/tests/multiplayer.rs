@@ -1,81 +1,8 @@
 //! Server + two clients over real localhost UDP. Skipped when de_dust2 isn't installed.
-use goldsrc::bsp::Bsp;
-use net::{Client, Server};
-use sim::collision::World;
+mod common;
+use common::*;
 use sim::pmove::Input;
-use std::net::SocketAddr;
 use std::time::Duration;
-
-fn game_dir() -> Option<String> {
-    let home = std::env::var("HOME").ok()?;
-    Some(std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life")))
-}
-
-fn dust2() -> Option<Bsp> {
-    Bsp::load(format!("{}/cstrike/maps/de_dust2.bsp", game_dir()?)).ok()
-}
-
-fn assets() -> net::server::Assets {
-    let dir = game_dir().unwrap();
-    let model = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")).expect("player model");
-    net::server::Assets {
-        hitboxes: sim::hitbox::Hitboxes::from_model(&model, "carbine").unwrap(),
-        materials: goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!("{dir}/cstrike/sound/materials.txt")).unwrap_or_default()),
-    }
-}
-
-struct Game {
-    server: Server,
-    a: Client,
-    b: Client,
-}
-
-fn setup(bsp: &Bsp, ping_ms: u32, loss: f32) -> Game {
-    let server = Server::new(SocketAddr::from(([127, 0, 0, 1], 0)), "de_dust2", bsp, assets()).unwrap();
-    let addr = server.local_addr();
-    let mut a = Client::connect(addr, "a", World::from_bsp(bsp)).unwrap();
-    let mut b = Client::connect(addr, "b", World::from_bsp(bsp)).unwrap();
-    a.simulate_network(ping_ms, loss);
-    b.simulate_network(ping_ms, loss);
-    Game { server, a, b }
-}
-
-impl Game {
-    /// One tick of everything; a short sleep lets localhost packets arrive.
-    fn tick(&mut self, ia: Input, ib: Input) {
-        self.server.step();
-        self.a.tick(ia);
-        self.b.tick(ib);
-        std::thread::sleep(Duration::from_micros(150));
-    }
-
-    /// Connect and pick sides (auto puts them on opposite teams).
-    fn connect(&mut self) {
-        self.connect_as(None, None);
-    }
-
-    /// Connect and join the given teams (same team = neighbouring spawns, handy for shooting tests).
-    fn connect_as(&mut self, a: Option<net::protocol::Team>, b: Option<net::protocol::Team>) {
-        for _ in 0..128 {
-            self.tick(Input::default(), Input::default());
-        }
-        self.a.join_team(a);
-        for _ in 0..8 {
-            self.tick(Input::default(), Input::default());
-        }
-        self.b.join_team(b);
-        for _ in 0..128 {
-            self.tick(Input::default(), Input::default());
-        }
-        assert!(self.a.id().is_some() && self.b.id().is_some(), "{:?} {:?}", self.a.status, self.b.status);
-        assert!(self.server.player_count() >= 2);
-        assert!(self.server.vitals(self.a.id().unwrap()).unwrap().alive(), "A spawned");
-    }
-}
-
-fn dist(a: [f32; 3], b: [f32; 3]) -> f32 {
-    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
-}
 
 /// Run A along a path, then stand still; check the server, B's view and A's prediction agree.
 /// `unlag_tolerance`: with packet loss the client blends across missing snapshots,

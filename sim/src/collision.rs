@@ -158,6 +158,8 @@ pub struct World {
     water_roots: Vec<(i32, Vec3)>,
     pub ladders: Vec<Ladder>,
     pub doors: Doors,
+    /// Buy zones, bomb sites.
+    pub zones: crate::zones::Zones,
     /// Faces on each point node, for finding the texture a bullet hit.
     node_faces: Vec<(u32, u32)>,
     surfaces: Vec<Surface>,
@@ -248,6 +250,7 @@ impl World {
             water_roots,
             ladders,
             doors,
+            zones: crate::zones::Zones::from_bsp(bsp),
             node_faces: bsp.nodes.iter().map(|n| (n.first_face as u32, n.num_faces as u32)).collect(),
             surfaces,
             textures: bsp.textures.iter().map(|t| t.name.clone()).collect(),
@@ -485,6 +488,7 @@ impl World {
             water_roots: vec![(0, [0.0; 3])],
             ladders: Vec::new(),
             doors: Doors::default(),
+            zones: Default::default(),
             node_faces: vec![(0, 0)],
             surfaces: Vec::new(),
             textures: Vec::new(),

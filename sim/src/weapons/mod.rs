@@ -123,7 +123,12 @@ pub struct Loadout {
     /// Pin pulled; the throw happens on release once this time has passed.
     pin_until: Option<f64>,
     grenade_next: f64,
+    /// Planting the bomb since this time (attack held with the C4 out, in a bomb site).
+    pub planting: Option<f64>,
 }
+
+/// Seconds of holding attack to plant the bomb (CS 1.6 C4 arming time).
+pub const C4_PLANT_TIME: f64 = 3.0;
 
 /// A bullet (or pellet volley) to trace, decided by the weapon update.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -159,6 +164,8 @@ pub struct Fired {
     pub swing: Option<Swing>,
     /// The empty-clip click.
     pub dry_fire: bool,
+    /// The bomb went down (planting finished this tick).
+    pub planted: bool,
     /// A grenade left the hand: which, and the view angles (pitch, yaw) incl. punch.
     pub throw: Option<(crate::grenades::Kind, [f32; 2])>,
     /// A gun was dropped (G), with its ammo.
@@ -184,6 +191,8 @@ pub struct Context {
     pub drop: bool,
     /// Freeze time etc.: no shooting.
     pub can_shoot: bool,
+    /// Standing in a bomb site (the C4 can be planted).
+    pub in_bomb_site: bool,
     /// Per-tick random seed (player and input number).
     pub seed: u64,
 }
@@ -206,6 +215,7 @@ impl Loadout {
             grenade: 0,
             pin_until: None,
             grenade_next: 0.0,
+            planting: None,
         }
     }
 
@@ -312,7 +322,7 @@ impl Loadout {
     pub fn spread_now(&self, on_ground: bool, crouched: bool, speed_2d: f32) -> Option<f32> {
         let g = self.active_gun()?;
         let gd = gun(g.id)?;
-        let c = Context { now: 0.0, dt: 0.0, on_ground, crouched, speed_2d, yaw: 0.0, pitch: 0.0, attack: false, attack2: false, reload: false, slot: 0, drop: false, can_shoot: true, seed: 0 };
+        let c = Context { now: 0.0, dt: 0.0, on_ground, crouched, speed_2d, yaw: 0.0, pitch: 0.0, attack: false, attack2: false, reload: false, slot: 0, drop: false, can_shoot: true, in_bomb_site: false, seed: 0 };
         Some(spread(&gd.modes[g.mode as usize].spread, g.accuracy, &c, g.zoom > 0))
     }
 
@@ -342,6 +352,10 @@ impl Loadout {
 
     /// Movement speed with the current weapon.
     pub fn max_speed(&self) -> f32 {
+        // You can't move while planting.
+        if self.planting.is_some() {
+            return 1.0;
+        }
         self.active_gun().map(|g| data::max_speed(g.id, g.zoom > 0)).unwrap_or(250.0)
     }
 
@@ -424,11 +438,20 @@ impl Loadout {
             }
         }
 
+        if self.active != Slot::Bomb {
+            self.planting = None;
+        }
         if c.now < self.next_attack {
             return out;
         }
         if self.active == Slot::Knife {
-            self.knife(c, &mut out);
+            if c.can_shoot {
+                self.knife(c, &mut out);
+            }
+            return out;
+        }
+        if self.active == Slot::Bomb {
+            self.plant(c, &mut out);
             return out;
         }
         if self.active == Slot::Grenade {
@@ -634,6 +657,23 @@ impl Loadout {
             out.swing = Some(Swing { stab: false, angles: [c.pitch, c.yaw] });
             self.knife_next_primary = c.now + 0.35;
             self.knife_next_secondary = c.now + 0.5;
+        }
+    }
+
+    /// Hold attack in a bomb site, standing on the ground, for `C4_PLANT_TIME`; letting go
+    /// or leaving the site starts over. Once planted, the best other weapon comes out.
+    fn plant(&mut self, c: &Context, out: &mut Fired) {
+        if !(c.attack && c.can_shoot && c.in_bomb_site && c.on_ground) {
+            self.planting = None;
+            return;
+        }
+        let start = *self.planting.get_or_insert(c.now);
+        if c.now - start >= C4_PLANT_TIME {
+            self.planting = None;
+            self.c4 = false;
+            out.planted = true;
+            let next = [Slot::Primary, Slot::Secondary, Slot::Knife].into_iter().find(|s| self.has(*s)).unwrap_or(Slot::Knife);
+            self.switch_to(next, c.now);
         }
     }
 

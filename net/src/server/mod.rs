@@ -1,7 +1,15 @@
 //! The authoritative server: owns the world, runs every player's movement and
 //! weapons from their inputs, resolves shots with lag compensation, and sends snapshots.
+mod bomb;
+mod buy;
+mod ground;
+mod round;
+
+use crate::config::MatchConfig;
 use crate::protocol::*;
+use crate::rounds::Match;
 use crate::socket::Socket;
+use bomb::Bomb;
 use goldsrc::bsp::Bsp;
 use goldsrc::materials::Materials;
 use sim::collision::World;
@@ -25,7 +33,7 @@ const MAX_INPUT_BUDGET: f32 = 16.0;
 const BACKLOG_INPUTS: usize = 4;
 const BACKLOG_TICKS: u32 = TICK_RATE / 4;
 
-/// How a server runs the game until the round system exists.
+/// Practice room or a real match (the match settings are in `MatchConfig`).
 #[derive(Clone, Debug)]
 pub struct Rules {
     /// Practice room: everything below is set for practising.
@@ -100,6 +108,8 @@ struct Remote {
     bot: bool,
     kills: i32,
     deaths: u32,
+    money: i32,
+    defuse_kit: bool,
     state: PlayerState,
     vitals: Vitals,
     /// Tick to respawn at while dead.
@@ -160,6 +170,8 @@ pub struct Server {
     ground: Vec<GroundGun>,
     /// Kill events in `events` already counted (events are cleared at each snapshot).
     kills_settled: usize,
+    round: Match,
+    bomb: Bomb,
 }
 
 impl Server {
@@ -193,7 +205,14 @@ impl Server {
             smokes: Vec::new(),
             ground: Vec::new(),
             kills_settled: 0,
+            round: Match::new(MatchConfig::default(), TICK_RATE),
+            bomb: Bomb::None,
         })
+    }
+
+    /// Match settings (server config file). Restarts the match.
+    pub fn set_config(&mut self, cfg: MatchConfig) {
+        self.round = Match::new(cfg, TICK_RATE);
     }
 
     /// Weapons every player gets on (re)spawn, on top of the starting pistol.
@@ -268,6 +287,23 @@ impl Server {
     /// Server-side state of a player (for tests and admin tools).
     pub fn player(&self, id: u8) -> Option<&Player> {
         self.clients.values().find(|c| c.id == id).map(|c| &c.state.movement)
+    }
+
+    /// Move a player (tests and admin tools); their client corrects to it.
+    pub fn teleport(&mut self, id: u8, origin: [f32; 3]) {
+        if let Some(c) = self.clients.values_mut().find(|c| c.id == id) {
+            c.state.movement.origin = origin;
+            c.state.movement.velocity = [0.0; 3];
+        }
+    }
+
+    pub fn round_phase(&self) -> crate::rounds::Phase {
+        self.round.phase
+    }
+
+    /// Money of a player (tests, admin).
+    pub fn money(&self, id: u8) -> Option<i32> {
+        self.clients.values().find(|c| c.id == id).map(|c| c.money)
     }
 
     pub fn player_state(&self, id: u8) -> Option<&PlayerState> {
@@ -352,6 +388,9 @@ impl Server {
 
         let mut actors = Vec::new();
         let mut pending = Vec::new();
+        let mut planted = Vec::new();
+        let mut bomb_drops = Vec::new();
+        let limits: HashMap<u8, sim::player::Limits> = self.clients.values().map(|c| (c.id, self.limits(c.id))).collect();
         for c in self.clients.values_mut() {
             c.budget = (c.budget + 1.0).min(MAX_INPUT_BUDGET);
             c.used = false;
@@ -366,7 +405,13 @@ impl Server {
                     continue; // the dead don't move (their inputs are still acknowledged)
                 }
                 let cmd_time = seq as f64 * TICK as f64;
-                let (ev, fired) = player::step(&mut c.state, &input, TICK, cmd_time, player::seed(c.id, seq), true, &self.world, &self.vars);
+                let (ev, fired) = player::step(&mut c.state, &input, TICK, cmd_time, player::seed(c.id, seq), limits[&c.id], &self.world, &self.vars);
+                if fired.planted {
+                    planted.push((c.id, c.state.movement.origin));
+                }
+                if input.drop && c.state.loadout.active == data::Slot::Bomb && c.state.loadout.c4 {
+                    bomb_drops.push(c.id);
+                }
                 if ev.footstep {
                     self.events.push(GameEvent::Footstep { player: c.id, at: c.state.movement.origin });
                 }
@@ -405,6 +450,12 @@ impl Server {
         for p in pending {
             self.resolve(p);
         }
+        for (id, at) in planted {
+            self.bomb_planted(id, at);
+        }
+        for id in bomb_drops {
+            self.drop_bomb(id);
+        }
         if self.rules.infinite_ammo {
             for c in self.clients.values_mut() {
                 c.state.loadout.refill_ammo(true);
@@ -415,6 +466,9 @@ impl Server {
         self.grenades_step();
         self.settle_deaths();
         self.ground_step();
+        self.bomb_step();
+        self.settle_deaths();
+        self.round_step();
 
         self.history.push_back(PastPositions {
             tick: self.tick,
@@ -466,8 +520,17 @@ impl Server {
             let grenades: Vec<_> = self.grenades.iter().map(|g| (g.kind, g.origin)).collect();
             let smokes: Vec<SmokeNet> = self.smokes.iter().map(|s| SmokeNet { at: s.0, left: (s.1 - now) as f32 }).collect();
             let ground: Vec<(Id, [f32; 3])> = self.ground.iter().map(|g| (g.gun.id, g.origin)).collect();
-            let sends: Vec<_> = self.clients.iter().filter(|(_, c)| !c.bot).map(|(a, c)| (*a, c.last_run, c.state.loadout.clone())).collect();
-            for (addr, ack, loadout) in sends {
+            let round = self.round_net();
+            let sends: Vec<_> = self
+                .clients
+                .iter()
+                .filter(|(_, c)| !c.bot)
+                .map(|(a, c)| {
+                    let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), defuse_kit: c.defuse_kit };
+                    (*a, c.last_run, c.state.loadout.clone(), self.bomb_net(c.team), me)
+                })
+                .collect();
+            for (addr, ack, loadout, bomb, me) in sends {
                 let msg = ServerMsg::Snapshot {
                     tick,
                     ack,
@@ -478,57 +541,12 @@ impl Server {
                     grenades: grenades.clone(),
                     smokes: smokes.clone(),
                     ground: ground.clone(),
+                    round,
+                    bomb,
+                    me,
                 };
                 self.socket.send(addr, encode(&msg));
             }
-        }
-    }
-
-    /// Dropped guns fall and slide to a stop; walking over one picks it up if that slot is free.
-    fn ground_step(&mut self) {
-        for g in &mut self.ground {
-            if g.velocity == [0.0; 3] {
-                continue;
-            }
-            g.velocity[2] -= self.vars.gravity * TICK;
-            let end = std::array::from_fn(|i| g.origin[i] + g.velocity[i] * TICK);
-            let t = self.world.trace_line(g.origin, end);
-            g.origin = t.end;
-            if t.fraction < 1.0 {
-                if t.normal[2] > 0.7 {
-                    g.velocity = [0.0; 3];
-                } else {
-                    let d = g.velocity[0] * t.normal[0] + g.velocity[1] * t.normal[1] + g.velocity[2] * t.normal[2];
-                    g.velocity = std::array::from_fn(|i| g.velocity[i] - t.normal[i] * d);
-                }
-            }
-        }
-        let tick = self.tick;
-        let mut i = 0;
-        while i < self.ground.len() {
-            let g = &self.ground[i];
-            let taker = self.clients.values_mut().find(|c| {
-                let o = c.state.movement.origin;
-                let h = c.state.movement.hull();
-                let near = (0..3).all(|k| g.origin[k] >= o[k] + h.mins()[k] - 8.0 && g.origin[k] <= o[k] + h.maxs()[k] + 8.0);
-                near && c.vitals.alive() && !(c.id == g.dropper && tick < g.dropper_wait_until)
-            });
-            let gun = g.gun;
-            if taker.is_some_and(|c| c.state.loadout.pick_up(gun)) {
-                self.ground.swap_remove(i);
-            } else {
-                i += 1;
-            }
-        }
-    }
-
-    /// A player died: their primary (or pistol) falls where they were.
-    fn drop_on_death(&mut self, victim: u8) {
-        let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { return };
-        let l = &mut c.state.loadout;
-        let gun = l.primary.take().or_else(|| l.secondary.take());
-        if let Some(gun) = gun {
-            self.ground.push(GroundGun { gun, origin: c.state.movement.origin, velocity: [0.0, 0.0, -1.0], dropper: victim, dropper_wait_until: 0 });
         }
     }
 
@@ -550,7 +568,10 @@ impl Server {
                 Kind::He => {
                     let blast = g.blast_point(&self.world);
                     self.events.push(GameEvent::Explosion { at: blast });
-                    for c in self.clients.values_mut().filter(|c| c.vitals.alive()) {
+                    // Without friendly fire your own HE still hurts you, not your team.
+                    let owner_team = self.clients.values().find(|c| c.id == g.owner).map(|c| c.team);
+                    let ff = self.round.cfg.friendly_fire;
+                    for c in self.clients.values_mut().filter(|c| c.vitals.alive() && (ff || c.id == g.owner || Some(c.team) != owner_team)) {
                         let dmg = grenades::he_damage(blast, c.state.movement.origin);
                         if dmg <= 0.0 {
                             continue;
@@ -626,9 +647,11 @@ impl Server {
             }
         }
         let tick = self.tick;
+        let shooter_team = self.clients.values().find(|c| c.id == p.shooter).map(|c| c.team);
+        let ff = self.round.cfg.friendly_fire;
         for (victim, damage, group, weapon, at) in hits {
             let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { continue };
-            if !c.vitals.alive() {
+            if !c.vitals.alive() || (!ff && Some(c.team) == shooter_team) {
                 continue;
             }
             let (health, armor) = combat::bullet_damage(&c.vitals, damage, group, data::armor_factor(weapon), false);
@@ -655,10 +678,16 @@ impl Server {
             GameEvent::Kill { killer, victim, .. } => Some((*killer, *victim)),
             _ => None,
         }).collect();
+        let respawns = self.respawns();
         for (killer, victim) in kills.into_iter().skip(self.kills_settled) {
             if let Some(v) = self.clients.values_mut().find(|c| c.id == victim) {
                 v.deaths += 1;
+                if !respawns {
+                    v.respawn_at = None; // wait for the next round
+                }
             }
+            self.kill_money(killer, victim);
+            self.drop_bomb(victim);
             if let Some(k) = self.clients.values_mut().find(|c| c.id == killer) {
                 k.kills += if killer == victim { -1 } else { 1 };
             }
@@ -683,7 +712,9 @@ impl Server {
                     let id = (0..=u8::MAX).find(|i| self.clients.values().all(|c| c.id != *i)).unwrap_or(0);
                     // Everyone starts as a spectator and picks a side (JoinTeam), like CS.
                     let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
-                    self.clients.insert(from, Remote::new(id, name, self.tick));
+                    let mut r = Remote::new(id, name, self.tick);
+                    r.money = self.round.cfg.start_money;
+                    self.clients.insert(from, r);
                 }
                 let id = self.clients[&from].id;
                 self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), tick_rate: TICK_RATE, practice: self.rules.practice }));
@@ -703,41 +734,7 @@ impl Server {
                     c.queue.pop_front();
                 }
             }
-            ClientMsg::Buy { item } => {
-                // Free for everyone until rounds and money exist.
-                let Some(c) = self.clients.get_mut(&from) else { return };
-                if !c.vitals.alive() {
-                    return;
-                }
-                let now = c.last_run as f64 * TICK as f64;
-                let l = &mut c.state.loadout;
-                match item {
-                    BuyItem::Weapon(id) => {
-                        // Buying a gun for a taken slot drops the old one, like CS.
-                        let taken = match data::def(id).slot {
-                            data::Slot::Primary => l.primary.is_some(),
-                            data::Slot::Secondary => l.secondary.is_some(),
-                            _ => false,
-                        };
-                        if taken && sim::weapons::is_gun(id) {
-                            l.switch_to(data::def(id).slot, now);
-                            if let Some(old) = l.drop_active(now) {
-                                let o = c.state.movement.origin;
-                                self.ground.push(GroundGun { gun: old, origin: o, velocity: [0.0, 0.0, -1.0], dropper: c.id, dropper_wait_until: self.tick + REPICK_TICKS });
-                            }
-                        }
-                        c.state.loadout.give(id, now);
-                    }
-                    BuyItem::PrimaryAmmo => l.refill_ammo(true),
-                    BuyItem::SecondaryAmmo => l.refill_ammo(false),
-                    BuyItem::Kevlar => c.vitals.armor = combat::MAX_ARMOR,
-                    BuyItem::KevlarHelmet => {
-                        c.vitals.armor = combat::MAX_ARMOR;
-                        c.vitals.helmet = true;
-                    }
-                    BuyItem::DefuseKit | BuyItem::NightVision => {} // with the bomb / later
-                }
-            }
+            ClientMsg::Buy { item } => self.buy(from, item),
             ClientMsg::JoinTeam { team } => {
                 let (t, ct) = self.clients.values().filter(|c| !c.bot).fold((0, 0), |(t, ct), c| match c.team {
                     Team::T => (t + 1, ct),
@@ -745,6 +742,8 @@ impl Server {
                     Team::Spectator => (t, ct),
                 });
                 let tick = self.tick;
+                // Mid-round you wait for the next one (freeze time still lets you in).
+                let can_spawn = self.respawns() || self.round.phase == crate::rounds::Phase::Freeze;
                 let Some(c) = self.clients.get_mut(&from) else { return };
                 let team = team.unwrap_or(if t <= ct { Team::T } else { Team::Ct });
                 if c.team == team {
@@ -752,7 +751,9 @@ impl Server {
                 }
                 c.team = team;
                 c.vitals.health = 0.0; // switching sides respawns you (or makes you watch)
-                c.respawn_at = if team == Team::Spectator { None } else { Some(tick) };
+                c.respawn_at = if team == Team::Spectator || !can_spawn { None } else { Some(tick) };
+                let id = c.id;
+                self.drop_bomb(id);
                 self.place_dummies();
             }
             ClientMsg::Bye => {
@@ -772,6 +773,8 @@ impl Remote {
             bot: false,
             kills: 0,
             deaths: 0,
+            money: 0,
+            defuse_kit: false,
             state: PlayerState { movement: Player::new([0.0; 3]), loadout: Loadout::knife_only() },
             vitals: Vitals { health: 0.0, ..Vitals::default() },
             respawn_at: None,

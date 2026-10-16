@@ -32,6 +32,7 @@ impl Sim {
             slot: 0,
             drop: false,
             can_shoot: true,
+            in_bomb_site: false,
             seed: self.tick,
         }
     }
@@ -288,4 +289,32 @@ fn q_wheel_and_drop() {
     assert_eq!(s.l.active, Slot::Knife);
     assert!(s.l.pick_up(dropped));
     assert!(!s.l.pick_up(GunState::new(Id::M4a1)), "slot taken");
+}
+
+#[test]
+fn c4_plants_after_three_seconds_held_in_a_site_only() {
+    let mut s = Sim::with(Id::Glock);
+    s.l.give(Id::C4, 0.0);
+    s.step(|c| c.slot = 5);
+    s.idle(1.0);
+    assert_eq!(s.l.active, Slot::Bomb);
+    // Outside a site: nothing, and you can still move.
+    let planted = (0..512).any(|_| s.step(attack).planted);
+    assert!(!planted && s.l.planting.is_none() && s.l.max_speed() > 200.0);
+    // In a site: frozen while planting, done after 3 s.
+    let in_site = |c: &mut Context| {
+        c.attack = true;
+        c.in_bomb_site = true;
+    };
+    let ticks = (0..1000).position(|_| s.step(in_site).planted).expect("planted");
+    assert!((380..=390).contains(&ticks), "{ticks} ticks");
+    assert!(!s.l.c4 && s.l.active == Slot::Secondary, "bomb gone, pistol out");
+    // Letting go halfway starts over.
+    s.l.give(Id::C4, s.now);
+    s.step(|c| c.slot = 5);
+    s.idle(1.0);
+    s.hold(1.5, in_site);
+    assert!(s.l.planting.is_some() && s.l.max_speed() < 2.0);
+    s.idle(0.1);
+    assert!(s.l.planting.is_none());
 }
