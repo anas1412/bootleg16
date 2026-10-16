@@ -84,7 +84,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Stat heuristics for aimbots, match replays, reports
 - [ ] 64-tick server option (tick rate is a constant 128 today)
 - [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)
-- [ ] Encryption/authentication, NAT traversal, server browser
+- [ ] Official dedicated servers (decided 2026-10-16: fair, no player hosting) + casual matchmaking with competitive rules, no ranks yet; server list by region
+- [ ] Encryption/authentication
 - [ ] Prediction error smoothing (corrections are applied instantly)
 
 ### Voice
