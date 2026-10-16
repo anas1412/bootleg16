@@ -157,9 +157,10 @@ impl MatchConfig {
 }
 
 /// The maps matches are played on (each server has the ones it finds in its game files).
-pub const MAP_POOL: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train", "de_mirage"];
-/// The pool maps every CS 1.6 install has; others (de_mirage: a community map) only some
-/// players have, so a match only gets a map all its players reported having.
+/// (de_mirage: on hold, decided 2026-10-16; it's a community map not every install has.)
+pub const MAP_POOL: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"];
+/// The pool maps every CS 1.6 install has; any others only some players have, so a match
+/// only gets a map all its players reported having.
 pub const STOCK_MAPS: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"];
 
 /// The pool maps in a game folder (`cstrike/maps/<name>.bsp`).
