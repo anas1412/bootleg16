@@ -24,6 +24,7 @@ pub enum UiAction {
     Volume(f32),
     FpsMax(i32),
     ToggleVsync,
+    CycleTeamIds,
     Quit,
     Resume,
     Leave,

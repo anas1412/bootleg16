@@ -38,11 +38,13 @@ pub struct Settings {
     /// Frame rate cap (0 = none), like CS's fps_max.
     pub fps_max: u32,
     pub vsync: bool,
+    /// CS2 "Show Team ID Through Walls": 0 off, 1 pips, 2 pips and names.
+    pub team_ids: u8,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false }
+        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, team_ids: 2 }
     }
 }
 
@@ -61,6 +63,7 @@ impl Settings {
                     Some(("volume", v)) => s.volume = v.trim().parse().unwrap_or(s.volume),
                     Some(("fps_max", v)) => s.fps_max = v.trim().parse().unwrap_or(s.fps_max),
                     Some(("vsync", v)) => s.vsync = v.trim() == "true",
+                    Some(("team_ids", v)) => s.team_ids = v.trim().parse::<u8>().unwrap_or(s.team_ids).min(2),
                     _ => {}
                 }
             }
@@ -71,7 +74,7 @@ impl Settings {
     fn save(&self) {
         let p = settings_path();
         let _ = std::fs::create_dir_all(p.parent().unwrap());
-        let _ = std::fs::write(p, format!("name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\n", self.name, self.sensitivity, self.volume, self.fps_max, self.vsync));
+        let _ = std::fs::write(p, format!("name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nteam_ids={}\n", self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.team_ids));
     }
 }
 
@@ -273,6 +276,8 @@ fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res
                         let cap = if settings.fps_max == 0 { "unlimited".to_string() } else { settings.fps_max.to_string() };
                         setting_row(p, &format!("Max FPS: {cap}"), UiAction::FpsMax(-1), UiAction::FpsMax(1));
                         button(p, if settings.vsync { "VSync: on" } else { "VSync: off" }, UiAction::ToggleVsync, settings.vsync);
+                        let ids = ["off", "pips", "pips + names"][settings.team_ids as usize];
+                        button(p, &format!("Team IDs through walls: {ids}"), UiAction::CycleTeamIds, settings.team_ids > 0);
                     });
                 }
             });
@@ -355,6 +360,10 @@ fn menu_actions(
                 const CAPS: [u32; 8] = [60, 100, 144, 200, 240, 300, 500, 0];
                 let i = CAPS.iter().position(|c| *c == settings.fps_max).unwrap_or(5) as i32;
                 settings.fps_max = CAPS[(i + step).clamp(0, CAPS.len() as i32 - 1) as usize];
+                settings.save();
+            }
+            UiAction::CycleTeamIds => {
+                settings.team_ids = (settings.team_ids + 1) % 3;
                 settings.save();
             }
             UiAction::ToggleVsync => {

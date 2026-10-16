@@ -24,6 +24,7 @@ mod models;
 mod players;
 mod round_hud;
 mod sound;
+mod teammates;
 mod ui;
 mod viewmodel;
 
@@ -71,6 +72,7 @@ fn main() {
             hud::HudPlugin,
             round_hud::RoundHudPlugin,
             bomb::BombPlugin,
+            teammates::TeammatesPlugin,
         ))
         .add_systems(Update, screenshot)
         .run();
