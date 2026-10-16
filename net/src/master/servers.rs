@@ -4,12 +4,13 @@ use super::*;
 
 impl Master {
     /// Write a report down for review: who, whom (Steam ids and names), why, where.
-    pub(super) fn file_report(&mut self, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: &str, round: u32) {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn file_report(&mut self, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: &str, round: u32, demo: &str, tick: u32) {
         let (Some(by), Some(of)) = (self.seats.get(&reporter), self.seats.get(&target)) else { return };
         let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         // Names have no control characters (see Hello), so Debug quoting is valid JSON here.
         let line = format!(
-            "{{\"time\":{time},\"reason\":\"{reason:?}\",\"reporter\":{{\"steam\":{},\"name\":{:?}}},\"reported\":{{\"steam\":{},\"name\":{:?}}},\"map\":{map:?},\"round\":{round}}}",
+            "{{\"time\":{time},\"reason\":\"{reason:?}\",\"reporter\":{{\"steam\":{},\"name\":{:?}}},\"reported\":{{\"steam\":{},\"name\":{:?}}},\"map\":{map:?},\"round\":{round},\"demo\":{demo:?},\"tick\":{tick}}}",
             by.0, by.1, of.0, of.1
         );
         println!("report: {line}");
@@ -49,7 +50,7 @@ impl Master {
                 self.servers.insert(from, GameServer { public, region, key, official: true, busy, seen: Instant::now(), sent, deathmatch, players, max, seated });
             }
             Some(LobbyMsg::Result { winners, losers, abandoned }) if self.role == Role::Active => self.match_result(&winners, &losers, &abandoned),
-            Some(LobbyMsg::Report { reporter, target, reason, map, round }) if self.role == Role::Active => self.file_report(reporter, target, reason, &map, round),
+            Some(LobbyMsg::Report { reporter, target, reason, map, round, demo, tick }) if self.role == Role::Active => self.file_report(reporter, target, reason, &map, round, &demo, tick),
             _ => {}
         }
     }

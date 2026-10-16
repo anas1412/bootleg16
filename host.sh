@@ -24,7 +24,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # Everything in hosting/ is private: the token (and the configs holding it) are secrets.
 umask 077
-mkdir -p hosting hosting/reports hosting/keys
+mkdir -p hosting hosting/reports hosting/keys hosting/demos
 chmod -R go-rwx hosting
 compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
 # The containers run as you (not root): they can read the private files and nothing else.
@@ -174,13 +174,14 @@ rm -f hosting/server*.cfg
     [ "$i" -gt "$SERVERS" ] && { mode=deathmatch; slots=20; }
     sed -e "s|^master = \"\"|master = \"$lobby_addr\"|" \
         -e "s|^mode = .*|mode = \"$mode\"|" \
+        -e "s|^demos = .*|demos = \"/bootleg16/demos\"|" \
         -e "s|^max_players = .*|max_players = $slots|" \
         -e "s|^official_token = \"\"|official_token = \"$token\"|" \
         -e "s|^public_address = \"\"|public_address = \"$IP:$port\"|" \
         -e "s|^name = .*|name = \"$(hostname)-$i\"|" \
         -e "s|^region = .*|region = \"$REGION\"|" \
         config/server.cfg > "hosting/server$i.cfg"
-    echo "  server$i: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, stop_grace_period: 3h, command: server de_dust2 $port --config /bootleg16/server.cfg, volumes: [./server$i.cfg:/bootleg16/server.cfg:ro, ./game:/game:ro]}"
+    echo "  server$i: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, stop_grace_period: 3h, command: server de_dust2 $port --config /bootleg16/server.cfg, volumes: [./server$i.cfg:/bootleg16/server.cfg:ro, ./game:/game:ro, ./demos:/bootleg16/demos]}"
   done
 } > hosting/compose.yaml
 

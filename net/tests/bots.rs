@@ -80,12 +80,17 @@ fn play(server: &mut Server, bots: &mut [Bot], secs: u32, events: &mut Vec<GameE
 fn ten_bots_play_a_whole_match() {
     let Some(bsp) = dust2() else { return };
     let map = BotMap::new(bsp);
-    let (mut server, mut bots) = booked(&map, short);
+    // Recorded too, to keep an eye on recording sizes.
+    let demos = std::env::temp_dir().join(format!("bootleg16-bot-demos-{}", std::process::id()));
+    let (mut server, mut bots) = booked(&map, |l| net::config::MatchConfig { demos: demos.to_string_lossy().into(), ..short(l) });
     let mut events = Vec::new();
     let secs = play(&mut server, &mut bots, 6 * 60, &mut events, |b, _| b.iter().all(|b| b.client.match_ended));
     let count = |f: fn(&GameEvent) -> bool| events.iter().filter(|e| f(e)).count();
     let (kills, rounds, plants) = (count(|e| matches!(e, GameEvent::Kill { .. })), count(|e| matches!(e, GameEvent::RoundEnd { .. })), count(|e| matches!(e, GameEvent::BombPlanted { .. })));
     println!("{rounds} rounds, {kills} kills, {plants} plants, {secs:.0} game seconds");
+    let size: u64 = std::fs::read_dir(&demos).map(|d| d.flatten().filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum()).unwrap_or(0);
+    println!("recording: {} KB, {:.1} MB per hour of 10 players", size / 1024, size as f64 / secs as f64 * 3600.0 / 1e6);
+    let _ = std::fs::remove_dir_all(&demos);
     assert!(events.iter().any(|e| matches!(e, GameEvent::MatchOver { .. })));
     assert!(rounds >= 3 && kills > 0, "{rounds} rounds, {kills} kills");
     assert!(!server.is_reserved(), "server free for the next match");

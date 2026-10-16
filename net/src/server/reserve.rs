@@ -76,6 +76,7 @@ impl Server {
         let knife = if setup.knife_round { Knife::Pending } else { Knife::Done };
         self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T, left_at: HashMap::new(), vote: None, voted_in_round: [None; 2], empty_since: None, reports: Vec::new(), winner: None, kicked: Vec::new(), kick_called: HashMap::new() });
         self.round = crate::rounds::Match::new(self.round.cfg.clone(), TICK_RATE);
+        self.start_recording();
     }
 
     /// The team a group plays on now: A starts T, B CT, and they swap with every side swap.
@@ -224,6 +225,7 @@ impl Server {
     /// The match is over: tell everyone, and free the server for the next one.
     pub(super) fn finish_reserved(&mut self) {
         let Some(r) = self.reserved.take() else { return };
+        self.stop_recording();
         // Tell the lobby how it went (for the hidden skill ratings and abandon cooldowns).
         let a = r.a_side;
         let team_of = |g: Group| if g == Group::A { a } else { crate::rounds::other(a) };

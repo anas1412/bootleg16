@@ -5,6 +5,8 @@
 //! `--give` hands every player extra weapons on spawn.
 //! `--practice <dummies>` runs the practice room (infinite ammo, quick respawn, standing dummies).
 //! There are no bots: matches are people only.
+//! `--play <recording.bdem> [port] [--speed N] [--from TICK]`: replay a match recording; join
+//! it with the game (`client --connect 127.0.0.1:<port>`) to watch it as a spectator.
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::path::PathBuf;
@@ -14,6 +16,10 @@ fn main() {
     let mut give = Vec::new();
     let mut practice: Option<u8> = None;
     let mut config: Option<PathBuf> = None;
+    let all: Vec<String> = std::env::args().collect();
+    if let Some(i) = all.iter().position(|a| a == "--play") {
+        return play(&all, i);
+    }
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         if a == "--practice" {
@@ -70,4 +76,19 @@ fn on_stop_signal() {
         signal(SIGINT, handler);
         signal(SIGTERM, handler);
     }
+}
+
+/// Replay a recording for the game to watch.
+fn play(args: &[String], i: usize) {
+    let file = args.get(i + 1).expect("--play <recording.bdem>");
+    let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).and_then(|v| v.parse::<u32>().ok());
+    let port = args.iter().skip(1).filter(|a| !a.starts_with("--")).filter_map(|a| a.parse::<u16>().ok()).next().unwrap_or(net::protocol::DEFAULT_PORT);
+    let mut replay = net::replay::Replay::open(SocketAddr::from(([127, 0, 0, 1], port)), std::path::Path::new(file)).unwrap_or_else(|e| panic!("{e}"));
+    replay.speed = flag("--speed").unwrap_or(1);
+    if let Some(tick) = flag("--from") {
+        replay.skip_to(tick);
+    }
+    let h = replay.header();
+    println!("replaying {} ({}, recorded on {}): watch with  client --connect {}", file, h.map, h.server, replay.local_addr());
+    replay.run();
 }

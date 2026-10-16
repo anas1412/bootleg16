@@ -18,6 +18,7 @@ mod sealed;
 /// Ticks between heartbeats to the lobby.
 const HEARTBEAT_EVERY: u32 = crate::master::HEARTBEAT_SECONDS as u32 * TICK_RATE;
 mod round;
+mod recording;
 mod running;
 mod setup;
 pub use setup::{Assets, Rules};
@@ -176,6 +177,8 @@ pub struct Server {
     server_key: Option<crate::crypto::ServerKey>,
     /// When the last booking we took was sealed (older ones are replays).
     last_booking: u64,
+    /// The match being recorded (see `recording`).
+    recorder: Option<crate::demo::Recorder>,
     /// Deathmatch seats the lobby handed out: ticket -> (key, when). Unused ones expire.
     seats: HashMap<u64, ([u8; 32], u32)>,
     /// A new player's channel, opened from their ticket's key while their join is checked.
@@ -223,6 +226,7 @@ impl Server {
             last_booking: 0,
             joining: None,
             seats: HashMap::new(),
+            recorder: None,
         })
     }
 

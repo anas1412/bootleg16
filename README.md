@@ -58,6 +58,16 @@ Its game servers join the same pool. Run `./host.sh token` on the main machine i
 - On the machine: run `./host.sh firewall` once (it asks for sudo). Kernel rules drop junk sizes and fragments, limit every source address, keep our traffic out of connection tracking, and let only your standby lobby reach the lobbies' TCP port. It loads again at every boot.
 - Upstream: a flood that fills the machine's internet line can't be stopped on the machine. Rent servers from a provider that filters floods before they reach you (OVHcloud's game servers, Path.net and Gcore offer UDP/game filtering; most big clouds offer something). That part is a provider choice, not code.
 
+**Match recordings:** every booked match is recorded (the whole truth: everyone, everywhere, every event) into `hosting/demos/`, about 12 MB per hour, kept 14 days (`demo_days` in `config/server.cfg`). A report names the recording and the moment (`demo`, `tick` in `reports.jsonl`). To watch one, replay it and join with the game as a spectator (`--from` jumps to a tick, `--speed 2` plays faster):
+
+```bash
+cargo run --release -p server -- --play hosting/demos/<file>.bdem --from <tick>
+```
+
+```bash
+cargo run -p client -- --connect 127.0.0.1:27015
+```
+
 **Leavers and reports:** one player leaving changes nothing (their seat waits, they can come back). After 5 minutes away they count as abandoned, and their team can call a surrender vote in game (F3, then F1 yes / F2 no; a majority of the team still there). If a whole side is gone the match pauses, and forfeits after 5 minutes. Player reports land in `hosting/reports/reports.jsonl` on the lobby machine, one line per report with both players' Steam ids, the reason, map and round.
 
 **Match rules** (rounds, money, timers) live in `config/server.cfg`. Edit it, then run `./host.sh` again.

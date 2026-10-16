@@ -47,6 +47,10 @@ pub struct MatchConfig {
     /// What the server runs: 5 v 5 matches booked by the lobby, or deathmatch (drop in any
     /// time, see `Rules::deathmatch`).
     pub deathmatch: bool,
+    /// Where booked matches are recorded (empty: not recorded), and for how many days
+    /// recordings are kept.
+    pub demos: String,
+    pub demo_days: u32,
 }
 
 impl Default for MatchConfig {
@@ -74,6 +78,8 @@ impl Default for MatchConfig {
             public_address: String::new(),
             max_players: 10,
             deathmatch: false,
+            demos: String::new(),
+            demo_days: 14,
         }
     }
 }
@@ -126,6 +132,8 @@ impl MatchConfig {
                 "official_token" => c.official_token = v.to_string(),
                 "public_address" => c.public_address = v.to_string(),
                 "max_players" => c.max_players = v.parse().map_err(|_| bad())?,
+                "demos" => c.demos = v.to_string(),
+                "demo_days" => c.demo_days = v.parse().map_err(|_| bad())?,
                 "mode" => {
                     c.deathmatch = match v {
                         "match" => false,

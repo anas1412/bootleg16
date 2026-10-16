@@ -36,6 +36,8 @@ impl Server {
             let ground: Vec<(Id, [f32; 3])> = self.ground.iter().map(|g| (g.gun.id, g.origin)).collect();
             let round = self.round_net();
             let broken = self.broken_models();
+            // The recording gets everything, before anything is culled per player.
+            self.record(&players, &events, &doors, &broken, &grenades, &smokes, &ground, &round);
             let viewers: Vec<u8> = self.clients.values().filter(|c| !c.bot).map(|c| c.id).collect();
             let sights: HashMap<u8, std::collections::HashSet<u8>> = viewers.iter().map(|id| (*id, self.visible_to(*id))).collect();
             let sends: Vec<_> = self

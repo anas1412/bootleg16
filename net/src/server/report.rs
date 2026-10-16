@@ -18,7 +18,8 @@ impl Server {
         }
         r.reports.push((reporter, target));
         let Some(key) = &self.server_key else { return };
-        let msg = crate::master::LobbyMsg::Report { reporter, target, reason, map: self.map.clone(), round: self.round.round };
+        let (demo, tick) = self.recording_now();
+        let msg = crate::master::LobbyMsg::Report { reporter, target, reason, map: self.map.clone(), round: self.round.round, demo, tick };
         let sealed = key.seal(&encode(&msg));
         // To every lobby: only the active one files it.
         for lobby in self.lobbies.clone() {
