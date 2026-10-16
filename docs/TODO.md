@@ -79,7 +79,8 @@ land, and add new ones here instead of leaving them only in chat.
 ### Networking (`docs/NETWORKING.md`)
 - [x] Anti-wallhack: enemies out of line of sight aren't sent (net/src/server/visibility.rs): rays from your eyes to their grown box, 0.15 s look-ahead, 0.25 s grace; teammates/dead/spectators see all; footsteps and shots still sent within hearing range
 - [ ] Visibility ignores doors and glass (only the static world blocks sight): safe, but leaks players behind closed doors; smoke doesn't hide either
-- [ ] Map check on join (same map file), map change / map vote
+- [x] Map check on join: the server sends its map file's hash (FNV-1a) in Welcome; a client with a different file goes back to the menu
+- [ ] Map change / map vote; downloading the server's map
 - [ ] Stat heuristics for aimbots, match replays, reports
 - [ ] 64-tick server option (tick rate is a constant 128 today)
 - [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)

@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 13;
+pub const PROTOCOL_VERSION: u32 = 14;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -176,7 +176,8 @@ pub struct SmokeNet {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ServerMsg {
     /// `practice`: practice room rules (no rounds, free buys, infinite ammo, dummies).
-    Welcome { id: u8, map: String, tick_rate: u32, practice: bool },
+    /// `map_hash`: the server's map file (`Bsp::hash`); a client with a different file must leave.
+    Welcome { id: u8, map: String, map_hash: u64, tick_rate: u32, practice: bool },
     Reject { reason: String },
     /// Scoreboard, sent a few times a second.
     Scores(Vec<Score>),

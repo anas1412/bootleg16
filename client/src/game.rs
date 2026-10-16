@@ -70,6 +70,13 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res
     let Some(mut client) = pending.0.take() else { return };
     let path = game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
     match goldsrc::bsp::Bsp::load(&path) {
+        // Same map name isn't enough: a changed file would mean different walls on our side.
+        Ok(bsp) if bsp.hash != client.map_hash => {
+            client.disconnect();
+            commands.insert_resource(MenuError(format!("Your {} is different from the server's (different version or modified). Get the server's map file.", config.map)));
+            next.set(AppState::Menu);
+            return;
+        }
         Ok(bsp) => client.world = sim::collision::World::from_bsp(&bsp),
         Err(e) => {
             commands.insert_resource(MenuError(format!("You don't have {} ({e})", config.map)));

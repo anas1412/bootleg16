@@ -109,6 +109,8 @@ pub struct Bsp {
     pub nodes: Vec<Node>,
     /// Contents of each leaf (-1 empty, -2 solid, -3 water, -4 slime, -5 lava, -16 ladder...).
     pub leaf_contents: Vec<i32>,
+    /// FNV-1a hash of the whole file: two players have the same map only if these match.
+    pub hash: u64,
 }
 
 /// Render/point BSP node (hull 0). Children >= 0 are nodes; negative child c is leaf -(c + 1).
@@ -166,6 +168,11 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// FNV-1a, 64 bit: simple and fast enough for a map file (a few MB).
+fn fnv1a(data: &[u8]) -> u64 {
+    data.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ *b as u64).wrapping_mul(0x0000_0100_0000_01b3))
+}
+
 impl Bsp {
     pub fn load(path: impl AsRef<Path>) -> Result<Bsp, BspError> {
         Self::parse(&fs::read(path)?)
@@ -187,7 +194,7 @@ impl Bsp {
             Ok(Reader::new(s, what))
         };
 
-        let mut bsp = Bsp::default();
+        let mut bsp = Bsp { hash: fnv1a(data), ..Bsp::default() };
 
         bsp.entities = String::from_utf8_lossy(lump(L_ENTITIES, "entities")?.data).trim_end_matches('\0').to_string();
 
@@ -342,6 +349,15 @@ impl Bsp {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn map_hash_is_fnv1a_and_sees_one_changed_byte() {
+        assert_eq!(super::fnv1a(b"a"), 0xaf63_dc4c_8601_ec8c); // the published FNV-1a 64 test value
+        let mut map = vec![7u8; 4096];
+        let h = super::fnv1a(&map);
+        map[2000] ^= 1;
+        assert_ne!(super::fnv1a(&map), h);
+    }
+
     use super::*;
 
     #[test]

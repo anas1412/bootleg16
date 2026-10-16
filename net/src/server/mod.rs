@@ -149,6 +149,7 @@ struct Pending {
 pub struct Server {
     socket: Socket,
     map: String,
+    map_hash: u64,
     world: World,
     assets: Assets,
     vars: MoveVars,
@@ -192,6 +193,7 @@ impl Server {
         Ok(Server {
             socket: Socket::bind(bind)?,
             map: map.to_string(),
+            map_hash: bsp.hash,
             world: World::from_bsp(bsp),
             assets,
             vars: MoveVars::default(),
@@ -729,7 +731,7 @@ impl Server {
                     self.clients.insert(from, r);
                 }
                 let id = self.clients[&from].id;
-                self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), tick_rate: TICK_RATE, practice: self.rules.practice }));
+                self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), map_hash: self.map_hash, tick_rate: TICK_RATE, practice: self.rules.practice }));
             }
             ClientMsg::Inputs { first_seq, inputs } => {
                 let Some(c) = self.clients.get_mut(&from) else { return };

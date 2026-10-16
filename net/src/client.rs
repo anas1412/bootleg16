@@ -73,8 +73,9 @@ pub struct Client {
     pub scores: Vec<Score>,
     /// The server runs practice rules.
     pub practice: bool,
-    /// The server's map, once welcomed.
+    /// The server's map and its file hash, once welcomed.
     pub map: Option<String>,
+    pub map_hash: u64,
     /// Round trip to the server in ms (smoothed): how long until it acknowledges an input.
     pub ping_ms: f32,
     /// The round (phase, clock, score), the bomb, and your money and limits.
@@ -110,6 +111,7 @@ impl Client {
             scores: Vec::new(),
             practice: false,
             map: None,
+            map_hash: 0,
             ping_ms: 0.0,
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0 },
             bomb: BombNet::None,
@@ -182,11 +184,12 @@ impl Client {
 
     fn handle(&mut self, msg: ServerMsg) {
         match msg {
-            ServerMsg::Welcome { id, map, practice, .. } => {
+            ServerMsg::Welcome { id, map, map_hash, practice, .. } => {
                 if self.status == Status::Connecting {
                     self.status = Status::Connected { id };
                     self.practice = practice;
                     self.map = Some(map);
+                    self.map_hash = map_hash;
                 }
             }
             ServerMsg::Scores(s) => self.scores = s,

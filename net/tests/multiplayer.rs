@@ -275,3 +275,13 @@ fn practice_room_dummies_and_infinite_ammo() {
     let gun = *g.server.player_state(g.a.id().unwrap()).unwrap().loadout.active_gun().unwrap();
     assert_eq!((gun.id, gun.reserve), (Id::Ak47, 90));
 }
+
+#[test]
+fn welcome_carries_the_servers_map_file_hash() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 0, 0.0);
+    g.connect();
+    // The client compares this with its own file before playing (client/src/game.rs).
+    assert_eq!(g.a.map_hash, bsp.hash);
+    assert_ne!(bsp.hash, 0);
+}
