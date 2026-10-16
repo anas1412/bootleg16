@@ -258,8 +258,8 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mu
                     anims.write(PlayerAnim::Shot(shooter, silenced));
                 }
             }
-            GameEvent::Footstep { player, at } if Some(player) != me => {
-                w.cues.push(sound::Cue::Footstep { feet: [at[0], at[1], at[2] - 36.0], own: false, ladder: false, water: false });
+            GameEvent::Footstep { player, at, step } if Some(player) != me => {
+                w.cues.push(sound::Cue::Footstep { feet: [at[0], at[1], at[2] - 36.0], who: Some(player), step });
             }
             GameEvent::Damage { attacker, victim, sound, group, at, .. } => {
                 let victim_at = eye_of(&w, victim);

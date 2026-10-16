@@ -33,8 +33,8 @@ impl Server {
                 if input.drop && c.state.loadout.active == data::Slot::Bomb && c.state.loadout.c4 {
                     bomb_drops.push(c.id);
                 }
-                if ev.footstep {
-                    self.events.push(GameEvent::Footstep { player: c.id, at: c.state.movement.origin });
+                if let Some(step) = ev.footstep {
+                    self.events.push(GameEvent::Footstep { player: c.id, at: c.state.movement.origin, step });
                 }
                 if ev.fall_damage > 0.0 && c.vitals.hurt(ev.fall_damage, 0.0) {
                     c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });

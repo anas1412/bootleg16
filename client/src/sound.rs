@@ -14,14 +14,14 @@ use std::path::PathBuf;
 /// GoldSrc attenuations: how fast a sound fades with distance (silent at 1000/attn units).
 pub const ATTN_NORM: f32 = 0.8;
 const ATTN_FAR: f32 = 0.3;
-const ATTN_QUIET: f32 = 1.6;
 
 /// Something that should make a sound this frame.
 #[derive(Clone, Debug)]
 pub enum Cue {
     /// `at` None = our own (heard in the head, not positioned).
     Shot { weapon: Id, silenced: bool, at: Option<[f32; 3]> },
-    Footstep { feet: [f32; 3], own: bool, ladder: bool, water: bool },
+    /// `who` None = our own (heard in the head).
+    Footstep { feet: [f32; 3], who: Option<u8>, step: sim::pmove::Step },
     Hit { sound: net::protocol::HitSound, at: Option<[f32; 3]> },
     Death { at: Option<[f32; 3]> },
     Explosion { at: [f32; 3] },
@@ -44,12 +44,14 @@ pub struct Sounds {
     materials: Materials,
     /// Cheap per-sound randomness (pitch, variant picks); doesn't need to be deterministic.
     rng: u64,
+    /// Whose next footstep is the left foot (None: ours).
+    left_foot: HashMap<Option<u8>, bool>,
 }
 
 impl Sounds {
     pub fn new(game_dir: PathBuf) -> Sounds {
         let materials = std::fs::read_to_string(game_dir.join("cstrike/sound/materials.txt")).map(|t| Materials::parse(&t)).unwrap_or_default();
-        Sounds { dir: game_dir.join("cstrike/sound"), cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D }
+        Sounds { dir: game_dir.join("cstrike/sound"), cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new() }
     }
 
     fn rand(&mut self) -> f32 {
@@ -76,7 +78,8 @@ impl Sounds {
     }
 }
 
-/// The firing sound for a weapon (CS picks between variants where there are two).
+/// The firing sound for a weapon (CS picks between variants where there are two; volume 1,
+/// attenuation `fire_attenuation`, pitch 94..109%: `EV_Fire*` in client.so).
 fn fire_sound(id: Id, silenced: bool) -> &'static [&'static str] {
     use Id::*;
     match id {
@@ -95,7 +98,7 @@ fn fire_sound(id: Id, silenced: bool) -> &'static [&'static str] {
         M4a1 if silenced => &["weapons/m4a1-1.wav"],
         M4a1 => &["weapons/m4a1_unsil-1.wav", "weapons/m4a1_unsil-2.wav"],
         Mac10 => &["weapons/mac10-1.wav"],
-        Mp5 => &["weapons/mp5-1.wav", "weapons/mp5-2.wav"],
+        Mp5 => &["weapons/mp5-1.wav", "weapons/mp5-2.wav"], // EV_FireMP5N
         P228 => &["weapons/p228-1.wav"],
         P90 => &["weapons/p90-1.wav"],
         Scout => &["weapons/scout_fire-1.wav"],
@@ -110,17 +113,20 @@ fn fire_sound(id: Id, silenced: bool) -> &'static [&'static str] {
     }
 }
 
-/// Footstep sounds by surface material (`materials.txt` letters).
-fn step_sounds(material: char) -> &'static [&'static str] {
-    match material {
-        'M' => &["player/pl_metal1.wav", "player/pl_metal2.wav", "player/pl_metal3.wav", "player/pl_metal4.wav"],
-        'D' => &["player/pl_dirt1.wav", "player/pl_dirt2.wav", "player/pl_dirt3.wav", "player/pl_dirt4.wav"],
-        'V' => &["player/pl_duct1.wav", "player/pl_duct2.wav", "player/pl_duct3.wav", "player/pl_duct4.wav"],
-        'G' => &["player/pl_grate1.wav", "player/pl_grate2.wav", "player/pl_grate3.wav", "player/pl_grate4.wav"],
-        'T' => &["player/pl_tile1.wav", "player/pl_tile2.wav", "player/pl_tile3.wav", "player/pl_tile4.wav"],
-        'S' => &["player/pl_slosh1.wav", "player/pl_slosh2.wav", "player/pl_slosh3.wav", "player/pl_slosh4.wav"],
-        'N' => &["player/pl_snow1.wav", "player/pl_snow2.wav", "player/pl_snow3.wav", "player/pl_snow4.wav"],
-        _ => &["player/pl_step1.wav", "player/pl_step2.wav", "player/pl_step3.wav", "player/pl_step4.wav"],
+/// Footstep sound set (`PM_PlayStepSound`): files 1 and 3 are the right foot, 2 and 4 the left.
+fn step_set(kind: sim::pmove::StepKind, material: char) -> &'static str {
+    use sim::pmove::StepKind::*;
+    match (kind, material) {
+        (Ladder, _) => "ladder",
+        (Wade, _) => "wade",
+        (Slosh, _) | (Surface, 'S') => "slosh",
+        (Surface, 'M') => "metal",
+        (Surface, 'D') => "dirt",
+        (Surface, 'V') => "duct",
+        (Surface, 'G') => "grate",
+        (Surface, 'T') => "tile",
+        (Surface, 'N') => "snow",
+        _ => "step",
     }
 }
 
@@ -142,29 +148,26 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
     let ear = w.client.me().eye();
     for cue in cues {
         let mut plays: Vec<Play> = Vec::new();
-        // Gunshot pitch varies a little, like CS (94..110%).
-        let gun_pitch = 0.94 + sounds.rand() * 0.16;
+        // Gunshot pitch varies a little, like CS (94 + 0..15 %).
+        let gun_pitch = 0.94 + (sounds.rand() * 16.0).floor() / 100.0;
         match cue {
             Cue::Shot { weapon, silenced, at } => {
                 let options = fire_sound(weapon, silenced);
                 if !options.is_empty() {
                     let file = sounds.pick(options);
-                    plays.push(Play { file, at, volume: if silenced { 0.7 } else { 1.0 }, attn: if silenced { ATTN_QUIET } else { ATTN_NORM }, pitch: gun_pitch });
+                    plays.push(Play { file, at, volume: 1.0, attn: sim::weapons::data::fire_attenuation(weapon, silenced), pitch: gun_pitch });
                 }
             }
-            Cue::Footstep { feet, own, ladder, water } => {
-                let options: &[&str] = if ladder {
-                    &["player/pl_ladder1.wav", "player/pl_ladder2.wav", "player/pl_ladder3.wav", "player/pl_ladder4.wav"]
-                } else if water {
-                    &["player/pl_wade1.wav", "player/pl_wade2.wav", "player/pl_wade3.wav", "player/pl_wade4.wav"]
-                } else {
-                    // The surface under the feet decides the sound.
-                    let below = [feet[0], feet[1], feet[2] - 64.0];
-                    let material = w.client.world.texture_at(feet, below).map(|t| sounds.materials.kind(t)).unwrap_or('C');
-                    step_sounds(material)
-                };
-                let file = sounds.pick(options);
-                plays.push(Play { file, at: if own { None } else { Some(feet) }, volume: 0.5, attn: ATTN_NORM, pitch: 1.0 });
+            Cue::Footstep { feet, who, step } => {
+                // The surface under the feet decides the sound and its volume.
+                let below = [feet[0], feet[1], feet[2] - 64.0];
+                let material = w.client.world.texture_at(feet, below).map(|t| sounds.materials.kind(t)).unwrap_or('C');
+                let left = sounds.left_foot.entry(who).or_insert(false);
+                *left = !*left;
+                let left = *left as u32;
+                let n = (sounds.rand() < 0.5) as u32 * 2 + 1 + left;
+                let file = format!("player/pl_{}{n}.wav", step_set(step.kind, material));
+                plays.push(Play { file, at: if who.is_none() { None } else { Some(feet) }, volume: step.loudness(material), attn: ATTN_NORM, pitch: 1.0 });
             }
             Cue::Hit { sound, at } => {
                 use net::protocol::HitSound::*;

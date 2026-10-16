@@ -28,7 +28,6 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Breakable gibs (only coloured debris now)
 - [x] CS 1.6 keys: B buy menu (CS layout per side, 0 cancel), Q last weapon, wheel, G drop,
       `,`/`.` ammo, Tab scoreboard; drop/pickup on the ground; gun drops on death
-- [ ] hud_fastswitch 0 (CS default: number keys show a selection, mouse1 confirms); only fastswitch 1 now
 - [x] Ground guns cleared at round start
 - [ ] First-person weapon models (viewmodels) and third-person weapon models
 - [x] Weapon sounds
@@ -79,14 +78,12 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Anti-wallhack: enemies out of line of sight aren't sent (net/src/server/visibility.rs): rays from your eyes to their grown box, 0.15 s look-ahead, 0.25 s grace; teammates/dead/spectators see all; footsteps and shots still sent within hearing range
 - [x] Visibility: closed doors, crates and smoke hide players; glass and open doors don't
 - [x] Map check on join: the server sends its map file's hash (FNV-1a) in Welcome; a client with a different file goes back to the menu
-- [ ] Map change / map vote; downloading the server's map
-- [ ] Deathmatch is de_dust2 only for now (decided 2026-10-16); later: other maps, or a new map each time someone reaches the kill limit; show the server's map on the Practice page
 - [x] Match recordings (net/src/demo.rs, replay with `server --play`), reports with recording + tick
 - [x] Aim checks (net/src/server/aimcheck.rs): inhuman reactions and snap hits flagged for review, never auto-ban
 - [ ] Tune the aim checks against real players: thresholds come from bot tests only (honest bots never trip them); check flags against recordings once people play, before trusting them
 - [x] A review tool for reports: `server --reports reports.jsonl`, `server --review reports.jsonl <n>` (from 10 s before)
 - [ ] de_mirage (community map, BubkeZ): on hold (2026-10-16); loads, plays and has its A/B table; add to MAP_POOL when wanted
-- [ ] de_train: check in game which bomb site is A (its map file doesn't name them; sim::zones::sites_a_first guesses east)
+- [x] de_train: A is the big middle yard, B the lower yard by the CT spawn (from the radar)
 - [x] Delta-compressed snapshots (net/src/delta.rs): 10 players moving, 16.5 to 5.3 KB/s per client
 - [x] Official servers only (decided 2026-10-16), no community servers, no server list:
       casual queue (solo or party of 2-5, party on one team, no mid-match joins, reconnect to your match),
@@ -118,7 +115,7 @@ land, and add new ones here instead of leaving them only in chat.
       grenades (bounce, HE, flash, smoke), knife, dry fire, zoom; 3D with GoldSrc falloff
 - [ ] Doors, ambience (`ambient_generic`), bullet ricochets/impacts,
       knife hit sounds, jump/land variants, menu sounds; other players' reload sounds
-- [ ] ⚠ Silenced shot loudness/attenuation and footstep volumes are estimates
+- [x] Gunshot volumes and attenuations from client.so (`EV_Fire*`, `fire_attenuation`); footstep, jump and landing volumes from `PM_UpdateStepSound`/`PM_CheckFalling`, left and right feet
 - [x] Muzzle flash at the model's muzzle attachment (own view model and other players)
 
 ### Movement leftovers (`docs/MOVEMENT.md`)

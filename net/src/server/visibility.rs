@@ -11,9 +11,9 @@ const GRACE_TICKS: u32 = TICK_RATE / 4;
 /// already there when they come into view, even with some ping.
 const MARGIN: f32 = 24.0;
 const LOOKAHEAD: f32 = 0.15;
-/// GoldSrc sound falloff: silent at 1000 / attenuation units (ATTN_NORM 0.8, quiet 1.6).
+/// GoldSrc sound falloff: silent at 1000 / attenuation units (footsteps: ATTN_NORM 0.8; shots:
+/// `fire_attenuation`).
 const HEAR_NORMAL: f32 = 1000.0 / 0.8;
-const HEAR_QUIET: f32 = 1000.0 / 1.6;
 /// A smoke cloud hides what's behind it once it has bloomed (1 s) until it thins out (last 2 s):
 /// a sphere this big around a point this high over where it popped.
 const SMOKE_RADIUS: f32 = 140.0;
@@ -127,8 +127,8 @@ impl Server {
         events
             .iter()
             .filter(|e| match e {
-                GameEvent::Footstep { player, at } => visible.contains(player) || hears(*at, HEAR_NORMAL),
-                GameEvent::Shot { shooter, silenced, from, .. } => visible.contains(shooter) || hears(*from, if *silenced { HEAR_QUIET } else { HEAR_NORMAL }),
+                GameEvent::Footstep { player, at, .. } => visible.contains(player) || hears(*at, HEAR_NORMAL),
+                GameEvent::Shot { shooter, weapon, silenced, from, .. } => visible.contains(shooter) || hears(*from, 1000.0 / sim::weapons::data::fire_attenuation(*weapon, *silenced)),
                 _ => true,
             })
             .cloned()

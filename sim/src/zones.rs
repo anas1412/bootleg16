@@ -80,8 +80,9 @@ impl Zones {
 
     /// The bomb sites' centres, A first. Names come from the map where it has them (de_dust2's
     /// `tgt_a`); else from what's known of the map (Inferno: B is the north site, up banana;
-    /// Nuke: A is the upper site; Mirage, BubkeZ's original: A is the south site); else the
-    /// east site is A (unverified: de_train).
+    /// Nuke: A is the upper site; Mirage, BubkeZ's original: A is the south site; Train: A is
+    /// the big middle yard, B the lower yard by the CT spawn, so A is the west one); else the
+    /// east site is A.
     pub fn sites_a_first(&self, map: &str) -> Vec<Vec3> {
         let centre = |(lo, hi): &(Vec3, Vec3)| [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2] + 36.0];
         let mut sites: Vec<(Vec3, Option<char>)> = self.bomb_sites.iter().zip(&self.site_names).map(|(b, n)| (centre(b), *n)).collect();
@@ -92,6 +93,7 @@ impl Zones {
                 "de_inferno" => sites.sort_by(|a, b| a.0[1].total_cmp(&b.0[1])), // north (bigger y) is B
                 "de_nuke" => sites.sort_by(|a, b| b.0[2].total_cmp(&a.0[2])),    // upper is A
                 "de_mirage" => sites.sort_by(|a, b| a.0[1].total_cmp(&b.0[1])),  // south (smaller y) is A
+                "de_train" => sites.sort_by(|a, b| a.0[0].total_cmp(&b.0[0])),   // west (smaller x) is A
                 _ => sites.sort_by(|a, b| b.0[0].total_cmp(&a.0[0])),
             }
         }

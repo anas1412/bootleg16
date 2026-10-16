@@ -249,10 +249,10 @@ fn walk(
     if fired.swing.is_some() {
         w.cues.push(sound::Cue::Swing);
     }
-    if events.footstep || events.landed {
+    if let Some(step) = events.footstep {
         let me = *w.client.me();
         let feet = [me.origin[0], me.origin[1], me.origin[2] + me.hull().mins()[2]];
-        w.cues.push(sound::Cue::Footstep { feet, own: true, ladder: me.on_ladder, water: me.water_level > 0 });
+        w.cues.push(sound::Cue::Footstep { feet, who: None, step });
     }
     // Our own shots show at once (predicted); other players' come from server events.
     for shot in fired.shots {

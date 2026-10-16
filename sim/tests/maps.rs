@@ -317,8 +317,8 @@ mod shooting {
 #[test]
 fn bomb_site_a_is_the_right_one_on_each_map() {
     // (map, A site centre, B site centre), from the maps themselves (de_dust2 names them) and
-    // what's known of each layout. de_train isn't in the list: not verified yet.
-    let expected = [("de_dust2", [1152.0, 2464.0], [-1536.0, 2688.0]), ("de_inferno", [1984.0, 456.0], [288.0, 2784.0]), ("de_nuke", [680.0, -776.0], [648.0, -904.0]), ("de_mirage", [-688.0, -1168.0], [-2312.0, 1288.0])];
+    // what's known of each layout.
+    let expected = [("de_train", [264.0, -1280.0], [1296.0, -160.0]), ("de_dust2", [1152.0, 2464.0], [-1536.0, 2688.0]), ("de_inferno", [1984.0, 456.0], [288.0, 2784.0]), ("de_nuke", [680.0, -776.0], [648.0, -904.0]), ("de_mirage", [-688.0, -1168.0], [-2312.0, 1288.0])];
     for (map, a, b) in expected {
         let Some(bsp) = load(map) else { continue };
         let sites = sim::zones::Zones::from_bsp(&bsp).sites_a_first(map);

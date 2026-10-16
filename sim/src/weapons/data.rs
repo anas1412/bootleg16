@@ -802,6 +802,25 @@ pub fn by_name(name: &str) -> Option<Id> {
     WEAPONS.iter().find(|d| d.name == n || (n == "mp5" && d.name == "mp5navy") || (n == "glock" && d.name == "glock18")).map(|d| d.id)
 }
 
+/// How fast a gunshot fades with distance (GoldSrc attenuation: silent at 1000 / attn units),
+/// as CS 1.6 plays it (`EV_Fire*` in `cl_dlls/client.so`, volume 1 for all).
+pub fn fire_attenuation(id: Id, silenced: bool) -> f32 {
+    use Id::*;
+    match id {
+        Awp => 0.28,
+        Ak47 | G3sg1 | Galil | Sg550 | Sg552 => 0.4,
+        Aug | Famas | M3 => 0.48,
+        M4a1 if silenced => 1.4,
+        M4a1 | M249 | Xm1014 => 0.52,
+        Deagle => 0.6,
+        Mp5 | P90 | Ump45 => 0.64,
+        Mac10 => 0.72,
+        Scout | Tmp => 1.6,
+        Usp if silenced => 2.0,
+        _ => 0.8, // Glock, USP, P228, Five-seveN, Elites
+    }
+}
+
 /// The player body animation set CS uses for each weapon (`ref_aim_<ext>`, `crouch_aim_<ext>`).
 pub fn anim_ext(id: Id) -> &'static str {
     use Id::*;

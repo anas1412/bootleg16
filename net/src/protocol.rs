@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 25;
+pub const PROTOCOL_VERSION: u32 = 26;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -171,7 +171,7 @@ pub enum GameEvent {
     /// `at`: where a bullet or knife hit them (None for explosions and falls).
     Damage { attacker: u8, victim: u8, amount: f32, group: HitGroup, sound: HitSound, at: Option<[f32; 3]> },
     /// Someone's footstep (everyone else hears it; you hear your own predicted ones).
-    Footstep { player: u8, at: [f32; 3] },
+    Footstep { player: u8, at: [f32; 3], step: sim::pmove::Step },
     GrenadeBounce { kind: sim::grenades::Kind, at: [f32; 3] },
     /// `weapon` None = fell to death.
     Kill { killer: u8, victim: u8, weapon: Option<Id>, headshot: bool },

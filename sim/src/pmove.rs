@@ -150,8 +150,44 @@ pub struct Events {
     /// Health to subtract (0 when the fall was safe).
     pub fall_damage: f32,
     /// A footstep sound plays now (other players hear it).
-    pub footstep: bool,
+    pub footstep: Option<Step>,
 }
+
+/// Where a footstep is (`PM_UpdateStepSound`): on the floor (its texture picks the sound),
+/// on a ladder, wading knee-deep or sloshing ankle-deep.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StepKind {
+    Surface,
+    Ladder,
+    Wade,
+    Slosh,
+}
+
+/// A footstep (`PM_PlayStepSound`, always `ATTN_NORM`).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Step {
+    pub kind: StepKind,
+    /// None: the surface's own volume (concrete 0.5, dirt 0.55, vent 0.7, ...).
+    pub volume: Option<f32>,
+    /// Crouched: 0.35 times as loud.
+    pub crouched: bool,
+}
+
+impl Step {
+    /// The volume to play it at, given the surface's own (`materials.txt` letter).
+    pub fn loudness(&self, material: char) -> f32 {
+        let own = match material {
+            'D' => 0.55,
+            'V' => 0.7,
+            _ => 0.5,
+        };
+        self.volume.unwrap_or(own) * if self.crouched { 0.35 } else { 1.0 }
+    }
+}
+
+/// `PM_CheckFalling`'s landing sound (`PM_PLAYER_MIN_BOUNCE_SPEED`, `PM_PLAYER_MAX_SAFE_FALL_SPEED`).
+const LAND_MIN_SOUND: f32 = 350.0;
+const LAND_LOUD: f32 = 580.0;
 
 impl Player {
     pub fn new(origin: Vec3) -> Player {
@@ -201,6 +237,7 @@ fn view_vectors(yaw: f32, pitch: f32) -> (Vec3, Vec3) {
 
 /// Advance one player by `dt` seconds.
 pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVars) -> Events {
+    let mut ev = Events::default();
     let ms = dt * 1000.0;
     p.stamina = (p.stamina - ms).max(0.0);
     p.duck_time = (p.duck_time - ms).max(0.0);
@@ -243,6 +280,10 @@ pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVa
     } else {
         if jump_pressed && p.on_ground {
             jump(p);
+            // `PM_Jump`: jumping off at 150 or faster thuds at full volume.
+            if p.speed_2d() >= FOOTSTEP_MIN_SPEED {
+                ev.footstep = Some(Step { kind: StepKind::Surface, volume: Some(1.0), crouched: false });
+            }
         }
         // Gravity is applied in two halves around the move (more accurate arcs).
         if !p.on_ground {
@@ -276,9 +317,20 @@ pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVa
     categorize(p, world);
     check_water(p, world);
 
-    let mut ev = Events::default();
     if p.on_ground && !was_on_ground && p.fall_velocity >= LAND_SPEED {
         ev.landed = true;
+        // In this order, as CS has it (so 0.5 is only heard in water).
+        let volume = match p.fall_velocity {
+            _ if p.water_level > 0 => 0.5,
+            v if v > LAND_LOUD => 1.0,
+            v if v > LAND_LOUD / 2.0 => 0.85,
+            v if v < LAND_MIN_SOUND => 0.0,
+            _ => 0.5,
+        };
+        if volume > 0.0 {
+            ev.footstep = Some(Step { kind: StepKind::Surface, volume: Some(volume), crouched: false });
+            p.step_timer = FOOTSTEP_MS;
+        }
         if p.water_level == 0 && p.fall_velocity > SAFE_FALL_SPEED {
             ev.fall_damage = (p.fall_velocity - SAFE_FALL_SPEED) * FALL_DAMAGE_PER_SPEED;
         }
@@ -292,19 +344,19 @@ pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVa
             p.step_timer = FOOTSTEP_QUIET_MS;
         } else if p.on_ground || p.on_ladder {
             let h = p.hull();
-            let knee = p.origin[2] - 0.3 * (h.maxs()[2] - h.mins()[2]);
-            let wading = world.point_contents([p.origin[0], p.origin[1], knee]) == Contents::Water;
-            p.step_timer = if p.on_ladder {
-                FOOTSTEP_LADDER_MS
-            } else if wading {
-                FOOTSTEP_WADE_MS
+            let height = h.maxs()[2] - h.mins()[2];
+            let wet = |z: f32| world.point_contents([p.origin[0], p.origin[1], p.origin[2] - z * height]) == Contents::Water;
+            let (kind, volume, ms) = if p.on_ladder {
+                (StepKind::Ladder, Some(0.35), FOOTSTEP_LADDER_MS)
+            } else if wet(0.3) {
+                (StepKind::Wade, Some(0.65), FOOTSTEP_WADE_MS)
+            } else if wet(0.5) {
+                (StepKind::Slosh, Some(0.5), FOOTSTEP_MS)
             } else {
-                FOOTSTEP_MS
+                (StepKind::Surface, None, FOOTSTEP_MS)
             };
-            if p.crouched || p.on_ladder {
-                p.step_timer += FOOTSTEP_SLOW_MS;
-            }
-            ev.footstep = true;
+            p.step_timer = ms + if p.crouched || p.on_ladder { FOOTSTEP_SLOW_MS } else { 0.0 };
+            ev.footstep = Some(Step { kind, volume, crouched: p.crouched && !p.on_ladder });
         }
     }
     ev
@@ -763,20 +815,20 @@ mod tests {
         let walk = Input { forward: 400.0, walk: true, ..Default::default() };
         let mut steps = 0;
         for _ in 0..256 {
-            steps += step(&mut p, &walk, DT, &w, &MoveVars::default()).footstep as i32;
+            steps += step(&mut p, &walk, DT, &w, &MoveVars::default()).footstep.is_some() as i32;
         }
         assert!((p.speed_2d() - 130.0).abs() < 1.0, "{}", p.speed_2d());
         assert_eq!(steps, 0);
         let run_input = Input { forward: 400.0, ..Default::default() };
         for _ in 0..256 {
-            steps += step(&mut p, &run_input, DT, &w, &MoveVars::default()).footstep as i32;
+            steps += step(&mut p, &run_input, DT, &w, &MoveVars::default()).footstep.is_some() as i32;
         }
         // One every 300 ms once over 150 (after up to 400 ms from walking): 6 in 2 s.
         assert!((5..=7).contains(&steps), "running made {steps} footsteps in 2 s");
         // Crouch-running is under 150: silent.
         let mut quiet = 0;
         for _ in 0..256 {
-            quiet += step(&mut p, &Input { crouch: true, ..run_input }, DT, &w, &MoveVars::default()).footstep as i32;
+            quiet += step(&mut p, &Input { crouch: true, ..run_input }, DT, &w, &MoveVars::default()).footstep.is_some() as i32;
         }
         assert!(p.crouched);
         assert!(quiet <= 1, "{quiet} footsteps crouched");
