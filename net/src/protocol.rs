@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 26;
+pub const PROTOCOL_VERSION: u32 = 27;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -104,6 +104,19 @@ pub struct Score {
     pub team: Team,
     /// A practice dummy.
     pub bot: bool,
+    /// Assists (CS2: over 40 damage to someone a teammate then killed).
+    pub assists: u32,
+    /// Round MVPs (the defuser, the planter whose bomb went off, else the winner with most kills).
+    pub mvps: u32,
+    /// Kills that were headshots.
+    pub headshots: u32,
+    /// Health taken off enemies, and rounds played: ADR is `damage / rounds`.
+    pub damage: u32,
+    pub rounds: u32,
+    /// Round trip to the server (milliseconds), measured by the server.
+    pub ping: u16,
+    /// Their money: only teammates' (None for the other team).
+    pub money: Option<i32>,
 }
 
 /// An input plus the server time the client was showing other players at, so
@@ -328,8 +341,12 @@ pub enum ServerMsg {
     Info { version: u32, name: String, map: String, players: u8, max: u8 },
     /// Scoreboard, sent a few times a second.
     Scores(Vec<Score>),
+    /// Every round so far this match: who won (the side they were on then) and how. Sent with
+    /// the scoreboard, so late joiners and reconnects get it all.
+    History(Vec<(Team, crate::rounds::EndReason)>),
     /// Someone talking. `gain`: how loud (proximity voice fades with distance; 255 = full).
-    Voice { from: u8, channel: VoiceChannel, gain: u8, data: Vec<u8> },
+    /// `muffled`: proximity voice from behind a wall (play it dull and quieter).
+    Voice { from: u8, channel: VoiceChannel, gain: u8, muffled: bool, data: Vec<u8> },
     Snapshot {
         tick: u32,
         /// Last of your inputs the server has run; replay the ones after it.

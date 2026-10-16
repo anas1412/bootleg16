@@ -85,6 +85,23 @@ struct GroundGun {
 /// Seconds before the dropper can pick their own gun back up.
 const REPICK_TICKS: u32 = TICK_RATE / 2;
 
+/// A player's scoreboard numbers beyond kills and deaths.
+#[derive(Default)]
+struct Stats {
+    assists: u32,
+    mvps: u32,
+    headshots: u32,
+    damage: u32,
+    rounds: u32,
+    /// Milliseconds, smoothed.
+    ping: f32,
+    /// This life: health each enemy took off them (for assists).
+    hurt_by: Vec<(u8, f32)>,
+    /// This round: kills and damage (for the MVP).
+    round_kills: u32,
+    round_damage: u32,
+}
+
 struct Remote {
     /// Their aim this match, for the aim checks.
     aim: aimcheck::Aim,
@@ -95,6 +112,8 @@ struct Remote {
     bot: bool,
     kills: i32,
     deaths: u32,
+    /// Scoreboard stats (see `Score`).
+    stats: Stats,
     money: i32,
     defuse_kit: bool,
     /// Reserved matches: this player's ticket (0 = none) and team group.
@@ -172,6 +191,8 @@ pub struct Server {
     kills_settled: usize,
     round: Match,
     bomb: Bomb,
+    /// Who planted this round's bomb (for the MVP).
+    planter: Option<u8>,
     pieces: breakables::Pieces,
     guard: guard::Guard,
     /// Set while running a match for a fixed list of players.
@@ -229,6 +250,7 @@ impl Server {
             kills_settled: 0,
             round: Match::new(MatchConfig::default(), TICK_RATE),
             bomb: Bomb::None,
+            planter: None,
             last_seen: HashMap::new(),
             pieces: breakables::Pieces::from_bsp(bsp),
             snapshot_bytes: 0,
@@ -433,6 +455,27 @@ impl Server {
 }
 
 impl Remote {
+    /// Their scoreboard line (money included: `send_updates` hides it from the other team).
+    fn score(&self) -> Score {
+        let s = &self.stats;
+        Score {
+            id: self.id,
+            name: self.name.clone(),
+            kills: self.kills,
+            deaths: self.deaths,
+            alive: self.vitals.alive(),
+            team: self.team,
+            bot: self.bot,
+            assists: s.assists,
+            mvps: s.mvps,
+            headshots: s.headshots,
+            damage: s.damage,
+            rounds: s.rounds,
+            ping: s.ping.round() as u16,
+            money: Some(self.money),
+        }
+    }
+
     /// A newly connected player: spectating until they pick a side.
     fn new(id: u8, name: String, tick: u32) -> Remote {
         Remote {
@@ -443,6 +486,7 @@ impl Remote {
             bot: false,
             kills: 0,
             deaths: 0,
+            stats: Stats::default(),
             money: 0,
             defuse_kit: false,
             ticket: 0,

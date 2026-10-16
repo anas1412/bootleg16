@@ -55,6 +55,8 @@ pub struct Match {
     losses: [u32; 2],
     shared_bonus: i32,
     pub last: Option<(Team, EndReason)>,
+    /// Every round so far (winner, how).
+    pub history: Vec<(Team, EndReason)>,
 }
 
 pub fn side(team: Team) -> usize {
@@ -75,7 +77,7 @@ pub fn other(team: Team) -> Team {
 
 impl Match {
     pub fn new(cfg: MatchConfig, tick_rate: u32) -> Match {
-        Match { cfg, tick_rate, phase: Phase::Warmup, phase_end: 0, buy_end: 0, round: 0, score: [0; 2], losses: [0; 2], shared_bonus: 1400, last: None }
+        Match { cfg, tick_rate, phase: Phase::Warmup, phase_end: 0, buy_end: 0, round: 0, score: [0; 2], losses: [0; 2], shared_bonus: 1400, last: None, history: Vec::new() }
     }
 
     fn ticks(&self, seconds: f32) -> u32 {
@@ -116,6 +118,7 @@ impl Match {
         let (w, l) = (side(winner), side(other(winner)));
         self.score[w] += 1;
         self.last = Some((winner, reason));
+        self.history.push((winner, reason));
         self.phase = Phase::Over;
         self.phase_end = tick + self.ticks(self.cfg.round_end_delay);
         // docs/RULES.md 3.2 (bomb maps).

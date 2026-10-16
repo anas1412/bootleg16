@@ -27,6 +27,18 @@ struct Snap {
     players: Vec<PlayerNet>,
 }
 
+/// A voice frame someone sent (see `ServerMsg::Voice`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Heard {
+    pub from: u8,
+    pub channel: VoiceChannel,
+    /// Loudness 1..255 (proximity voice fades with distance).
+    pub gain: u8,
+    /// Proximity voice from behind a wall.
+    pub muffled: bool,
+    pub data: Vec<u8>,
+}
+
 /// Another player, as it should be drawn now.
 #[derive(Clone, Copy, Debug)]
 pub struct Remote {
@@ -75,6 +87,8 @@ pub struct Client {
     pub ground: Vec<(sim::weapons::Id, [f32; 3])>,
     /// Scoreboard as last sent.
     pub scores: Vec<Score>,
+    /// Every round so far this match (winner, how), from the server.
+    pub round_history: Vec<(Team, crate::rounds::EndReason)>,
     /// The server runs practice rules.
     pub practice: bool,
     /// The server's map and its file hash, once welcomed.
@@ -98,7 +112,7 @@ pub struct Client {
     /// Highest reliable event number received (each is kept once).
     reliable_seen: u32,
     /// Voice frames received and not yet taken: (from, channel, gain 0..255, Opus data).
-    voice: Vec<(u8, VoiceChannel, u8, Vec<u8>)>,
+    voice: Vec<Heard>,
     /// The round (phase, clock, score), the bomb, and your money and limits.
     pub round: RoundNet,
     pub bomb: BombNet,
@@ -132,6 +146,7 @@ impl Client {
             smokes: Vec::new(),
             ground: Vec::new(),
             scores: Vec::new(),
+            round_history: Vec::new(),
             practice: false,
             map: None,
             map_hash: 0,
@@ -254,6 +269,7 @@ impl Client {
                 }
             }
             ServerMsg::Scores(s) => self.scores = s,
+            ServerMsg::History(h) => self.round_history = h,
             ServerMsg::Info { .. } => {} // for the server browser, not a connection
             ServerMsg::MatchEnded => self.match_ended = true,
             ServerMsg::Delta { .. } => {} // patched into a snapshot on arrival
@@ -265,7 +281,7 @@ impl Client {
                     self.socket.send(self.server, encode(&hello));
                 }
             }
-            ServerMsg::Voice { from, channel, gain, data } => self.voice.push((from, channel, gain, data)),
+            ServerMsg::Voice { from, channel, gain, muffled, data } => self.voice.push(Heard { from, channel, gain, muffled, data }),
             ServerMsg::Reject { reason } => {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
@@ -430,7 +446,7 @@ impl Client {
     }
 
     /// Voice frames that arrived since the last call.
-    pub fn take_voice(&mut self) -> Vec<(u8, VoiceChannel, u8, Vec<u8>)> {
+    pub fn take_voice(&mut self) -> Vec<Heard> {
         std::mem::take(&mut self.voice)
     }
 

@@ -45,7 +45,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Round HUD: score, clock, freeze/bomb states, money +/-, announcements, plant/defuse bars; bomb models, beeps, sounds
 - [x] Shop trimmed to the chosen list (docs/RULES.md 4); ammo not sold, refilled each round
 - [x] Defuse reach as CS `PlayerUse`: 64 from your centre to the bomb's, within 45 degrees of your view (no wall check in CS either)
-- [ ] Buy menu: CS2-style team money on the scoreboard (B where you can't buy now says why)
+- [ ] Buy menu: CS2-style team money on the scoreboard (data: `Score::money`, UI session)
 - [x] Hitboxes follow each weapon's aim pose (head moved up to ~7 units between poses; the old test simply aimed 9 units over the head)
 - [ ] Hitboxes don't follow shoot/reload/flinch upper-body animations or gait (aim pose frame 0 only)
 - [x] Defuse times 10 s / 5 s with kit (ReGameDLL `DefuseBombStart`)
@@ -106,7 +106,8 @@ land, and add new ones here instead of leaving them only in chat.
       `voice_range` and panned when you see the speaker. Opus 24 kbit/s, server relays.
       Settings page: on/off, rebind keys (incl. mouse buttons), mic, mic volume, voice volume, mic test.
       **No radio commands/callouts**: decided 2026-10-15, voice replaces them.
-- [ ] Voice: mute individual players (scoreboard), noise gate / open-mic option, walls muffling proximity voice
+- [x] Voice backend: per-player volume and mute (`VoiceSettings::set_player_gain`), open mic + noise gate, proximity voice through walls muffled
+- [ ] Voice UI (UI session): per-player mute/volume on the scoreboard, open mic and gate on the Voice page
 - [ ] Voice: only checked automatically (relay test, codec round trip); needs a real two-person test
 
 ### Sound
@@ -130,11 +131,11 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Static props/models placed in maps (`env_model`, `cycler_sprite` …)
 
 ### UI (Interference: docs/UI.md, design/mockups/ui is the spec)
-- [ ] Scoreboard: the server's `Score` only has name, kills, deaths, alive, team, bot.
-      Add per player: assists, ping, MVPs, teammates' money (own team only), headshot %,
-      ADR (average damage per round). Then show them as columns.
-- [ ] Scoreboard: round history is rebuilt from events seen since you joined; the server
-      should send the full list so late joiners and reconnects see it too
+- [x] Scoreboard data: `Score` has assists, MVPs, headshots, damage and rounds (ADR), server-measured
+      ping, money (own team only)
+- [ ] Scoreboard columns for them (UI session)
+- [x] Round history from the server (`ServerMsg::History`, `Client::round_history`); the scoreboard
+      should switch to it (UI session)
 - [ ] ⚠ Not yet seen on screen in a real match: low-health heartbeat, reload line, money
       delta, timer ticks, vote panel, voted out / surrendered / kill limit announcements
       (checked: hit wash and meter trail with net/examples/shooter and friendly fire on, the

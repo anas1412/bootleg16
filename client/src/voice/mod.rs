@@ -53,13 +53,26 @@ pub struct VoiceSettings {
     pub mic_volume: f32,
     /// Everyone else's voice.
     pub volume: f32,
+    /// Open mic: talk to your team whenever you speak (the gate decides), no key needed.
+    pub open_mic: bool,
+    /// Noise gate: frames quieter than this peak (0..1) aren't sent (0 = off). Open mic needs it.
+    pub gate: f32,
+    /// Each player's voice volume by name (0 = muted; missing = 1).
+    players: HashMap<String, f32>,
 }
 
 impl Default for VoiceSettings {
     fn default() -> Self {
-        VoiceSettings { on: true, mic: String::new(), mic_volume: 1.0, volume: 1.0 }
+        VoiceSettings { on: true, mic: String::new(), mic_volume: 1.0, volume: 1.0, open_mic: false, gate: 0.03, players: HashMap::new() }
     }
 }
+
+/// After the voice drops under the gate, keep sending this many frames (300 ms) so the ends of
+/// words aren't cut off.
+const GATE_HOLD_FRAMES: u32 = 15;
+/// Voice through a wall: this much quieter, and low-passed (one-pole, ~1.2 kHz at 48 kHz).
+const MUFFLED_GAIN: f32 = 0.55;
+const MUFFLE_ALPHA: f32 = 0.145;
 
 fn path() -> PathBuf {
     PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config/bootleg16/voice.txt")
@@ -76,6 +89,13 @@ impl VoiceSettings {
                 "mic" => s.mic = v.to_string(),
                 "mic_volume" => s.mic_volume = v.parse().unwrap_or(s.mic_volume),
                 "volume" => s.volume = v.parse().unwrap_or(s.volume),
+                "open_mic" => s.open_mic = v == "true",
+                "gate" => s.gate = v.parse().unwrap_or(s.gate),
+                k if k.starts_with("player.") => {
+                    if let Ok(g) = v.parse() {
+                        s.players.insert(k["player.".len()..].to_string(), g);
+                    }
+                }
                 _ => {}
             }
         }
@@ -85,14 +105,30 @@ impl VoiceSettings {
     fn save(&self) {
         let p = path();
         let _ = std::fs::create_dir_all(p.parent().unwrap());
-        let text = format!(
-            "on={}\nmic={}\nmic_volume={}\nvolume={}\n",
-            self.on,
-            self.mic,
-            self.mic_volume,
-            self.volume
+        let mut text = format!(
+            "on={}\nmic={}\nmic_volume={}\nvolume={}\nopen_mic={}\ngate={}\n",
+            self.on, self.mic, self.mic_volume, self.volume, self.open_mic, self.gate
         );
+        for (name, g) in &self.players {
+            text.push_str(&format!("player.{name}={g}\n"));
+        }
         let _ = std::fs::write(p, text);
+    }
+
+    /// How loud `name`'s voice plays for you (0 = muted).
+    pub fn player_gain(&self, name: &str) -> f32 {
+        self.players.get(name).copied().unwrap_or(1.0)
+    }
+
+    /// Set `name`'s voice volume (0 mutes them; 1 is normal, up to 2), and remember it.
+    pub fn set_player_gain(&mut self, name: &str, gain: f32) {
+        let g = gain.clamp(0.0, 2.0);
+        if (g - 1.0).abs() < 1e-3 {
+            self.players.remove(name);
+        } else {
+            self.players.insert(name.to_string(), g);
+        }
+        self.save();
     }
 }
 
@@ -111,6 +147,10 @@ pub(super) struct Audio {
     speakers: Option<audio::Speakers>,
     encoder: Option<opus::Encoder>,
     decoders: HashMap<u8, opus::Decoder>,
+    /// Low-pass state per speaker (for voice through walls).
+    muffle: HashMap<u8, f32>,
+    /// Frames left to send after the voice fell under the gate.
+    gate_hold: u32,
 }
 
 fn open_audio(world: &mut World) {
@@ -121,6 +161,8 @@ fn open_audio(world: &mut World) {
         speakers: audio::Speakers::open(),
         encoder: voice_encoder(),
         decoders: HashMap::new(),
+        muffle: HashMap::new(),
+        gate_hold: 0,
     };
     if audio.mic.is_none() {
         warn!("voice: no microphone");
@@ -159,7 +201,8 @@ impl Audio {
     }
 }
 
-/// While a push-to-talk key is held (and no menu is open), send what the mic hears.
+/// While a push-to-talk key is held, or always with open mic (team voice), and no menu is open:
+/// send what the mic hears, once it's louder than the noise gate.
 #[allow(clippy::too_many_arguments)]
 fn talk(
     mut audio: NonSendMut<Audio>,
@@ -174,15 +217,22 @@ fn talk(
 ) {
     audio.follow(&settings);
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
-    let channel = if auto { None } else { pushed(&settings, &binds, &keys, &mouse, overlay) };
-    *me_talking = channel;
+    let open = settings.on && settings.open_mic && !auto && overlay.as_ref().is_none_or(|o| **o == Overlay::None);
+    let channel = if auto { None } else { pushed(&settings, &binds, &keys, &mouse, overlay) }.or(open.then_some(VoiceChannel::Team));
     if let Some(mic) = &mut audio.mic {
         mic.set_running(channel.is_some());
     }
     let (frames, peak) = audio.captured(&settings);
     level.0 = peak;
+    *me_talking = channel;
     let Some(channel) = channel else { return };
     for f in frames {
+        // Noise gate: send while it's louder than the gate, and a moment after.
+        let loud = f.iter().fold(0.0f32, |m, x| m.max(x.abs())) >= settings.gate;
+        audio.gate_hold = if loud { GATE_HOLD_FRAMES } else { audio.gate_hold.saturating_sub(1) };
+        if !loud && audio.gate_hold == 0 {
+            continue;
+        }
         let mut out = [0u8; 400];
         if let Some(n) = audio.encoder.as_mut().and_then(|e| e.encode_float(&f, &mut out).ok()) {
             w.client.send_voice(channel, out[..n].to_vec());
@@ -207,13 +257,27 @@ fn listen(
     let right = cam.right().as_vec3();
     let ear = cam.translation();
     let others = w.client.others();
-    for (from, channel, gain, data) in frames {
+    for net::client::Heard { from, channel, gain, muffled, data } in frames {
+        let name = w.client.scores.iter().find(|s| s.id == from).map(|s| s.name.as_str()).unwrap_or("");
+        let player = settings.player_gain(name);
+        if player <= 0.0 {
+            continue; // muted: not even decoded
+        }
         let dec = audio.decoders.entry(from).or_insert_with(|| opus::Decoder::new(VOICE_RATE, opus::Channels::Mono).expect("opus decoder"));
         let mut pcm = vec![0.0f32; VOICE_FRAME * 6];
         let Ok(n) = dec.decode_float(&data, &mut pcm, false) else { continue };
+        // Through a wall: duller (low-pass) and quieter. The filter keeps its state per speaker
+        // so it doesn't click between frames.
+        let y = audio.muffle.entry(from).or_insert(0.0);
+        for x in pcm[..n].iter_mut() {
+            *y += MUFFLE_ALPHA * (*x - *y);
+            if muffled {
+                *x = *y * MUFFLED_GAIN;
+            }
+        }
         let peak = pcm[..n].iter().fold(0.0f32, |m, x| m.max(x.abs()));
         talking.0.insert(from, (channel, time.elapsed_secs(), peak));
-        let vol = settings.volume * gain as f32 / 255.0;
+        let vol = settings.volume * player * gain as f32 / 255.0;
         // Pan: -1 left .. 1 right, only for proximity voice from someone in view.
         let pan = match (channel, others.iter().find(|o| o.id == from)) {
             (VoiceChannel::Proximity, Some(o)) => {

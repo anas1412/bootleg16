@@ -78,6 +78,7 @@ impl Server {
         let at = self.floor_under(at);
         let explode = self.tick + (self.round.cfg.c4_timer * TICK_RATE as f32) as u32;
         self.bomb = Bomb::Planted { at, explode, defuse: None };
+        self.planter = Some(by);
         self.events.push(GameEvent::BombPlanted { by, at });
     }
 

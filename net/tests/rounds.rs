@@ -63,6 +63,17 @@ fn freeze_time_then_a_win_pays_both_teams_and_starts_the_next_round() {
     assert!(ev.iter().any(|e| matches!(e, GameEvent::RoundStart { round: 2 })), "{ev:?}");
     assert!(g.server.vitals(b).unwrap().alive());
     assert_eq!(g.a.round.score, [1, 0]);
+    // The scoreboard: the T is the round's MVP, both played a round, the history has it, and
+    // money shows for your own team only.
+    let me = g.a.scores.iter().find(|s| s.id == a).unwrap();
+    let them = g.a.scores.iter().find(|s| s.id == b).unwrap();
+    assert_eq!((me.mvps, me.rounds, them.rounds), (1, 1, 1));
+    assert_eq!(me.kills, 1);
+    assert!(me.damage >= 100, "{}", me.damage);
+    assert_eq!(me.money, Some(4350));
+    assert_eq!(them.money, None, "the other team's money is hidden");
+    assert_eq!(g.a.round_history, vec![(Team::T, EndReason::Eliminated)]);
+    assert!(me.ping < 100, "{}", me.ping);
     // Ammo isn't bought: the new round tops everyone's reserve up.
     let full = sim::weapons::gun(sim::weapons::Id::Glock).unwrap().reserve;
     assert_eq!(g.server.player_state(a).unwrap().loadout.secondary.unwrap().reserve, full);

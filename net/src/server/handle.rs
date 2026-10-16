@@ -67,6 +67,11 @@ impl Server {
             ClientMsg::Inputs { first_seq, inputs, events, snap } => {
                 let Some(c) = self.clients.get_mut(&from) else { return };
                 c.last_heard = self.tick;
+                // Ping, as the server sees it: from sending a snapshot to hearing it arrived.
+                if snap > c.snap_ack && snap <= self.tick {
+                    let ms = (self.tick - snap) as f32 * 1000.0 / TICK_RATE as f32;
+                    c.stats.ping = if c.stats.ping == 0.0 { ms } else { c.stats.ping * 0.9 + ms * 0.1 };
+                }
                 c.snap_ack = c.snap_ack.max(snap);
                 while c.outbox.front().is_some_and(|(n, _)| *n <= events) {
                     c.outbox.pop_front();

@@ -10,16 +10,24 @@ impl Server {
     pub(super) fn send_updates(&mut self) {
         let tick = self.tick;
         if self.tick % (TICK_RATE / 4) == 0 {
-            let mut scores: Vec<Score> = self
-                .clients
-                .values()
-                .map(|c| Score { id: c.id, name: c.name.clone(), kills: c.kills, deaths: c.deaths, alive: c.vitals.alive(), team: c.team, bot: c.bot })
-                .collect();
+            let mut scores: Vec<Score> = self.clients.values().map(|c| c.score()).collect();
             scores.sort_by_key(|s| (-s.kills, s.deaths));
-            let msg = encode(&ServerMsg::Scores(scores));
-            let addrs: Vec<_> = self.clients.iter().filter(|(_, c)| !c.bot).map(|(a, _)| *a).collect();
-            for a in addrs {
+            // Money only for your own team (spectators: nobody's).
+            let for_team = |team: Team| {
+                let list: Vec<Score> = scores.iter().map(|s| Score { money: s.money.filter(|_| team != Team::Spectator && s.team == team), ..s.clone() }).collect();
+                encode(&ServerMsg::Scores(list))
+            };
+            let msgs = [for_team(Team::T), for_team(Team::Ct), for_team(Team::Spectator)];
+            let history = encode(&ServerMsg::History(self.round.history.clone()));
+            let addrs: Vec<_> = self.clients.iter().filter(|(_, c)| !c.bot).map(|(a, c)| (*a, c.team)).collect();
+            for (a, team) in addrs {
+                let msg = match team {
+                    Team::T => &msgs[0],
+                    Team::Ct => &msgs[1],
+                    _ => &msgs[2],
+                };
                 self.socket.send(a, msg.clone());
+                self.socket.send(a, history.clone());
             }
         }
         if self.tick % HEARTBEAT_EVERY == 1 {

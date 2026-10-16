@@ -111,6 +111,24 @@ impl Server {
             c.money = (c.money + pay[side(c.team)]).min(max);
         }
         self.events.push(GameEvent::RoundEnd { winner, reason });
+        // The round's MVP (CS2): the defuser, the planter whose bomb went off, else the
+        // winner with the most kills (then damage) this round.
+        let defuser = self.events.iter().rev().find_map(|e| match e {
+            GameEvent::BombDefused { by } => Some(*by),
+            _ => None,
+        });
+        let mvp = match reason {
+            EndReason::BombDefused => defuser,
+            EndReason::BombExploded => self.planter,
+            _ => None,
+        }
+        .or_else(|| {
+            self.clients.values().filter(|c| c.team == winner && c.stats.round_kills > 0).max_by_key(|c| (c.stats.round_kills, c.stats.round_damage, std::cmp::Reverse(c.id))).map(|c| c.id)
+        });
+        for c in self.clients.values_mut().filter(|c| matches!(c.team, Team::T | Team::Ct)) {
+            c.stats.rounds += 1;
+            c.stats.mvps += (Some(c.id) == mvp) as u32;
+        }
     }
 
     /// Freeze time: everyone back to their spawn. Survivors keep their weapons and armor;
@@ -128,6 +146,11 @@ impl Server {
                 };
             }
             self.events.push(GameEvent::SidesSwapped);
+        }
+        self.planter = None;
+        for c in self.clients.values_mut() {
+            c.stats.round_kills = 0;
+            c.stats.round_damage = 0;
         }
         self.ground.clear();
         self.grenades.clear();

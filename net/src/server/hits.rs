@@ -25,6 +25,7 @@ impl Server {
                     let owner_team = self.clients.values().find(|c| c.id == g.owner).map(|c| c.team);
                     let ff = self.round.cfg.friendly_fire;
                     let wet = self.world.point_contents(blast) == sim::collision::Contents::Water;
+                    let mut dealt = Vec::new();
                     for c in self.clients.values_mut().filter(|c| c.vitals.alive() && (ff || c.id == g.owner || Some(c.team) != owner_team)) {
                         if !grenades::blast_reaches(wet, c.state.movement.water_level) {
                             continue;
@@ -34,6 +35,10 @@ impl Server {
                             continue;
                         }
                         let (health, armor) = combat::explosion_damage(&c.vitals, dmg);
+                        if Some(c.team) != owner_team {
+                            dealt.push((g.owner, health.min(c.vitals.health)));
+                            c.stats.hurt_by.push((g.owner, health.min(c.vitals.health)));
+                        }
                         let killed = c.vitals.hurt(health, armor);
                         self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion, at: None });
                         if killed {
@@ -41,6 +46,7 @@ impl Server {
                             self.events.push(GameEvent::Kill { killer: g.owner, victim: c.id, weapon: Some(Id::HeGrenade), headshot: false });
                         }
                     }
+                    self.note_damage(&dealt);
                 }
                 Kind::Flash => {
                     let wet = self.world.point_contents(g.origin) == sim::collision::Contents::Water;
@@ -112,6 +118,7 @@ impl Server {
         let shooter_team = self.clients.values().find(|c| c.id == p.shooter).map(|c| c.team);
         let ff = self.round.cfg.friendly_fire;
         let mut aimed = Vec::new();
+        let mut dealt = Vec::new();
         for (victim, damage, group, weapon, at) in hits {
             let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { continue };
             if !c.vitals.alive() || (!ff && Some(c.team) == shooter_team) {
@@ -137,6 +144,10 @@ impl Server {
             };
             let roll = ((tick.wrapping_mul(2_654_435_761) ^ victim as u32) % 2001) as f32 / 1000.0 - 1.0;
             player::hit_by(&mut c.state, weapon, group, damage, unarmored, roll);
+            if Some(c.team) != shooter_team {
+                dealt.push((p.shooter, health.min(c.vitals.health)));
+                c.stats.hurt_by.push((p.shooter, health.min(c.vitals.health)));
+            }
             let killed = c.vitals.hurt(health, armor);
             self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group, sound, at });
             if killed {
@@ -144,6 +155,7 @@ impl Server {
                 self.events.push(GameEvent::Kill { killer: p.shooter, victim, weapon: Some(weapon), headshot: group == HitGroup::Head });
             }
         }
+        self.note_damage(&dealt);
         // (A shotgun's pellets hitting one player count once.)
         aimed.dedup();
         for (_, head) in aimed {
@@ -152,18 +164,48 @@ impl Server {
         self.settle_deaths();
     }
 
+    /// Health taken off enemies, for the scoreboard (ADR) and the round's MVP.
+    fn note_damage(&mut self, dealt: &[(u8, f32)]) {
+        for (by, amount) in dealt {
+            if let Some(c) = self.clients.values_mut().find(|c| c.id == *by) {
+                c.stats.damage += amount.round() as u32;
+                c.stats.round_damage += amount.round() as u32;
+            }
+        }
+    }
+
     /// Bookkeeping for kill events raised this tick: scores and dropped guns.
     pub(super) fn settle_deaths(&mut self) {
-        let kills: Vec<(u8, u8)> = self.events.iter().filter_map(|e| match e {
-            GameEvent::Kill { killer, victim, .. } => Some((*killer, *victim)),
+        let kills: Vec<(u8, u8, bool)> = self.events.iter().filter_map(|e| match e {
+            GameEvent::Kill { killer, victim, headshot, .. } => Some((*killer, *victim, *headshot)),
             _ => None,
         }).collect();
         let respawns = self.respawns();
-        for (killer, victim) in kills.into_iter().skip(self.kills_settled) {
+        for (killer, victim, headshot) in kills.into_iter().skip(self.kills_settled) {
+            let team = |id: u8| self.clients.values().find(|c| c.id == id).map(|c| c.team);
+            let (killer_team, victim_team) = (team(killer), team(victim));
+            let mut helpers = Vec::new();
             if let Some(v) = self.clients.values_mut().find(|c| c.id == victim) {
                 v.deaths += 1;
                 if !respawns {
                     v.respawn_at = None; // wait for the next round
+                }
+                // CS2 assists: over 40 damage to them this life, by a teammate of the killer.
+                let hurt = std::mem::take(&mut v.stats.hurt_by);
+                for (by, _) in &hurt {
+                    let total: f32 = hurt.iter().filter(|(b, _)| b == by).map(|(_, d)| d).sum();
+                    if *by != killer && total > 40.0 && !helpers.contains(by) {
+                        helpers.push(*by);
+                    }
+                }
+            }
+            for c in self.clients.values_mut().filter(|c| helpers.contains(&c.id) && Some(c.team) == killer_team) {
+                c.stats.assists += 1;
+            }
+            if killer != victim && killer_team != victim_team {
+                if let Some(k) = self.clients.values_mut().find(|c| c.id == killer) {
+                    k.stats.round_kills += 1;
+                    k.stats.headshots += headshot as u32;
                 }
             }
             self.kill_money(killer, victim);
@@ -187,6 +229,7 @@ impl Server {
         for c in self.clients.values_mut() {
             c.kills = 0;
             c.deaths = 0;
+            c.stats = Stats { ping: c.stats.ping, ..Stats::default() };
         }
     }
 }

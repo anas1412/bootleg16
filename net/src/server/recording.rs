@@ -40,7 +40,7 @@ impl Server {
             return;
         }
         let scores = (self.tick / SNAPSHOT_EVERY % SCORES_EVERY == 0).then(|| {
-            self.clients.values().filter(|c| !c.bot).map(|c| Score { id: c.id, name: c.name.clone(), kills: c.kills, deaths: c.deaths, alive: c.vitals.alive(), team: c.team, bot: c.bot }).collect()
+            self.clients.values().filter(|c| !c.bot).map(|c| c.score()).collect()
         });
         let frame = crate::demo::Frame {
             tick: self.tick,

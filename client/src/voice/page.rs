@@ -11,6 +11,10 @@ pub enum VoiceAction {
     NextMic,
     MicVolume(f32),
     Volume(f32),
+    /// Open mic on/off (talks to your team whenever the gate opens).
+    OpenMic,
+    /// Noise gate threshold step (0 = off).
+    Gate(f32),
 }
 
 /// Apply a voice settings change (called from the menu).
@@ -23,6 +27,8 @@ pub fn apply(s: &mut VoiceSettings, devices: &Devices, a: VoiceAction) {
         }
         VoiceAction::MicVolume(d) => s.mic_volume = (s.mic_volume + d).clamp(0.0, 3.0),
         VoiceAction::Volume(d) => s.volume = (s.volume + d).clamp(0.0, 2.0),
+        VoiceAction::OpenMic => s.open_mic = !s.open_mic,
+        VoiceAction::Gate(d) => s.gate = (s.gate + d).clamp(0.0, 0.5),
     }
     s.save();
 }
