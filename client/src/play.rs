@@ -66,10 +66,8 @@ pub enum LobbyAction {
     /// A match was found (`LobbyState::ready`): take it / pass (passing costs a short cooldown).
     AcceptMatch,
     DeclineMatch,
-    /// Custom games: the leader picks a map (None: random), or starts a veto; a captain bans.
+    /// Custom games: the leader picks a map (None: random).
     SetMap(Option<String>),
-    StartVeto,
-    Ban(String),
     /// Drop into a deathmatch server (the lobby picks one with room; it comes back as `found`).
     Deathmatch,
     /// Go back to your running match (`LobbyState::rejoin`: you left it, or the game restarted).
@@ -108,8 +106,6 @@ pub fn apply(lobby: &mut Lobby, st: &mut MenuState, steam: Option<&Steam>, a: Lo
         LobbyAction::AcceptMatch => Command::Accept,
         LobbyAction::Deathmatch => Command::Deathmatch,
         LobbyAction::SetMap(m) => Command::SetMap(m),
-        LobbyAction::StartVeto => Command::StartVeto,
-        LobbyAction::Ban(m) => Command::Ban(m),
         LobbyAction::DeclineMatch => Command::Decline,
         LobbyAction::Reconnect => {
             // Same as a match found: `poll` connects with the seat.

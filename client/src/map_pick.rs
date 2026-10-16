@@ -43,7 +43,6 @@ pub fn fake() -> Option<LobbyState> {
         notice: String::new(),
         invites: Vec::new(),
         map: None,
-        veto: None,
         regions: Vec::new(),
     })
 }

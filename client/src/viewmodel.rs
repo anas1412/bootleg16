@@ -112,13 +112,16 @@ fn update(
     mut bones: Query<&mut Transform, With<ChildOf>>,
     camera: Single<Entity, With<ViewModelCamera>>,
     flash_look: Res<crate::muzzle::FlashLook>,
+    watch: Res<crate::spectate::Watch>,
 ) {
     let now = time.elapsed_secs();
     let l = &w.client.state.loadout;
-    let id = l.active_id();
-    let gun = l.active_gun();
+    // Watching a teammate through their eyes: their gun (idle) in their hands.
+    let watched = crate::spectate::in_eye(&w, &watch);
+    let id = watched.map(|o| o.weapon).unwrap_or(l.active_id());
+    let gun = l.active_gun().filter(|_| watched.is_none());
     let mode = gun.map(|g| g.mode).unwrap_or(0);
-    let alive = w.client.vitals.alive() && w.client.id().is_some();
+    let alive = (w.client.vitals.alive() && w.client.id().is_some() && !crate::spectate::spectating(&w)) || watched.is_some();
     // Silenced-capable guns have *_unsil animations for the plain mode.
     let unsil = matches!(id, Id::Usp | Id::M4a1) && mode == 0;
     let names = |base: &str| -> Vec<String> { if unsil { vec![format!("{base}_unsil"), base.to_string()] } else { vec![base.to_string()] } };
@@ -275,9 +278,9 @@ fn update(
     if let Ok(mut v) = vis.get_mut(flash) {
         v.set_if_neq(if lit { Visibility::Inherited } else { Visibility::Hidden });
     }
-    // Hidden while dead, spectating, or looking through a sniper scope.
+    // Hidden while dead (unless watching a teammate through their eyes) or through a sniper scope.
     let scoped = gun.is_some_and(|g| g.fov() < 90) && matches!(id, Id::Awp | Id::Scout | Id::G3sg1 | Id::Sg550);
-    let show = alive && !scoped && !w.noclip && std::env::var_os("BOOTLEG16_SPECTATE").is_none();
+    let show = alive && !scoped && !w.noclip;
     for e in vm.skin.iter().flat_map(|s| &s.parts) {
         if let Ok(mut v) = vis.get_mut(*e) {
             v.set_if_neq(if show { Visibility::Inherited } else { Visibility::Hidden });

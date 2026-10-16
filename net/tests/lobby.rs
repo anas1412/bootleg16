@@ -183,7 +183,6 @@ fn answers_never_outgrow_requests() {
         cooldown: Some(1e9),
         // (The lobby only ever lists pool maps.)
         map: Some("de_inferno".into()),
-        veto: Some(net::lobby::Veto { left: net::config::MAP_POOL.iter().map(|m| m.to_string()).collect(), turn: net::server::Group::B }),
         notice: "Too many players from your address, or the lobby is full. Try again later.".into(),
         invites: (0..net::lobby::MAX_INVITES).map(|_| net::lobby::Invite { from: long.clone(), steam: u64::MAX, code: "ABC-DEF".into(), left: 30.0 }).collect(),
         regions: (0..net::lobby::MAX_REGIONS).map(|_| ("x".repeat(16), addr)).collect(),
@@ -428,7 +427,7 @@ fn a_restarted_game_is_offered_its_running_match() {
 }
 
 #[test]
-fn a_custom_game_vetoes_maps_down_to_one_and_plays_it() {
+fn a_custom_game_plays_the_map_the_leader_picked() {
     let Some(bsp) = dust2() else { return };
     let Some(dir) = game_dir() else { return };
     let (mut server, lobby) = world(&bsp, 2);
@@ -440,21 +439,13 @@ fn a_custom_game_vetoes_maps_down_to_one_and_plays_it() {
     a.send(Command::SetMode(Mode::Custom));
     let bid = b.state.as_ref().unwrap().you;
     a.send(Command::Move { member: bid, group: Group::B });
-    a.send(Command::StartVeto);
-    until(&mut server, &mut [&mut a, &mut b], "veto", |c| c[0].state.as_ref().unwrap().veto.is_some());
-    // Captains in turn: A, B, A. B can't ban out of turn.
-    b.send(Command::Ban("de_dust2".into()));
-    until(&mut server, &mut [&mut a, &mut b], "out of turn", |c| !c[1].notice.is_empty());
-    for (who, map) in [(0, "de_dust2"), (1, "de_inferno"), (0, "de_nuke")] {
-        let c = if who == 0 { &mut a } else { &mut b };
-        c.send(Command::Ban(map.into()));
-        let left = 3 - ["de_dust2", "de_inferno", "de_nuke"].iter().position(|m| *m == map).unwrap();
-        until(&mut server, &mut [&mut a, &mut b], "ban", |c| c[0].state.as_ref().unwrap().veto.as_ref().map_or(1, |v| v.left.len()) == left);
-    }
-    assert_eq!(a.state.as_ref().unwrap().map.as_deref(), Some("de_train"));
+    // Only the leader picks.
+    b.send(Command::SetMap(Some("de_nuke".into())));
+    a.send(Command::SetMap(Some("de_train".into())));
+    until(&mut server, &mut [&mut a, &mut b], "picked", |c| c[1].state.as_ref().unwrap().map.as_deref() == Some("de_train"));
     a.send(Command::Play);
     until(&mut server, &mut [&mut a, &mut b], "match found", |c| c.iter().all(|c| c.found.is_some()));
-    // The server switched to the vetoed map; the players are told so when they join.
+    // The server switched to the picked map; the players are told so when they join.
     let (addr, ticket, key) = a.found.unwrap();
     let mut p = net::Client::connect(addr, "a", sim::collision::World::from_bsp(&bsp)).unwrap();
     p.ticket = ticket;
@@ -484,8 +475,6 @@ fn only_maps_everyone_has_are_offered() {
     a.send(Command::SetMap(Some("de_train".into())));
     until(&mut server, &mut [&mut a, &mut b], "refused", |c| !c[0].notice.is_empty());
     assert_eq!(a.notice, "Not everyone in the party has that map.");
-    a.send(Command::StartVeto);
-    until(&mut server, &mut [&mut a, &mut b], "veto", |c| c[0].state.as_ref().unwrap().veto.is_some());
-    let left = a.state.as_ref().unwrap().veto.clone().unwrap().left;
-    assert!(!left.contains(&"de_train".to_string()) && left.len() == 3, "{left:?}");
+    a.send(Command::SetMap(Some("de_nuke".into())));
+    until(&mut server, &mut [&mut a, &mut b], "picked", |c| c[0].state.as_ref().unwrap().map.as_deref() == Some("de_nuke"));
 }

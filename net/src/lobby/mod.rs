@@ -77,18 +77,8 @@ struct Party {
     /// Members in order joined, with their custom-game team.
     members: Vec<(u32, Group)>,
     queued: Option<Instant>,
-    /// Custom games: the map (None: a random one), or a veto in progress.
+    /// Custom games: the map the leader picked (None: a random one).
     map: Option<String>,
-    veto: Option<Veto>,
-}
-
-/// A custom game's map veto: the team captains (each team's first member) take turns banning
-/// maps until one is left.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Veto {
-    pub left: Vec<String>,
-    /// Whose turn to ban.
-    pub turn: Group,
 }
 
 struct GameServer {

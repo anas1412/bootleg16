@@ -217,18 +217,24 @@ fn animate(
     w: Res<Walker>,
     look: Res<OtherPlayers>,
     time: Res<Time>,
-    mut live: Query<(&mut OtherPlayer, &mut Transform), (Without<Corpse>, Without<ChildOf>)>,
+    mut live: Query<(Entity, &mut OtherPlayer, &mut Transform), (Without<Corpse>, Without<ChildOf>)>,
     mut corpses: Query<&mut Corpse>,
     mut bones: Query<&mut Transform, With<ChildOf>>,
     mut vis: Query<&mut Visibility>,
     cam: Single<&GlobalTransform, With<crate::game::FlyCam>>,
+    watch: Res<crate::spectate::Watch>,
 ) {
+    // Watching someone through their eyes: their own body isn't drawn.
+    let in_eye = crate::spectate::in_eye(&w, &watch).map(|o| o.id);
     let cam_rot = cam.compute_transform().rotation;
     let (now, dt) = (time.elapsed_secs(), time.delta_secs().max(1e-4));
     let others = w.client.others();
-    for (mut p, mut tf) in &mut live {
+    for (e, mut p, mut tf) in &mut live {
         let Some(o) = others.iter().find(|o| o.id == p.id) else { continue };
         *tf = place(o);
+        if let Ok(mut v) = vis.get_mut(e) {
+            v.set_if_neq(if in_eye == Some(p.id) { Visibility::Hidden } else { Visibility::Inherited });
+        }
         let model = &look.looks[p.look].model;
         // Speed from how far they moved (smoothed).
         let moved = ((o.origin[0] - p.last_origin[0]).powi(2) + (o.origin[1] - p.last_origin[1]).powi(2)).sqrt() / dt;

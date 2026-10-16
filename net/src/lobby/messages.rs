@@ -103,10 +103,6 @@ pub enum Command {
     Maps(Vec<String>),
     /// Leader, custom games: play this map (None: a random one).
     SetMap(Option<String>),
-    /// Leader, custom games: the captains ban maps in turn until one is left.
-    StartVeto,
-    /// A team captain, on their turn: ban this map.
-    Ban(String),
 }
 
 /// Lobby -> game server, sealed with its token's key.
@@ -174,9 +170,8 @@ pub struct LobbyState {
     pub notice: String,
     /// Invites to other parties, newest last.
     pub invites: Vec<Invite>,
-    /// Custom games: the map picked (None: random), and a veto in progress.
+    /// Custom games: the map picked (None: random).
     pub map: Option<String>,
-    pub veto: Option<super::Veto>,
     /// One server per region to measure your ping to (answer with `Command::Pings`).
     pub regions: Vec<(String, SocketAddr)>,
 }

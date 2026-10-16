@@ -263,6 +263,24 @@ fn walk(
     }
 }
 
+/// A chase camera on someone at `origin` facing `yaw`: behind them (in front if there's no
+/// room there, or first when `front_first`), never in a wall. Returns (camera, what it looks at).
+fn chase(world: &sim::collision::World, origin: [f32; 3], yaw: f32, front_first: bool) -> ([f32; 3], [f32; 3]) {
+    let eye = [origin[0], origin[1], origin[2] + 20.0];
+    let (s, c) = yaw.to_radians().sin_cos();
+    let spot = if front_first { [1.0f32, -1.0] } else { [-1.0, 1.0] }
+        .iter()
+        .map(|side| {
+            let want = [eye[0] + c * 100.0 * side, eye[1] + s * 100.0 * side, eye[2] + 10.0];
+            let t = world.trace_line(eye, want);
+            (t.fraction, std::array::from_fn(|i| eye[i] + (want[i] - eye[i]) * t.fraction * 0.9))
+        })
+        .find(|(f, _)| *f > 0.6)
+        .map(|(_, p)| p)
+        .unwrap_or(eye);
+    (spot, eye)
+}
+
 fn move_camera(
     time: Res<Time>,
     fixed: Res<Time<Fixed>>,
@@ -275,32 +293,23 @@ fn move_camera(
     if keys.just_pressed(KeyCode::KeyN) && w.client.practice {
         w.noclip = !w.noclip;
     }
-    // Dead, spectating (or forced with BOOTLEG16_SPECTATE): watch a living teammate only. With
-    // none left the camera stays put behind the black "team is out" screen (spectate.rs).
+    // Dead, spectating (or forced with BOOTLEG16_SPECTATE): through a living teammate's eyes;
+    // with the whole team out, from behind where the last of you went down (spectate.rs).
     if crate::spectate::spectating(&w) && !w.noclip {
-        if watch.out {
+        if let Some(o) = crate::spectate::in_eye(&w, &watch) {
+            let h = if o.crouched { sim::pmove::VIEW_HEIGHT_CROUCHED } else { sim::pmove::VIEW_HEIGHT_STANDING };
+            tf.translation = Vec3::from(map::to_y_up([o.origin[0], o.origin[1], o.origin[2] + h]));
+            tf.rotation = Quat::from_euler(EulerRot::YXZ, (o.yaw - 90.0).to_radians(), -o.pitch.to_radians(), 0.0);
             return;
         }
-        if let Some(o) = crate::spectate::target(&w, &watch) {
-            let eye = [o.origin[0], o.origin[1], o.origin[2] + 20.0];
-            let (s, c) = o.yaw.to_radians().sin_cos();
-            // Chase view from behind (like CS); in front if there's no room (or
-            // BOOTLEG16_SPECTATE=front, for checking models). Never in a wall.
+        let watched = crate::spectate::target(&w, &watch).map(|o| (o.origin, o.yaw)).or(if watch.out { watch.last_down } else { None });
+        if let Some((origin, yaw)) = watched {
             let front_first = std::env::var("BOOTLEG16_SPECTATE").is_ok_and(|v| v == "front");
-            let spot = if front_first { [1.0f32, -1.0] } else { [-1.0, 1.0] }
-                .iter()
-                .map(|side| {
-                    let want = [eye[0] + c * 100.0 * side, eye[1] + s * 100.0 * side, eye[2] + 10.0];
-                    let t = w.client.world.trace_line(eye, want);
-                    (t.fraction, [eye[0] + (want[0] - eye[0]) * t.fraction * 0.9, eye[1] + (want[1] - eye[1]) * t.fraction * 0.9, eye[2] + (want[2] - eye[2]) * t.fraction * 0.9])
-                })
-                .find(|(f, _)| *f > 0.6)
-                .map(|(_, p)| p)
-                .unwrap_or(eye);
+            let (spot, eye) = chase(&w.client.world, origin, yaw, front_first);
             tf.translation = Vec3::from(map::to_y_up(spot));
             tf.look_at(Vec3::from(map::to_y_up(eye)), Vec3::Y);
-            return;
         }
+        return;
     }
     if !w.noclip {
         if w.client.id().is_none() {
