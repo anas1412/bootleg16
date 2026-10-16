@@ -326,7 +326,7 @@ impl Server {
         }
     }
 
-    /// Announce this server to the master (if one is set), so it shows in the server list.
+    /// Announce this server to the lobby (if one is set), so it can be given matches.
     fn heartbeat(&mut self) {
         let cfg = &self.round.cfg;
         if cfg.master.is_empty() {
@@ -334,13 +334,15 @@ impl Server {
         }
         let Some(master) = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next()) else { return };
         let players = self.clients.values().filter(|c| !c.bot).count() as u8;
-        let msg = crate::master::MasterMsg::Heartbeat {
+        let busy = self.reserved.is_some();
+        let msg = crate::master::LobbyMsg::Heartbeat {
             name: cfg.name.clone(),
             map: self.map.clone(),
             players,
             max: cfg.max_players,
             region: cfg.region.clone(),
             token: cfg.official_token.clone(),
+            busy,
         };
         self.socket.send(master, encode(&msg));
     }
@@ -902,6 +904,13 @@ impl Server {
                     let cfg = &self.round.cfg;
                     let info = ServerMsg::Info { version: PROTOCOL_VERSION, name: cfg.name.clone(), map: self.map.clone(), players, max: cfg.max_players };
                     self.socket.send(from, encode(&info));
+                }
+            }
+            ClientMsg::Reserve { token, setup } => {
+                let cfg = &self.round.cfg;
+                let lobby = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next());
+                if !cfg.official_token.is_empty() && token == cfg.official_token && lobby == Some(from) && self.reserved.is_none() {
+                    self.reserve(setup);
                 }
             }
             ClientMsg::Bye => {

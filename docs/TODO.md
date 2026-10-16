@@ -84,11 +84,12 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Stat heuristics for aimbots, match replays, reports
 - [ ] 64-tick server option (tick rate is a constant 128 today)
 - [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)
-- [ ] Official servers only (decided 2026-10-16), no community servers, no server list:
+- [x] Official servers only (decided 2026-10-16), no community servers, no server list:
       casual queue (solo or party of 2-5, party on one team, no mid-match joins, reconnect to your match),
       custom games (invite up to 10, Team A/B lobby, knife round then winners pick side); invite codes until accounts
-- [ ] Reserved-match mode on the game server (only the match's players, on their teams) + knife round + side vote
-- [ ] Matchmaker / lobby service (parties, codes, queue, free-server pool); Play page replaces the server list
+- [x] Reserved-match mode on the game server (only the match's players, on their teams) + knife round + side vote
+- [x] Matchmaker / lobby service (parties, codes, queue, free-server pool); Play page replaces the server list
+- [ ] Lobby: accounts instead of fresh sessions, OS randomness for tickets, regions/ping in the queue
 - [ ] One-command hosting script (tools/host.sh: build, config, firewall, service) — after we have our own assets (decided 2026-10-16: don't install CS 1.6 files on hosts)
 - [ ] Home hosting without port forwarding: UPnP from the server, relay through the master as fallback
 - [x] Server protection: join cookie (stateless, no spoofed slots), per-IP packet budget, max 6 players per IP, 1400-byte cap, padded info/list requests (no amplification), master list rate limit

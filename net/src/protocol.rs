@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 21;
+pub const PROTOCOL_VERSION: u32 = 22;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -28,7 +28,7 @@ pub enum ClientMsg {
     /// `cookie`: 0 at first; then the one from `ServerMsg::Challenge` (proves our address is real).
     /// `ticket`: your seat in a reserved match (0 = none).
     Hello { version: u32, name: String, cookie: u64, ticket: u64 },
-    /// Server browser: tell me about yourself (no connection made). `pad` must be at least
+    /// Tell me about yourself (no connection made). `pad` must be at least
     /// `INFO_PAD` bytes so the answer is never bigger than the question (no amplification).
     Info { pad: Vec<u8> },
     /// Inputs numbered `first_seq`, `first_seq + 1`, ...
@@ -43,6 +43,9 @@ pub enum ClientMsg {
     /// One 20 ms Opus voice frame while a push-to-talk key is held.
     Voice { channel: VoiceChannel, data: Vec<u8> },
     Bye,
+    /// Lobby -> game server: run this match. Only obeyed with our official token, from the
+    /// lobby address in server.cfg.
+    Reserve { token: String, setup: crate::server::MatchSetup },
 }
 
 /// The two voice channels, each on its own push-to-talk key.

@@ -1,5 +1,5 @@
-//! Master server (the server list). Usage: `master [port] [--tokens file]`.
-//! `--tokens`: one secret per line; game servers announcing with one are marked official.
+//! The lobby (parties, matchmaking, custom games). Usage: `master [port] [--tokens file]`.
+//! `--tokens`: one secret per line; only game servers announcing with one get matches.
 use std::net::SocketAddr;
 
 fn main() {
@@ -12,6 +12,6 @@ fn main() {
         .map(|f| std::fs::read_to_string(f).unwrap_or_else(|e| panic!("{f}: {e}")).lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect())
         .unwrap_or_default();
     let mut m = net::master::Master::bind(SocketAddr::from(([0, 0, 0, 0], port)), tokens).unwrap_or_else(|e| panic!("binding port {port}: {e}"));
-    println!("bootleg16 master on {}", m.local_addr());
+    println!("bootleg16 lobby on {}", m.local_addr());
     m.run();
 }
