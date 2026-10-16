@@ -211,7 +211,7 @@ impl Client {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
             }
-            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, reliable, broken, grenades, smokes, ground, round, bomb, me } => {
+            ServerMsg::Snapshot { tick, ack, players, you, doors, loadout, events, reliable, broken, grenades, smokes, ground, round, bomb, me } => {
                 let Status::Connected { id } = self.status else { return };
                 if tick <= self.latest_tick {
                     return; // old or duplicate
@@ -241,7 +241,7 @@ impl Client {
                 self.me_info = me;
 
                 // Correct our prediction: take the server's state, replay what it hasn't run yet.
-                if let Some(mine) = players.iter().find(|p| p.id == id) {
+                if let Some((movement, vitals)) = you {
                     // Our last input went out at `seq`; the server had run up to `ack`.
                     let sample = self.seq.saturating_sub(ack) as f32 * TICK * 1000.0;
                     self.ping_ms = if self.ping_ms == 0.0 { sample } else { self.ping_ms * 0.9 + sample * 0.1 };
@@ -249,8 +249,8 @@ impl Client {
                         self.history.pop_front();
                     }
                     let before = self.state.movement.origin;
-                    self.vitals = mine.vitals;
-                    self.state = PlayerState { movement: mine.player, loadout };
+                    self.vitals = vitals;
+                    self.state = PlayerState { movement, loadout };
                     if self.vitals.alive() {
                         for (seq, timed) in &self.history {
                             let cmd_time = *seq as f64 * TICK as f64;
@@ -299,20 +299,23 @@ impl Client {
                 let t = (rt - a.tick as f32) / (b.tick - a.tick) as f32;
                 for pb in b.players.iter().filter(|p| Some(p.id) != me) {
                     let origin = match a.players.iter().find(|p| p.id == pb.id) {
-                        Some(pa) => std::array::from_fn(|i| pa.player.origin[i] + (pb.player.origin[i] - pa.player.origin[i]) * t),
-                        None => pb.player.origin,
+                        Some(pa) => {
+                            let (oa, ob) = (pa.origin(), pb.origin());
+                            std::array::from_fn(|i| oa[i] + (ob[i] - oa[i]) * t)
+                        }
+                        None => pb.origin(),
                     };
                     // Turn the short way round when blending yaw.
                     let yaw = match a.players.iter().find(|p| p.id == pb.id) {
-                        Some(pa) => pa.yaw + ((pb.yaw - pa.yaw + 540.0).rem_euclid(360.0) - 180.0) * t,
-                        None => pb.yaw,
+                        Some(pa) => pa.yaw() + ((pb.yaw() - pa.yaw() + 540.0).rem_euclid(360.0) - 180.0) * t,
+                        None => pb.yaw(),
                     };
-                    out.push(Remote { id: pb.id, origin, crouched: pb.player.crouched, alive: pb.vitals.alive(), yaw, pitch: pb.pitch, weapon: pb.weapon, team: pb.team });
+                    out.push(Remote { id: pb.id, origin, crouched: pb.crouched(), alive: pb.alive(), yaw, pitch: pb.pitch(), weapon: pb.weapon, team: pb.team });
                 }
             }
             None => {
                 for p in newest.players.iter().filter(|p| Some(p.id) != me) {
-                    out.push(Remote { id: p.id, origin: p.player.origin, crouched: p.player.crouched, alive: p.vitals.alive(), yaw: p.yaw, pitch: p.pitch, weapon: p.weapon, team: p.team });
+                    out.push(Remote { id: p.id, origin: p.origin(), crouched: p.crouched(), alive: p.alive(), yaw: p.yaw(), pitch: p.pitch(), weapon: p.weapon, team: p.team });
                 }
             }
         }

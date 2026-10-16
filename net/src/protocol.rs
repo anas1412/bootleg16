@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 17;
+pub const PROTOCOL_VERSION: u32 = 18;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -92,14 +92,46 @@ pub const MAX_UNLAG_TICKS: u32 = TICK_RATE / 2;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PlayerNet {
     pub id: u8,
-    pub player: Player,
-    pub vitals: Vitals,
-    /// View angles (degrees), so others can be drawn facing the right way.
-    pub yaw: f32,
-    pub pitch: f32,
+    /// Position in 1/8 units (small varints on the wire).
+    origin: [i32; 3],
+    /// View angles in 1/65536 of a turn (yaw) and of half a turn (pitch).
+    yaw: u16,
+    pitch: i16,
+    /// Bit 0 crouched, bit 1 alive.
+    flags: u8,
     /// Weapon in hand.
     pub weapon: Id,
     pub team: Team,
+}
+
+impl PlayerNet {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(id: u8, origin: [f32; 3], yaw: f32, pitch: f32, crouched: bool, alive: bool, weapon: Id, team: Team) -> PlayerNet {
+        PlayerNet {
+            id,
+            origin: origin.map(|v| (v * 8.0).round() as i32),
+            yaw: (yaw.rem_euclid(360.0) / 360.0 * 65536.0).round() as u32 as u16,
+            pitch: (pitch.clamp(-90.0, 90.0) / 180.0 * 65535.0).round() as i16,
+            flags: crouched as u8 | (alive as u8) << 1,
+            weapon,
+            team,
+        }
+    }
+    pub fn origin(&self) -> [f32; 3] {
+        self.origin.map(|v| v as f32 / 8.0)
+    }
+    pub fn yaw(&self) -> f32 {
+        self.yaw as f32 / 65536.0 * 360.0
+    }
+    pub fn pitch(&self) -> f32 {
+        self.pitch as f32 / 65535.0 * 180.0
+    }
+    pub fn crouched(&self) -> bool {
+        self.flags & 1 != 0
+    }
+    pub fn alive(&self) -> bool {
+        self.flags & 2 != 0
+    }
 }
 
 /// Things that happened since the last snapshot (effects, kill feed).
@@ -223,7 +255,10 @@ pub enum ServerMsg {
         tick: u32,
         /// Last of your inputs the server has run; replay the ones after it.
         ack: u32,
+        /// Other players you can see (compact: what drawing them needs).
         players: Vec<PlayerNet>,
+        /// Your own full movement state and health, for prediction (None while connecting).
+        you: Option<(Player, Vitals)>,
         doors: Vec<DoorNet>,
         /// Your own weapons, for prediction and the HUD.
         loadout: Loadout,

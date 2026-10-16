@@ -181,6 +181,8 @@ pub struct Server {
     round: Match,
     bomb: Bomb,
     pieces: breakables::Pieces,
+    /// Size of the last snapshot sent (bandwidth checks).
+    snapshot_bytes: usize,
     /// Anti-wallhack: when each (viewer, target) pair last had line of sight.
     last_seen: HashMap<(u8, u8), u32>,
 }
@@ -221,6 +223,7 @@ impl Server {
             bomb: Bomb::None,
             last_seen: HashMap::new(),
             pieces: breakables::Pieces::from_bsp(bsp),
+            snapshot_bytes: 0,
         })
     }
 
@@ -310,6 +313,11 @@ impl Server {
             c.state.movement.origin = origin;
             c.state.movement.velocity = [0.0; 3];
         }
+    }
+
+    /// Bytes in the last snapshot sent to a client.
+    pub fn snapshot_bytes(&self) -> usize {
+        self.snapshot_bytes
     }
 
     pub fn round_phase(&self) -> crate::rounds::Phase {
@@ -490,13 +498,15 @@ impl Server {
         self.settle_deaths();
         self.round_step();
 
+        // Positions as clients get them (1/8 unit, `PlayerNet`), so lag compensation rewinds to
+        // exactly what they were shown.
         self.history.push_back(PastPositions {
             tick: self.tick,
             players: self
                 .clients
                 .values()
                 .filter(|c| c.vitals.alive())
-                .map(|c| Target { id: c.id, origin: c.state.movement.origin, yaw: c.view.0, pitch: c.view.1, crouched: c.state.movement.crouched, weapon: c.state.loadout.active_id() })
+                .map(|c| Target { id: c.id, origin: c.state.movement.origin.map(|v| (v * 8.0).round() / 8.0), yaw: c.view.0, pitch: c.view.1, crouched: c.state.movement.crouched, weapon: c.state.loadout.active_id() })
                 .collect(),
         });
         while self.history.len() > TICK_RATE as usize {
@@ -525,15 +535,7 @@ impl Server {
             let players: Vec<PlayerNet> = self
                 .clients
                 .values()
-                .map(|c| PlayerNet {
-                    id: c.id,
-                    player: c.state.movement,
-                    vitals: c.vitals,
-                    yaw: c.view.0,
-                    pitch: c.view.1,
-                    weapon: c.state.loadout.active_id(),
-                    team: c.team,
-                })
+                .map(|c| PlayerNet::new(c.id, c.state.movement.origin, c.view.0, c.view.1, c.state.movement.crouched, c.vitals.alive(), c.state.loadout.active_id(), c.team))
                 .collect();
             let doors = self.world.doors.net_state();
             let events = std::mem::take(&mut self.events);
@@ -553,12 +555,13 @@ impl Server {
                 .map(|(a, c)| {
                     let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), defuse_kit: c.defuse_kit };
                     let seen = &sights[&c.id];
-                    let players: Vec<PlayerNet> = players.iter().filter(|p| seen.contains(&p.id)).cloned().collect();
+                    let players: Vec<PlayerNet> = players.iter().filter(|p| seen.contains(&p.id) && p.id != c.id).cloned().collect();
+                    let you = Some((c.state.movement, c.vitals));
                     let events = self.events_for(c.id, seen, &events);
-                    (*a, c.last_run, c.state.loadout.clone(), self.bomb_net(c.team), me, players, events)
+                    (*a, c.last_run, c.state.loadout.clone(), self.bomb_net(c.team), me, players, you, events)
                 })
                 .collect();
-            for (addr, ack, loadout, bomb, me, players, events) in sends {
+            for (addr, ack, loadout, bomb, me, players, you, events) in sends {
                 // Reliable events go in the client's numbered outbox until it confirms them.
                 let (reliable_new, events): (Vec<GameEvent>, Vec<GameEvent>) = events.into_iter().partition(|e| e.reliable());
                 let c = self.clients.get_mut(&addr).unwrap();
@@ -574,6 +577,7 @@ impl Server {
                     tick,
                     ack,
                     players,
+                    you,
                     doors: doors.clone(),
                     loadout,
                     events,
@@ -586,7 +590,9 @@ impl Server {
                     bomb,
                     me,
                 };
-                self.socket.send(addr, encode(&msg));
+                let bytes = encode(&msg);
+                self.snapshot_bytes = bytes.len();
+                self.socket.send(addr, bytes);
             }
         }
     }

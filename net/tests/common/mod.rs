@@ -82,7 +82,9 @@ impl Game {
         }
         assert!(self.a.id().is_some() && self.b.id().is_some(), "{:?} {:?}", self.a.status, self.b.status);
         assert!(self.server.player_count() >= 2);
-        assert!(self.server.vitals(self.a.id().unwrap()).unwrap().alive(), "A spawned");
+        if a != Some(net::protocol::Team::Spectator) {
+            assert!(self.server.vitals(self.a.id().unwrap()).unwrap().alive(), "A spawned");
+        }
     }
 }
 
