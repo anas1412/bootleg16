@@ -254,7 +254,7 @@
    the wordmark's 16 far behind */
 .space { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(1100px 700px at 28% 18%, rgba(140, 160, 180, .09), transparent 70%), radial-gradient(1400px 600px at 70% 120%, rgba(0, 0, 0, .55), transparent 70%); }
-.far16 { position: absolute; right: -60px; top: -120px; font: 800 1150px/.8 var(--f-display); color: transparent; -webkit-text-stroke: 2px rgba(200, 230, 255, .045); pointer-events: none; user-select: none; }
+.far16 { position: absolute; right: -60px; top: -120px; font: 800 1150px/.8 var(--f-display); color: transparent; -webkit-text-stroke: 2px rgba(200, 230, 255, .14); pointer-events: none; user-select: none; }
 
 /* chips have a faint fill so their light shows; the page sits on its own plate */
 .chip { background-color: rgba(14, 17, 22, .6); }
@@ -273,3 +273,21 @@
 .chip, .primary, .card, .nav > .item { transition: none !important; }
 .card.invite { background: none; box-shadow: none; }
 .card.invite:hover { box-shadow: inset 0 0 0 1px var(--line-3), var(--e2); }
+
+/* ---- the world behind the menus (screens.js backdrop, menu.js) ---- */
+.backdrop { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.backdrop img { position: absolute; inset: -4%; width: 108%; height: 108%; max-width: none; object-fit: cover; opacity: 0;
+  /* overcast: colour drained, light lowered, shadows cool */
+  filter: grayscale(.55) brightness(.42) contrast(1.08) saturate(.9);
+  transition: opacity 2.4s ease-in-out; transform: scale(1); }
+.backdrop img.on { opacity: 1; animation: drift 26s linear forwards; }
+@keyframes drift { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.07) translate(-1%, -.6%); } }
+.backdrop .grade { position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(40, 52, 66, .35), rgba(7, 8, 11, 0) 40%, rgba(7, 8, 11, .55)),
+    radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(7, 8, 11, .85) 100%),
+    linear-gradient(90deg, rgba(7, 8, 11, .55), rgba(7, 8, 11, .05) 45%, rgba(7, 8, 11, .35)); }
+.backdrop .grain { position: absolute; inset: -50%; opacity: .07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain 1s steps(6) infinite; }
+@keyframes grain { 0% { transform: translate(0, 0); } 20% { transform: translate(-3%, 2%); } 40% { transform: translate(2%, -3%); } 60% { transform: translate(-2%, -1%); } 80% { transform: translate(3%, 3%); } 100% { transform: translate(0, 0); } }
+

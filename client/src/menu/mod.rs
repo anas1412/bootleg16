@@ -3,9 +3,11 @@
 //! `connect`: starting and joining a match.
 mod connect;
 mod settings;
+mod stage3d;
 
 pub use connect::*;
 pub use settings::Settings;
+pub use stage3d::Layer;
 use crate::ui::{Kit, UiAction, UiActions};
 use crate::game::Walker;
 use crate::game_dir;
@@ -59,6 +61,7 @@ pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         crate::found::plugin(app);
+        stage3d::plugin(app);
         app.add_plugins(crate::play::PlayPlugin)
             .init_resource::<UiActions>()
             .init_resource::<Kit>()
@@ -139,7 +142,8 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
     });
     commands.remove_resource::<MenuError>();
     // The page colour is the clear colour, so menu parts can tune in and out over it.
-    commands.spawn((Camera2d, Camera { clear_color: ClearColorConfig::Custom(crate::ui::BG0), ..default() }, DespawnOnExit(AppState::Menu)));
+    // Flat screens (Play, a match found) over the 3D menu (stage3d), which clears to the page colour.
+    commands.spawn((Camera2d, Camera { order: 1, clear_color: ClearColorConfig::None, ..default() }, IsDefaultUiCamera, DespawnOnExit(AppState::Menu)));
 }
 
 /// Why we ended up back at the menu (shown once).

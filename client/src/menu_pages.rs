@@ -75,8 +75,17 @@ pub fn rebuild_menu(
         return;
     }
 
-    // The frame.
-    commands.spawn((MenuRoot, DespawnOnExit(AppState::Menu), full.clone())).with_children(|root| {
+    // The frame: the left side (list, wordmark) and the right side (your name, invites, the far
+    // 16), each drawn on its own side of the 3D menu (menu::stage3d).
+    use crate::menu::Layer;
+    commands.spawn((MenuRoot, Layer::Right, DespawnOnExit(AppState::Menu), full.clone())).with_children(|root| {
+        // the far 16: the wordmark's number, huge and faint behind everything on the right
+        root.spawn((abs(Node { right: vh(-60.0), top: vh(-140.0), ..default() }), kit_text("16", 1150.0, TX1.with_alpha(0.007), &kit.display), LineHeight::RelativeToFont(0.8), Pickable::IGNORE));
+        // Top right: who you are; under it your running match and invites.
+        crate::play::identity(root, &kit, &settings, steam, 80.0);
+        crate::found::notes(root, &kit, &lobby, steam, 80.0 + 68.0 + 16.0);
+    });
+    commands.spawn((MenuRoot, Layer::Left, DespawnOnExit(AppState::Menu), full.clone())).with_children(|root| {
         let mut list = root.spawn(abs(Node { left: vh(80.0), top: vh(200.0), width: vh(560.0), flex_direction: FlexDirection::Column, ..default() }));
         if tune_frame {
             list.insert(Anim::stagger(0));
@@ -84,8 +93,8 @@ pub fn rebuild_menu(
         list.with_children(|col| {
             let item = |num, label, jp, action, selected| NavItem { num, label, jp, action, selected };
             nav(col, &kit, "menu.nav", vec![
-                item("01", "Practice", "練習", UiAction::Page(Page::Practice), st.page == Page::Practice),
-                item("02", "Play", "プレイ", UiAction::Page(Page::Join), false),
+                item("01", "Play", "プレイ", UiAction::Page(Page::Join), false),
+                item("02", "Practice", "練習", UiAction::Page(Page::Practice), st.page == Page::Practice),
                 item("03", "Settings", "設定", UiAction::Page(Page::Settings), st.page == Page::Settings),
                 item("04", "Voice", "音声", UiAction::Page(Page::Voice), st.page == Page::Voice),
                 item("05", "Quit", "終了", UiAction::Quit, false),
@@ -113,14 +122,12 @@ pub fn rebuild_menu(
                 b.spawn((kit_text("16", 112.0, AMBER_INK, &kit.display), LineHeight::RelativeToFont(1.0), Node { margin: UiRect::top(vh(NUDGE)), ..default() }));
             });
         });
-        // Top right: who you are; under it your running match and invites; over all, a match found.
-        crate::play::identity(root, &kit, &settings, steam, 80.0);
-        crate::found::notes(root, &kit, &lobby, steam, 80.0 + 68.0 + 16.0);
     });
+    // over all, flat: a match found
     crate::found::overlay(&mut commands, &kit, &lobby, &mut memory);
 
     // The page.
-    let mut page = commands.spawn((MenuPage, DespawnOnExit(AppState::Menu), abs(Node { left: vh(720.0), right: vh(96.0), top: vh(200.0), bottom: vh(96.0), flex_direction: FlexDirection::Column, ..default() })));
+    let mut page = commands.spawn((MenuPage, Layer::Right, DespawnOnExit(AppState::Menu), abs(Node { left: vh(720.0), right: vh(96.0), top: vh(200.0), bottom: vh(96.0), flex_direction: FlexDirection::Column, ..default() })));
     if tune_page {
         page.insert(tune(2));
     }

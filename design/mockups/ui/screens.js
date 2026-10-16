@@ -3,10 +3,10 @@ const shot = n => `${A}shots/${n}`;
 
 // ---- menu frame: numbered list left, wordmark bottom left, you top right, page right ----
 // The frame stays while pages swap inside #page and #extra (see go() in index.html).
-const MENU_ITEMS = [['01', 'Practice', '練習', 'practice'], ['02', 'Play', 'プレイ', 'play'], ['03', 'Settings', '設定', 'settings'], ['04', 'Voice', '音声', 'voice'], ['05', 'Quit', '終了', '']];
+const MENU_ITEMS = [['01', 'Play', 'プレイ', 'play'], ['02', 'Practice', '練習', 'practice'], ['03', 'Settings', '設定', 'settings'], ['04', 'Voice', '音声', 'voice'], ['05', 'Quit', '終了', '']];
 function menuFrame(page, content, extra = '') {
   // depth: the space and the far 16 sit back, the list and the page float in front (parallax)
-  return `<div class="space" data-tilt="none" data-depth="-0.6"></div><div class="far16" data-tilt="none" data-depth="-3">16</div>
+  return `${backdrop()}<div class="space" data-tilt="none" data-depth="-0.6"></div><div class="far16" data-tilt="none" data-depth="-3">16</div>
   <div class="abs scan" style="inset:0"></div>
   <div class="abs tune" style="left:80px;top:200px;width:560px" data-tilt="y 16" data-hinge="left center" data-depth="0.3">${ui.nav(MENU_ITEMS.map(([n, l, j, k]) => [n, l, j, l === page, k]))}</div>
   <div class="abs jp tune" style="left:92px;bottom:262px;font-size:16px;color:var(--tx2);--i:3" data-tilt="y 12" data-hinge="left center">ブートレグ・シックスティーン</div>
@@ -15,6 +15,12 @@ function menuFrame(page, content, extra = '') {
   <div id="page" class="abs tune plate${content ? '' : ' empty'}" style="left:680px;width:fit-content;min-width:640px;max-width:1180px;top:160px;--i:2" data-tilt="y -10" data-hinge="right center" data-depth="0.2">${content}</div><div id="extra" data-tilt="none">${extra}</div>`;
 }
 
+// The world behind the menus: near future, grounded (docs/MAPS.md). Stand-in shots of our maps
+// (CS shots for now; the game ships stills of its own maps), graded overcast and cool, drifting
+// slowly toward you and cross-fading from map to map (menu.js runs it). Grain and a vignette.
+// Nothing else: the menu stays simple.
+const BACKDROPS = ['spec_de_dust2_front.jpg', 'de_inferno_t.jpg', 'de_dust_ct.jpg'];
+const backdrop = () => `<div class="backdrop" data-tilt="none">${BACKDROPS.map((n, i) => `<img src="${shot(n)}" alt="" class="${i ? '' : 'on'}">`).join('')}<i class="grade"></i><i class="grain"></i></div>`;
 const SCREENS = {
   main: {
     name: 'Main menu', note: 'Straight and calm, no page. Pick an item: its page comes in and the menu swings into 3D. Esc swings it back flat.',

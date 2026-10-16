@@ -44,6 +44,7 @@ body.bare { padding: 0; } .bare header, .bare .bar { display: none; } .bare .fra
 <script src="rig.js"></script>
 <script src="ai.js"></script>
 <script src="hud.js"></script>
+<script src="menu.js"></script>
 <script>
 const stage = document.getElementById('stage'), frame = document.getElementById('frame');
 const tabs = document.getElementById('tabs'), note = document.getElementById('note'), toggle = document.getElementById('toggle');
@@ -79,6 +80,7 @@ function show(k, opening) {
   speakAll(stage);
   hudLive(stage);
   curve(stage);
+  menuWorld(stage);
 }
 // Opening re-renders so the menu tunes in again; closing tunes it out.
 toggle.onclick = () => {

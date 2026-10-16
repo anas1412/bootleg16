@@ -21,6 +21,10 @@ fn mmss(secs: f32) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+/// The match found screen's root (flat over the 3D menu; the menu takes no clicks under it).
+#[derive(Component)]
+pub struct FoundOverlay;
+
 /// The accept button: its glow breathes.
 #[derive(Component)]
 struct Breathe;
@@ -52,7 +56,7 @@ pub fn overlay(commands: &mut Commands, kit: &Kit, lobby: &Lobby, memory: &mut U
     memory.changed("found.open", if ready.is_some() { "1" } else { "0" });
     let Some(r) = ready else { return };
     commands
-        .spawn((crate::menu::MenuRoot, DespawnOnExit(crate::menu::AppState::Menu), Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() }, BackgroundColor(BACKDROP), GlobalZIndex(30)))
+        .spawn((crate::menu::MenuRoot, FoundOverlay, DespawnOnExit(crate::menu::AppState::Menu), Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() }, BackgroundColor(BACKDROP), GlobalZIndex(30)))
         .with_children(|full| {
             let mut panel = full.spawn((soft(Node { width: vh(640.0), padding: UiRect::axes(vh(48.0), vh(40.0)), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, border: UiRect::all(px(1)), ..default() }), BackgroundColor(BG1.with_alpha(0.96)), BorderColor::all(LINE_2), lift()));
             if appeared {
