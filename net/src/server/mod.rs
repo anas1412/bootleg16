@@ -351,6 +351,13 @@ impl Server {
         self.clients.values().find(|c| c.id == id).map(|c| &c.state.movement)
     }
 
+    /// Set a player's health (tests and admin tools; 0 = dead).
+    pub fn set_health(&mut self, id: u8, health: f32) {
+        if let Some(c) = self.clients.values_mut().find(|c| c.id == id) {
+            c.vitals.health = health;
+        }
+    }
+
     /// Move a player (tests and admin tools); their client corrects to it.
     pub fn teleport(&mut self, id: u8, origin: [f32; 3]) {
         if let Some(c) = self.clients.values_mut().find(|c| c.id == id) {

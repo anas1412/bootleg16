@@ -74,16 +74,35 @@ impl Server {
         false
     }
 
-    /// Who `viewer` gets told about: themselves, teammates, and enemies in (or just out of) sight.
-    /// The dead and spectators see everyone.
+    /// The living players whose eyes and ears `viewer` gets: themselves when alive; when dead,
+    /// their living teammates (CS competitive: the dead only watch their own team, so they
+    /// can't call out what the enemy is doing); a whole team dead: nobody's (their screen goes
+    /// black). None: sees everyone (spectators, outside official matches).
+    fn eyes_of(&self, viewer: u8) -> Option<Vec<&Remote>> {
+        let v = self.clients.values().find(|c| c.id == viewer)?;
+        if v.team == Team::Spectator {
+            return None;
+        }
+        if v.vitals.alive() {
+            return Some(vec![v]);
+        }
+        Some(self.clients.values().filter(|c| c.team == v.team && c.vitals.alive()).collect())
+    }
+
+    /// Who `viewer` gets told about: themselves, teammates, and enemies in (or just out of)
+    /// sight of their eyes (see `eyes_of`).
     pub(super) fn visible_to(&mut self, viewer: u8) -> HashSet<u8> {
         let Some(v) = self.clients.values().find(|c| c.id == viewer) else { return HashSet::new() };
-        let all = !v.vitals.alive() || v.team == Team::Spectator;
+        let eyes = self.eyes_of(viewer);
         let tick = self.tick;
         let mut out = HashSet::new();
         let mut seen = Vec::new();
         for t in self.clients.values() {
-            let visible = all || t.id == viewer || t.team == v.team || !t.vitals.alive() || self.in_sight(v, t);
+            let in_sight = match &eyes {
+                None => true,
+                Some(eyes) => eyes.iter().any(|e| self.in_sight(e, t)),
+            };
+            let visible = t.id == viewer || t.team == v.team || !t.vitals.alive() || in_sight;
             if visible {
                 seen.push(t.id);
                 out.insert(t.id);
@@ -99,14 +118,17 @@ impl Server {
 
     /// The events `viewer` may get: sounds only within hearing range of someone hidden.
     pub(super) fn events_for(&self, viewer: u8, visible: &HashSet<u8>, events: &[GameEvent]) -> Vec<GameEvent> {
-        let Some(ear) = self.clients.values().find(|c| c.id == viewer).map(|c| c.state.movement.eye()) else { return Vec::new() };
+        if !self.clients.values().any(|c| c.id == viewer) {
+            return Vec::new();
+        }
+        // Heard with the same ears as `eyes_of` (the dead: their living teammates').
+        let ears: Option<Vec<[f32; 3]>> = self.eyes_of(viewer).map(|e| e.iter().map(|c| c.state.movement.eye()).collect());
+        let hears = |at: [f32; 3], range: f32| ears.as_ref().is_none_or(|ears| ears.iter().any(|e| dist(at, *e) <= range));
         events
             .iter()
             .filter(|e| match e {
-                GameEvent::Footstep { player, at } => visible.contains(player) || dist(*at, ear) <= HEAR_NORMAL,
-                GameEvent::Shot { shooter, silenced, from, .. } => {
-                    visible.contains(shooter) || dist(*from, ear) <= if *silenced { HEAR_QUIET } else { HEAR_NORMAL }
-                }
+                GameEvent::Footstep { player, at } => visible.contains(player) || hears(*at, HEAR_NORMAL),
+                GameEvent::Shot { shooter, silenced, from, .. } => visible.contains(shooter) || hears(*from, if *silenced { HEAR_QUIET } else { HEAR_NORMAL }),
                 _ => true,
             })
             .cloned()

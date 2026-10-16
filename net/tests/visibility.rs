@@ -57,3 +57,62 @@ fn smoke_hides_enemies_from_the_server_too() {
     }
     assert!(!g.a.others().iter().any(|p| p.id == b), "seen through the smoke");
 }
+
+#[test]
+fn the_dead_only_see_what_their_living_teammates_see() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 0, 0.0);
+    g.connect_as(Some(Team::T), Some(Team::Ct));
+    let mut mate = net::Client::connect(g.server.local_addr(), "mate", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let tick = |g: &mut Game, mate: &mut net::Client| {
+        g.tick(Input::default(), Input::default());
+        mate.tick(Input::default());
+    };
+    for _ in 0..128 {
+        tick(&mut g, &mut mate);
+    }
+    mate.join_team(Some(Team::Ct));
+    for _ in 0..128 {
+        tick(&mut g, &mut mate);
+    }
+    let (t, ct, m) = (g.a.id().unwrap(), g.b.id().unwrap(), mate.id().unwrap());
+    // B (a CT) dies; their living teammate is at CT spawn (joining mid-round you'd sit out
+    // the round, as in CS: bring them in), the T across the map at his.
+    g.server.set_health(m, 100.0);
+    g.server.teleport(m, g.server.player(ct).unwrap().origin);
+    g.server.set_health(ct, 0.0);
+    for _ in 0..64 {
+        tick(&mut g, &mut mate);
+    }
+    assert_eq!((mate.team(), g.b.vitals.alive()), (Team::Ct, false), "setup");
+    assert!(!mate.others().iter().any(|o| o.id == t), "setup: the living teammate can't see the T either");
+    assert!(!g.b.others().iter().any(|o| o.id == t), "dead, but shown an enemy no teammate can see (ghosting)");
+    // The teammate walks up to the T: now B sees him too (watching that teammate).
+    let o = g.server.player(t).unwrap().origin;
+    g.server.teleport(m, [o[0] + 150.0, o[1], o[2]]);
+    for _ in 0..64 {
+        tick(&mut g, &mut mate);
+    }
+    assert!(mate.others().iter().any(|o| o.id == t), "setup: the teammate next to him sees him");
+    assert!(g.b.others().iter().any(|o| o.id == t), "a teammate sees him, so the dead do too");
+}
+
+#[test]
+fn a_whole_team_dead_sees_nothing_of_the_enemy() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 0, 0.0);
+    g.connect_as(Some(Team::T), Some(Team::Ct));
+    let (t, ct) = (g.a.id().unwrap(), g.b.id().unwrap());
+    // The CT right in front of the T, then dies: their team is all dead, the screen goes black.
+    let o = g.server.player(t).unwrap().origin;
+    g.server.teleport(ct, [o[0] + 150.0, o[1], o[2]]);
+    for _ in 0..64 {
+        g.tick(Input::default(), Input::default());
+    }
+    assert!(g.b.others().iter().any(|o| o.id == t));
+    g.server.set_health(ct, 0.0);
+    for _ in 0..128 {
+        g.tick(Input::default(), Input::default());
+    }
+    assert!(!g.b.others().iter().any(|o| o.id == t && o.alive), "nobody alive on their team: nothing of the enemy");
+}
