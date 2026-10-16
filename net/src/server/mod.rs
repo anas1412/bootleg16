@@ -476,7 +476,7 @@ impl Server {
                 .clients
                 .values()
                 .filter(|c| c.vitals.alive())
-                .map(|c| Target { id: c.id, origin: c.state.movement.origin, yaw: c.view.0, pitch: c.view.1, crouched: c.state.movement.crouched })
+                .map(|c| Target { id: c.id, origin: c.state.movement.origin, yaw: c.view.0, pitch: c.view.1, crouched: c.state.movement.crouched, weapon: c.state.loadout.active_id() })
                 .collect(),
         });
         while self.history.len() > TICK_RATE as usize {

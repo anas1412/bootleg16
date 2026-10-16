@@ -70,24 +70,6 @@ impl OtherPlayers {
     }
 }
 
-/// The player body animation set CS uses for each weapon (`ref_aim_<ext>`, `crouch_aim_<ext>`).
-fn anim_ext(id: Id) -> &'static str {
-    use Id::*;
-    match id {
-        Knife => "knife",
-        Glock | Usp | P228 | Deagle | FiveSeven => "onehanded",
-        Elite => "dualpistols",
-        M3 | Xm1014 => "shotgun",
-        Mac10 | Tmp | Mp5 | Ump45 | P90 => "mp5",
-        Galil | Ak47 => "ak47",
-        Famas | M4a1 | Sg552 | Aug => "carbine",
-        Scout | Awp | G3sg1 | Sg550 => "rifle",
-        M249 => "m249",
-        HeGrenade | Flashbang | Smoke => "grenade",
-        C4 => "c4",
-    }
-}
-
 /// A live player's model. Children are the body parts, then the weapon parts.
 #[derive(Component)]
 struct OtherPlayer {
@@ -139,7 +121,7 @@ fn anim_events(
                 let name = match *m {
                     PlayerAnim::Hurt(_, HitGroup::Head) => "head_flinch".to_string(),
                     PlayerAnim::Hurt(..) => "gut_flinch".to_string(),
-                    _ => format!("{}_shoot_{}", if p.crouched { "crouch" } else { "ref" }, anim_ext(p.weapon)),
+                    _ => format!("{}_shoot_{}", if p.crouched { "crouch" } else { "ref" }, sim::weapons::data::anim_ext(p.weapon)),
                 };
                 if let Some(s) = seq(model, &name) {
                     p.action = Some((s, now));
@@ -252,7 +234,7 @@ fn animate(
         let rate = if nominal > 0.0 { (speed / nominal).clamp(0.5, 1.5) } else { 1.0 };
         p.gait_frame = (p.gait_frame + gs.fps * rate * dt) % gs.frames.max(1) as f32;
         // Upper body: a one-off action, else the weapon's aim pose.
-        let aim = seq(model, &format!("{stance}_aim_{}", anim_ext(p.weapon))).or_else(|| seq(model, &format!("{stance}_aim_carbine"))).unwrap_or(0);
+        let aim = seq(model, &format!("{stance}_aim_{}", sim::weapons::data::anim_ext(p.weapon))).or_else(|| seq(model, &format!("{stance}_aim_carbine"))).unwrap_or(0);
         let mut upper = (aim, 0.0);
         if let Some((s, t0)) = p.action {
             let sq = &model.sequences[s];

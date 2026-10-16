@@ -140,3 +140,6 @@ something surprises you.
 - Child modules (`server/round.rs` etc.) can use the parent's private fields, but `fn`s in their `impl Server`
   blocks must be `pub(super)` for `server/mod.rs` to call them.
 - `info_map_parameters bombradius` (de_nuke 350): C4 damage = radius, reach = 3.5 × radius, through walls.
+- Head height: in the CS models the head centre is ~+19 over the origin, i.e. at eye level (+17), and leans
+  forward of the origin by 1-12 units depending on the weapon pose. Shooting someone's back at eye level can
+  hit the upper chest first. Hitboxes are posed per weapon (`Target::weapon`).

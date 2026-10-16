@@ -827,3 +827,21 @@ pub fn by_name(name: &str) -> Option<Id> {
     let n = n.strip_prefix("weapon_").unwrap_or(&n);
     WEAPONS.iter().find(|d| d.name == n || (n == "mp5" && d.name == "mp5navy") || (n == "glock" && d.name == "glock18")).map(|d| d.id)
 }
+
+/// The player body animation set CS uses for each weapon (`ref_aim_<ext>`, `crouch_aim_<ext>`).
+pub fn anim_ext(id: Id) -> &'static str {
+    use Id::*;
+    match id {
+        Knife => "knife",
+        Glock | Usp | P228 | Deagle | FiveSeven => "onehanded",
+        Elite => "dualpistols",
+        M3 | Xm1014 => "shotgun",
+        Mac10 | Tmp | Mp5 | Ump45 | P90 => "mp5",
+        Galil | Ak47 => "ak47",
+        Famas | M4a1 | Sg552 | Aug => "carbine",
+        Scout | Awp | G3sg1 | Sg550 => "rifle",
+        M249 => "m249",
+        HeGrenade | Flashbang | Smoke => "grenade",
+        C4 => "c4",
+    }
+}

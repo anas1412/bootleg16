@@ -184,21 +184,35 @@ fn hitboxes_from_the_real_player_model() {
     let shot = |from: [f32; 3], yaw: f32| {
         let d = [c[0] - from[0], c[1] - from[1], c[2] - from[2]];
         let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
-        hb.trace([0.0; 3], yaw, 0.0, false, from, [d[0] / l, d[1] / l, d[2] / l], 1000.0).map(|h| h.group)
+        hb.trace([0.0; 3], yaw, 0.0, false, sim::weapons::Id::M4a1, from, [d[0] / l, d[1] / l, d[2] / l], 1000.0).map(|h| h.group)
     };
     // From the front-above and from above, the head is the first thing hit.
     assert_eq!(shot([200.0, c[1], c[2] + 60.0], 0.0), Some(HitGroup::Head));
     assert_eq!(shot([c[0], c[1], 300.0], 0.0), Some(HitGroup::Head));
     // Horizontal shots by height: legs low, body in the middle, nothing over the head.
-    let level = |z: f32, crouched: bool| hb.trace([0.0; 3], 0.0, 0.0, crouched, [200.0, 0.0, z], [-1.0, 0.0, 0.0], 400.0).map(|h| h.group);
+    let level = |z: f32, crouched: bool| hb.trace([0.0; 3], 0.0, 0.0, crouched, sim::weapons::Id::M4a1, [200.0, 0.0, z], [-1.0, 0.0, 0.0], 400.0).map(|h| h.group);
     assert!(matches!(level(-15.0, false), Some(HitGroup::LeftLeg | HitGroup::RightLeg)));
     assert!(matches!(level(10.0, false), Some(HitGroup::Chest | HitGroup::LeftArm | HitGroup::RightArm)));
     assert_eq!(level(30.0, false), None);
+    // Close range at eye level (+17) to the face is a headshot; 9 units higher (8° up at
+    // 64 units, as an old test aimed) goes over the head.
+    let front = |z: f32, w| hb.trace([0.0; 3], 180.0, 0.0, false, w, [-64.0, -c[1], z], [1.0, 0.0, 0.0], 200.0).map(|h| h.group);
+    assert_eq!(front(18.0, sim::weapons::Id::M4a1), Some(HitGroup::Head));
+    assert_eq!(front(26.0, sim::weapons::Id::M4a1), None);
+    // Hitboxes follow the weapon's pose: each gun's real head centre is a headshot, from the side.
+    for (w, ext) in [(sim::weapons::Id::Ak47, "ak47"), (sim::weapons::Id::Knife, "knife"), (sim::weapons::Id::Awp, "rifle"), (sim::weapons::Id::Glock, "onehanded")] {
+        for (stance, crouched) in [("ref", false), ("crouch", true)] {
+            let p = model.pose(model.sequence(&format!("{stance}_aim_{ext}")).unwrap(), 0, 0.5);
+            let hc = p[head.bone].apply([(head.mins[0] + head.maxs[0]) / 2.0, (head.mins[1] + head.maxs[1]) / 2.0, (head.mins[2] + head.maxs[2]) / 2.0]);
+            let side = hb.trace([0.0; 3], 0.0, 0.0, crouched, w, [hc[0], -200.0, hc[2]], [0.0, 1.0, 0.0], 400.0).map(|h| h.group);
+            assert_eq!(side, Some(HitGroup::Head), "{stance} {ext} head at {hc:?}");
+        }
+    }
     // A rotated player is hit the same way: shooting the head of a player facing +y.
     let rotated = [-c[1], c[0], c[2]];
     let from = [rotated[0], rotated[1], 300.0];
     let d = [0.0, 0.0, -1.0];
-    assert_eq!(hb.trace([0.0; 3], 90.0, 0.0, false, from, d, 1000.0).map(|h| h.group), Some(HitGroup::Head));
+    assert_eq!(hb.trace([0.0; 3], 90.0, 0.0, false, sim::weapons::Id::M4a1, from, d, 1000.0).map(|h| h.group), Some(HitGroup::Head));
 }
 
 #[test]
@@ -260,7 +274,7 @@ mod shooting {
         let Some((world, hb, mats, me)) = setup() else { return };
         let yaw = open_direction(&world, me, 700.0);
         let (s, c) = yaw.to_radians().sin_cos();
-        let target = Target { id: 1, origin: [me[0] + c * 500.0, me[1] + s * 500.0, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false };
+        let target = Target { id: 1, origin: [me[0] + c * 500.0, me[1] + s * 500.0, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1 };
         let eye = [me[0], me[1], me[2] + 17.0];
         // Aim level at chest height (target origin + 9).
         let pitch = -((target.origin[2] + 9.0 - eye[2]) / 500.0).atan().to_degrees();
@@ -276,7 +290,7 @@ mod shooting {
         let Some((world, hb, mats, me)) = setup() else { return };
         let yaw = open_direction(&world, me, 700.0);
         let (s, c) = yaw.to_radians().sin_cos();
-        let at = |d: f32, id| Target { id, origin: [me[0] + c * d, me[1] + s * d, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false };
+        let at = |d: f32, id| Target { id, origin: [me[0] + c * d, me[1] + s * d, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1 };
         let eye = [me[0], me[1], me[2] + 17.0];
         let pitch = -((me[2] + 9.0 - eye[2]) / 300.0).atan().to_degrees();
         let r = fire_bullet(&world, &mats, &hb, eye, &ak_shot(pitch, yaw), 0, &[at(200.0, 1), at(300.0, 2)]);
@@ -289,7 +303,7 @@ mod shooting {
     fn a_thick_wall_stops_the_bullet() {
         let Some((world, hb, mats, me)) = setup() else { return };
         // Shoot straight down: the bullet hits the floor and the target "under" it is safe.
-        let below = Target { id: 1, origin: [me[0], me[1], me[2] - 300.0], yaw: 0.0, pitch: 0.0, crouched: false };
+        let below = Target { id: 1, origin: [me[0], me[1], me[2] - 300.0], yaw: 0.0, pitch: 0.0, crouched: false, weapon: Id::M4a1 };
         let eye = [me[0], me[1], me[2] + 17.0];
         let r = fire_bullet(&world, &mats, &hb, eye, &ak_shot(89.0, 0.0), 0, &[below]);
         assert!(r.hits.is_empty(), "{r:?}");

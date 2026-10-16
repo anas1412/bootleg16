@@ -15,6 +15,8 @@ pub struct Target {
     pub yaw: f32,
     pub pitch: f32,
     pub crouched: bool,
+    /// What they hold (their hitboxes follow that weapon's pose).
+    pub weapon: crate::weapons::Id,
 }
 
 /// Damage reaching a player, after the hit group multiplier (armor comes later).
@@ -62,7 +64,7 @@ fn nearest(world: &World, hitboxes: &Hitboxes, src: Vec3, end: Vec3, targets: &[
     let dir = scale(seg, 1.0 / len.max(1e-6));
     let mut best = (wt.fraction, None);
     for t in targets.iter().filter(|t| !skip.contains(&t.id)) {
-        if let Some(h) = hitboxes.trace(t.origin, t.yaw, t.pitch, t.crouched, src, dir, len * best.0) {
+        if let Some(h) = hitboxes.trace(t.origin, t.yaw, t.pitch, t.crouched, t.weapon, src, dir, len * best.0) {
             best = (h.distance / len, Some((t.id, h.group)));
         }
     }

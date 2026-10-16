@@ -47,7 +47,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Night vision isn't sold (no effect yet)
 - [ ] Defuse needs only reach + looking roughly at it; CS traces +use to the bomb entity
 - [ ] Buy menu: "you can't buy now" feedback; CS2-style team money on the scoreboard
-- [ ] ⚠ Close-range head shots at 64 units with pitch -8 missed in a test (net/tests/rounds.rs uses body shots); check head hitbox placement
+- [x] Hitboxes follow each weapon's aim pose (head moved up to ~7 units between poses; the old test simply aimed 9 units over the head)
+- [ ] Hitboxes don't follow shoot/reload/flinch upper-body animations or gait (aim pose frame 0 only)
 - [ ] ⚠ Defuse times (10 s / 5 s with kit)
 - [ ] ⚠ Living Ts get no money when time runs out (`MarkLivingPlayersOnTeamAsNotReceivingMoneyNextRound` call sites)
 - [ ] ⚠ Team buy restrictions (`CanBuyWeaponByMaptype`)
@@ -118,8 +119,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Engine works from a neutral map form so editor maps and BSPs both load
 - [ ] Modernized look: new maps and character models replace the CS assets
       (UI direction E in `design/mockups/e.html`; update `docs/UI.md` to E)
-- [ ] Five rebuilt maps per `docs/MAPS.md`: Noor (Dust2 layout), Jiufen (Inferno),
-      Shinagawa (Train), Cadarache (Nuke), Deira (Mirage; 1.6 community BSP installed)
+- [ ] Four maps per `docs/MAPS.md`: port (Train structure), data_center (Dust2),
+      bank (Mirage), high_rise (Inferno). Nuke dropped.
 - [ ] Renderer: PBR texture overrides by WAD name, glTF props, fog/bloom/grading
 - [ ] Factions Bureau (cyan) vs Strays (pink) replace CT/T in UI and code
 - [ ] Characters picked once in the main menu, independent of team; outfit

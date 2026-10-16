@@ -44,10 +44,19 @@ struct PosedBox {
 /// Number of aim-pitch poses (the CS player models' blend sets).
 const PITCH_STEPS: usize = 9;
 
+/// One aim pose set: [stance][pitch step] -> boxes in model space (x forward, z up).
+type Poses = [Vec<Vec<PosedBox>>; 2];
+
 pub struct Hitboxes {
-    /// [stance][pitch step] -> boxes in model space (x forward, z up, origin = box centre).
-    poses: [Vec<Vec<PosedBox>>; 2],
+    /// Per weapon pose (`ref_aim_<ext>`): the head sits up to ~7 units differently between
+    /// them, so a player is hit where they're drawn for the gun they hold.
+    poses: std::collections::HashMap<&'static str, Poses>,
+    /// For weapons whose pose the model doesn't have.
+    fallback: &'static str,
 }
+
+/// Every weapon pose name (`sim::weapons::data::anim_ext`).
+const EXTS: [&str; 11] = ["carbine", "onehanded", "knife", "rifle", "ak47", "mp5", "shotgun", "grenade", "c4", "dualpistols", "m249"];
 
 /// Where a ray entered a hitbox.
 #[derive(Clone, Copy, Debug)]
@@ -58,33 +67,40 @@ pub struct Hit {
 }
 
 impl Hitboxes {
-    /// `aim`: the aim animation to use, e.g. "carbine" (ref_aim_carbine / crouch_aim_carbine).
-    pub fn from_model(model: &Model, aim: &str) -> Option<Hitboxes> {
-        let stance = |prefix: &str| -> Option<Vec<Vec<PosedBox>>> {
-            let seq = model.sequence(&format!("{prefix}_aim_{aim}"))?;
-            Some(
-                (0..PITCH_STEPS)
-                    .map(|i| {
-                        let pose = model.pose(seq, 0, i as f32 / (PITCH_STEPS - 1) as f32);
-                        model
-                            .hitboxes
-                            .iter()
-                            .filter(|h| h.group != 8) // the shield box only matters with a shield
-                            .map(|h| PosedBox { group: HitGroup::from_mdl(h.group), bone: pose[h.bone], mins: h.mins, maxs: h.maxs })
-                            .collect()
-                    })
-                    .collect(),
-            )
+    /// All weapon aim poses the model has; `fallback`: the one to use for the rest (e.g. "carbine").
+    pub fn from_model(model: &Model, fallback: &str) -> Option<Hitboxes> {
+        let set = |aim: &str| -> Option<Poses> {
+            let stance = |prefix: &str| -> Option<Vec<Vec<PosedBox>>> {
+                let seq = model.sequence(&format!("{prefix}_aim_{aim}"))?;
+                Some(
+                    (0..PITCH_STEPS)
+                        .map(|i| {
+                            let pose = model.pose(seq, 0, i as f32 / (PITCH_STEPS - 1) as f32);
+                            model
+                                .hitboxes
+                                .iter()
+                                .filter(|h| h.group != 8) // the shield box only matters with a shield
+                                .map(|h| PosedBox { group: HitGroup::from_mdl(h.group), bone: pose[h.bone], mins: h.mins, maxs: h.maxs })
+                                .collect()
+                        })
+                        .collect(),
+                )
+            };
+            Some([stance("ref")?, stance("crouch")?])
         };
-        Some(Hitboxes { poses: [stance("ref")?, stance("crouch")?] })
+        let poses: std::collections::HashMap<_, _> = EXTS.iter().filter_map(|e| Some((*e, set(e)?))).collect();
+        let fallback = *EXTS.iter().find(|e| **e == fallback && poses.contains_key(*e))?;
+        Some(Hitboxes { poses, fallback })
     }
 
     /// First hitbox the ray `start + dir * t` (dir normalised, t <= `max`) enters, for a
-    /// player at `origin` facing `yaw` and aiming at `pitch` (GoldSrc degrees).
-    pub fn trace(&self, origin: Vec3, yaw: f32, pitch: f32, crouched: bool, start: Vec3, dir: Vec3, max: f32) -> Option<Hit> {
-        // ⚠ Which end of the 9 pitch poses is "looking up" is not yet confirmed.
+    /// player at `origin` facing `yaw` and aiming at `pitch` (GoldSrc degrees), holding `weapon`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn trace(&self, origin: Vec3, yaw: f32, pitch: f32, crouched: bool, weapon: crate::weapons::Id, start: Vec3, dir: Vec3, max: f32) -> Option<Hit> {
+        // Blend 0.5 + pitch/180 (GoldSrc pitch is down-positive): checked against the drawn model.
         let step = (((pitch + 90.0) / 180.0) * (PITCH_STEPS - 1) as f32).round().clamp(0.0, (PITCH_STEPS - 1) as f32) as usize;
-        let boxes = &self.poses[crouched as usize][step];
+        let set = self.poses.get(crate::weapons::data::anim_ext(weapon)).unwrap_or(&self.poses[self.fallback]);
+        let boxes = &set[crouched as usize][step];
         // Into model space: undo the player's position and yaw.
         let (s, c) = (-yaw).to_radians().sin_cos();
         let rot = |v: Vec3| [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]];
