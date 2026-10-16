@@ -12,6 +12,7 @@
 //! (crosshair and assistant: Settings sections) in such runs.
 //! `BOOTLEG16_OVERLAY=pause|teams` shows that in-game overlay; `BOOTLEG16_MENU=1` the buy menu.
 //! `BOOTLEG16_SCORES=1` holds the scoreboard open. `BOOTLEG16_FIRE=1` holds fire (bullet holes).
+//! `BOOTLEG16_CAM=x,y,z` parks the camera there (with `BOOTLEG16_LOOK`, to check map details).
 //! `BOOTLEG16_ASSISTANT=0..3` picks the AI assistant for the run (not saved).
 //! `BOOTLEG16_VOICE=1` shows you and a teammate on the voice list.
 //! `BOOTLEG16_FOUND=1` shows a match found and the Reconnect card on the menu.
@@ -24,6 +25,7 @@ mod buy;
 mod effects;
 mod framerate;
 mod game;
+mod glows;
 mod found;
 mod hud;
 mod impacts;
@@ -101,7 +103,8 @@ fn main() {
             killfeed::KillFeedPlugin,
             round_hud::RoundHudPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (bomb::BombPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
+            (bomb::BombPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin),
+            (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
         .add_systems(Update, screenshot)
         .run();

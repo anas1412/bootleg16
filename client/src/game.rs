@@ -313,6 +313,11 @@ fn move_camera(
     watch: Res<crate::spectate::Watch>,
     mut tf: Single<&mut Transform, With<FlyCam>>,
 ) {
+    // Screenshot runs can park the camera: BOOTLEG16_CAM=x,y,z (GoldSrc units).
+    if let Some(p) = std::env::var("BOOTLEG16_CAM").ok().map(|v| v.split(',').filter_map(|x| x.trim().parse::<f32>().ok()).collect::<Vec<_>>()).filter(|p| p.len() == 3) {
+        tf.translation = Vec3::from(map::to_y_up([p[0], p[1], p[2]]));
+        return;
+    }
     // free flight, for looking around maps in practice (V is team voice)
     if keys.just_pressed(KeyCode::KeyN) && w.client.practice {
         w.noclip = !w.noclip;

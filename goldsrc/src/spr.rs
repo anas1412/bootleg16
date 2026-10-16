@@ -7,7 +7,10 @@ use std::{collections::HashMap, fs, io, path::Path};
 pub struct Sprite {
     pub width: u32,
     pub height: u32,
+    /// White, with the shape in alpha (for HUD art).
     pub rgba: Vec<u8>,
+    /// The palette colour of each pixel (RGB), as world sprites draw it.
+    pub colors: Vec<u8>,
 }
 
 impl Sprite {
@@ -32,6 +35,7 @@ impl Sprite {
         let (width, height) = (i32_at(f + 12)? as u32, i32_at(f + 16)? as u32);
         let pixels = data.get(f + 20..f + 20 + (width * height) as usize)?;
         let mut rgba = Vec::with_capacity(pixels.len() * 4);
+        let mut colors = Vec::with_capacity(pixels.len() * 3);
         for &i in pixels {
             let c = palette.get(i as usize * 3..i as usize * 3 + 3)?;
             let alpha = match format {
@@ -45,8 +49,9 @@ impl Sprite {
                 }
             };
             rgba.extend_from_slice(&[255, 255, 255, alpha]);
+            colors.extend_from_slice(c);
         }
-        Some(Sprite { width, height, rgba })
+        Some(Sprite { width, height, rgba, colors })
     }
 }
 
