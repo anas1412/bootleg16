@@ -156,6 +156,9 @@ impl MatchConfig {
     }
 }
 
+/// The maps matches are played on (each server has the ones it finds in its game files).
+pub const MAP_POOL: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"];
+
 /// The addresses in a comma-separated list ("host:port, host:port"). `look_up`: names too
 /// (blocking: a DNS lookup each; off the game loop!), else only literal addresses.
 pub fn addresses(list: &str, look_up: bool) -> Vec<std::net::SocketAddr> {

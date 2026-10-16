@@ -29,6 +29,8 @@ struct PartySnap {
     members: Vec<(u32, Group)>,
     /// Seconds in the queue.
     queued: Option<f32>,
+    map: Option<String>,
+    veto: Option<Veto>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -68,7 +70,7 @@ impl Master {
                     pings: p.pings.iter().map(|(r, ms)| (r.clone(), *ms)).collect(),
                 })
                 .collect(),
-            parties: self.parties.iter().map(|(id, p)| PartySnap { id: *id, code: p.code.clone(), leader: p.leader, mode: p.mode, members: p.members.clone(), queued: p.queued.map(|t| t.elapsed().as_secs_f32()) }).collect(),
+            parties: self.parties.iter().map(|(id, p)| PartySnap { id: *id, code: p.code.clone(), leader: p.leader, mode: p.mode, members: p.members.clone(), queued: p.queued.map(|t| t.elapsed().as_secs_f32()), map: p.map.clone(), veto: p.veto.clone() }).collect(),
             seats: self.seats.iter().map(|(t, (steam, name, at))| (*t, *steam, name.clone(), at.elapsed().as_secs_f32())).collect(),
             ratings: self.ratings.iter().map(|(k, v)| (*k, *v)).collect(),
             penalties: self.penalties.iter().map(|(k, v)| (*k, *v)).collect(),
@@ -101,7 +103,7 @@ impl Master {
                 (p.session, player)
             })
             .collect();
-        self.parties = snap.parties.into_iter().map(|p| (p.id, Party { code: p.code, leader: p.leader, mode: p.mode, members: p.members, queued: p.queued.map(ago) })).collect();
+        self.parties = snap.parties.into_iter().map(|p| (p.id, Party { code: p.code, leader: p.leader, mode: p.mode, members: p.members, queued: p.queued.map(ago), map: p.map, veto: p.veto })).collect();
         self.seats = snap.seats.into_iter().map(|(t, steam, name, secs)| (t, (steam, name, ago(secs)))).collect();
         self.ratings = snap.ratings.into_iter().collect();
         self.penalties = snap.penalties.into_iter().collect();

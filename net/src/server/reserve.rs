@@ -20,6 +20,8 @@ pub struct MatchSetup {
     pub players: Vec<(u64, Group)>,
     /// Knife round first, winners pick sides (custom games). Otherwise A starts as T.
     pub knife_round: bool,
+    /// The map to play (empty: the one the server is on).
+    pub map: String,
     /// Each ticket's encryption key (official servers: a player proves their seat by
     /// encrypting with it; the key itself never crosses the network in the clear).
     pub keys: Vec<(u64, [u8; 32])>,

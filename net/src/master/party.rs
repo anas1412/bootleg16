@@ -24,7 +24,7 @@ impl Master {
         let code = self.new_code();
         let id = self.next_id;
         self.next_id += 1;
-        self.parties.insert(id, Party { code, leader: player, mode: Mode::Casual, members: vec![(player, Group::A)], queued: None });
+        self.parties.insert(id, Party { code, leader: player, mode: Mode::Casual, members: vec![(player, Group::A)], queued: None, map: None, veto: None });
         id
     }
 
@@ -117,12 +117,51 @@ impl Master {
                     Mode::Casual => self.parties.get_mut(&party).unwrap().queued = Some(Instant::now()),
                     Mode::Custom => {
                         let members = self.parties[&party].members.clone();
+                        let map = self.parties[&party].map.clone();
                         if members.len() < 2 {
                             notice = "Invite at least one friend first.".into();
-                        } else if !self.start_custom(members) {
+                        } else if self.parties[&party].veto.is_some() {
+                            notice = "Finish the map veto first.".into();
+                        } else if !self.start_custom(members, map.as_deref()) {
                             notice = "No server free right now. Try again in a moment.".into();
                         }
                     }
+                }
+            }
+            Command::SetMap(map) if leader => {
+                let p = self.parties.get_mut(&party).unwrap();
+                match map {
+                    Some(m) if !crate::config::MAP_POOL.contains(&m.as_str()) => notice = "That map isn't in the pool.".into(),
+                    m => {
+                        p.map = m;
+                        p.veto = None;
+                    }
+                }
+            }
+            Command::StartVeto if leader => {
+                let p = self.parties.get_mut(&party).unwrap();
+                if p.mode != Mode::Custom || !p.members.iter().any(|(_, g)| *g == Group::B) {
+                    notice = "A veto needs a custom game with someone on each team.".into();
+                } else {
+                    p.map = None;
+                    p.veto = Some(Veto { left: crate::config::MAP_POOL.iter().map(|m| m.to_string()).collect(), turn: Group::A });
+                }
+            }
+            Command::Ban(map) => {
+                let p = self.parties.get_mut(&party).unwrap();
+                // The captain of the team whose turn it is: that team's first member.
+                let captain = p.veto.as_ref().and_then(|v| p.members.iter().find(|(_, g)| *g == v.turn)).map(|(m, _)| *m);
+                match &mut p.veto {
+                    Some(v) if captain == Some(me) && v.left.contains(&map) => {
+                        v.left.retain(|m| *m != map);
+                        v.turn = if v.turn == Group::A { Group::B } else { Group::A };
+                        if v.left.len() == 1 {
+                            p.map = v.left.pop();
+                            p.veto = None;
+                        }
+                    }
+                    Some(_) => notice = "It's the other captain's turn (or that map is gone).".into(),
+                    None => {}
                 }
             }
             Command::Cancel if leader => {
@@ -168,6 +207,8 @@ impl Master {
             mode: party.mode,
             members: party.members.iter().map(|(m, g)| (*m, who(*m), *g)).map(|(id, (name, steam), group)| Member { id, name, group, steam }).collect(),
             searching: party.queued.map(|t| t.elapsed().as_secs_f32()),
+            map: party.map.clone(),
+            veto: party.veto.clone(),
             ready: self.ready_of(you),
             rejoin: self.active.get(&self.penalty_key(you)).copied(),
             cooldown: self.cooldown_of(you),

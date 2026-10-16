@@ -13,7 +13,7 @@ fn a_match_is_recorded_and_plays_back() {
     let dir = std::env::temp_dir().join(format!("bootleg16-demos-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig { demos: dir.to_string_lossy().into(), name: "rec test".into(), ..Default::default() });
-    g.server.reserve(MatchSetup { players: vec![(1, Group::A), (2, Group::B)], knife_round: false, keys: Vec::new() });
+    g.server.reserve(MatchSetup { players: vec![(1, Group::A), (2, Group::B)], knife_round: false, keys: Vec::new(), map: String::new() });
     g.a.ticket = 1;
     g.b.ticket = 2;
     // Two seconds of play, A walking.

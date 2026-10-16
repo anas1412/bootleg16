@@ -12,6 +12,7 @@ mod packets;
 mod players;
 mod handle;
 mod lobby_link;
+mod maps;
 mod reserve;
 mod report;
 mod sealed;
@@ -182,6 +183,9 @@ pub struct Server {
     last_booking: u64,
     /// Enemies in sight of whom, since when (for the aim checks).
     sightings: aimcheck::Sightings,
+    /// Where maps are loaded from, and the pool maps found there (see `maps`).
+    game_dir: Option<std::path::PathBuf>,
+    maps: Vec<String>,
     /// The match being recorded (see `recording`).
     recorder: Option<crate::demo::Recorder>,
     /// Deathmatch seats the lobby handed out: ticket -> (key, when). Unused ones expire.
@@ -232,6 +236,8 @@ impl Server {
             joining: None,
             seats: HashMap::new(),
             recorder: None,
+            game_dir: None,
+            maps: Vec::new(),
             sightings: Default::default(),
         })
     }

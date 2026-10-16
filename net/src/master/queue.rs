@@ -46,19 +46,25 @@ impl Master {
 
     /// Reserve a free official server in `region` (any region: None) for these players and
     /// hand out tickets. False if none.
-    pub(super) fn start_match(&mut self, players: Vec<(u32, Group)>, knife_round: bool, region: Option<&str>) -> bool {
-        let free = self.servers.iter().find(|(_, s)| s.official && !s.busy && !s.deathmatch && region.is_none_or(|r| s.region == r));
-        let Some((addr, public, key, region)) = free.map(|(a, s)| (*a, s.public, s.key, s.region.clone())) else { return false };
+    /// `map`: this one (a custom game's pick or veto), or None: a random one from the pool.
+    pub(super) fn start_match(&mut self, players: Vec<(u32, Group)>, knife_round: bool, region: Option<&str>, map: Option<&str>) -> bool {
+        let free = self.servers.iter().find(|(_, s)| s.official && !s.busy && !s.deathmatch && region.is_none_or(|r| s.region == r) && map.is_none_or(|m| s.maps.iter().any(|x| x == m)));
+        let Some((addr, public, key, region, maps)) = free.map(|(a, s)| (*a, s.public, s.key, s.region.clone(), s.maps.clone())) else { return false };
+        let map = match map {
+            Some(m) => m.to_string(),
+            None if maps.is_empty() => String::new(),
+            None => maps[(self.rand() % maps.len() as u64) as usize].clone(),
+        };
         // A seat number and a fresh key per player: the server learns the keys from this
         // (sealed) booking, the player from the lobby (encrypted); they never travel in clear.
         let tickets: Vec<(u32, u64, Group, [u8; 32])> = players.iter().map(|(id, g)| (*id, self.rand() | 1, *g, crate::crypto::new_key())).collect();
-        let setup = MatchSetup { players: tickets.iter().map(|(_, t, g, _)| (*t, *g)).collect(), knife_round, keys: tickets.iter().map(|(_, t, _, k)| (*t, *k)).collect() };
+        let setup = MatchSetup { players: tickets.iter().map(|(_, t, g, _)| (*t, *g)).collect(), knife_round, keys: tickets.iter().map(|(_, t, _, k)| (*t, *k)).collect(), map: map.clone() };
         // Sealed with the server's token key: only it can read it, nobody can forge one.
         let msg = self.keys[key].seal(&encode(&LobbyOrder::Book(setup)));
         let _ = self.udp.send_to(&msg, addr);
         self.booking.insert(addr, (msg, Instant::now(), Instant::now()));
         self.servers.get_mut(&addr).unwrap().busy = true;
-        println!("match booked on {public} ({region}): {} players{}", players.len(), if knife_round { ", custom" } else { "" });
+        println!("match booked on {public} ({region}, {map}): {} players{}", players.len(), if knife_round { ", custom" } else { "" });
         for (id, ticket, _, k) in tickets {
             if let Some(p) = self.players.values_mut().find(|p| p.id == id) {
                 p.found = Some((public, ticket, k));
@@ -102,10 +108,10 @@ impl Master {
     }
 
     /// A custom game: the best region for the whole party, else any free server.
-    pub(super) fn start_custom(&mut self, members: Vec<(u32, Group)>) -> bool {
+    pub(super) fn start_custom(&mut self, members: Vec<(u32, Group)>, map: Option<&str>) -> bool {
         let ids: Vec<u32> = members.iter().map(|(m, _)| *m).collect();
         let best = self.regions_for(&ids).into_iter().next().map(|(r, _)| r);
-        self.start_match(members.clone(), true, best.as_deref()) || self.start_match(members, true, None)
+        self.start_match(members.clone(), true, best.as_deref(), map) || self.start_match(members, true, None, map)
     }
 
     /// One official server per region for players to ping.

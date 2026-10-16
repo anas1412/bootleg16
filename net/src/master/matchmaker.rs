@@ -110,7 +110,7 @@ impl Master {
             let c = &self.checks[i];
             if c.accepted.len() == c.players.len() {
                 let c = self.checks.remove(i);
-                if !self.start_match(c.players.clone(), false, Some(&c.region)) {
+                if !self.start_match(c.players.clone(), false, Some(&c.region), None) {
                     // The server went away meanwhile: everyone back in line, first.
                     self.requeue(&c.players.iter().map(|(p, _)| *p).collect::<Vec<_>>());
                 }

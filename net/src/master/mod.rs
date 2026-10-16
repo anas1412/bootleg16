@@ -35,7 +35,7 @@ const SERVER_TIMEOUT: Duration = Duration::from_secs(HEARTBEAT_SECONDS * 3);
 /// Players poll every second; ten seconds of silence and they're gone.
 const PLAYER_TIMEOUT: Duration = Duration::from_secs(10);
 /// Every player request is padded to this: the biggest state answer fits in it.
-pub const PAD: usize = 1200;
+pub const PAD: usize = 1280;
 /// Packets per second one IP may send the lobby (a player polls once a second; a household
 /// of players and their clicks fit easily).
 const IP_RATE: f32 = 40.0;
@@ -75,6 +75,18 @@ struct Party {
     /// Members in order joined, with their custom-game team.
     members: Vec<(u32, Group)>,
     queued: Option<Instant>,
+    /// Custom games: the map (None: a random one), or a veto in progress.
+    map: Option<String>,
+    veto: Option<Veto>,
+}
+
+/// A custom game's map veto: the team captains (each team's first member) take turns banning
+/// maps until one is left.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Veto {
+    pub left: Vec<String>,
+    /// Whose turn to ban.
+    pub turn: Group,
 }
 
 struct GameServer {
@@ -94,6 +106,8 @@ struct GameServer {
     players: u8,
     max: u8,
     seated: Vec<Instant>,
+    /// The pool maps it can run.
+    maps: Vec<String>,
 }
 
 pub struct Master {

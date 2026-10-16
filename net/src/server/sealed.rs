@@ -27,6 +27,13 @@ impl Server {
             return;
         }
         self.last_booking = sent;
+        // The booked map first (the lobby only books maps we said we have).
+        if !setup.map.is_empty() {
+            if let Err(e) = self.change_map(&setup.map) {
+                println!("can't take the booking: {e}");
+                return;
+            }
+        }
         self.reserve(setup);
         self.heartbeat(); // tell the lobby right away that we took it
     }

@@ -28,8 +28,15 @@ fn main() {
     let deathmatch = args.iter().any(|a| a == "--deathmatch");
     let difficulty = args.iter().position(|a| a == "--difficulty").and_then(|i| args.get(i + 1)).and_then(|d| Profile::parse(d)).unwrap_or(net::bot::Difficulty::Normal);
     let dir = std::env::var("BOOTLEG16_DIR").unwrap_or_else(|_| format!("{}/.steam/steam/steamapps/common/Half-Life", std::env::var("HOME").unwrap_or_default()));
-    let bsp = goldsrc::bsp::Bsp::load(format!("{dir}/cstrike/maps/de_dust2.bsp")).expect("de_dust2.bsp (set BOOTLEG16_DIR)");
-    let map = BotMap::new(bsp, "de_dust2");
+    // Each map's navigation, worked out the first time a match is on it.
+    let mut maps: std::collections::HashMap<String, std::sync::Arc<BotMap>> = std::collections::HashMap::new();
+    let mut load = |name: &str| -> Option<std::sync::Arc<BotMap>> {
+        if !maps.contains_key(name) {
+            let bsp = goldsrc::bsp::Bsp::load(format!("{dir}/cstrike/maps/{name}.bsp")).ok()?;
+            maps.insert(name.to_string(), BotMap::new(bsp, name));
+        }
+        maps.get(name).cloned()
+    };
 
     // Orders from the terminal and from the control port.
     let (tx, orders) = channel::<String>();
@@ -58,6 +65,8 @@ fn main() {
         .collect();
     let mut queued = vec![false; count];
     let mut bots: Vec<Option<Bot>> = (0..count).map(|_| None).collect();
+    // Connecting: until the server says which map, a bot can't find its way yet.
+    let mut joining: Vec<Option<net::Client>> = (0..count).map(|_| None).collect();
     // Standing orders, kept for bots between matches.
     let mut modes = vec![Mode::Normal; count];
     let mut profiles = vec![Profile::of(difficulty); count];
@@ -124,16 +133,32 @@ fn main() {
                 if local {
                     addr.set_ip([127, 0, 0, 1].into());
                 }
-                let mut client = net::Client::connect(addr, &format!("bot{i}"), map.world()).unwrap();
+                let mut client = net::Client::connect(addr, &format!("bot{i}"), sim::collision::World::flat_floor(-100_000.0)).unwrap();
                 client.ticket = ticket;
                 client.key = Some(key);
                 if i == 0 {
                     println!("bots booked on {addr}");
                 }
-                let mut b = Bot::new(client, map.clone(), i, profiles[i]);
-                b.mode = modes[i];
-                b.site = sites[i];
-                bots[i] = Some(b);
+                joining[i] = Some(client);
+            }
+            if let Some(c) = &mut joining[i] {
+                c.tick(sim::pmove::Input::default());
+                if let Some(name) = c.map.clone() {
+                    let mut client = joining[i].take().unwrap();
+                    match load(&name) {
+                        Some(map) => {
+                            client.world = map.world();
+                            if i == 0 {
+                                println!("map: {name}");
+                            }
+                            let mut b = Bot::new(client, map, i, profiles[i]);
+                            b.mode = modes[i];
+                            b.site = sites[i];
+                            bots[i] = Some(b);
+                        }
+                        None => println!("bot{i}: no {name}.bsp here (BOOTLEG16_DIR)"),
+                    }
+                }
             }
             if let Some(b) = &mut bots[i] {
                 b.tick();

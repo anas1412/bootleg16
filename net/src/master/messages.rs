@@ -6,7 +6,8 @@ pub enum LobbyMsg {
     /// Game server -> lobby: "I'm here", and whether it's running a match.
     /// `address`: where players connect (empty = where this came from).
     /// Sealed with the official token's key (see `crypto::ServerKey`).
-    Heartbeat { name: String, map: String, players: u8, max: u8, region: String, busy: bool, address: String, deathmatch: bool },
+    /// `maps`: the pool maps it can run.
+    Heartbeat { name: String, map: String, players: u8, max: u8, region: String, busy: bool, address: String, deathmatch: bool, maps: Vec<String> },
     /// Player -> lobby: sign in. `public`: a fresh key for this session; `sealed`: a `SignIn`
     /// only the lobby can read (see `crypto::client_hello`). `cookie`: 0 at first, then the
     /// one from `Cookie` (proves the address is real before the lobby does any crypto).
@@ -98,6 +99,12 @@ pub enum Command {
     Decline,
     /// A seat on a deathmatch server (comes back as `found`).
     Deathmatch,
+    /// Leader, custom games: play this map (None: a random one).
+    SetMap(Option<String>),
+    /// Leader, custom games: the captains ban maps in turn until one is left.
+    StartVeto,
+    /// A team captain, on their turn: ban this map.
+    Ban(String),
 }
 
 /// Lobby -> game server, sealed with its token's key.
@@ -165,6 +172,9 @@ pub struct LobbyState {
     pub notice: String,
     /// Invites to other parties, newest last.
     pub invites: Vec<Invite>,
+    /// Custom games: the map picked (None: random), and a veto in progress.
+    pub map: Option<String>,
+    pub veto: Option<super::Veto>,
     /// One server per region to measure your ping to (answer with `Command::Pings`).
     pub regions: Vec<(String, SocketAddr)>,
 }

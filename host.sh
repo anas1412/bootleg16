@@ -73,6 +73,10 @@ last=$((27014 + SERVERS + DM))
 
 # The few game files the servers read, copied from your own CS 1.6 install (never shipped).
 game="${BOOTLEG16_DIR:-$HOME/.steam/steam/steamapps/common/Half-Life}"
+# The map pool too (de_dust2 is needed; the others are played if they're there).
+for m in de_inferno de_nuke de_train; do
+  [ -f "hosting/game/cstrike/maps/$m.bsp" ] || { [ -f "$game/cstrike/maps/$m.bsp" ] && mkdir -p hosting/game/cstrike/maps && cp "$game/cstrike/maps/$m.bsp" hosting/game/cstrike/maps/; } || true
+done
 for f in cstrike/maps/de_dust2.bsp cstrike/models/player/arctic/arctic.mdl cstrike/sound/materials.txt; do
   if [ ! -f "hosting/game/$f" ]; then
     [ -f "$game/$f" ] || { echo "Missing $f. Set BOOTLEG16_DIR to your Half-Life folder (the one with cstrike/ in it), or copy hosting/game/ from a machine that has it."; exit 1; }

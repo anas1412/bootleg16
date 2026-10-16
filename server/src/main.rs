@@ -44,6 +44,7 @@ fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let assets = net::server::Assets::load(&dir).unwrap_or_else(|e| panic!("loading game files: {e}"));
     let mut server = net::Server::new(addr, &map, &bsp, assets).unwrap_or_else(|e| panic!("binding {addr}: {e}"));
+    server.set_game_dir(dir.clone());
     server.set_give(give);
     let config = config.or_else(|| Some(PathBuf::from("server.cfg")).filter(|p| p.exists()));
     if let Some(path) = config {
