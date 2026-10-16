@@ -2,7 +2,7 @@
 //! game install.
 use super::*;
 
-/// Practice room or a real match (the match settings are in `MatchConfig`).
+/// Practice room, deathmatch, or a real match (the match settings are in `MatchConfig`).
 #[derive(Clone, Debug)]
 pub struct Rules {
     /// Practice room: everything below is set for practising.
@@ -11,20 +11,33 @@ pub struct Rules {
     pub respawn_ticks: u32,
     /// Reserve ammo is topped up all the time (you still reload).
     pub infinite_ammo: bool,
-    /// Practice only: standing dummies on the other team to shoot at. (No bots: by decision,
-    /// matches are people only.)
+    /// Practice only: standing dummies on the other team to shoot at.
     pub dummies: u8,
+    /// Deathmatch: no rounds, timers or bomb; back straight away at a random spawn away from
+    /// enemies; buy anything anywhere for free; up to 20 players dropping in any time. When
+    /// someone reaches `kill_limit`, they're announced and everyone's score starts over.
+    pub deathmatch: bool,
+    pub kill_limit: i32,
 }
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { practice: false, respawn_ticks: 3 * TICK_RATE, infinite_ammo: false, dummies: 0 }
+        Rules { practice: false, respawn_ticks: 3 * TICK_RATE, infinite_ammo: false, dummies: 0, deathmatch: false, kill_limit: 100 }
     }
 }
 
 impl Rules {
     pub fn practice(dummies: u8) -> Rules {
-        Rules { practice: true, respawn_ticks: TICK_RATE / 2, infinite_ammo: true, dummies }
+        Rules { practice: true, respawn_ticks: TICK_RATE / 2, infinite_ammo: true, dummies, ..Rules::default() }
+    }
+
+    pub fn deathmatch() -> Rules {
+        Rules { deathmatch: true, respawn_ticks: TICK_RATE, ..Rules::default() }
+    }
+
+    /// No rounds: practice and deathmatch (buy anywhere, come back after dying).
+    pub fn free_play(&self) -> bool {
+        self.practice || self.deathmatch
     }
 }
 

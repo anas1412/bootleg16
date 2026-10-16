@@ -6,7 +6,7 @@ pub enum LobbyMsg {
     /// Game server -> lobby: "I'm here", and whether it's running a match.
     /// `address`: where players connect (empty = where this came from).
     /// Sealed with the official token's key (see `crypto::ServerKey`).
-    Heartbeat { name: String, map: String, players: u8, max: u8, region: String, busy: bool, address: String },
+    Heartbeat { name: String, map: String, players: u8, max: u8, region: String, busy: bool, address: String, deathmatch: bool },
     /// Player -> lobby: sign in. `public`: a fresh key for this session; `sealed`: a `SignIn`
     /// only the lobby can read (see `crypto::client_hello`). `cookie`: 0 at first, then the
     /// one from `Cookie` (proves the address is real before the lobby does any crypto).
@@ -93,6 +93,17 @@ pub enum Command {
     /// A match was found (`LobbyState::ready`): in, or out (out: a short queue cooldown).
     Accept,
     Decline,
+    /// A seat on a deathmatch server (comes back as `found`).
+    Deathmatch,
+}
+
+/// Lobby -> game server, sealed with its token's key.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum LobbyOrder {
+    /// Run this match.
+    Book(crate::server::MatchSetup),
+    /// Deathmatch: let this ticket in, encrypted with this key.
+    Seat { ticket: u64, key: [u8; 32] },
 }
 
 /// A match found, waiting for everyone to accept.

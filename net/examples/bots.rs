@@ -1,5 +1,5 @@
 //! Test bots against a real deployment: `bots <lobby host:port> [count] [--local]
-//! [--difficulty easy|normal|hard|expert]`. Each bot signs in to the lobby, queues for
+//! [--difficulty easy|normal|hard|expert] [--deathmatch]`. Each bot signs in to the lobby, queues for
 //! casual, plays the match it gets in real time and queues again. Needs a test lobby
 //! (`./host.sh --test`): official lobbies only let in Steam players. `--local`: reach the game
 //! servers through 127.0.0.1 (on the hosting machine).
@@ -24,6 +24,8 @@ fn main() {
     let lobby = std::net::ToSocketAddrs::to_socket_addrs(args.get(1).map(String::as_str).unwrap_or("127.0.0.1:27010")).expect("lobby address").next().unwrap();
     let count: usize = args.get(2).and_then(|n| n.parse().ok()).unwrap_or(10);
     let local = args.iter().any(|a| a == "--local");
+    // Deathmatch: take seats on the deathmatch server instead of queueing for matches.
+    let deathmatch = args.iter().any(|a| a == "--deathmatch");
     let difficulty = args.iter().position(|a| a == "--difficulty").and_then(|i| args.get(i + 1)).and_then(|d| Profile::parse(d)).unwrap_or(net::bot::Difficulty::Normal);
     let dir = std::env::var("BOOTLEG16_DIR").unwrap_or_else(|_| format!("{}/.steam/steam/steamapps/common/Half-Life", std::env::var("HOME").unwrap_or_default()));
     let bsp = goldsrc::bsp::Bsp::load(format!("{dir}/cstrike/maps/de_dust2.bsp")).expect("de_dust2.bsp (set BOOTLEG16_DIR)");
@@ -116,7 +118,7 @@ fn main() {
             }
             if bots[i].is_none() && lobbies[i].online() && !queued[i] {
                 queued[i] = true;
-                lobbies[i].send(Command::Play);
+                lobbies[i].send(if deathmatch { Command::Deathmatch } else { Command::Play });
             }
             if let Some((mut addr, ticket, key)) = lobbies[i].found.take() {
                 if local {
@@ -157,7 +159,13 @@ fn main() {
 fn report(e: &net::protocol::GameEvent, kills: &mut u32) {
     use net::protocol::GameEvent;
     match e {
-        GameEvent::Kill { .. } => *kills += 1,
+        GameEvent::Kill { .. } => {
+            *kills += 1;
+            if *kills % 10 == 0 {
+                println!("{kills} kills so far");
+            }
+        }
+        GameEvent::KillLimit { player } => println!("player {player} reached the kill limit: scores start over"),
         GameEvent::BombPlanted { at, .. } => println!("bomb planted at {:.0} {:.0}", at[0], at[1]),
         GameEvent::RoundEnd { winner, reason } => {
             println!("round over: {winner:?} win ({reason:?}), {kills} kills");

@@ -37,6 +37,8 @@ pub(super) struct State {
     strafe: (f32, u32),
     /// Where we looked last tick (an idle bot keeps looking that way).
     yaw: f32,
+    /// Deathmatch: the spot we're heading for while hunting.
+    hunt: Option<[f32; 3]>,
 }
 
 impl State {
@@ -58,6 +60,7 @@ impl State {
             noise: None,
             strafe: (1.0, 0),
             yaw: 0.0,
+            hunt: None,
         }
     }
 
@@ -157,6 +160,20 @@ impl Bot {
                 return if flat(me.origin, at) < 48.0 { input } else { self.walk(input, at) };
             }
             _ => {}
+        }
+        // No objective (deathmatch, practice): hunt. Gunfire first, else roam the map from one
+        // random spot to the next.
+        if self.client.practice {
+            if let Some(at) = self.noise() {
+                return self.walk(input, at);
+            }
+            let me = self.client.me().origin;
+            let arrived = self.brain.hunt.is_none_or(|h| flat(me, h) < 100.0) || self.brain.t % (128 * 20) == 0;
+            if arrived {
+                let n = self.map.nav.points.len().max(1);
+                self.brain.hunt = Some(self.map.nav.points[(self.brain.rand() * n as f32) as usize % n]);
+            }
+            return self.walk(input, self.brain.hunt.unwrap());
         }
         let site = self.map.sites.get(self.site.unwrap_or(self.brain.site)).copied().unwrap_or(self.map.spawns.1);
         let bomb = self.client.bomb;

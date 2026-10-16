@@ -127,6 +127,11 @@ Casual has no ranks, but every player has a hidden skill rating (a Bayesian team
 
 In a match: a team can vote a teammate out (a majority of the others; they can't come back), and once a teammate is gone for good (away 5 minutes, or voted out) the team can vote to surrender. A player whose game crashed or who left is offered their seat again (Reconnect) until the match ends: same team, money and score.
 
+## Practice
+
+- **Solo:** the map on your own machine (the game runs a private server inside itself, nothing online), with standing dummies if you like.
+- **Deathmatch:** official drop-in servers for warming up: up to 20 players, join any time, straight onto a team, back at once at a random spawn away from enemies, no rounds, timer or bomb, buy anything anywhere for free. When someone reaches 100 kills they're announced and everyone's score starts over. `./host.sh` runs one deathmatch server next to the match servers (`--dm N` for more); fill it with bots for testing with `--deathmatch` on the bots command.
+
 ## Playing
 
 Open **Play** and share your party code with friends.

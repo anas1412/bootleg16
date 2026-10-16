@@ -101,6 +101,11 @@ impl Master {
                     m.1 = group;
                 }
             }
+            Command::Deathmatch => {
+                if !self.deathmatch_seat(me) {
+                    notice = "Every deathmatch server is full right now. Try again in a moment.".into();
+                }
+            }
             Command::Accept => self.accept(me),
             Command::Decline => self.decline(me),
             Command::Play if leader => {

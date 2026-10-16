@@ -52,9 +52,13 @@ impl Server {
                     if let Some((addr, ticket, ch)) = self.joining.take().filter(|j| j.0 == from) {
                         self.socket.secure(addr, ticket, ch);
                     }
+                    // Deathmatch: straight in, on the smaller team (no team pick, like CSDM).
+                    if self.rules.deathmatch {
+                        self.handle(from, ClientMsg::JoinTeam { team: None });
+                    }
                 }
                 let id = self.clients[&from].id;
-                self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), map_hash: self.map_hash, tick_rate: TICK_RATE, practice: self.rules.practice }));
+                self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), map_hash: self.map_hash, tick_rate: TICK_RATE, practice: self.rules.free_play() }));
             }
             ClientMsg::Inputs { first_seq, inputs, events } => {
                 let Some(c) = self.clients.get_mut(&from) else { return };

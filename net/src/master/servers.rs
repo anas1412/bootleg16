@@ -31,7 +31,7 @@ impl Master {
         let Some(key) = self.keys.iter().position(|k| k.id == id) else { return };
         let Some((sent, body)) = self.keys[key].open(packet) else { return };
         match decode::<LobbyMsg>(&body) {
-            Some(LobbyMsg::Heartbeat { busy, address, region, .. }) => {
+            Some(LobbyMsg::Heartbeat { busy, address, region, deathmatch, players, max, .. }) => {
                 if self.servers.get(&from).is_some_and(|s| sent < s.sent) || (!self.servers.contains_key(&from) && self.servers.len() >= MAX_SERVERS) {
                     return;
                 }
@@ -45,7 +45,8 @@ impl Master {
                 }
                 // Booked, not confirmed yet: still busy as far as we're concerned.
                 let busy = busy || self.booking.contains_key(&from);
-                self.servers.insert(from, GameServer { public, region, key, official: true, busy, seen: Instant::now(), sent });
+                let seated = self.servers.get(&from).map(|s| s.seated.clone()).unwrap_or_default();
+                self.servers.insert(from, GameServer { public, region, key, official: true, busy, seen: Instant::now(), sent, deathmatch, players, max, seated });
             }
             Some(LobbyMsg::Result { winners, losers, abandoned }) if self.role == Role::Active => self.match_result(&winners, &losers, &abandoned),
             Some(LobbyMsg::Report { reporter, target, reason, map, round }) if self.role == Role::Active => self.file_report(reporter, target, reason, &map, round),

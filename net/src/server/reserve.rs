@@ -91,7 +91,8 @@ impl Server {
     /// Who may join a reserved server: Err(reason) for anyone without a ticket.
     pub(super) fn admit(&mut self, ticket: u64) -> Result<Option<(Group, Team, Option<(i32, i32, u32)>)>, String> {
         let Some(r) = &self.reserved else {
-            if self.official() {
+            // Deathmatch: anyone the lobby gave a seat.
+            if self.official() && !(self.rules.deathmatch && self.seats.contains_key(&ticket)) {
                 return Err("Matches here come from the lobby: use Play in the game.".into());
             }
             return Ok(None);

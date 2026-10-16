@@ -156,8 +156,22 @@ impl Server {
             if let Some(k) = self.clients.values_mut().find(|c| c.id == killer) {
                 k.kills += if killer == victim { -1 } else { 1 };
             }
+            self.kill_limit(killer);
             self.drop_on_death(victim);
             self.kills_settled += 1;
+        }
+    }
+
+    /// Deathmatch: the first to the kill limit is announced, and everyone starts over.
+    fn kill_limit(&mut self, killer: u8) {
+        let limit = self.rules.kill_limit;
+        if !self.rules.deathmatch || !self.clients.values().any(|c| c.id == killer && c.kills >= limit) {
+            return;
+        }
+        self.events.push(GameEvent::KillLimit { player: killer });
+        for c in self.clients.values_mut() {
+            c.kills = 0;
+            c.deaths = 0;
         }
     }
 }

@@ -176,6 +176,8 @@ pub struct Server {
     server_key: Option<crate::crypto::ServerKey>,
     /// When the last booking we took was sealed (older ones are replays).
     last_booking: u64,
+    /// Deathmatch seats the lobby handed out: ticket -> (key, when). Unused ones expire.
+    seats: HashMap<u64, ([u8; 32], u32)>,
     /// A new player's channel, opened from their ticket's key while their join is checked.
     joining: Option<(SocketAddr, u64, crate::crypto::Channel)>,
     /// Size of the last snapshot sent (bandwidth checks).
@@ -220,6 +222,7 @@ impl Server {
             server_key: None,
             last_booking: 0,
             joining: None,
+            seats: HashMap::new(),
         })
     }
 
@@ -227,6 +230,9 @@ impl Server {
     pub fn set_config(&mut self, cfg: MatchConfig) {
         self.lobbies = crate::config::addresses(&cfg.master, false);
         self.server_key = (!cfg.official_token.is_empty()).then(|| crate::crypto::ServerKey::from_token(&cfg.official_token));
+        if cfg.deathmatch {
+            self.rules = Rules::deathmatch();
+        }
         self.round = Match::new(cfg, TICK_RATE);
         self.look_up_lobby();
     }
@@ -274,6 +280,9 @@ impl Server {
 
     /// A free spawn point for the team (not on top of someone else).
     fn spawn_point(&self, team: Team) -> [f32; 3] {
+        if self.rules.deathmatch {
+            return self.deathmatch_spawn(team);
+        }
         let list = if team == Team::Ct { &self.spawns_ct } else { &self.spawns_t };
         let taken = |p: &[f32; 3]| {
             self.clients.values().filter(|c| c.vitals.alive()).any(|c| {
@@ -282,6 +291,22 @@ impl Server {
             })
         };
         list.iter().find(|p| !taken(p)).or(list.first()).copied().unwrap_or([0.0; 3])
+    }
+
+    /// Deathmatch: any spawn point on the map, picked at random among the ones furthest from
+    /// living enemies (nobody spawns in someone's sights, nobody can camp a spawn).
+    fn deathmatch_spawn(&self, team: Team) -> [f32; 3] {
+        let enemies: Vec<[f32; 3]> = self.clients.values().filter(|c| c.vitals.alive() && c.team != team && c.team != Team::Spectator).map(|c| c.state.movement.origin).collect();
+        let mut all: Vec<([f32; 3], f32)> = self
+            .spawns_t
+            .iter()
+            .chain(&self.spawns_ct)
+            .filter(|p| !self.clients.values().any(|c| c.vitals.alive() && (0..3).map(|k| (c.state.movement.origin[k] - p[k]).powi(2)).sum::<f32>() < 64.0 * 64.0))
+            .map(|p| (*p, enemies.iter().map(|e| (0..3).map(|k| (e[k] - p[k]).powi(2)).sum::<f32>()).fold(f32::MAX, f32::min)))
+            .collect();
+        all.sort_by(|a, b| b.1.total_cmp(&a.1));
+        let pick = (crate::secure::random() % all.len().clamp(1, 4) as u64) as usize;
+        all.get(pick).map(|(p, _)| *p).unwrap_or([0.0; 3])
     }
 
     /// CS starting weapons: T Glock + 40 rounds, CT USP + 24; dummies hold a rifle.

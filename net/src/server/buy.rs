@@ -31,7 +31,7 @@ impl Server {
         if !c.vitals.alive() || c.team == Team::Spectator {
             return false;
         }
-        if self.rules.practice || self.round.phase == Phase::Warmup {
+        if self.rules.free_play() || self.round.phase == Phase::Warmup {
             return true; // anywhere, any time
         }
         let side = if c.team == Team::Ct { sim::zones::Side::Ct } else { sim::zones::Side::T };
@@ -44,7 +44,7 @@ impl Server {
         if !self.can_buy(c) || !allowed(c.team, item) {
             return;
         }
-        let free = self.rules.practice || self.round.phase == Phase::Warmup;
+        let free = self.rules.free_play() || self.round.phase == Phase::Warmup;
         let tick = self.tick;
         let c = self.clients.get_mut(&from).unwrap();
         let now = c.last_run as f64 * TICK as f64;

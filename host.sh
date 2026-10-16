@@ -14,6 +14,7 @@
 #            --test        a test lobby: lets in players without Steam (test bots, smoke tests)
 #            --official    back to an official lobby (Steam players only; the default)
 #            --peer IP     (main lobby) the standby lobby machine to stream state to
+#            --dm N        deathmatch servers here (drop-in, 20 players; default 1 with the lobby)
 #   ./host.sh firewall               kernel-level flood filtering for our ports (asks for sudo)
 #   ./host.sh token | status | logs | update | stop
 #
@@ -30,7 +31,7 @@ compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
 as_me="user: \"$(id -u):$(id -g)\", "
 
 [ -f hosting/settings ] && . hosting/settings
-LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}" TEST="${TEST:-}" PEER="${PEER:-}"
+LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}" TEST="${TEST:-}" PEER="${PEER:-}" DM="${DM:-}"
 
 case "${1:-}" in
   stop) compose down -t 5; exit ;;   # now: running matches end
@@ -59,12 +60,16 @@ while [ $# -gt 0 ]; do
     --test) TEST=1; shift ;;
     --official) TEST=""; shift ;;
     --peer) PEER="$2"; shift 2 ;;
+    --dm) DM="$2"; shift 2 ;;
     *) echo "Unknown option $1 (see the top of host.sh)"; exit 1 ;;
   esac
 done
 
 command -v docker >/dev/null || { echo "Install Docker first: https://docs.docker.com/engine/install/"; exit 1; }
 SERVERS="${SERVERS:-$(nproc)}"
+DM="${DM:-$([ "$LOBBY" = here ] && echo 1 || echo 0)}"
+# Ports: match servers from 27015, then the deathmatch ones.
+last=$((27014 + SERVERS + DM))
 
 # The few game files the servers read, copied from your own CS 1.6 install (never shipped).
 game="${BOOTLEG16_DIR:-$HOME/.steam/steam/steamapps/common/Half-Life}"
@@ -84,7 +89,7 @@ if [ -z "$IP" ]; then
   IP=$(curl -4fsS --max-time 5 https://api.ipify.org || true)
   [ -n "$IP" ] || { echo "Couldn't find this machine's public IP: run again with --ip <address>."; exit 1; }
 fi
-printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\nTEST=%q\nPEER=%q\n' "$LOBBY" "$SERVERS" "$IP" "$REGION" "$TEST" "$PEER" > hosting/settings
+printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\nTEST=%q\nPEER=%q\nDM=%q\n' "$LOBBY" "$SERVERS" "$IP" "$REGION" "$TEST" "$PEER" "$DM" > hosting/settings
 
 # Kernel-level filtering (nftables), before any packet reaches the game: junk sizes and
 # fragments are dropped, every source address gets a packet budget, our UDP skips connection
@@ -92,7 +97,7 @@ printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\nTEST=%q\nPEER=%q\n' "$LOBBY" "$S
 # the standby lobby may reach the lobbies' link. Big floods that fill the line itself can only
 # be stopped upstream: pick a provider with DDoS filtering (see README "Hosting").
 firewall_rules() {
-  local last=$((27014 + SERVERS))
+  local last=$((27014 + SERVERS + DM))
   cat <<NFT
 table inet bootleg16
 delete table inet bootleg16
@@ -162,9 +167,14 @@ rm -f hosting/server*.cfg
   if [ "$LOBBY" = here ]; then
     echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl --key /bootleg16/keys/lobby.key --state /bootleg16/keys/lobby.state --ratings /bootleg16/keys/ratings.db${PEER:+ --peer $PEER:27011 --peer-port 27011}${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports, ./keys:/bootleg16/keys]}"
   fi
-  for i in $(seq 1 "$SERVERS"); do
+  for i in $(seq 1 $((SERVERS + DM))); do
     port=$((27014 + i))
+    # After the match servers: deathmatch ones (drop-in, 20 players).
+    mode=match; slots=10
+    [ "$i" -gt "$SERVERS" ] && { mode=deathmatch; slots=20; }
     sed -e "s|^master = \"\"|master = \"$lobby_addr\"|" \
+        -e "s|^mode = .*|mode = \"$mode\"|" \
+        -e "s|^max_players = .*|max_players = $slots|" \
         -e "s|^official_token = \"\"|official_token = \"$token\"|" \
         -e "s|^public_address = \"\"|public_address = \"$IP:$port\"|" \
         -e "s|^name = .*|name = \"$(hostname)-$i\"|" \
@@ -183,15 +193,14 @@ if [ -n "${UPDATE:-}" ] && [ -n "$(compose ps -q 2>/dev/null)" ]; then
   # Rolling update: the lobby now (players sign back in by themselves), each game server once
   # its match is over (it finishes the match on SIGTERM; nothing new is booked on it meanwhile).
   [ "$LOBBY" = here ] && compose up -d --no-deps --force-recreate lobby
-  services=$(seq -f "server%g" 1 "$SERVERS" | tr '\n' ' ')
+  services=$(seq -f "server%g" 1 $((SERVERS + DM)) | tr '\n' ' ')
   nohup bash -c "for s in $services; do docker compose -p bootleg16 -f hosting/compose.yaml up -d --no-deps --force-recreate \$s & done; wait; echo update done" > hosting/update.log 2>&1 &
   echo "Updating: idle game servers restart now, busy ones when their match ends (progress: hosting/update.log)."
   exit
 fi
 compose up -d --remove-orphans
-last=$((27014 + SERVERS))
 echo
-echo "Running $SERVERS game server(s) on $IP (UDP $([ "$SERVERS" = 1 ] && echo 27015 || echo "27015-$last"))$([ "$LOBBY" = here ] && echo " and the lobby (UDP 27010)")."
+echo "Running $SERVERS match server(s) and $DM deathmatch server(s) on $IP (UDP 27015-$last)$([ "$LOBBY" = here ] && echo " and the lobby (UDP 27010)")."
 echo "Open those UDP ports in your firewall / router.${PEER:+ Lobbies also talk to each other on TCP 27011 (open it to $PEER only).}"
 if [ "$LOBBY" = here ]; then
   echo "More machines:  ./host.sh join $IP${PEER:+,$PEER} $token"

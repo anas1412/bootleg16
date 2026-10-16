@@ -10,7 +10,7 @@ const TEAMKILL_PENALTY: i32 = 3300;
 impl Server {
     /// No rounds in the practice room.
     pub(super) fn rounds_on(&self) -> bool {
-        !self.rules.practice
+        !self.rules.free_play()
     }
 
     /// What the round phase allows everyone (plus the defuser can't move).

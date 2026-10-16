@@ -198,6 +198,8 @@ pub enum GameEvent {
     Surrendered { team: Team },
     /// This player's team voted them out of the match.
     VotedOut { player: u8 },
+    /// Deathmatch: this player reached the kill limit (everyone's score starts over).
+    KillLimit { player: u8 },
     /// A breakable broke (for its sound and debris; the state itself is `Snapshot::broken`).
     Broke { model: u16, material: sim::breakables::Material, at: [f32; 3] },
 }
@@ -220,6 +222,7 @@ impl GameEvent {
                 | GameEvent::SidesChosen { .. }
                 | GameEvent::Surrendered { .. }
                 | GameEvent::VotedOut { .. }
+                | GameEvent::KillLimit { .. }
         )
     }
 }

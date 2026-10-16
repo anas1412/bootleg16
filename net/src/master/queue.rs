@@ -32,7 +32,7 @@ impl Master {
     /// Regions with a free official server, best ping for these players first.
     fn regions_for(&self, members: &[u32]) -> Vec<(String, f32)> {
         let mut regions: Vec<(String, f32)> = Vec::new();
-        for s in self.servers.values().filter(|s| s.official && !s.busy) {
+        for s in self.servers.values().filter(|s| s.official && !s.busy && !s.deathmatch) {
             if regions.iter().any(|(r, _)| *r == s.region) {
                 continue;
             }
@@ -47,14 +47,14 @@ impl Master {
     /// Reserve a free official server in `region` (any region: None) for these players and
     /// hand out tickets. False if none.
     pub(super) fn start_match(&mut self, players: Vec<(u32, Group)>, knife_round: bool, region: Option<&str>) -> bool {
-        let free = self.servers.iter().find(|(_, s)| s.official && !s.busy && region.is_none_or(|r| s.region == r));
+        let free = self.servers.iter().find(|(_, s)| s.official && !s.busy && !s.deathmatch && region.is_none_or(|r| s.region == r));
         let Some((addr, public, key, region)) = free.map(|(a, s)| (*a, s.public, s.key, s.region.clone())) else { return false };
         // A seat number and a fresh key per player: the server learns the keys from this
         // (sealed) booking, the player from the lobby (encrypted); they never travel in clear.
         let tickets: Vec<(u32, u64, Group, [u8; 32])> = players.iter().map(|(id, g)| (*id, self.rand() | 1, *g, crate::crypto::new_key())).collect();
         let setup = MatchSetup { players: tickets.iter().map(|(_, t, g, _)| (*t, *g)).collect(), knife_round, keys: tickets.iter().map(|(_, t, _, k)| (*t, *k)).collect() };
         // Sealed with the server's token key: only it can read it, nobody can forge one.
-        let msg = self.keys[key].seal(&encode(&setup));
+        let msg = self.keys[key].seal(&encode(&LobbyOrder::Book(setup)));
         let _ = self.udp.send_to(&msg, addr);
         self.booking.insert(addr, (msg, Instant::now(), Instant::now()));
         self.servers.get_mut(&addr).unwrap().busy = true;
@@ -69,6 +69,33 @@ impl Master {
             if let Some(party) = self.parties.values_mut().find(|q| q.members.iter().any(|(m, _)| *m == id)) {
                 party.queued = None;
             }
+        }
+        true
+    }
+
+    /// A seat on the deathmatch server with room where this player pings best: sealed to the
+    /// server, the ticket and key to the player (as `found`). False if they're all full.
+    pub(super) fn deathmatch_seat(&mut self, player: u32) -> bool {
+        for s in self.servers.values_mut() {
+            s.seated.retain(|t| t.elapsed() < Duration::from_secs(20));
+        }
+        // Room on it (players, plus seats given out but not taken yet), best ping first.
+        let pick = self
+            .servers
+            .iter()
+            .filter(|(_, s)| s.official && s.deathmatch && (s.players as usize + s.seated.len()) < s.max as usize)
+            .map(|(a, s)| (*a, self.worst_ping(&[player], &s.region).unwrap_or(f32::MAX)))
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(a, _)| a);
+        let Some(addr) = pick else { return false };
+        let (ticket, key) = (self.rand() | 1, crate::crypto::new_key());
+        let s = self.servers.get_mut(&addr).unwrap();
+        s.seated.push(Instant::now());
+        let (public, k) = (s.public, s.key);
+        let order = self.keys[k].seal(&encode(&LobbyOrder::Seat { ticket, key }));
+        let _ = self.udp.send_to(&order, addr);
+        if let Some(p) = self.players.values_mut().find(|p| p.id == player) {
+            p.found = Some((public, ticket, key));
         }
         true
     }

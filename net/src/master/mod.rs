@@ -88,6 +88,12 @@ struct GameServer {
     seen: Instant,
     /// When its newest heartbeat was sealed (older ones are replays).
     sent: u64,
+    /// A deathmatch server (drop-in seats, never booked for matches), its players and slots,
+    /// and the seats we gave out lately (not in its player count yet).
+    deathmatch: bool,
+    players: u8,
+    max: u8,
+    seated: Vec<Instant>,
 }
 
 pub struct Master {
@@ -241,7 +247,7 @@ impl Master {
         if now - self.reported > Duration::from_secs(60) {
             self.reported = now;
             let queued: usize = self.parties.values().filter(|p| p.queued.is_some()).map(|p| p.members.len()).sum();
-            let free = self.servers.values().filter(|s| s.official && !s.busy).count();
+            let free = self.servers.values().filter(|s| s.official && !s.busy && !s.deathmatch).count();
             let busy = self.servers.values().filter(|s| s.busy).count();
             println!("{} online, {queued} in queue, servers: {free} free, {busy} in a match", self.players.len());
         }

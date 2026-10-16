@@ -40,6 +40,7 @@ impl Server {
             region: cfg.region.clone(),
             busy,
             address: cfg.public_address.clone(),
+            deathmatch: self.rules.deathmatch,
         };
         // Sealed with the token's key (the token itself never goes out): only the lobby can
         // read it, and nobody can pretend to be us.

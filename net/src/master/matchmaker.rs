@@ -170,11 +170,11 @@ impl Master {
             })
             .collect();
         queue.sort_by(|a, b| b.waited.total_cmp(&a.waited));
-        let mut regions: Vec<String> = self.servers.values().filter(|s| s.official && !s.busy).map(|s| s.region.clone()).collect();
+        let mut regions: Vec<String> = self.servers.values().filter(|s| s.official && !s.busy && !s.deathmatch).map(|s| s.region.clone()).collect();
         regions.sort();
         regions.dedup();
         let mut free: HashMap<String, usize> = HashMap::new();
-        for s in self.servers.values().filter(|s| s.official && !s.busy) {
+        for s in self.servers.values().filter(|s| s.official && !s.busy && !s.deathmatch) {
             *free.entry(s.region.clone()).or_default() += 1;
         }
         for _ in 0..8 {

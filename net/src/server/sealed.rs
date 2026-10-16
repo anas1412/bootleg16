@@ -5,11 +5,23 @@ use super::*;
 use crate::crypto::Channel;
 
 impl Server {
-    /// A sealed booking from the lobby: take it if genuine, fresh and we're free.
+    /// A sealed order from the lobby: a booking (taken if genuine, fresh and we're free), or a
+    /// deathmatch seat.
     pub(super) fn booking(&mut self, packet: &[u8]) {
         let Some(key) = &self.server_key else { return };
         let Some((sent, body)) = key.open(packet) else { return };
-        let Some(setup) = decode::<MatchSetup>(&body) else { return };
+        let setup = match decode::<crate::master::LobbyOrder>(&body) {
+            Some(crate::master::LobbyOrder::Book(setup)) => setup,
+            Some(crate::master::LobbyOrder::Seat { ticket, key }) if self.rules.deathmatch => {
+                // ponytail: a few dozen seats at most (20 players, seats expire); a map is plenty.
+                self.seats.insert(ticket, (key, self.tick));
+                return;
+            }
+            _ => return,
+        };
+        if self.rules.deathmatch {
+            return; // deathmatch servers run no booked matches
+        }
         // An older booking replayed (or a resend of one we took) changes nothing.
         if sent <= self.last_booking || self.reserved.is_some() || self.draining.is_some() {
             return;
@@ -26,7 +38,8 @@ impl Server {
             return self.socket.open(from, packet);
         }
         let ticket = crate::crypto::channel_id(packet)?;
-        let key = self.reserved.as_ref()?.setup.keys.iter().find(|(t, _)| *t == ticket)?.1;
+        let booked = self.reserved.as_ref().and_then(|r| r.setup.keys.iter().find(|(t, _)| *t == ticket).map(|k| k.1));
+        let key = booked.or_else(|| self.seats.get(&ticket).map(|s| s.0))?;
         let mut ch = Channel::new(&key, false);
         let plain = ch.open(packet)?;
         self.joining = Some((from, ticket, ch));
