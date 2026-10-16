@@ -95,6 +95,9 @@ fn the_dead_only_see_what_their_living_teammates_see() {
     }
     assert!(mate.others().iter().any(|o| o.id == t), "setup: the teammate next to him sees him");
     assert!(g.b.others().iter().any(|o| o.id == t), "a teammate sees him, so the dead do too");
+    // Team IDs: a teammate's health comes along, an enemy's never does.
+    assert_eq!(g.b.others().iter().find(|o| o.id == m).and_then(|o| o.mate).map(|x| x.health), Some(100));
+    assert!(mate.others().iter().find(|o| o.id == t).is_some_and(|o| o.mate.is_none()), "an enemy's health was sent");
 }
 
 #[test]

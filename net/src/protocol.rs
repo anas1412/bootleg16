@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 27;
+pub const PROTOCOL_VERSION: u32 = 28;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -138,25 +138,41 @@ pub struct PlayerNet {
     /// View angles in 1/65536 of a turn (yaw) and of half a turn (pitch).
     yaw: u16,
     pitch: i16,
-    /// Bit 0 crouched, bit 1 alive.
+    /// Bit 0 crouched, bit 1 alive, bit 2 in the air (jumping, falling).
     flags: u8,
     /// Weapon in hand.
     pub weapon: Id,
     pub team: Team,
+    /// Health and kit: only in snapshots for their teammates (Team IDs).
+    pub mate: Option<Mate>,
+}
+
+/// A teammate's health and equipment, as their Team ID shows it.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct Mate {
+    pub health: u8,
+    pub armor: u8,
+    pub helmet: bool,
+    pub defuse_kit: bool,
 }
 
 impl PlayerNet {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(id: u8, origin: [f32; 3], yaw: f32, pitch: f32, crouched: bool, alive: bool, weapon: Id, team: Team) -> PlayerNet {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(id: u8, origin: [f32; 3], yaw: f32, pitch: f32, crouched: bool, alive: bool, airborne: bool, weapon: Id, team: Team, mate: Option<Mate>) -> PlayerNet {
         PlayerNet {
             id,
             origin: origin.map(|v| (v * 8.0).round() as i32),
             yaw: (yaw.rem_euclid(360.0) / 360.0 * 65536.0).round() as u32 as u16,
             pitch: (pitch.clamp(-90.0, 90.0) / 180.0 * 65535.0).round() as i16,
-            flags: crouched as u8 | (alive as u8) << 1,
+            flags: crouched as u8 | (alive as u8) << 1 | (airborne as u8) << 2,
             weapon,
             team,
+            mate,
         }
+    }
+    pub fn airborne(&self) -> bool {
+        self.flags & 4 != 0
     }
     pub fn origin(&self) -> [f32; 3] {
         self.origin.map(|v| v as f32 / 8.0)

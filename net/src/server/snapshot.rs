@@ -37,7 +37,11 @@ impl Server {
             let players: Vec<PlayerNet> = self
                 .clients
                 .values()
-                .map(|c| PlayerNet::new(c.id, c.state.movement.origin, c.view.0, c.view.1, c.state.movement.crouched, c.vitals.alive(), c.state.loadout.active_id(), c.team))
+                .map(|c| {
+                    let (m, v) = (&c.state.movement, &c.vitals);
+                    let mate = Mate { health: v.health.clamp(0.0, 255.0).ceil() as u8, armor: v.armor.clamp(0.0, 255.0).ceil() as u8, helmet: v.helmet, defuse_kit: c.defuse_kit };
+                    PlayerNet::new(c.id, m.origin, c.view.0, c.view.1, m.crouched, v.alive(), !m.on_ground && !m.on_ladder, c.state.loadout.active_id(), c.team, Some(mate))
+                })
                 .collect();
             let doors = self.world.doors.net_state();
             let events = std::mem::take(&mut self.events);
@@ -60,7 +64,16 @@ impl Server {
                 .map(|(a, c)| {
                     let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), defuse_kit: c.defuse_kit };
                     let seen = &sights[&c.id];
-                    let players: Vec<PlayerNet> = players.iter().filter(|p| seen.contains(&p.id) && p.id != c.id).cloned().collect();
+                    // Health and kit only for teammates (spectators see everything anyway).
+                    let players: Vec<PlayerNet> = players
+                        .iter()
+                        .filter(|p| seen.contains(&p.id) && p.id != c.id)
+                        .map(|p| {
+                            let mut p = p.clone();
+                            p.mate = p.mate.filter(|_| c.team == Team::Spectator || p.team == c.team);
+                            p
+                        })
+                        .collect();
                     let you = Some((c.state.movement, c.vitals));
                     let events = self.events_for(c.id, seen, &events);
                     (*a, c.last_run, c.state.loadout.clone(), self.bomb_net(c.team), me, players, you, events)
