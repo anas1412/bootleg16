@@ -15,8 +15,13 @@ fn main() {
     let tick = Duration::from_secs_f64(1.0 / 128.0);
     let start = Instant::now();
     let mut t = 0u32;
+    let mut joined = false;
     while start.elapsed() < Duration::from_secs(30) {
         t += 1;
+        if !joined && c.id().is_some() {
+            c.join_team(Some(net::protocol::Team::T));
+            joined = true;
+        }
         let base = Input { yaw: 270.0, pitch, ..Default::default() };
         let input = match t {
             n if n > 50 && n <= 50 + presses as u32 * 120 && (n - 50) % 120 == 1 => Input { slot: 4, ..base },

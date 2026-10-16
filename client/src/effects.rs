@@ -1,5 +1,5 @@
 //! Server events turned into things you see and hear: tracers, the kill feed, grenades in
-//! flight, explosions, smoke clouds, the flashbang white-out and guns on the ground.
+//! flight, explosions, the flashbang white-out and guns on the ground.
 use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::menu::AppState;
@@ -33,7 +33,6 @@ struct Effects {
     /// HE, flash, smoke world models.
     grenades: Vec<Parts>,
     sphere: Handle<Mesh>,
-    smoke_puff: Handle<StandardMaterial>,
 }
 
 /// Flashbang: seconds of full white left, seconds of fade left (and total), strength.
@@ -57,8 +56,6 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
     commands.insert_resource(Effects {
         grenades,
         sphere: meshes.add(Sphere::new(1.0)),
-        // Double-sided: you can stand inside a smoke cloud.
-        smoke_puff: materials.add(StandardMaterial { base_color: Color::srgba(0.55, 0.55, 0.55, 0.85), unlit: true, alpha_mode: AlphaMode::Blend, cull_mode: None, double_sided: true, ..default() }),
     });
 }
 
@@ -148,14 +145,11 @@ fn ground_guns(
 #[derive(Component)]
 struct Fireball(f32, f32);
 
-/// A smoke cloud's puffs, keyed by where the cloud is.
-#[derive(Component)]
-struct SmokeCloud([i32; 3]);
 
 #[derive(Component)]
 struct FlashOverlay;
 
-/// Grenades in flight, fireballs, smoke clouds, and the flashbang white-out.
+/// Grenades in flight, fireballs, and the flashbang white-out (smoke: `smoke.rs`).
 #[allow(clippy::too_many_arguments)]
 fn grenade_effects(
     mut commands: Commands,
@@ -166,7 +160,6 @@ fn grenade_effects(
     mut materials: ResMut<Assets<StandardMaterial>>,
     views: Query<Entity, With<GrenadeView>>,
     mut fireballs: Query<(Entity, &mut Fireball, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
-    clouds: Query<(Entity, &SmokeCloud)>,
     mut overlay: Single<&mut BackgroundColor, With<FlashOverlay>>,
 ) {
     let dt = time.delta_secs();
@@ -232,31 +225,6 @@ fn grenade_effects(
         0.0
     };
     overlay.set_if_neq(BackgroundColor(Color::srgba(1.0, 1.0, 1.0, a)));
-    // Smoke clouds: a cluster of grey puffs.
-    let key = |at: [f32; 3]| at.map(|v| v.round() as i32);
-    let live: Vec<_> = w.client.smokes.iter().map(|s| (key(s.at), *s)).collect();
-    for (e, c) in &clouds {
-        if !live.iter().any(|(k, _)| *k == c.0) {
-            commands.entity(e).despawn();
-        }
-    }
-    for (k, smoke) in &live {
-        if clouds.iter().any(|(_, c)| c.0 == *k) {
-            continue;
-        }
-        if smoke.left > sim::grenades::SMOKE_SECONDS as f32 - 1.0 {
-            w.cues.push(sound::Cue::Smoke { at: smoke.at }); // just popped (not one we joined late)
-        }
-        let centre = Vec3::from(map::to_y_up(smoke.at));
-        let parent = commands.spawn((SmokeCloud(*k), Transform::from_translation(centre), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
-        for i in 0..14 {
-            let a = i as f32 * 2.4;
-            let r = 30.0 + (i % 4) as f32 * 22.0;
-            let offset = Vec3::new(a.cos() * r, 20.0 + (i % 3) as f32 * 35.0, a.sin() * r);
-            let child = commands.spawn((Mesh3d(fx.sphere.clone()), MeshMaterial3d(fx.smoke_puff.clone()), Transform::from_translation(offset).with_scale(Vec3::splat(70.0)))).id();
-            commands.entity(parent).add_child(child);
-        }
-    }
 }
 
 /// Server events: tracers, sounds, the kill feed, bullet holes and blood (`impacts`), player
