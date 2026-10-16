@@ -75,7 +75,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Spawn view angle from the spawn point
 
 ### Networking (`docs/NETWORKING.md`)
-- [ ] Anti-wallhack: don't send players the client can't see (server-side visibility)
+- [x] Anti-wallhack: enemies out of line of sight aren't sent (net/src/server/visibility.rs): rays from your eyes to their grown box, 0.15 s look-ahead, 0.25 s grace; teammates/dead/spectators see all; footsteps and shots still sent within hearing range
+- [ ] Visibility ignores doors and glass (only the static world blocks sight): safe, but leaks players behind closed doors; smoke doesn't hide either
 - [ ] Map check on join (same map file), map change / map vote
 - [ ] Stat heuristics for aimbots, match replays, reports
 - [ ] 64-tick server option (tick rate is a constant 128 today)

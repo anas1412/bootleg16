@@ -48,7 +48,8 @@ fn run_and_check(g: &mut Game, label: &str, unlag_tolerance: f32) {
 fn two_clients_on_lan() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 0, 0.0);
-    g.connect();
+    // Teammates: always sent to each other (enemies only when in sight, see tests/visibility.rs).
+    g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
     run_and_check(&mut g, "lan", 0.05);
 }
 
@@ -56,7 +57,7 @@ fn two_clients_on_lan() {
 fn two_clients_at_100ms_ping_with_5_percent_loss() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 100, 0.05);
-    g.connect();
+    g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
     run_and_check(&mut g, "100ms/5%", 2.0);
 }
 

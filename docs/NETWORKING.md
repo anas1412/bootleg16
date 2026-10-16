@@ -49,3 +49,16 @@ moves no faster than an honest one.
 - Encryption/authentication, NAT traversal, server browser.
 - Snapshots are full state every time; delta compression when bandwidth matters
   (10 players ≈ 40 KB/s per client now).
+
+## Anti-wallhack (server-side visibility)
+
+Each snapshot only contains the enemies the receiving player could see: the server traces
+lines from the viewer's eyes (now and 0.15 s ahead along their velocity) to the corners of
+the target's box grown by 24 units (now and 0.15 s ahead). One clear line is enough. Only the
+static world blocks sight, so glass and doors never hide someone you could see. Someone who
+goes out of sight is still sent for 0.25 s, so corners don't flicker. Teammates, and anyone
+watching while dead or spectating, get everyone.
+
+Sounds are filtered separately: footsteps and unsilenced shots are sent within 1250 units
+(GoldSrc ATTN_NORM falloff), silenced shots within 625, so players behind walls are still heard
+exactly where they are, but a cheat gets no player to draw.

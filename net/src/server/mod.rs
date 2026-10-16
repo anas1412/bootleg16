@@ -4,6 +4,7 @@ mod bomb;
 pub mod buy;
 mod ground;
 mod round;
+mod visibility;
 
 use crate::config::MatchConfig;
 use crate::protocol::*;
@@ -171,6 +172,8 @@ pub struct Server {
     kills_settled: usize,
     round: Match,
     bomb: Bomb,
+    /// Anti-wallhack: when each (viewer, target) pair last had line of sight.
+    last_seen: HashMap<(u8, u8), u32>,
 }
 
 impl Server {
@@ -206,6 +209,7 @@ impl Server {
             kills_settled: 0,
             round: Match::new(MatchConfig::default(), TICK_RATE),
             bomb: Bomb::None,
+            last_seen: HashMap::new(),
         })
     }
 
@@ -484,6 +488,8 @@ impl Server {
 
         let tick = self.tick;
         self.clients.retain(|_, c| c.bot || tick - c.last_heard < TIMEOUT_TICKS);
+        let ids: std::collections::HashSet<u8> = self.clients.values().map(|c| c.id).collect();
+        self.last_seen.retain(|(v, t), _| ids.contains(v) && ids.contains(t));
 
         if self.tick % (TICK_RATE / 4) == 0 {
             let mut scores: Vec<Score> = self
@@ -520,23 +526,28 @@ impl Server {
             let smokes: Vec<SmokeNet> = self.smokes.iter().map(|s| SmokeNet { at: s.0, left: (s.1 - now) as f32 }).collect();
             let ground: Vec<(Id, [f32; 3])> = self.ground.iter().map(|g| (g.gun.id, g.origin)).collect();
             let round = self.round_net();
+            let viewers: Vec<u8> = self.clients.values().filter(|c| !c.bot).map(|c| c.id).collect();
+            let sights: HashMap<u8, std::collections::HashSet<u8>> = viewers.iter().map(|id| (*id, self.visible_to(*id))).collect();
             let sends: Vec<_> = self
                 .clients
                 .iter()
                 .filter(|(_, c)| !c.bot)
                 .map(|(a, c)| {
                     let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), defuse_kit: c.defuse_kit };
-                    (*a, c.last_run, c.state.loadout.clone(), self.bomb_net(c.team), me)
+                    let seen = &sights[&c.id];
+                    let players: Vec<PlayerNet> = players.iter().filter(|p| seen.contains(&p.id)).cloned().collect();
+                    let events = self.events_for(c.id, seen, &events);
+                    (*a, c.last_run, c.state.loadout.clone(), self.bomb_net(c.team), me, players, events)
                 })
                 .collect();
-            for (addr, ack, loadout, bomb, me) in sends {
+            for (addr, ack, loadout, bomb, me, players, events) in sends {
                 let msg = ServerMsg::Snapshot {
                     tick,
                     ack,
-                    players: players.clone(),
+                    players,
                     doors: doors.clone(),
                     loadout,
-                    events: events.clone(),
+                    events,
                     grenades: grenades.clone(),
                     smokes: smokes.clone(),
                     ground: ground.clone(),

@@ -391,6 +391,16 @@ impl World {
     }
 
     /// A bullet-style line trace through the exact geometry (world + doors).
+    /// Whether the static world (no doors, glass or other brush entities) blocks a line of
+    /// sight. For hiding players you can't see: anything see-through must not count.
+    pub fn sight_blocked(&self, start: Vec3, end: Vec3) -> bool {
+        let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
+        let head = self.models[0].heads[0];
+        let mut t = Trace { start_solid: false, all_solid: true, fraction: 1.0, end, normal: [0.0; 3], hit_contents: CONTENTS_EMPTY };
+        self.recursive(tree, head, head, 0.0, 1.0, start, end, &mut t);
+        t.fraction < 1.0
+    }
+
     pub fn trace_line(&self, start: Vec3, end: Vec3) -> LineTrace {
         let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
         let mut best = LineTrace { fraction: 1.0, end, normal: [0.0; 3], start_solid: false, hit_sky: false };
