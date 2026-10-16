@@ -50,8 +50,8 @@ struct Kicked(Option<u32>);
 #[derive(Resource, Default)]
 struct Reported(HashSet<u8>);
 
-fn mouse(keys: Res<ButtonInput<KeyCode>>, buttons: Res<ButtonInput<MouseButton>>, mut m: ResMut<ScoreMouse>, mut cursor: Single<&mut CursorOptions>) {
-    if keys.pressed(KeyCode::Tab) {
+fn mouse(keys: Res<ButtonInput<KeyCode>>, buttons: Res<ButtonInput<MouseButton>>, binds: Res<crate::binds::Binds>, mut m: ResMut<ScoreMouse>, mut cursor: Single<&mut CursorOptions>) {
+    if binds.held(crate::binds::Action::Scores, &keys, &buttons) {
         if buttons.just_pressed(MouseButton::Right) {
             m.on = !m.on;
             cursor.grab_mode = if m.on { CursorGrabMode::None } else { CursorGrabMode::Locked };
@@ -109,9 +109,9 @@ const COL: f32 = 96.0;
 type Shown = (Vec<Score>, [u32; 2], usize, bool, Option<u8>, usize);
 
 #[allow(clippy::too_many_arguments)]
-fn scoreboard(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>, w: Res<Walker>, kit: Res<Kit>, icons: Res<Icons>, history: Res<History>, m: Res<ScoreMouse>, (reported, kicked): (Res<Reported>, Res<Kicked>), roots: Query<Entity, With<ScoresRoot>>, mut shown: Local<Option<Shown>>) {
+fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<crate::binds::Binds>), w: Res<Walker>, kit: Res<Kit>, icons: Res<Icons>, history: Res<History>, m: Res<ScoreMouse>, (reported, kicked): (Res<Reported>, Res<Kicked>), roots: Query<Entity, With<ScoresRoot>>, mut shown: Local<Option<Shown>>) {
     let auto_show = std::env::var_os("BOOTLEG16_SCORES").is_some();
-    let want = (keys.pressed(KeyCode::Tab) || auto_show).then(|| (w.client.scores.clone(), w.client.round.score, history.0.len(), m.on, m.open, reported.0.len()));
+    let want = (binds.held(crate::binds::Action::Scores, &keys, &buttons) || auto_show).then(|| (w.client.scores.clone(), w.client.round.score, history.0.len(), m.on, m.open, reported.0.len()));
     if *shown == want {
         return;
     }

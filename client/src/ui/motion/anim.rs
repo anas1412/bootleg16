@@ -5,6 +5,7 @@ use crate::ui::tokens::*;
 use super::Fade;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Kind {
@@ -124,6 +125,28 @@ pub(super) fn anim(
 ) {
     let now = time.elapsed_secs();
     let px = window.single().map(|w| w.height() / 1080.0).unwrap_or(1.0);
+    // Animations nest (a page tunes in while each of its rows does): they share one Base per
+    // node, so only the last one still covering a node restores it and lets the Base go.
+    let subtree = |root: Entity| {
+        let mut all = Vec::new();
+        let mut stack = vec![root];
+        while let Some(e) = stack.pop() {
+            if let Ok(kids) = children.get(e) {
+                stack.extend(kids.iter());
+            }
+            all.push(e);
+        }
+        all
+    };
+    // Bases made this frame (the insert lands at the end of the frame): a second animation
+    // reaching the same node this frame must use the colours from before the first one
+    let mut fresh: HashMap<Entity, Base> = HashMap::new();
+    let mut cover: HashMap<Entity, u32> = HashMap::new();
+    for (root, ..) in &roots {
+        for e in subtree(root) {
+            *cover.entry(e).or_default() += 1;
+        }
+    }
     for (root, mut a, mut tr) in &mut roots {
         let delay = a.delay;
         let start = *a.start.get_or_insert(now + delay);
@@ -142,14 +165,19 @@ pub(super) fn anim(
                 stack.extend(kids.iter());
             }
             let Ok((text, bg, border, img, shadow, base, faded)) = parts.get_mut(e) else { continue };
-            let b = match base {
-                Some(b) => Base { text: b.text, bg: b.bg, border: b.border, img: b.img, had_shadow: b.had_shadow },
-                None => {
+            let b = match (base, fresh.get(&e)) {
+                (Some(b), _) | (None, Some(b)) => Base { text: b.text, bg: b.bg, border: b.border, img: b.img, had_shadow: b.had_shadow },
+                (None, None) => {
                     let b = Base { text: text.as_ref().map(|c| c.0), bg: bg.as_ref().map(|c| c.0), border: border.as_deref().copied(), img: img.as_ref().map(|i| i.color), had_shadow: shadow.is_some() };
                     commands.entity(e).insert(Base { ..b });
+                    fresh.insert(e, Base { ..b });
                     b
                 }
             };
+            if done && cover.get(&e).copied().unwrap_or(1) > 1 {
+                // another animation still runs here: it restores the node when it ends
+                continue;
+            }
             if done {
                 if let (Some(mut c), Some(v)) = (text, b.text) {
                     c.0 = v;
@@ -198,6 +226,11 @@ pub(super) fn anim(
             }
         }
         if done {
+            for e in subtree(root) {
+                if let Some(n) = cover.get_mut(&e) {
+                    *n -= 1;
+                }
+            }
             if a.kind == Kind::TuneOut {
                 commands.entity(root).despawn();
             } else {

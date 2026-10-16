@@ -5,17 +5,23 @@ const shot = n => `${A}shots/${n}`;
 // The frame stays while pages swap inside #page and #extra (see go() in index.html).
 const MENU_ITEMS = [['01', 'Practice', '練習', 'practice'], ['02', 'Play', 'プレイ', 'play'], ['03', 'Settings', '設定', 'settings'], ['04', 'Voice', '音声', 'voice'], ['05', 'Quit', '終了', '']];
 function menuFrame(page, content, extra = '') {
-  return `<div class="abs scan" style="inset:0"></div>
-  <div class="abs tune" style="left:80px;top:200px;width:560px">${ui.nav(MENU_ITEMS.map(([n, l, j, k]) => [n, l, j, l === page, k]))}</div>
-  <div class="abs jp tune" style="left:92px;bottom:262px;font-size:16px;color:var(--tx2);--i:3">ブートレグ・シックスティーン</div>
-  <div class="abs tune" style="left:88px;bottom:96px;display:flex;align-items:flex-end;gap:10px;--i:4"><span class="display">Bootleg</span><span class="wm16"><span class="display">16</span></span></div>
-  <div class="tune" style="--i:1">${ui.identity(80)}</div>
-  <div id="page" class="abs tune" style="left:720px;right:var(--margin);top:200px;--i:2">${content}</div><div id="extra">${extra}</div>`;
+  // depth: the space and the far 16 sit back, the list and the page float in front (parallax)
+  return `<div class="space" data-tilt="none" data-depth="-0.6"></div><div class="far16" data-tilt="none" data-depth="-3">16</div>
+  <div class="abs scan" style="inset:0"></div>
+  <div class="abs tune" style="left:80px;top:200px;width:560px" data-tilt="y 16" data-hinge="left center" data-depth="0.3">${ui.nav(MENU_ITEMS.map(([n, l, j, k]) => [n, l, j, l === page, k]))}</div>
+  <div class="abs jp tune" style="left:92px;bottom:262px;font-size:16px;color:var(--tx2);--i:3" data-tilt="y 12" data-hinge="left center">ブートレグ・シックスティーン</div>
+  <div class="abs tune" style="left:88px;bottom:96px;display:flex;align-items:flex-end;gap:10px;--i:4" data-tilt="y 12" data-hinge="left center"><span class="display">Bootleg</span><span class="wm16"><span class="display">16</span></span></div>
+  <div class="tune" style="--i:1" data-tilt="none">${ui.identity(80)}</div>
+  <div id="page" class="abs tune plate${content ? '' : ' empty'}" style="left:680px;width:fit-content;min-width:640px;max-width:1180px;top:160px;--i:2" data-tilt="y -10" data-hinge="right center" data-depth="0.2">${content}</div><div id="extra" data-tilt="none">${extra}</div>`;
 }
 
 const SCREENS = {
+  main: {
+    name: 'Main menu', note: 'Straight and calm, no page. Pick an item: its page comes in and the menu swings into 3D. Esc swings it back flat.',
+    menu: 'Main', page: () => '', extra: () => '',
+  },
   practice: {
-    name: 'Main menu', note: 'Practice page open. An invite arrives under your name.',
+    name: 'Practice', note: 'Practice page open. An invite arrives under your name.',
     menu: 'Practice', page: () => `<div style="max-width:560px">
       ${ui.pageTitle('No rounds · infinite ammo · instant respawn', 'Practice', '練習')}
       ${ui.label('Map')}${ui.chips(['de_dust2', 'de_dust', 'de_inferno', 'de_train', 'de_nuke', 'de_mirage', 'cs_office', 'de_aztec'], 'de_dust2')}
@@ -72,7 +78,7 @@ const SCREENS = {
       const party = [['anas_1412', 'Leader · you', '#c9733f', '#3b2418', 'you'], ['kova', 'Ready', '#5b8fd6', '#1b2a44', 'ok'], ['lux', 'Not ready', '#7fbf6a', '#1f3320', '']];
       const slots = party.map((p, i) => `<div class="card tune${p[4] === 'you' ? ' sel' : ''}" style="--i:${i};height:280px;padding:var(--pad);display:flex;flex-direction:column;align-items:center;gap:var(--pad)">
           ${ui.avatar(p[2], p[3], 96)}<div style="text-align:center"><div class="h3" style="text-transform:none">${p[0]}</div><div class="label" style="margin-top:8px;color:${p[4] === 'you' ? 'var(--amber)' : p[4] === 'ok' ? 'var(--ok)' : 'var(--tx2)'}">${p[1]}</div></div></div>`).join('') +
-        [3, 4].map(i => `<div class="tune" style="--i:${i};height:280px;padding:23px;border:1px dashed var(--line-2);display:flex;flex-direction:column;align-items:center;gap:var(--pad)">
+        [3, 4].map(i => `<div class="card invite tune" style="--i:${i};height:280px;padding:23px;border:1px dashed var(--line-2);display:flex;flex-direction:column;align-items:center;gap:var(--pad)">
           <div style="width:96px;height:96px;border:1px dashed var(--line-2);display:grid;place-items:center;font:300 40px var(--f-text);color:var(--tx3)">+</div><span class="label">Invite a friend</span></div>`).join('');
       const fr = [['In game', 'var(--amber)', [['mako', 'In a match · 7:5', '#d4a03f', '#3a2a10', 'Invite']]],
         ['Online', 'var(--ok)', [['kova', 'In your party', '#5b8fd6', '#1b2a44', 'In party'], ['vera', 'Online', '#d66f8f', '#3a1a26', 'Invite'], ['rook', 'Away', '#9b6fd6', '#271a3a', 'Invited', 1]]],
@@ -83,6 +89,7 @@ const SCREENS = {
           <div style="width:112px;display:flex;justify-content:center">${f[4] ? (f[4] === 'Invite' ? ui.chip('Invite', false, '', 'width:112px;justify-content:center;padding:0') : `<span class="label" style="color:var(--tx3)">${f[4]}</span>`) : ''}</div></div>`).join('')).join('');
       return `<div class="abs scan" style="inset:0"></div>
       <div class="phead">${ui.pageTitle('Play · Casual 5v5', 'Party', 'パーティー')}</div>${ui.identity(72, 68)}
+      <div class="abs" style="left:var(--margin);bottom:48px"><span class="chip" data-go="main" style="gap:12px">Back <b class="key" style="margin:0">Esc</b></span></div>
       <div class="abs" style="left:var(--margin);top:200px;width:1200px">
         <div class="label" style="margin-bottom:16px">Your party · 3 of 5 · code KX7-42Q</div>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px">${slots}</div>

@@ -34,7 +34,10 @@ fn side(t: Team) -> &'static str {
     if t == Team::Ct { "Bureau" } else { "Strays" }
 }
 
-fn banner(w: Res<Walker>, mut banner: Query<(&mut Visibility, &Children), With<Banner>>, mut texts: Query<&mut Text>) {
+fn banner(w: Res<Walker>, binds: Res<crate::binds::Binds>, mut banner: Query<(&mut Visibility, &Children), With<Banner>>, mut texts: Query<&mut Text>) {
+    use crate::binds::Action;
+    // the keys as bound, in the player's layout
+    let key = |a: Action| binds.get(a).label(binds.layout);
     let Ok((mut vis, kids)) = banner.single_mut() else { return };
     let round = &w.client.round;
     let me = w.client.team();
@@ -45,12 +48,12 @@ fn banner(w: Res<Walker>, mut banner: Query<(&mut Visibility, &Children), With<B
             Some(v) if v.team == me && v.kick == w.client.id() => Some(format!("Your team is voting to kick you ({:.0}s)", v.left)),
             // your team's other votes have their own panel (`vote`)
             Some(v) if v.team == me => None,
-            None if me != Team::Spectator && round.abandoned[mine] => Some("A teammate abandoned the match · F3 calls a surrender vote".to_string()),
+            None if me != Team::Spectator && round.abandoned[mine] => Some(format!("A teammate abandoned the match · {} calls a surrender vote", key(Action::Surrender))),
             _ => None,
         },
         Stage::Waiting => Some("Waiting for everyone to connect...".to_string()),
         Stage::Knife => Some("KNIFE ROUND · the winners pick their side".to_string()),
-        Stage::SideVote { winners, left } if w.client.team() == winners => Some(format!("You won the knife round: F1 stay · F2 switch sides ({left:.0}s)")),
+        Stage::SideVote { winners, left } if w.client.team() == winners => Some(format!("You won the knife round: {} stay · {} switch sides ({left:.0}s)", key(Action::VoteYes), key(Action::VoteNo))),
         Stage::SideVote { winners, left } => Some(format!("{} are picking sides ({left:.0}s)", side(winners))),
     };
     *vis = if msg.is_some() { Visibility::Inherited } else { Visibility::Hidden };
@@ -62,8 +65,9 @@ fn banner(w: Res<Walker>, mut banner: Query<(&mut Visibility, &Children), With<B
     }
 }
 
-fn vote(mut w: ResMut<Walker>, keys: Res<ButtonInput<KeyCode>>) {
-    let (yes, no) = (keys.just_pressed(KeyCode::F1), keys.just_pressed(KeyCode::F2));
+fn vote(mut w: ResMut<Walker>, keys: Res<ButtonInput<KeyCode>>, mouse: Res<ButtonInput<MouseButton>>, binds: Res<crate::binds::Binds>) {
+    use crate::binds::Action;
+    let (yes, no) = (binds.just(Action::VoteYes, &keys, &mouse), binds.just(Action::VoteNo, &keys, &mouse));
     if matches!(w.client.round.stage, Stage::SideVote { .. }) {
         if yes {
             w.client.side_vote(false);
@@ -74,7 +78,7 @@ fn vote(mut w: ResMut<Walker>, keys: Res<ButtonInput<KeyCode>>) {
         if yes || no {
             w.client.surrender_vote(yes);
         }
-    } else if keys.just_pressed(KeyCode::F3) {
+    } else if binds.just(Action::Surrender, &keys, &mouse) {
         w.client.call_surrender();
     }
 }

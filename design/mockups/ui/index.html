@@ -51,7 +51,7 @@ if (location.search.includes('bare')) document.body.classList.add('bare');
 // ?still: the settled frame, for screenshots (a headless clock never advances).
 if (location.search.includes('still')) document.body.classList.add('still');
 const keys = Object.keys(SCREENS);
-let current = keys.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'practice';
+let current = keys.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main';
 
 tabs.innerHTML = keys.map(k => `<button type="button" data-k="${k}">${SCREENS[k].name}</button>`).join('');
 tabs.onclick = e => { const k = e.target.dataset.k; if (k) go(k); };
@@ -78,6 +78,7 @@ function show(k, opening) {
   decorate(stage);
   speakAll(stage);
   hudLive(stage);
+  curve(stage);
 }
 // Opening re-renders so the menu tunes in again; closing tunes it out.
 toggle.onclick = () => {

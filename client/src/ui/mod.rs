@@ -45,12 +45,17 @@ pub enum UiAction {
     Chattiness(u8),
     SetRelay(bool),
     SetAssistantInRound(bool),
-    /// Settings page section: 0 general, 1 crosshair, 2 AI assistant.
+    /// Wait for a new key for this action (Settings · Keys, Voice).
+    Rebind(crate::binds::Action),
+    ResetBinds,
+    /// Settings page section: 0 general, 1 crosshair, 2 AI assistant, 3 keys.
     SettingsTab(u8),
     CrosshairColor(u8),
     CrosshairSize(u8),
     CrosshairDynamic(bool),
     CrosshairDot(bool),
+    /// HUD curve up or down a step.
+    HudCurve(i8),
     Quit,
     Resume,
     Leave,

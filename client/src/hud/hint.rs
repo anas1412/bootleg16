@@ -30,7 +30,7 @@ fn show(mut commands: Commands, mut hints: MessageReader<Hint>, time: Res<Time>,
             leave(&mut commands, e);
         }
         sounds.write(UiSound::Off);
-        commands.spawn((Shown(now), Anim::tune_in(0.0), DespawnOnExit(AppState::InGame), Node { position_type: PositionType::Absolute, left: px(0), right: px(0), bottom: vh(BOTTOM), justify_content: JustifyContent::Center, ..default() })).with_children(|row| {
+        commands.spawn((Shown(now), Anim::tune_in(0.0), super::Visor, DespawnOnExit(AppState::InGame), Node { position_type: PositionType::Absolute, left: px(0), right: px(0), bottom: vh(BOTTOM), justify_content: JustifyContent::Center, ..default() })).with_children(|row| {
             row.spawn((kit_text(text.clone(), 18.0, TX1, &kit.text), TextShadow { offset: Vec2::splat(1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.9) }));
         });
         return;

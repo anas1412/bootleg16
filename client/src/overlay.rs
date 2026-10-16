@@ -19,11 +19,12 @@ pub enum Overlay {
 #[derive(Component)]
 pub(crate) struct OverlayRoot;
 
-/// Esc toggles the pause menu; M opens team selection (also shown when you join).
+/// Esc toggles the pause menu; the Teams key (M) opens team selection (also shown when you join).
 pub(crate) fn pause_menu(
     mut commands: Commands,
     kit: Res<Kit>,
     keys: Res<ButtonInput<KeyCode>>,
+    (mouse, binds): (Res<ButtonInput<MouseButton>>, Res<crate::binds::Binds>),
     mut overlay: ResMut<Overlay>,
     mut shown: Local<Option<Overlay>>,
     w: Res<Walker>,
@@ -36,7 +37,7 @@ pub(crate) fn pause_menu(
         if keys.just_pressed(KeyCode::Escape) {
             *overlay = if *overlay == Overlay::None { Overlay::Pause } else { Overlay::None };
         }
-        if keys.just_pressed(KeyCode::KeyM) {
+        if binds.just(crate::binds::Action::Teams, &keys, &mouse) {
             *overlay = if *overlay == Overlay::Teams { Overlay::None } else { Overlay::Teams };
         }
         // First time in: pick a side, like CS.

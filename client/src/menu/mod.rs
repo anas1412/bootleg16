@@ -111,17 +111,18 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
     cursor.visible = true;
     let maps = maps_installed();
     // Screenshot runs can open a page directly (BOOTLEG16_MENU_PAGE=practice|join|settings|
-    // crosshair|assistant|voice; the last two are Settings sections).
+    // crosshair|assistant|keys|voice; crosshair, assistant and keys are Settings sections).
     let wanted = std::env::var("BOOTLEG16_MENU_PAGE");
     let settings_tab = match wanted.as_deref() {
         Ok("crosshair") => 1,
         Ok("assistant") => 2,
+        Ok("keys") => 3,
         _ => 0,
     };
     let page = match wanted.as_deref() {
         Ok("practice") => Page::Practice,
         Ok("join") => Page::Join,
-        Ok("settings" | "crosshair" | "assistant") => Page::Settings,
+        Ok("settings" | "crosshair" | "assistant" | "keys") => Page::Settings,
         Ok("voice") => Page::Voice,
         _ => Page::Main,
     };
@@ -178,6 +179,7 @@ fn menu_actions(
     keys: Res<ButtonInput<KeyCode>>,
     (mut voice, devices): (ResMut<crate::voice::VoiceSettings>, Res<crate::voice::Devices>),
     (mut lobby, steam): (ResMut<crate::play::Lobby>, Option<Res<crate::steam::Steam>>),
+    mut binds: ResMut<crate::binds::Binds>,
 ) {
     let ready = lobby.shown.as_ref().and_then(|s| s.ready);
     if keys.just_pressed(KeyCode::Enter) && ready.is_some_and(|r| !r.you) {
@@ -264,7 +266,12 @@ fn menu_actions(
                 settings.assistant_in_round = v;
                 settings.save();
             }
-            UiAction::SettingsTab(t) => st.settings_tab = t.min(2),
+            UiAction::SettingsTab(t) => st.settings_tab = t.min(3),
+            UiAction::Rebind(a) => binds.capture = if binds.capture == Some(a) { None } else { Some(a) },
+            UiAction::ResetBinds => {
+                *binds = crate::binds::Binds::default();
+                binds.save();
+            }
             UiAction::CrosshairColor(c) => {
                 settings.crosshair_color = c.min(crate::hud::CROSSHAIR_COLORS.len() as u8 - 1);
                 settings.save();
@@ -275,6 +282,10 @@ fn menu_actions(
             }
             UiAction::CrosshairDynamic(v) => {
                 settings.crosshair_dynamic = v;
+                settings.save();
+            }
+            UiAction::HudCurve(d) => {
+                settings.hud_curve = (settings.hud_curve as i16 + d as i16 * 20).clamp(0, 100) as u8;
                 settings.save();
             }
             UiAction::CrosshairDot(v) => {

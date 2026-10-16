@@ -25,6 +25,7 @@ pub fn rebuild_menu(
     mut dirty: ResMut<MenuDirty>,
     mut memory: ResMut<UiMemory>,
     faces: Res<crate::assistant::view::Faces>,
+    binds: Res<crate::binds::Binds>,
     frames: Query<Entity, With<MenuRoot>>,
     pages: Query<Entity, With<MenuPage>>,
 ) {
@@ -126,7 +127,7 @@ pub fn rebuild_menu(
     page.with_children(|page| match st.page {
         Page::Main | Page::Join => {}
         Page::Practice => practice(page, &kit, &mut memory, st, &lobby),
-        Page::Settings => settings_page(page, &kit, &faces, &mut memory, &settings, steam, st.settings_tab, tune_page.then_some(delay)),
+        Page::Settings => settings_page(page, &kit, &faces, &mut memory, &settings, steam, &binds, st.settings_tab, tune_page.then_some(delay)),
         Page::Voice => crate::voice::page(page, &kit, &mut memory, &voice, tune_page.then_some(delay)),
     });
 }
@@ -174,17 +175,51 @@ pub(crate) fn rows(page: &mut ChildSpawnerCommands, tune: Option<f32>, build: im
     });
 }
 
-/// Settings, in three sections picked by chips under the title; a new section's rows tune in.
+/// The chip that shows an action's key and rebinds it when clicked (Keys, Voice).
+pub(crate) fn key_chip(r: &mut ChildSpawnerCommands, kit: &Kit, binds: &crate::binds::Binds, a: crate::binds::Action) {
+    let waiting = binds.capture == Some(a);
+    let label = if waiting { "Press a key".to_string() } else { binds.get(a).label(binds.layout) };
+    crate::ui::key_chip(r, kit, &label, UiAction::Rebind(a), waiting);
+}
+
+/// Every binding in three columns (move, weapons, game and voice): click a key, press the new
+/// one (Esc cancels); a key already used swaps over.
+fn keys_section(page: &mut ChildSpawnerCommands, kit: &Kit, binds: &crate::binds::Binds, tune: Option<f32>) {
+    let mut cols = page.spawn(Node { margin: UiRect::top(vh(24.0)), column_gap: vh(48.0), ..default() });
+    if let Some(d) = tune {
+        cols.insert(Anim::tune_in(d + crate::ui::STAGGER));
+    }
+    cols.with_children(|cols| {
+        for (title, from, to) in crate::binds::GROUPS {
+            cols.spawn(Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, flex_basis: px(0), ..default() }).with_children(|col| {
+                col.spawn((kit_text(title.to_uppercase(), 13.0, TX2, &kit.text), Node { margin: UiRect::bottom(vh(8.0)), ..default() }));
+                for (a, _, label, _) in &crate::binds::ACTIONS[from..to] {
+                    col.spawn((Node { height: vh(52.0), align_items: AlignItems::Center, justify_content: JustifyContent::SpaceBetween, border: UiRect::top(px(1)), ..default() }, BorderColor::all(crate::ui::LINE))).with_children(|r| {
+                        r.spawn(kit_text(label.to_uppercase(), 16.0, TX1, &kit.text));
+                        key_chip(r, kit, binds, *a);
+                    });
+                }
+            });
+        }
+    });
+    page.spawn(Node { margin: UiRect::top(vh(24.0)), column_gap: vh(16.0), align_items: AlignItems::Center, ..default() }).with_children(|r| {
+        crate::ui::chip(r, kit, "Reset to defaults", UiAction::ResetBinds, false);
+        r.spawn(kit_text(if binds.capture.is_some() { "PRESS A KEY OR MOUSE BUTTON · ESC CANCELS" } else { "CLICK A KEY TO CHANGE IT" }, 13.0, TX3, &kit.text));
+    });
+}
+
+/// Settings, in four sections picked by chips under the title; a new section's rows tune in.
 #[allow(clippy::too_many_arguments)]
-fn settings_page(page: &mut ChildSpawnerCommands, kit: &Kit, faces: &crate::assistant::view::Faces, memory: &mut UiMemory, s: &Settings, steam: Option<&crate::steam::Steam>, tab: u8, tune: Option<f32>) {
+fn settings_page(page: &mut ChildSpawnerCommands, kit: &Kit, faces: &crate::assistant::view::Faces, memory: &mut UiMemory, s: &Settings, steam: Option<&crate::steam::Steam>, binds: &crate::binds::Binds, tab: u8, tune: Option<f32>) {
     page_title(page, kit, "Saved as you change them", "Settings", "設定");
     // straight on the page (a wrapper would shrink the group and wrap it)
     page.spawn(Node { height: vh(24.0), ..default() });
-    chips(page, kit, "set.tab", ["General", "Crosshair", "AI assistant"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::SettingsTab(i as u8), tab == i as u8)).collect());
+    chips(page, kit, "set.tab", ["General", "Crosshair", "AI assistant", "Keys"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::SettingsTab(i as u8), tab == i as u8)).collect());
     let tune = if memory.changed("set.tab.shown", &tab.to_string()) { Some(0.0) } else { tune };
     let on_off = |key: &str, on: bool, a: fn(bool) -> UiAction| (key.to_string(), on, a);
     let toggle = |rows: &mut ChildSpawnerCommands, name: &str, (key, on, a): (String, bool, fn(bool) -> UiAction)| setting_row(rows, kit, name, |r| chips(r, kit, &key, vec![Choice::new("On", a(true), on), Choice::new("Off", a(false), !on)]));
     match tab {
+        3 => keys_section(page, kit, binds, tune),
         1 => {
             rows(page, tune, |rows| {
                 vec![
@@ -196,6 +231,8 @@ fn settings_page(page: &mut ChildSpawnerCommands, kit: &Kit, faces: &crate::assi
                     }),
                     toggle(rows, "Opens with spread", on_off("set.xdyn", s.crosshair_dynamic, UiAction::CrosshairDynamic)),
                     toggle(rows, "Centre dot", on_off("set.xdot", s.crosshair_dot, UiAction::CrosshairDot)),
+                    // the HUD bends like a visor (hud::visor); 0 is flat
+                    setting_row(rows, kit, "HUD curve", |r| stepper(r, kit, memory, "set.curve", &if s.hud_curve == 0 { "Flat".to_string() } else { format!("{}%", s.hud_curve) }, UiAction::HudCurve(-1), UiAction::HudCurve(1))),
                 ]
             });
             // what it looks like, on a wall

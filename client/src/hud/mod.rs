@@ -7,10 +7,12 @@ mod crosshair;
 mod hint;
 mod icons;
 mod motion;
+mod visor;
 
 pub use crate::ui::SAFE;
 pub use crosshair::{draw as draw_crosshair, CROSSHAIR_COLORS, STATIC_GAP};
 pub use hint::Hint;
+pub use visor::Visor;
 pub use icons::{gun_art, weapon_icon, Icons};
 
 use crate::game::{Frame, Walker};
@@ -31,6 +33,7 @@ impl Plugin for HudPlugin {
             .add_systems(Update, (status, crosshair::crosshair, net_stats).in_set(Frame::Ui));
         motion::plugin(app);
         hint::plugin(app);
+        visor::plugin(app);
     }
 }
 
@@ -101,7 +104,7 @@ fn spawn(mut commands: Commands, kit: Res<Kit>, icons: Res<Icons>) {
     let section = || Node { padding: UiRect::axes(vh(24.0), vh(16.0)), align_items: AlignItems::Center, column_gap: vh(16.0), ..default() };
 
     // Bottom left: health | armor.
-    commands.spawn((game.clone(), AliveOnly, VitalsPanel, Sway, hud_panel(pos(Node { left: vh(SAFE), bottom: vh(SAFE), ..default() })))).with_children(|p| {
+    commands.spawn((game.clone(), AliveOnly, VitalsPanel, Sway, Visor, hud_panel(pos(Node { left: vh(SAFE), bottom: vh(SAFE), ..default() })))).with_children(|p| {
         p.spawn((VitalsEdge, edge(EdgeColor::Team, EDGE_REST)));
         // a red wash when you're hit, fading out
         p.spawn((VitalsWash, Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), border_radius: BorderRadius::all(vh(crate::ui::RADIUS)), ..default() }, BackgroundColor(Color::NONE)));
@@ -126,7 +129,7 @@ fn spawn(mut commands: Commands, kit: Res<Kit>, icons: Res<Icons>) {
 
     // Bottom right: weapon | ammo, grenades above.
     commands
-        .spawn((game.clone(), AliveOnly, Sway, pos(Node { right: vh(SAFE), bottom: vh(SAFE), flex_direction: FlexDirection::Column, align_items: AlignItems::FlexEnd, row_gap: vh(8.0), ..default() })))
+        .spawn((game.clone(), AliveOnly, Sway, Visor, pos(Node { right: vh(SAFE), bottom: vh(SAFE), flex_direction: FlexDirection::Column, align_items: AlignItems::FlexEnd, row_gap: vh(8.0), ..default() })))
         .with_children(|col| {
             col.spawn((Field::Grenades, kit_text("", 16.0, TX2, &kit.text), shadowed()));
             col.spawn(hud_panel(Node::default())).with_children(|p| {

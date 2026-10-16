@@ -17,6 +17,7 @@
 //! `BOOTLEG16_FOUND=1` shows a match found and the Reconnect card on the menu.
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead);
 //! `BOOTLEG16_SPECTATE=front` watches them from the front.
+mod binds;
 mod bomb;
 mod assistant;
 mod buy;
@@ -98,7 +99,7 @@ fn main() {
             round_hud::RoundHudPlugin,
             bomb::BombPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin),
+            (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
         .add_systems(Update, screenshot)
         .run();

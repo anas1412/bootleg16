@@ -1,4 +1,4 @@
-//! Voice chat: two push-to-talk keys. Team voice reaches your team anywhere; proximity voice
+//! Voice chat: two push-to-talk keys (bound in `binds`). Team voice reaches your team anywhere; proximity voice
 //! reaches everyone alive near you (enemies too), fading with distance and panned to where
 //! you are. Opus over the game's UDP connection; the server relays (net/src/server/voice.rs).
 mod audio;
@@ -7,6 +7,7 @@ mod rows;
 
 pub use page::{apply, page, VoiceAction};
 
+use crate::binds::{Action, Binds};
 use crate::game::{FlyCam, Frame, Walker};
 use rows::Talking;
 use crate::menu::{overlay_open, AppState, Overlay};
@@ -24,53 +25,22 @@ impl Plugin for VoicePlugin {
             .init_resource::<MicLevel>()
             .add_systems(Startup, open_audio)
             .add_systems(OnEnter(AppState::InGame), rows::spawn)
-            .add_systems(Update, (page::rebind, page::mic_test).run_if(in_state(AppState::Menu)))
+            .add_systems(Update, page::mic_test.run_if(in_state(AppState::Menu)))
             .add_systems(Update, (talk, listen).chain().in_set(Frame::Sound))
             .add_systems(Update, rows::rows.in_set(Frame::Ui));
     }
 }
 
-/// A push-to-talk binding: a key or a mouse button, saved by name ("KeyK", "MouseBack").
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Bind {
-    Key(KeyCode),
-    Mouse(MouseButton),
-}
-
-/// Keys that can be bound (by their saved names).
-const KEYS: [KeyCode; 62] = {
-    use KeyCode::*;
-    [
-        KeyA, KeyB, KeyC, KeyD, KeyE, KeyF, KeyG, KeyH, KeyI, KeyJ, KeyK, KeyL, KeyM, KeyN, KeyO, KeyP, KeyQ, KeyR, KeyS, KeyT, KeyU, KeyV, KeyW, KeyX, KeyY, KeyZ, Digit0, Digit1,
-        Digit2, Digit3, Digit4, Digit5, Digit6, Digit7, Digit8, Digit9, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, Space, Tab, CapsLock, ShiftLeft, ShiftRight,
-        ControlLeft, ControlRight, AltLeft, AltRight, Backquote, Comma, Period, Slash, Semicolon,
-    ]
-};
-const MICE: [MouseButton; 4] = [MouseButton::Middle, MouseButton::Back, MouseButton::Forward, MouseButton::Right];
-
-impl Bind {
-    fn name(self) -> String {
-        match self {
-            Bind::Key(k) => format!("{k:?}"),
-            Bind::Mouse(m) => format!("Mouse{m:?}"),
-        }
-    }
-
-    fn parse(s: &str) -> Option<Bind> {
-        KEYS.iter().find(|k| format!("{k:?}") == s).map(|k| Bind::Key(*k)).or_else(|| MICE.iter().find(|m| format!("Mouse{m:?}") == s).map(|m| Bind::Mouse(*m)))
-    }
-
-    /// As shown to the player: "K", "5", "Mouse Back".
-    fn label(self) -> String {
-        let n = self.name();
-        n.strip_prefix("Key").or_else(|| n.strip_prefix("Digit")).map(str::to_string).unwrap_or_else(|| n.replace("Mouse", "Mouse "))
-    }
-
-    fn held(self, keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> bool {
-        match self {
-            Bind::Key(k) => keys.pressed(k),
-            Bind::Mouse(m) => mouse.pressed(m),
-        }
+/// Which channel you're talking on: a push-to-talk key held (`binds`), voice on, no menu open.
+pub(super) fn pushed(s: &VoiceSettings, binds: &Binds, keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>, overlay: Option<Res<Overlay>>) -> Option<VoiceChannel> {
+    if !s.on || overlay_open(overlay) {
+        None
+    } else if binds.held(Action::TeamVoice, keys, mouse) {
+        Some(VoiceChannel::Team)
+    } else if binds.held(Action::NearVoice, keys, mouse) {
+        Some(VoiceChannel::Proximity)
+    } else {
+        None
     }
 }
 
@@ -78,21 +48,16 @@ impl Bind {
 #[derive(Resource, Clone)]
 pub struct VoiceSettings {
     pub on: bool,
-    pub team_key: Bind,
-    pub near_key: Bind,
     /// Microphone by name ("" = system default).
     pub mic: String,
     pub mic_volume: f32,
     /// Everyone else's voice.
     pub volume: f32,
-    /// Waiting for a key to bind (on the voice settings page).
-    pub capture: Option<VoiceChannel>,
 }
 
 impl Default for VoiceSettings {
     fn default() -> Self {
-        // K is CS's voice key; X sits next to the movement keys.
-        VoiceSettings { on: true, team_key: Bind::Key(KeyCode::KeyK), near_key: Bind::Key(KeyCode::KeyX), mic: String::new(), mic_volume: 1.0, volume: 1.0, capture: None }
+        VoiceSettings { on: true, mic: String::new(), mic_volume: 1.0, volume: 1.0 }
     }
 }
 
@@ -108,8 +73,6 @@ impl VoiceSettings {
             let v = v.trim();
             match k.trim() {
                 "on" => s.on = v == "true",
-                "team_key" => s.team_key = Bind::parse(v).unwrap_or(s.team_key),
-                "near_key" => s.near_key = Bind::parse(v).unwrap_or(s.near_key),
                 "mic" => s.mic = v.to_string(),
                 "mic_volume" => s.mic_volume = v.parse().unwrap_or(s.mic_volume),
                 "volume" => s.volume = v.parse().unwrap_or(s.volume),
@@ -123,10 +86,8 @@ impl VoiceSettings {
         let p = path();
         let _ = std::fs::create_dir_all(p.parent().unwrap());
         let text = format!(
-            "on={}\nteam_key={}\nnear_key={}\nmic={}\nmic_volume={}\nvolume={}\n",
+            "on={}\nmic={}\nmic_volume={}\nvolume={}\n",
             self.on,
-            self.team_key.name(),
-            self.near_key.name(),
             self.mic,
             self.mic_volume,
             self.volume
@@ -203,6 +164,7 @@ impl Audio {
 fn talk(
     mut audio: NonSendMut<Audio>,
     settings: Res<VoiceSettings>,
+    binds: Res<Binds>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     overlay: Option<Res<Overlay>>,
@@ -212,15 +174,7 @@ fn talk(
 ) {
     audio.follow(&settings);
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
-    let channel = if !settings.on || auto || overlay_open(overlay) {
-        None
-    } else if settings.team_key.held(&keys, &mouse) {
-        Some(VoiceChannel::Team)
-    } else if settings.near_key.held(&keys, &mouse) {
-        Some(VoiceChannel::Proximity)
-    } else {
-        None
-    };
+    let channel = if auto { None } else { pushed(&settings, &binds, &keys, &mouse, overlay) };
     *me_talking = channel;
     if let Some(mic) = &mut audio.mic {
         mic.set_running(channel.is_some());
@@ -300,12 +254,4 @@ mod tests {
         assert!((energy.1 / energy.0 - 1.0).abs() < 0.3, "{energy:?}");
     }
 
-    #[test]
-    fn binds_save_and_load_by_name() {
-        for b in [Bind::Key(KeyCode::KeyK), Bind::Key(KeyCode::F5), Bind::Mouse(MouseButton::Back)] {
-            assert_eq!(Bind::parse(&b.name()), Some(b));
-        }
-        assert_eq!(Bind::Key(KeyCode::KeyX).label(), "X");
-        assert_eq!(Bind::Mouse(MouseButton::Forward).label(), "Mouse Forward");
-    }
 }

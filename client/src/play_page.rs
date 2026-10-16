@@ -1,7 +1,7 @@
 //! Drawing the Play screen (design/mockups/ui, Play): your party's slots, mode and the main
 //! button on the left, Steam friends on the right, the identity card top right, and the invite
 //! toast (over any menu page). Specs are at 1080p.
-use crate::menu::{MenuState, Settings};
+use crate::menu::{MenuState, Page, Settings};
 use crate::play::{Lobby, LobbyAction};
 use crate::steam::{Presence, Steam};
 use crate::ui::{card, chip, chip_w, chips, kit_text, page_title, primary_button, vh, Choice, Kit, UiAction, AMBER, BAR, BG1, BG2, BG3, CT_COLOR, LINE, LINE_2, OK, TX1, TX2, TX3, T_COLOR};
@@ -102,7 +102,8 @@ pub fn screen(root: &mut ChildSpawnerCommands, kit: &Kit, st: &MenuState, lobby:
     });
     identity(root, kit, settings, steam, 72.0);
     root.spawn((abs(Node { left: vh(96.0), right: vh(96.0), top: vh(160.0), height: px(1), ..default() }), BackgroundColor(LINE)));
-    root.spawn(abs(Node { left: vh(96.0), bottom: vh(48.0), ..default() })).with_children(|b| label(b, kit, "Esc · back", TX3));
+    // back to the main menu (Esc does the same)
+    root.spawn(abs(Node { left: vh(96.0), bottom: vh(48.0), ..default() })).with_children(|b| chip(b, kit, "Back · Esc", UiAction::Page(Page::Main), false));
     friends(root, kit, lobby, steam);
 
     // Left column: party, mode, the big button, joining by code.

@@ -136,6 +136,12 @@ pub fn chip_w(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str, action: UiAc
     p.commands().entity(id).entry::<Node>().and_modify(move |mut n| n.width = vh(width));
 }
 
+/// A key binding: a fixed-width chip with the key; amber while it waits for a new one.
+pub fn key_chip(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str, action: UiAction, waiting: bool) {
+    let id = chip_node(p, kit, label, action, waiting, true, |_| {});
+    p.commands().entity(id).entry::<Node>().and_modify(|mut n| n.width = vh(136.0));
+}
+
 /// A choice in a group; `lead` draws something before the label (an assistant portrait).
 pub struct Choice<'a> {
     pub label: &'a str,
@@ -201,7 +207,7 @@ pub fn stepper(p: &mut ChildSpawnerCommands, kit: &Kit, memory: &mut UiMemory, k
 pub fn setting_row(p: &mut ChildSpawnerCommands, kit: &Kit, name: &str, controls: impl FnOnce(&mut ChildSpawnerCommands)) -> Entity {
     p.spawn((Node { min_height: vh(60.0), align_items: AlignItems::Center, padding: UiRect::vertical(vh(GAP_S)), border: UiRect::top(px(1)), ..default() }, BorderColor::all(LINE))).with_children(|r| {
         r.spawn((kit_text(name.to_uppercase(), 22.0, TX1, &kit.text), Node { width: vh(360.0), flex_shrink: 0.0, ..default() }));
-        r.spawn(Node { flex_grow: 1.0, align_items: AlignItems::Center, column_gap: vh(GAP_S), ..default() }).with_children(controls);
+        r.spawn(Node { align_items: AlignItems::Center, column_gap: vh(GAP_S), ..default() }).with_children(controls);
     })
     .id()
 }

@@ -26,6 +26,20 @@
   --radius: 6px; --radius-s: 4px;
   --bar: 4px;
 
+  /* depth: light from above, three heights (panels.rs `lift`). A lit surface is a touch lighter
+     at the top with a hairline highlight on its top edge; the higher it sits, the softer and
+     farther its shadow. */
+  --lit: linear-gradient(180deg, rgba(234, 242, 248, .045), rgba(234, 242, 248, 0) 45%, rgba(0, 0, 0, .14));
+  --hi: inset 0 1px 0 rgba(234, 242, 248, .07);
+  /* each height: the slab's own edge (solid, a few px under it, reads on any background), then
+     its soft shadow */
+  --e1: 0 3px 0 rgba(3, 4, 6, .55), 0 6px 10px rgba(0, 0, 0, .25), 0 14px 30px rgba(0, 0, 0, .3);
+  --e2: 0 5px 0 rgba(3, 4, 6, .6), 0 10px 16px rgba(0, 0, 0, .3), 0 24px 52px rgba(0, 0, 0, .42);
+  --e3: 0 7px 0 rgba(3, 4, 6, .65), 0 14px 24px rgba(0, 0, 0, .35), 0 36px 90px rgba(0, 0, 0, .58);
+  /* text stands off its surface by a pixel or two */
+  --lift-text: 0 2px 0 rgba(3, 4, 6, .45);
+  --t-lift: 200ms;
+
   /* type */
   --f-display: 'Big Shoulders Display', 'Noto Sans JP', Impact, sans-serif;
   --f-text: 'Chakra Petch', 'Noto Sans JP', system-ui, sans-serif;
@@ -44,12 +58,12 @@
 }
 
 /* the type scale (tokens.rs `Type`) */
-.display { font: 800 150px/.8 var(--f-display); text-transform: uppercase; }
-.h2 { font: 800 52px/.95 var(--f-display); letter-spacing: .01em; text-transform: uppercase; }
+.display { font: 800 150px/.8 var(--f-display); text-transform: uppercase; text-shadow: 0 6px 0 rgba(3, 4, 6, .5), 0 18px 40px rgba(0, 0, 0, .45); }
+.h2 { font: 800 52px/.95 var(--f-display); letter-spacing: .01em; text-transform: uppercase; text-shadow: 0 3px 0 rgba(3, 4, 6, .5); }
 .h3 { font: 600 28px/1.1 var(--f-text); letter-spacing: .02em; text-transform: uppercase; }
 .body { font: 600 18px/1.35 var(--f-text); }
 .label { font: 600 13px/1.5 var(--f-text); letter-spacing: .18em; text-transform: uppercase; color: var(--tx2); }
 .jp { font: 700 13px/1 var(--f-jp); letter-spacing: .2em; color: var(--tx3); }
-.num-l { font: 700 56px/.9 var(--f-num); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.num-m { font: 700 32px/1 var(--f-num); font-variant-numeric: tabular-nums; }
+.num-l { font: 700 56px/.9 var(--f-num); letter-spacing: -.03em; font-variant-numeric: tabular-nums; text-shadow: var(--lift-text); }
+.num-m { font: 700 32px/1 var(--f-num); font-variant-numeric: tabular-nums; text-shadow: var(--lift-text); }
 .num-s { font: 700 18px/1 var(--f-num); font-variant-numeric: tabular-nums; }

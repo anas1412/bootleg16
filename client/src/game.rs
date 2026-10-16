@@ -1,5 +1,6 @@
 //! Playing: the connection (`Walker`), keyboard and mouse into sim inputs, and the camera.
 //! Also defines the order the other in-game plugins run in each frame (`Frame`).
+use crate::binds::{Action, Bind, Binds};
 use crate::buy::BuyMenu;
 use crate::level::Spawns;
 use crate::menu::{overlay_open, AppState, GameConfig, MenuError, Overlay, PendingClient, Settings};
@@ -172,11 +173,12 @@ fn mouse_look(
     }
 }
 
-/// One simulation tick from the keyboard and mouse. WASD move, Space jump, Ctrl crouch,
-/// Shift walk, E use, mouse fire, R reload, 1-5 weapon slots.
+/// One simulation tick from the keyboard and mouse, through the player's bindings (`binds`;
+/// CS's defaults: WASD, Space, Ctrl, Shift, E, mouse, R, G, Q, 1-5).
 #[allow(clippy::too_many_arguments)]
 fn walk(
     mut vm: ResMut<viewmodel::ViewModel>,
+    binds: Res<Binds>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     wheel: Res<AccumulatedMouseScroll>,
@@ -192,10 +194,11 @@ fn walk(
     // so do menus over the game.
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
     let keys = if auto || overlay_open(overlay) { &ButtonInput::<KeyCode>::default() } else { &*keys };
-    let slot_keys = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5];
+    let slot_keys = [Action::Primary, Action::Secondary, Action::Knife, Action::Grenade, Action::Bomb];
+    let on = |a: Action| binds.held(a, keys, &mouse);
     // While the buy menu is open, number keys belong to the menu.
-    let mut slot = if buy.is_open() { 0 } else { slot_keys.iter().position(|k| keys.pressed(*k)).map(|i| i as u8 + 1).unwrap_or(0) };
-    if keys.pressed(KeyCode::KeyQ) {
+    let mut slot = if buy.is_open() { 0 } else { slot_keys.iter().position(|a| on(*a)).map(|i| i as u8 + 1).unwrap_or(0) };
+    if on(Action::LastWeapon) {
         slot = sim::pmove::SLOT_LAST;
     }
     // Mouse wheel: up = previous weapon, down = next (CS invprev / invnext).
@@ -209,23 +212,24 @@ fn walk(
         slot = if w.wheel > 0.0 { sim::pmove::SLOT_PREV } else { sim::pmove::SLOT_NEXT };
         w.wheel = 0.0;
     }
-    let drop = keys.pressed(KeyCode::KeyG) && !w.drop_held;
-    w.drop_held = keys.pressed(KeyCode::KeyG);
-    let axis = |pos: KeyCode, neg: KeyCode| 400.0 * (keys.pressed(pos) as i32 - keys.pressed(neg) as i32) as f32;
+    let drop = on(Action::Drop) && !w.drop_held;
+    w.drop_held = on(Action::Drop);
+    let axis = |pos: Action, neg: Action| 400.0 * (on(pos) as i32 - on(neg) as i32) as f32;
     let input = sim::pmove::Input {
-        forward: axis(KeyCode::KeyW, KeyCode::KeyS),
-        side: axis(KeyCode::KeyD, KeyCode::KeyA),
+        forward: axis(Action::Forward, Action::Back),
+        side: axis(Action::Right, Action::Left),
         // Bevy yaw 0 looks down -Z, which is GoldSrc yaw 90.
         yaw: cam.yaw.to_degrees() + 90.0,
         // Bevy pitch is positive looking up; GoldSrc is positive looking down.
         pitch: -cam.pitch.to_degrees(),
-        jump: keys.pressed(KeyCode::Space),
-        crouch: keys.pressed(KeyCode::ControlLeft),
-        walk: keys.pressed(KeyCode::ShiftLeft),
-        use_key: keys.pressed(KeyCode::KeyE),
-        attack: captured && mouse.pressed(MouseButton::Left),
-        attack2: captured && mouse.pressed(MouseButton::Right),
-        reload: keys.pressed(KeyCode::KeyR),
+        jump: on(Action::Jump),
+        crouch: on(Action::Crouch),
+        walk: on(Action::Walk),
+        use_key: on(Action::Use),
+        // mouse buttons only while the mouse is captured; keys count either way
+        attack: on(Action::Fire) && (captured || matches!(binds.get(Action::Fire), Bind::Key(_))),
+        attack2: on(Action::AltFire) && (captured || matches!(binds.get(Action::AltFire), Bind::Key(_))),
+        reload: on(Action::Reload),
         slot,
         drop,
     };
@@ -267,7 +271,8 @@ fn move_camera(
     watch: Res<crate::spectate::Watch>,
     mut tf: Single<&mut Transform, With<FlyCam>>,
 ) {
-    if keys.just_pressed(KeyCode::KeyV) {
+    // free flight, for looking around maps in practice (V is team voice)
+    if keys.just_pressed(KeyCode::KeyN) && w.client.practice {
         w.noclip = !w.noclip;
     }
     // Dead, spectating (or forced with BOOTLEG16_SPECTATE): watch a living teammate only. With

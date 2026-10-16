@@ -25,10 +25,10 @@ pub(super) struct BarMeter;
 pub(super) struct BarLabel;
 
 pub(super) fn spawn(mut commands: Commands, kit: Res<Kit>) {
-    commands.spawn((NewsRoot, DespawnOnExit(AppState::InGame), abs(Node { width: percent(100), top: percent(26), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, ..default() })));
+    commands.spawn((NewsRoot, crate::hud::Visor, DespawnOnExit(AppState::InGame), abs(Node { width: percent(100), top: percent(26), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, ..default() })));
     // Plant / defuse progress, low middle.
     commands
-        .spawn((Bar, DespawnOnExit(AppState::InGame), Visibility::Hidden, abs(Node { width: percent(100), bottom: percent(24), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, ..default() })))
+        .spawn((Bar, crate::hud::Visor, DespawnOnExit(AppState::InGame), Visibility::Hidden, abs(Node { width: percent(100), bottom: percent(24), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, ..default() })))
         .with_children(|col| {
             col.spawn((BarLabel, kit_text("", 16.0, TX1, &kit.text), shadow()));
             let m = meter(col, 320.0, TX1, 0.0);

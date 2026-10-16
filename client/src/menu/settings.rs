@@ -28,11 +28,13 @@ pub struct Settings {
     pub crosshair_size: u8,
     pub crosshair_dynamic: bool,
     pub crosshair_dot: bool,
+    /// How much the HUD bends like a visor (0 flat .. 100), `hud::visor`.
+    pub hud_curve: u8,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false }
+        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60 }
     }
 }
 
@@ -60,6 +62,7 @@ impl Settings {
                     Some(("crosshair_size", v)) => s.crosshair_size = v.trim().parse::<u8>().unwrap_or(1).min(2),
                     Some(("crosshair_dynamic", v)) => s.crosshair_dynamic = v.trim() == "true",
                     Some(("crosshair_dot", v)) => s.crosshair_dot = v.trim() == "true",
+                    Some(("hud_curve", v)) => s.hud_curve = v.trim().parse::<u8>().unwrap_or(60).min(100),
                     _ => {}
                 }
             }
@@ -73,8 +76,8 @@ impl Settings {
         let _ = std::fs::write(
             p,
             format!(
-                "name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nteam_ids={}\nassistant={}\nchattiness={}\nrelay={}\nassistant_in_round={}\ncrosshair_color={}\ncrosshair_size={}\ncrosshair_dynamic={}\ncrosshair_dot={}\n",
-                self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.team_ids, self.assistant, self.chattiness, self.relay, self.assistant_in_round, self.crosshair_color, self.crosshair_size, self.crosshair_dynamic, self.crosshair_dot
+                "name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nteam_ids={}\nassistant={}\nchattiness={}\nrelay={}\nassistant_in_round={}\ncrosshair_color={}\ncrosshair_size={}\ncrosshair_dynamic={}\ncrosshair_dot={}\nhud_curve={}\n",
+                self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.team_ids, self.assistant, self.chattiness, self.relay, self.assistant_in_round, self.crosshair_color, self.crosshair_size, self.crosshair_dynamic, self.crosshair_dot, self.hud_curve
             ),
         );
     }

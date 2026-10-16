@@ -4,7 +4,7 @@
 //! Rows tune in when someone starts and tune out a moment after they stop.
 use super::{MicLevel, VoiceSettings};
 use crate::game::Walker;
-use crate::menu::{overlay_open, AppState, Overlay};
+use crate::menu::{AppState, Overlay};
 use crate::ui::{feed_row, kit_text, vh, Anim, HudLayer, Kit, Outer, AMBER, CT_COLOR, TX1, TX2, T_COLOR};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
@@ -78,6 +78,7 @@ pub(super) fn rows(
     mut commands: Commands,
     w: Res<Walker>,
     settings: Res<VoiceSettings>,
+    binds: Res<crate::binds::Binds>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     overlay: Option<Res<Overlay>>,
@@ -95,15 +96,7 @@ pub(super) fn rows(
     let info = |id: u8| w.client.scores.iter().find(|s| s.id == id).map(|s| (s.name.clone(), s.team));
     // (who, name, colour, channel, level)
     let mut want: Vec<(Option<u8>, String, Color, VoiceChannel, f32)> = Vec::new();
-    let mine = if !settings.on || overlay_open(overlay) {
-        None
-    } else if settings.team_key.held(&keys, &mouse) {
-        Some(VoiceChannel::Team)
-    } else if settings.near_key.held(&keys, &mouse) {
-        Some(VoiceChannel::Proximity)
-    } else {
-        None
-    };
+    let mine = super::pushed(&settings, &binds, &keys, &mouse, overlay);
     // screenshot runs: BOOTLEG16_VOICE shows you and a teammate talking
     let fake = std::env::var_os("BOOTLEG16_VOICE").is_some();
     let mine = if fake { Some(VoiceChannel::Team) } else { mine };

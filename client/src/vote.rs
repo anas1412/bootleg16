@@ -2,7 +2,7 @@
 //! (surrender, or kicking a teammate), one segment per teammate (yes fills green from the left,
 //! no red from the right), a mark at what it takes, the time left and the F1 / F2 keys.
 //! It tunes in when the vote starts, segments burst as votes come in, and it tunes out when
-//! the vote ends. The keys themselves are `match_flow::vote`.
+//! the vote ends. The keys are the player's bindings (`binds`); `match_flow::vote` reads them.
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
 use crate::ui::{hud_panel, kit_text, t, vh, Anim, Kit, Type, AMBER, BAD, LINE_2, LINE_3, OK, TX1, TX2};
@@ -36,7 +36,7 @@ struct Drawn {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn show(mut commands: Commands, w: Res<Walker>, kit: Res<Kit>, roots: Query<Entity, With<VoteRoot>>, mut left: Query<&mut Text, With<Left>>, mut drawn: Local<Option<Drawn>>) {
+fn show(mut commands: Commands, w: Res<Walker>, kit: Res<Kit>, binds: Res<crate::binds::Binds>, roots: Query<Entity, With<VoteRoot>>, mut left: Query<&mut Text, With<Left>>, mut drawn: Local<Option<Drawn>>) {
     let me = w.client.team();
     // yours to answer: your team's, and not about you (the banner tells you that one)
     let vote: Option<VoteNet> = w.client.round.vote.filter(|v| v.team == me && v.kick != w.client.id());
@@ -93,13 +93,13 @@ fn show(mut commands: Commands, w: Res<Walker>, kit: Res<Kit>, roots: Query<Enti
             });
             p.spawn(Node { justify_content: JustifyContent::SpaceBetween, align_items: AlignItems::Center, margin: UiRect::top(vh(10.0)), ..default() }).with_children(|k| {
                 k.spawn(Node { align_items: AlignItems::Center, column_gap: vh(8.0), ..default() }).with_children(|l| {
-                    key(l, &kit, "F1");
+                    key(l, &kit, &binds.get(crate::binds::Action::VoteYes).label(binds.layout));
                     l.spawn(t(&kit, Type::Label, &format!("Yes · {}", d.yes), TX2));
                 });
                 k.spawn(t(&kit, Type::Label, &format!("{} needed", d.needed), TX2));
                 k.spawn(Node { align_items: AlignItems::Center, column_gap: vh(8.0), ..default() }).with_children(|r| {
                     r.spawn(t(&kit, Type::Label, &format!("No · {}", d.no), TX2));
-                    key(r, &kit, "F2");
+                    key(r, &kit, &binds.get(crate::binds::Action::VoteNo).label(binds.layout));
                 });
             });
         });

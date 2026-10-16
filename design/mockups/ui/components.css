@@ -21,7 +21,7 @@
 .card.sel { background: linear-gradient(var(--amber-wash), var(--amber-wash)), var(--bg1); box-shadow: inset 0 0 0 2px var(--amber); }
 
 /* ---- text that can split (every label on something you can press) ---- */
-.chroma, .chip, .primary b, .nav .h2 { text-shadow: calc(-1 * var(--split)) 0 rgba(73, 198, 255, .9), var(--split) 0 rgba(255, 79, 139, .9); }
+.chroma, .chip, .primary b, .nav .h2, .card { text-shadow: calc(-1 * var(--split)) 0 rgba(73, 198, 255, .9), var(--split) 0 rgba(255, 79, 139, .9), var(--lift-text); }
 
 /* ---- nav_item: number, big label, Japanese subtitle ---- */
 .nav { position: relative; display: flex; flex-direction: column; }
@@ -227,3 +227,49 @@
 .wm16 { height: 122px; margin-bottom: 1px; padding: 0 12px; display: flex; align-items: center; background: var(--amber); color: var(--amber-ink); }
 .wm16 .display { font-size: 112px; line-height: 1; margin-top: 3px; }
 .primary.off.mf-wait .label { color: var(--tx2); }
+
+/* ---- depth (panels.rs lift / lit; motion.rs parallax) ----
+   Every surface is lit from above and sits at a height: page (flat), e1 panels and rows,
+   e2 raised (toasts, hovered and selected choices), e3 overlays (match found, menus over the
+   game). Things you can press rise toward you on hover. */
+.panel, .panel.hud, .card, .kf, .vc, .vote, .ul-band, .mf-box, .chip, .primary, .stepper .v { background-image: var(--lit); }
+.panel, .card { box-shadow: var(--hi), var(--e1); }
+.panel.hud, .kf, .vc, .vote, .ul-band { box-shadow: var(--hi), var(--e1); }
+.kf.you.bar-r { box-shadow: var(--hi), inset calc(-1 * var(--bar)) 0 0 var(--amber), var(--e1); }
+.vc.you { box-shadow: var(--hi), inset var(--bar) 0 0 var(--amber), var(--e1); }
+.panel.raised, .bar-r.panel { box-shadow: var(--hi), inset calc(-1 * var(--bar)) 0 0 var(--amber), var(--e2); }
+.mf-box { box-shadow: var(--hi), inset 0 0 0 1px var(--line-2), var(--e3); }
+.card { transition: box-shadow var(--t-lift) var(--ease-out), transform var(--t-lift) var(--ease-out), background var(--t-hover); }
+.card:hover { transform: translateY(-3px); box-shadow: var(--hi), inset 0 0 0 1px var(--line-3), var(--e2); }
+.card.sel { transform: translateY(-3px); box-shadow: var(--hi), inset 0 0 0 2px var(--amber), var(--e2); }
+.chip { transition: color var(--t-hover), box-shadow var(--t-lift) var(--ease-out), transform var(--t-lift) var(--ease-out), background var(--t-hover); }
+.chip:hover { transform: translateY(-1px); box-shadow: inset 0 0 0 1px var(--line-3), 0 4px 10px rgba(0, 0, 0, .3); }
+.chip.on { box-shadow: inset 0 0 0 1px var(--amber), 0 4px 10px rgba(0, 0, 0, .3); }
+.primary { box-shadow: var(--hi), inset 0 0 0 2px var(--amber), inset 6px 0 0 var(--amber), var(--e1); transition: box-shadow var(--t-lift) var(--ease-out), transform var(--t-lift) var(--ease-out), background var(--t-hover); }
+.primary:not(.off):hover { transform: translateY(-2px); box-shadow: var(--hi), inset 0 0 0 2px var(--amber), inset 6px 0 0 var(--amber), var(--e2); }
+.primary.off { box-shadow: inset 0 0 0 1px var(--line-2), inset 6px 0 0 var(--line-2); background-image: none; }
+.nav > .ind { background: var(--lit), var(--amber-wash); box-shadow: var(--hi), inset var(--bar) 0 0 var(--amber), var(--e1); }
+.chips > .ind { box-shadow: inset 0 0 0 1px var(--amber), 0 4px 10px rgba(0, 0, 0, .3); }
+/* the space the menus sit in: a soft light from the upper left, the floor falling into shadow,
+   the wordmark's 16 far behind */
+.space { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(1100px 700px at 28% 18%, rgba(140, 160, 180, .09), transparent 70%), radial-gradient(1400px 600px at 70% 120%, rgba(0, 0, 0, .55), transparent 70%); }
+.far16 { position: absolute; right: -60px; top: -120px; font: 800 1150px/.8 var(--f-display); color: transparent; -webkit-text-stroke: 2px rgba(200, 230, 255, .045); pointer-events: none; user-select: none; }
+
+/* chips have a faint fill so their light shows; the page sits on its own plate */
+.chip { background-color: rgba(14, 17, 22, .6); }
+.plate { border-radius: var(--radius); background: var(--lit), rgba(14, 17, 22, .55); box-shadow: var(--hi), var(--e2); padding: 40px; }
+/* ---- 3D: a curved visor (the game draws the UI onto a curved surface in front of the camera) ----
+   The stage has perspective; each part turns toward you by where it sits: left edge parts turn
+   in from the left, right from the right, top and bottom tilt in. depth.js sets the angles and
+   lets each part swing into place when a page opens. */
+.stage { perspective: 1300px; perspective-origin: 50% 50%; }
+.stage .view3d { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 500ms var(--ease-out); }
+.stage .view3d > * { transform-style: preserve-3d; }
+.wm16 .display { text-shadow: none; }
+.wm16 { box-shadow: 0 6px 0 rgba(3, 4, 6, .5), 0 18px 40px rgba(0, 0, 0, .45); }
+#page.empty { display: none; }
+/* hover: the hovered look comes at once and the glitch plays over it; leaving snaps back */
+.chip, .primary, .card, .nav > .item { transition: none !important; }
+.card.invite { background: none; box-shadow: none; }
+.card.invite:hover { box-shadow: inset 0 0 0 1px var(--line-3), var(--e2); }

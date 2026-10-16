@@ -189,3 +189,12 @@ something surprises you.
   `reveal` draw from it), instead of tuples of queries.
 - A part that animates its own colour (a burst, a roll) fights any system that also sets that
   colour every frame: the setter skips while an `Anim` is on it (`Has<Anim>`).
+- Nested animations share one `Base` (a node's colours before an animation) per node. Two
+  races left menu rows blank until clicked again (the page tunes in while each row does): the
+  first animation to finish restored and dropped the Base while the other still ran, and a
+  second animation reaching a node in the same frame read the colours the first had just faded
+  (the Base insert lands at the end of the frame). `anim` now restores a node only when the
+  last animation covering it ends, and reuses Bases made earlier in the same frame. A blank
+  screen that shows only the chips (their hover fades rewrite them) is this kind of bug.
+- Sample a screen several times before trusting it: bugs that depend on frame timing show up
+  in some captures only.
