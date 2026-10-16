@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 11;
+pub const PROTOCOL_VERSION: u32 = 12;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -164,6 +164,9 @@ pub enum HitSound {
     Helmet,
     Headshot,
     Explosion,
+    /// Knife connected: a slash or a stab.
+    KnifeSlash,
+    KnifeStab,
 }
 
 /// A smoke cloud: where, and how many seconds it has left.

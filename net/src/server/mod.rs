@@ -655,7 +655,9 @@ impl Server {
                 continue;
             }
             let (health, armor) = combat::bullet_damage(&c.vitals, damage, group, data::armor_factor(weapon), false);
+            let stab = p.fired.swing.is_some_and(|s| s.stab);
             let sound = match group {
+                _ if weapon == Id::Knife => if stab { HitSound::KnifeStab } else { HitSound::KnifeSlash },
                 HitGroup::Head if c.vitals.helmet && c.vitals.armor > 0.0 => HitSound::Helmet,
                 HitGroup::Head => HitSound::Headshot,
                 HitGroup::LeftLeg | HitGroup::RightLeg => HitSound::Flesh,

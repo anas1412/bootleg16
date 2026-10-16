@@ -124,7 +124,9 @@ fn update(
                 commands.entity(*e).insert(RenderLayers::layer(LAYER));
             }
             vm.skin = Some(skin);
-            let draw: Vec<String> = names("draw").into_iter().chain(["deploy".to_string(), "draw".to_string()]).collect();
+            // The Glock picks one of two draws at random (cs.so CGLOCK18::Deploy).
+            let draw_name = if id == Id::Glock && (now * 1000.0) as u32 % 2 == 1 { "draw2" } else { "draw" };
+            let draw: Vec<String> = names(draw_name).into_iter().chain(["deploy".to_string(), "draw".to_string()]).collect();
             let draw: Vec<&str> = draw.iter().map(String::as_str).collect();
             play(&mut vm, find(&m.model, &draw), now, false);
         }
@@ -147,8 +149,9 @@ fn update(
         let seq = if id == Id::Elite {
             find(&m.model, if *side < 0.0 { &["shoot_left1"] } else { &["shoot_right1"] })
         } else if id == Id::Glock {
-            // CS: `shoot3` is the single shot, `shoot` the burst; `shoot_empty` on the last round.
-            find(&m.model, if empty { &["shoot_empty"] } else if mode == 1 { &["shoot"] } else { &["shoot3"] })
+            // CS 1.6 (client.so EV_FireGlock18): every bullet, burst or not, plays `shoot3`;
+            // the last round `shoot_empty`. (`shoot`/`shoot2` are the shield versions.)
+            find(&m.model, if empty { &["shoot_empty"] } else { &["shoot3"] })
         } else {
             let k = (now * 1000.0) as usize % 3;
             let shoot = names(["shoot1", "shoot2", "shoot3"][k]);
@@ -177,7 +180,8 @@ fn update(
     } else if l.pin_pulled() && !vm.was_pinned {
         play(&mut vm, m.model.sequence("pullpin"), now, false);
     } else if reloading && !vm.was_reloading {
-        let r = names("reload");
+        // The Glock picks one of two reloads at random (cs.so CGLOCK18::Reload).
+        let r = names(if id == Id::Glock && (now * 1000.0) as u32 % 2 == 1 { "reload2" } else { "reload" });
         let mut want: Vec<&str> = r.iter().map(String::as_str).collect();
         want.insert(0, "start_reload");
         play(&mut vm, find(&m.model, &want), now, false);

@@ -173,6 +173,8 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                     Kevlar => &["player/bhit_kevlar-1.wav"],
                     Helmet => &["player/bhit_helmet-1.wav"],
                     Headshot => &["player/headshot1.wav", "player/headshot2.wav", "player/headshot3.wav"],
+                    KnifeSlash => &["weapons/knife_hit1.wav", "weapons/knife_hit2.wav", "weapons/knife_hit3.wav", "weapons/knife_hit4.wav"],
+                    KnifeStab => &["weapons/knife_stab.wav"],
                     Explosion => &["player/pl_pain2.wav", "player/pl_pain4.wav", "player/pl_pain5.wav", "player/pl_pain6.wav", "player/pl_pain7.wav"],
                 };
                 let file = sounds.pick(options);
@@ -198,8 +200,10 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
             Cue::DryFire { pistol } => {
                 plays.push(Play { file: if pistol { "weapons/dryfire_pistol.wav" } else { "weapons/dryfire_rifle.wav" }.into(), at: None, volume: 0.8, attn: ATTN_NORM, pitch: 1.0 })
             }
-            Cue::Swing { stab } => {
-                let file = if stab { "weapons/knife_stab.wav".into() } else { sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]) };
+            Cue::Swing { .. } => {
+                // The swing itself is a whoosh, slash or stab (CS plays the same miss sounds for
+                // both); what it hit sounds on its own, from the server (`Cue::Hit`).
+                let file = sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]);
                 plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 });
             }
             Cue::Zoom => plays.push(Play { file: "weapons/zoom.wav".into(), at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
