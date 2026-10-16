@@ -29,7 +29,7 @@ pub enum Cue {
     Smoke { at: [f32; 3] },
     Bounce { kind: Kind, at: [f32; 3] },
     DryFire { pistol: bool },
-    Swing { stab: bool },
+    Swing,
     Zoom,
     /// A sound file named by a view model animation event (reloads, draws, pins).
     File(String),
@@ -200,7 +200,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
             Cue::DryFire { pistol } => {
                 plays.push(Play { file: if pistol { "weapons/dryfire_pistol.wav" } else { "weapons/dryfire_rifle.wav" }.into(), at: None, volume: 0.8, attn: ATTN_NORM, pitch: 1.0 })
             }
-            Cue::Swing { .. } => {
+            Cue::Swing => {
                 // The swing itself is a whoosh, slash or stab (CS plays the same miss sounds for
                 // both); what it hit sounds on its own, from the server (`Cue::Hit`).
                 let file = sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]);

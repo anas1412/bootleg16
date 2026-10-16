@@ -223,8 +223,8 @@ fn walk(
     if fired.dry_fire {
         w.cues.push(sound::Cue::DryFire { pistol });
     }
-    if let Some(s) = fired.swing {
-        w.cues.push(sound::Cue::Swing { stab: s.stab });
+    if fired.swing.is_some() {
+        w.cues.push(sound::Cue::Swing);
     }
     if events.footstep || events.landed {
         let me = *w.client.me();
