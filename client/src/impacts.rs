@@ -1,5 +1,7 @@
 //! Bullet holes and dust where shots hit the map (every shotgun pellet too), and blood
 //! where they hit players: a spray, more for headshots, and a splat on the wall behind.
+//! The marks are CS's own decals (`decals.wad`: `{shot`, `{blood`, `{scorch`), drawn a texel
+//! a unit like GoldSrc; maps' `infodecal`s are put on their walls when the map loads.
 use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::map;
@@ -16,6 +18,8 @@ impl Plugin for ImpactsPlugin {
             .init_resource::<Decals>()
             .add_systems(Startup, load)
             .add_systems(OnEnter(AppState::InGame), |mut d: ResMut<Decals>| d.0.clear())
+            // Once the connection (and the map's collision) is in place.
+            .add_systems(Update, map_decals.run_if(resource_added::<Walker>))
             .add_systems(Update, (spawn_hits, particles).chain().in_set(Frame::World));
     }
 }
@@ -30,6 +34,8 @@ pub enum Hit {
     Debris { at: [f32; 3], material: sim::breakables::Material },
     /// Sparks (`env_spark`, bullets on metal).
     Sparks { at: [f32; 3] },
+    /// An HE went off here: a scorch on the floor under it.
+    Scorch { at: [f32; 3] },
 }
 
 /// Most decals kept at once (oldest go first, like GoldSrc's decal limit).
@@ -42,8 +48,12 @@ struct Decals(VecDeque<Entity>);
 struct Looks {
     quad: Handle<Mesh>,
     ball: Handle<Mesh>,
-    hole: Handle<StandardMaterial>,
-    splat: Handle<StandardMaterial>,
+    /// Decals from decals.wad, each with its size in units (one texel each).
+    shots: Vec<(Handle<StandardMaterial>, Vec2)>,
+    bloods: Vec<(Handle<StandardMaterial>, Vec2)>,
+    scorches: Vec<(Handle<StandardMaterial>, Vec2)>,
+    /// The wad, for the maps' own `infodecal`s.
+    wad: Option<goldsrc::wad::Wad>,
     dust: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
     /// Hot sparks (additive, bright).
@@ -52,39 +62,43 @@ struct Looks {
     shards: [Handle<StandardMaterial>; 3],
 }
 
-/// A round soft-edged spot: `rgb` with alpha falling off from the middle (`hard` 0..1 keeps
-/// the centre solid), roughened a little so it doesn't look like a perfect circle.
-fn spot(n: u32, rgb: [u8; 3], hard: f32, rough: f32) -> Image {
-    let mut px = Vec::with_capacity((n * n * 4) as usize);
-    let c = n as f32 / 2.0;
-    for y in 0..n {
-        for x in 0..n {
-            let (dx, dy) = (x as f32 + 0.5 - c, y as f32 + 0.5 - c);
-            let ang = dy.atan2(dx);
-            let edge = 1.0 - rough * (0.5 + 0.5 * (ang * 5.0).sin() * (ang * 3.0 + 1.0).cos());
-            let r = (dx * dx + dy * dy).sqrt() / c / edge;
-            let a = ((1.0 - r) / (1.0 - hard)).clamp(0.0, 1.0);
-            px.extend_from_slice(&[rgb[0], rgb[1], rgb[2], (a * 255.0) as u8]);
-        }
-    }
-    rgba_image(n, n, px, false, TextureFormat::Rgba8UnormSrgb)
-}
-
-fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>, mut images: ResMut<Assets<Image>>) {
-    let decal = |img: Handle<Image>| StandardMaterial {
+/// A decal's material: alpha-blended over the wall it sits on.
+fn decal_material(img: Handle<Image>) -> StandardMaterial {
+    StandardMaterial {
         base_color_texture: Some(img),
         unlit: true,
         alpha_mode: AlphaMode::Blend,
         // Drawn on top of the wall it sits on.
         depth_bias: 50.0,
         ..default()
-    };
+    }
+}
+
+/// These decals from the wad (missing ones skipped), sized a texel a unit.
+fn load_decals(wad: &Option<goldsrc::wad::Wad>, names: &[&str], images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>) -> Vec<(Handle<StandardMaterial>, Vec2)> {
+    names
+        .iter()
+        .filter_map(|n| wad.as_ref()?.decal(n))
+        .map(|t| (materials.add(decal_material(images.add(rgba_image(t.width, t.height, t.rgba, false, TextureFormat::Rgba8UnormSrgb)))), Vec2::new(t.width as f32, t.height as f32)))
+        .collect()
+}
+
+/// A decal flat on a surface (GoldSrc coordinates in, Y-up out): upright on walls.
+fn decal_transform(at: Vec3, normal: Vec3, size: Vec2) -> Transform {
+    let up = if normal.y.abs() > 0.9 { Vec3::Z } else { Vec3::Y };
+    Transform::from_translation(at + normal * 0.15).looking_to(-normal, up).with_scale(size.extend(1.0))
+}
+
+fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>, mut images: ResMut<Assets<Image>>) {
     let solid = |c: Color| StandardMaterial { base_color: c, unlit: true, ..default() };
+    let wad = ["cstrike", "valve"].iter().find_map(|d| goldsrc::wad::Wad::load(crate::game_dir().join(d).join("decals.wad")).ok());
     commands.insert_resource(Looks {
         quad: meshes.add(Rectangle::new(1.0, 1.0)),
         ball: meshes.add(Sphere::new(1.0).mesh().ico(1).unwrap()),
-        hole: materials.add(decal(images.add(spot(32, [18, 16, 14], 0.45, 0.1)))),
-        splat: materials.add(decal(images.add(spot(64, [110, 6, 4], 0.3, 0.45)))),
+        shots: load_decals(&wad, &["{shot1", "{shot2", "{shot3", "{shot4", "{shot5"], &mut images, &mut materials),
+        bloods: load_decals(&wad, &["{blood1", "{blood2", "{blood3", "{blood4", "{blood5", "{blood6"], &mut images, &mut materials),
+        scorches: load_decals(&wad, &["{scorch1", "{scorch2", "{scorch3"], &mut images, &mut materials),
+        wad,
         dust: materials.add(solid(Color::srgb(0.55, 0.5, 0.42))),
         blood: materials.add(solid(Color::srgb(0.55, 0.02, 0.01))),
         spark: materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.8, 0.35), unlit: true, alpha_mode: AlphaMode::Add, ..default() }),
@@ -117,15 +131,11 @@ fn noise(i: u32, salt: f32) -> f32 {
 
 fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<Looks>, mut decals: ResMut<Decals>, w: Res<Walker>, time: Res<Time>) {
     let salt = time.elapsed_secs();
-    let mut decal = |commands: &mut Commands, at: Vec3, normal: Vec3, size: f32, material: &Handle<StandardMaterial>, spin: f32| {
-        let rot = Quat::from_rotation_arc(Vec3::Z, normal) * Quat::from_rotation_z(spin);
+    // One of a set of decals, picked by `k`.
+    let mut decal = |commands: &mut Commands, at: Vec3, normal: Vec3, set: &[(Handle<StandardMaterial>, Vec2)], k: f32| {
+        let Some((material, size)) = set.get(((k * set.len() as f32) as usize).min(set.len().saturating_sub(1))) else { return };
         let e = commands
-            .spawn((
-                Mesh3d(looks.quad.clone()),
-                MeshMaterial3d(material.clone()),
-                Transform { translation: at + normal * 0.15, rotation: rot, scale: Vec3::splat(size) },
-                DespawnOnExit(AppState::InGame),
-            ))
+            .spawn((Mesh3d(looks.quad.clone()), MeshMaterial3d(material.clone()), decal_transform(at, normal, *size), DespawnOnExit(AppState::InGame)))
             .id();
         decals.0.push_back(e);
         if decals.0.len() > MAX_DECALS {
@@ -148,12 +158,18 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
         }
     };
     for (k, hit) in hits.read().enumerate() {
-        let spin = noise(k as u32, salt) * std::f32::consts::TAU;
         match *hit {
             Hit::Wall { at, normal } => {
                 let (p, n) = (y_up(at), y_up(normal).normalize_or(Vec3::Y));
-                decal(&mut commands, p, n, 4.0, &looks.hole, spin);
+                decal(&mut commands, p, n, &looks.shots, noise(k as u32, salt));
                 burst(&mut commands, p + n, n, 5, 90.0, 0.9, 0.35, &looks.dust, true);
+            }
+            // CS: a scorch on the floor under an HE (`UTIL_DecalTrace` down).
+            Hit::Scorch { at } => {
+                let t = w.client.world.trace_line(at, [at[0], at[1], at[2] - 64.0]);
+                if t.fraction < 1.0 && !t.hit_sky {
+                    decal(&mut commands, y_up(t.end), y_up(t.normal).normalize_or(Vec3::Y), &looks.scorches, noise(k as u32 + 3, salt));
+                }
             }
             // GoldSrc's TE_SPARKS: a spray of hot bits that fall and fade fast.
             Hit::Sparks { at } => burst(&mut commands, y_up(at), Vec3::Y * 0.3, 14, 220.0, 0.5, 0.45, &looks.spark, true),
@@ -177,7 +193,7 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
                 let end = std::array::from_fn(|i| at[i] + dir[i] * reach);
                 let t = w.client.world.trace_line(at, end);
                 if t.fraction < 1.0 && !t.hit_sky && !t.start_solid {
-                    decal(&mut commands, y_up(t.end), y_up(t.normal).normalize_or(Vec3::Y), if head { 34.0 } else { 24.0 }, &looks.splat, spin);
+                    decal(&mut commands, y_up(t.end), y_up(t.normal).normalize_or(Vec3::Y), &looks.bloods, noise(k as u32 + 7, salt));
                 }
             }
         }
@@ -197,5 +213,27 @@ fn particles(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &mut
         }
         tf.translation += p.vel * dt;
         tf.scale = Vec3::splat(p.size * (p.left / p.life).sqrt());
+    }
+}
+
+/// The map's own decals (`infodecal`: a decals.wad texture stuck on the nearest surface).
+fn map_decals(mut commands: Commands, looks: Res<Looks>, config: Res<crate::menu::GameConfig>, w: Res<Walker>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+    let path = crate::game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
+    let Ok(bsp) = goldsrc::bsp::Bsp::load(&path) else { return };
+    for e in bsp.entity_list().iter().filter(|e| e.get("classname").map(String::as_str) == Some("infodecal")) {
+        let Some(name) = e.get("texture") else { continue };
+        let Some(set) = Some(load_decals(&looks.wad, &[name.as_str()], &mut images, &mut materials)).filter(|s| !s.is_empty()) else { continue };
+        let v: Vec<f32> = e.get("origin").map(|o| o.split_whitespace().filter_map(|x| x.parse().ok()).collect()).unwrap_or_default();
+        let Some(&[x, y, z]) = v.get(..3).map(|s| <&[f32; 3]>::try_from(s).unwrap()) else { continue };
+        // The nearest surface within 16 units, along the six axes.
+        let hit = [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, -1.0]]
+            .iter()
+            .map(|d: &[f32; 3]| w.client.world.trace_line([x, y, z], [x + d[0] * 16.0, y + d[1] * 16.0, z + d[2] * 16.0]))
+            .filter(|t| t.fraction < 1.0 && !t.start_solid)
+            .min_by(|a, b| a.fraction.total_cmp(&b.fraction));
+        if let Some(t) = hit {
+            let (material, size) = &set[0];
+            commands.spawn((Mesh3d(looks.quad.clone()), MeshMaterial3d(material.clone()), decal_transform(y_up(t.end), y_up(t.normal).normalize_or(Vec3::Y), *size), DespawnOnExit(AppState::InGame)));
+        }
     }
 }

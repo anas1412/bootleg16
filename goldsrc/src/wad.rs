@@ -51,4 +51,11 @@ impl Wad {
         let &(pos, size) = self.entries.get(&name.to_ascii_lowercase())?;
         decode_miptex(self.data.get(pos..pos + size)?)
     }
+
+    /// A decal (`decals.wad`): one colour (palette entry 255) everywhere, each pixel's palette
+    /// index as its opacity (0 clear .. 255 solid), the way GoldSrc draws decals.
+    pub fn decal(&self, name: &str) -> Option<Texture> {
+        let &(pos, size) = self.entries.get(&name.to_ascii_lowercase())?;
+        crate::texture::decode_decal(self.data.get(pos..pos + size)?)
+    }
 }

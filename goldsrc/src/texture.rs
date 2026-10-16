@@ -39,6 +39,20 @@ pub fn decode_miptex(data: &[u8]) -> Option<Texture> {
     Some(Texture { name, width: w, height: h, rgba })
 }
 
+/// Decode a decal miptex: palette entry 255 is the colour, the pixel index the opacity.
+pub fn decode_decal(data: &[u8]) -> Option<Texture> {
+    let u32_at = |o: usize| Some(u32::from_le_bytes(data.get(o..o + 4)?.try_into().ok()?));
+    let (w, h, mip0) = (u32_at(16)?, u32_at(20)?, u32_at(24)? as usize);
+    if mip0 == 0 || w == 0 || h == 0 || w > 4096 || h > 4096 {
+        return None;
+    }
+    let (w_, h_) = (w as usize, h as usize);
+    let pal = u32_at(36)? as usize + (w_ / 8) * (h_ / 8) + 2;
+    let c = data.get(pal + 255 * 3..pal + 256 * 3)?;
+    let rgba = data.get(mip0..mip0 + w_ * h_)?.iter().flat_map(|&i| [c[0], c[1], c[2], i]).collect();
+    Some(Texture { name: cstr(data.get(..16)?), width: w, height: h, rgba })
+}
+
 pub(crate) fn cstr(b: &[u8]) -> String {
     let end = b.iter().position(|&c| c == 0).unwrap_or(b.len());
     String::from_utf8_lossy(&b[..end]).into_owned()
@@ -80,5 +94,12 @@ mod tests {
         assert_eq!(&t.rgba[..4], &[0, 0, 255, 255]);
         let masked = decode_miptex(&miptex("{fence")).unwrap();
         assert_eq!(&masked.rgba[..4], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn decals_take_palette_255_as_colour_and_the_index_as_opacity() {
+        let t = decode_decal(&miptex("{shot1")).unwrap();
+        assert_eq!(&t.rgba[..4], &[0, 0, 255, 255], "index 255: solid");
+        assert_eq!(&t.rgba[4..8], &[0, 0, 255, 1], "index 1: nearly clear");
     }
 }

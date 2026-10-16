@@ -11,7 +11,7 @@
 //! `BOOTLEG16_MENU_PAGE=practice|join|settings|crosshair|assistant|voice` opens that menu page
 //! (crosshair and assistant: Settings sections) in such runs.
 //! `BOOTLEG16_OVERLAY=pause|teams` shows that in-game overlay; `BOOTLEG16_MENU=1` the buy menu.
-//! `BOOTLEG16_SCORES=1` holds the scoreboard open.
+//! `BOOTLEG16_SCORES=1` holds the scoreboard open. `BOOTLEG16_FIRE=1` holds fire (bullet holes).
 //! `BOOTLEG16_ASSISTANT=0..3` picks the AI assistant for the run (not saved).
 //! `BOOTLEG16_VOICE=1` shows you and a teammate on the voice list.
 //! `BOOTLEG16_FOUND=1` shows a match found and the Reconnect card on the menu.

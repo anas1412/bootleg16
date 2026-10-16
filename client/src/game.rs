@@ -25,12 +25,20 @@ pub enum Frame {
 
 pub struct GamePlugin;
 
+/// Hitboxes and surface materials, to trace our own shots as the server will (holes at once).
+#[derive(Resource)]
+pub(crate) struct ShotAssets(net::server::Assets);
+
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.configure_sets(
             Update,
             (Frame::Camera, Frame::Events, Frame::World, Frame::Sound, Frame::Ui).chain().run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>),
         )
+            .add_systems(Startup, |mut c: Commands| match net::server::Assets::load(&crate::game_dir()) {
+                Ok(a) => c.insert_resource(ShotAssets(a)),
+                Err(e) => warn!("no hitboxes, own bullet holes come from the server: {e}"),
+            })
             .add_systems(OnEnter(AppState::InGame), enter)
             .add_systems(FixedUpdate, walk.run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
             .add_systems(Update, (face_spawn, mouse_look, move_camera, grab_cursor).chain().in_set(Frame::Camera));
@@ -187,6 +195,8 @@ fn walk(
     buy: Res<BuyMenu>,
     overlay: Option<Res<Overlay>>,
     mut w: ResMut<Walker>,
+    shot_assets: Option<Res<ShotAssets>>,
+    mut hits: MessageWriter<crate::impacts::Hit>,
 ) {
     // Mouse buttons only count while the mouse is captured (the first click just captures it).
     let captured = cursor.grab_mode != CursorGrabMode::None;
@@ -227,7 +237,7 @@ fn walk(
         walk: on(Action::Walk),
         use_key: on(Action::Use),
         // mouse buttons only while the mouse is captured; keys count either way
-        attack: on(Action::Fire) && (captured || matches!(binds.get(Action::Fire), Bind::Key(_))),
+        attack: (on(Action::Fire) && (captured || matches!(binds.get(Action::Fire), Bind::Key(_)))) || (auto && std::env::var_os("BOOTLEG16_FIRE").is_some()),
         attack2: on(Action::AltFire) && (captured || matches!(binds.get(Action::AltFire), Bind::Key(_))),
         reload: on(Action::Reload),
         slot,
@@ -254,11 +264,25 @@ fn walk(
         let feet = [me.origin[0], me.origin[1], me.origin[2] + me.hull().mins()[2]];
         w.cues.push(sound::Cue::Footstep { feet, who: None, step });
     }
-    // Our own shots show at once (predicted); other players' come from server events.
+    // Our own shots show at once (predicted, traced like the server does: same spread seed,
+    // penetration and players in the way); other players' come from server events.
+    use sim::weapons::bullets::{fire_bullet, fire_pellets, view_vectors, Target};
+    let me_id = w.client.id().unwrap_or(u8::MAX);
+    let targets: Vec<Target> = w.client.others().iter().filter(|o| o.alive).map(|o| Target { id: o.id, origin: o.origin, yaw: o.yaw, pitch: o.pitch, crouched: o.crouched, weapon: o.weapon }).collect();
     for shot in fired.shots {
         let eye = w.client.me().eye();
-        let (f, _, _) = sim::weapons::bullets::view_vectors(shot.angles[0], shot.angles[1]);
-        let end = w.client.world.trace_line(eye, std::array::from_fn(|i| eye[i] + f[i] * 8192.0)).end;
+        let (f, _, _) = view_vectors(shot.angles[0], shot.angles[1]);
+        let mut end = w.client.world.trace_line(eye, std::array::from_fn(|i| eye[i] + f[i] * 8192.0)).end;
+        if let Some(a) = &shot_assets {
+            let r = if shot.pellets.is_some() { fire_pellets(&w.client.world, &a.0.hitboxes, eye, &shot, me_id, &targets) } else { fire_bullet(&w.client.world, &a.0.materials, &a.0.hitboxes, eye, &shot, me_id, &targets) };
+            for i in r.impacts.iter().filter(|i| !i.sky) {
+                hits.write(crate::impacts::Hit::Wall { at: i.point, normal: i.normal });
+                w.cues.push(sound::Cue::Impact { at: i.point, normal: i.normal });
+            }
+            if let Some(i) = r.impacts.first() {
+                end = i.point;
+            }
+        }
         w.tracers.push((eye, end, 0.08));
     }
 }

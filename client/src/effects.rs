@@ -225,8 +225,9 @@ fn grenade_effects(
 pub struct GameNews(pub GameEvent);
 
 #[allow(clippy::too_many_arguments)]
-fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut gizmos: Gizmos, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>) {
+fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut gizmos: Gizmos, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>) {
     let me = w.client.id();
+    let predicting = shot_assets.is_some();
     // Where a player is now (for sounds and the direction blood flies).
     let eye_of = |w: &Walker, id: u8| -> Option<[f32; 3]> {
         if Some(id) == me {
@@ -238,7 +239,9 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mu
         news.write(GameNews(e.clone()));
         match e {
             GameEvent::Shot { shooter, weapon, silenced, from, to, holes } => {
-                for (at, normal) in holes {
+                // Our own holes were drawn when we fired (game.rs), if we could trace them.
+                let predicted = Some(shooter) == me && predicting;
+                for (at, normal) in holes.into_iter().filter(|_| !predicted) {
                     hits.write(Hit::Wall { at, normal });
                     w.cues.push(sound::Cue::Impact { at, normal });
                 }
@@ -281,6 +284,7 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mu
             }
             GameEvent::Explosion { at } => {
                 w.cues.push(sound::Cue::Explosion { at });
+                hits.write(Hit::Scorch { at });
                 w.pending_fx.push(e);
             }
             GameEvent::Flash { at, .. } => {
