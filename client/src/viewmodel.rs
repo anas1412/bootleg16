@@ -77,6 +77,8 @@ pub fn attach(commands: &mut Commands, cam: Entity) {
             bevy::core_pipeline::tonemapping::DebandDither::Disabled,
             RenderLayers::layer(LAYER),
             Transform::default(),
+            // The weapon in your hands is lit by where you stand.
+            crate::studio::LitByMe,
         ))
         .id();
     commands.entity(cam).add_child(vm);
@@ -103,7 +105,7 @@ fn update(
     mut vm: ResMut<ViewModel>,
     mut cache: ResMut<ModelCache>,
     mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<crate::studio::StudioMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut bindposes: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     mut vis: Query<&mut Visibility>,
@@ -129,7 +131,7 @@ fn update(
         vm.model = cache.get(&weapon_model("v", id), &mut images, &mut materials);
         if let Some(m) = vm.model.clone() {
             // The parts hang off the view model camera, which only sees their layer.
-            let skin = m.spawn_skinned(&mut commands, *camera, Some(to_camera()), &mut meshes, &mut bindposes);
+            let skin = m.spawn_skinned(&mut commands, *camera, Some(to_camera()), &mut meshes, &mut bindposes, &mut materials);
             for e in &skin.parts {
                 commands.entity(*e).insert(RenderLayers::layer(LAYER));
             }

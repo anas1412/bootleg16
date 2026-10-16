@@ -52,7 +52,7 @@ struct OtherPlayers {
     last_hit: HashMap<u8, HitGroup>,
 }
 
-fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>) {
     let mut load = |names: &[&str]| -> Vec<_> { names.iter().filter_map(|n| cache.get(&format!("player/{n}/{n}.mdl"), &mut images, &mut materials)).collect() };
     let mut looks = load(&T_MODELS);
     let t_count = looks.len();
@@ -180,7 +180,7 @@ fn draw_others(
     mut look: ResMut<OtherPlayers>,
     mut cache: ResMut<models::ModelCache>,
     mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<crate::studio::StudioMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut bindposes: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     flash_look: Res<crate::muzzle::FlashLook>,
@@ -201,9 +201,9 @@ fn draw_others(
         }
         let body = look.looks[*li].clone();
         let parent = commands.spawn((place(o), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
-        let joints = body.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes).joints;
+        let joints = body.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes, &mut materials).joints;
         let gun = cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials).map(|wm| {
-            let s = wm.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes);
+            let s = wm.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes, &mut materials);
             (wm, s)
         });
         let flash = crate::muzzle::spawn(&mut commands, &flash_look);

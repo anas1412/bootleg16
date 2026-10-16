@@ -66,6 +66,11 @@ impl BoneTransform {
         let r = &self.rot;
         std::array::from_fn(|i| r[0][i] * d[0] + r[1][i] * d[1] + r[2][i] * d[2])
     }
+    /// Bone-local direction to model space.
+    pub fn rotate(&self, d: Vec3) -> Vec3 {
+        let r = &self.rot;
+        std::array::from_fn(|i| r[i][0] * d[0] + r[i][1] * d[1] + r[i][2] * d[2])
+    }
     /// Model-space direction to bone-local.
     pub fn inverse_rotate(&self, d: Vec3) -> Vec3 {
         let r = &self.rot;
@@ -324,6 +329,8 @@ pub struct MeshPart {
     pub texture: usize,
     pub positions: Vec<Vec3>,
     pub uvs: Vec<[f32; 2]>,
+    /// Vertex normals (posed like the positions, unit length), for lighting.
+    pub normals: Vec<Vec3>,
     pub indices: Vec<u32>,
     /// The bone each vertex follows (GoldSrc vertices have exactly one).
     pub bones: Vec<u16>,
@@ -406,6 +413,18 @@ impl Model {
                     pose.get(bone).map(|t| t.apply(local)).unwrap_or(local)
                 })
                 .collect();
+            // Normals: their own list, each with its bone (rotated only).
+            let (num_norms, norm_info, norm_index) = (self.header_i32(model + 92), self.header_i32(model + 96), self.header_i32(model + 100));
+            let norms: Vec<Vec3> = (0..num_norms)
+                .map(|n| {
+                    let bone = self.data.get(norm_info + n).copied().unwrap_or(0) as usize;
+                    let o = norm_index + n * 12;
+                    let local = [f32_at(o), f32_at(o + 4), f32_at(o + 8)];
+                    let d = pose.get(bone).map(|t| t.rotate(local)).unwrap_or(local);
+                    let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-6);
+                    [d[0] / l, d[1] / l, d[2] / l]
+                })
+                .collect();
             for m in 0..num_mesh {
                 let mo = mesh_index + m * 20;
                 let tex = skin(self.header_i32(mo + 8));
@@ -427,6 +446,7 @@ impl Model {
                         part.positions.push(verts.get(v).copied().unwrap_or([0.0; 3]));
                         part.bones.push(vert_bone(v));
                         part.uvs.push([i16_at(o + 4) as f32 / tw, i16_at(o + 6) as f32 / th]);
+                        part.normals.push(norms.get(i16_at(o + 2).max(0) as usize).copied().unwrap_or([0.0, 0.0, 1.0]));
                     }
                     let count = n.unsigned_abs();
                     for k in 2..count {

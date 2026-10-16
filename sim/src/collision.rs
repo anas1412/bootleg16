@@ -270,6 +270,11 @@ impl World {
     }
 
     /// Name of the world texture hit by the line `start`..`end` (first surface crossed).
+    /// The world face (BSP face index) a line meets first, if any.
+    pub fn face_at(&self, start: Vec3, end: Vec3) -> Option<usize> {
+        self.surface_at(self.water_roots.first()?.0, start, end)
+    }
+
     pub fn texture_at(&self, start: Vec3, end: Vec3) -> Option<&str> {
         let root = self.water_roots.first()?.0;
         let face = self.surface_at(root, start, end)?;

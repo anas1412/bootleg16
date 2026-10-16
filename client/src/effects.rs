@@ -10,8 +10,6 @@ use crate::models::Parts;
 use crate::players::PlayerAnim;
 use crate::{game_dir, map, models, sound};
 use bevy::{
-    asset::RenderAssetUsages,
-    mesh::{Indices, PrimitiveTopology},
     prelude::*,
     render::render_resource::TextureFormat,
 };
@@ -46,7 +44,7 @@ struct Flash {
     alpha: f32,
 }
 
-fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>, mut images: ResMut<Assets<Image>>) {
+fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>, mut images: ResMut<Assets<Image>>) {
     let grenades = ["w_hegrenade", "w_flashbang", "w_smokegrenade"]
         .iter()
         .map(|name| {
@@ -74,38 +72,28 @@ fn spawn_overlay(mut commands: Commands, mut flash: ResMut<Flash>) {
 }
 
 /// Meshes and materials for one posed studio model.
-fn model_parts(model: &goldsrc::mdl::Model, seq: usize, meshes: &mut Assets<Mesh>, materials: &mut Assets<StandardMaterial>, images: &mut Assets<Image>) -> Parts {
-    let textures: Vec<Handle<StandardMaterial>> = model
+fn model_parts(model: &goldsrc::mdl::Model, seq: usize, meshes: &mut Assets<Mesh>, materials: &mut Assets<crate::studio::StudioMaterial>, images: &mut Assets<Image>) -> Parts {
+    let textures: Vec<Handle<crate::studio::StudioMaterial>> = model
         .textures()
         .into_iter()
         .map(|t| {
-            let image = images.add(rgba_image(t.width, t.height, t.rgba, false, TextureFormat::Rgba8UnormSrgb));
-            materials.add(StandardMaterial { base_color_texture: Some(image), unlit: true, alpha_mode: AlphaMode::Mask(0.5), ..default() })
+            let mut rgba = t.rgba;
+            crate::level::tex_gamma(&mut rgba);
+            materials.add(crate::studio::material(images.add(rgba_image(t.width, t.height, rgba, false, TextureFormat::Rgba8UnormSrgb))))
         })
         .collect();
     model
         .posed_mesh(&model.pose(seq, 0, 0.5))
         .into_iter()
         .filter(|p| !p.indices.is_empty())
-        .map(|p| {
-            let positions: Vec<[f32; 3]> = p.positions.iter().map(|v| map::to_y_up(*v)).collect();
-            let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-                .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-                .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
-                .with_inserted_indices(Indices::U32(p.indices))
-                .with_computed_normals();
-            (meshes.add(mesh), textures.get(p.texture).cloned().unwrap_or_default())
-        })
+        .map(|p| (meshes.add(models::part_mesh(&p, map::to_y_up, false)), textures.get(p.texture).cloned().unwrap_or_default()))
         .collect()
 }
 
 /// Spawn a model's parts under one parent at `at` (GoldSrc coordinates).
-fn spawn_parts(commands: &mut Commands, marker: impl Bundle, at: [f32; 3], parts: &Parts) {
+fn spawn_parts(commands: &mut Commands, marker: impl Bundle, at: [f32; 3], parts: &Parts, materials: &mut Assets<crate::studio::StudioMaterial>) {
     let parent = commands.spawn((marker, Transform::from_translation(Vec3::from(map::to_y_up(at))), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
-    for (mesh, mat) in parts {
-        let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(mat.clone()))).id();
-        commands.entity(parent).add_child(child);
-    }
+    models::spawn_lit(commands, parent, parts, materials);
 }
 
 #[derive(Component)]
@@ -121,7 +109,7 @@ fn ground_guns(
     w: Res<Walker>,
     mut cache: ResMut<models::ModelCache>,
     mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<crate::studio::StudioMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut parts: Local<std::collections::HashMap<sim::weapons::Id, Parts>>,
     mut shown: Local<Vec<(sim::weapons::Id, [f32; 3])>>,
@@ -139,7 +127,7 @@ fn ground_guns(
             Some(m) => models::static_parts(&m, &m.model.pose(0, 0, 0.0), &mut meshes),
             None => Vec::new(),
         });
-        spawn_parts(&mut commands, GroundGunView, at, p);
+        spawn_parts(&mut commands, GroundGunView, at, p, &mut materials);
     }
 }
 
@@ -160,6 +148,7 @@ fn grenade_effects(
     mut flash: ResMut<Flash>,
     fx: Res<Effects>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut studio: ResMut<Assets<crate::studio::StudioMaterial>>,
     views: Query<Entity, With<GrenadeView>>,
     mut fireballs: Query<(Entity, &mut Fireball, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
     mut overlay: Single<&mut BackgroundColor, With<FlashOverlay>>,
@@ -175,7 +164,7 @@ fn grenade_effects(
             sim::grenades::Kind::Flash => 1,
             sim::grenades::Kind::Smoke => 2,
         };
-        spawn_parts(&mut commands, GrenadeView, at, &fx.grenades[i]);
+        spawn_parts(&mut commands, GrenadeView, at, &fx.grenades[i], &mut studio);
     }
     // Explosions and flashes from server events (sorted out in `events`).
     let me = w.client.id();

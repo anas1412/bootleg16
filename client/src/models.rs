@@ -2,6 +2,7 @@
 //! posed models into Bevy meshes.
 use crate::level::rgba_image;
 use crate::map;
+use crate::studio::{LitPart, StudioMaterial};
 use bevy::{
     asset::RenderAssetUsages,
     camera::visibility::NoFrustumCulling,
@@ -24,13 +25,27 @@ pub fn weapon_model(prefix: &str, id: Id) -> String {
     format!("{prefix}_{name}.mdl")
 }
 
-/// Meshes with their materials, ready to spawn.
-pub type Parts = Vec<(Handle<Mesh>, Handle<StandardMaterial>)>;
+/// Meshes with their materials, ready to spawn (`spawn_lit` gives each instance its own).
+pub type Parts = Vec<(Handle<Mesh>, Handle<StudioMaterial>)>;
+
+/// A copy of a model material for one instance (its light changes as it moves).
+pub fn own(materials: &mut Assets<StudioMaterial>, shared: &Handle<StudioMaterial>) -> Handle<StudioMaterial> {
+    let m = materials.get(shared).cloned().unwrap_or_else(|| crate::studio::material(Handle::default()));
+    materials.add(m)
+}
+
+/// Spawn lit model parts under `parent`.
+pub fn spawn_lit(commands: &mut Commands, parent: Entity, parts: &Parts, materials: &mut Assets<StudioMaterial>) {
+    for (mesh, mat) in parts {
+        let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(own(materials, mat)), LitPart)).id();
+        commands.entity(parent).add_child(child);
+    }
+}
 
 /// A model and the materials for its textures.
 pub struct Loaded {
     pub model: Model,
-    pub materials: Vec<Handle<StandardMaterial>>,
+    pub materials: Vec<Handle<StudioMaterial>>,
     /// GPU-skinned meshes, built on first use (see `Loaded::skin`); [normal, mirrored].
     skin: [std::sync::OnceLock<Skin>; 2],
 }
@@ -84,14 +99,14 @@ impl Loaded {
 
     /// Spawn bones and skinned meshes as children of `parent` (posed with `set_pose`).
     /// `mirror`: the bones go through this reflection first (the first-person view model).
-    pub fn spawn_skinned(&self, commands: &mut Commands, parent: Entity, mirror: Option<Transform>, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>) -> SpawnedSkin {
+    pub fn spawn_skinned(&self, commands: &mut Commands, parent: Entity, mirror: Option<Transform>, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>, materials: &mut Assets<StudioMaterial>) -> SpawnedSkin {
         let skin = self.skin(mirror.is_some(), meshes, bindposes);
         let mirror = mirror.map(|t| commands.spawn((t, ChildOf(parent))).id());
         let joints: Vec<Entity> = (0..self.model.bones.len().max(1)).map(|_| commands.spawn((Transform::default(), ChildOf(mirror.unwrap_or(parent)))).id()).collect();
         let mut parts = Vec::new();
         for (mesh, material) in &skin.parts {
             // Bounds come from the bind pose, which is nowhere near the posed body: don't cull.
-            parts.push(commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), SkinnedMesh { inverse_bindposes: skin.bindposes.clone(), joints: joints.clone() }, NoFrustumCulling)).id());
+            parts.push(commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(own(materials, material)), LitPart, SkinnedMesh { inverse_bindposes: skin.bindposes.clone(), joints: joints.clone() }, NoFrustumCulling)).id());
         }
         commands.entity(parent).add_children(&parts);
         SpawnedSkin { joints, parts, mirror }
@@ -131,7 +146,7 @@ impl ModelCache {
         ModelCache { dir: game_dir.join("cstrike/models"), models: HashMap::new() }
     }
 
-    pub fn get(&mut self, file: &str, images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>) -> Option<Arc<Loaded>> {
+    pub fn get(&mut self, file: &str, images: &mut Assets<Image>, materials: &mut Assets<StudioMaterial>) -> Option<Arc<Loaded>> {
         if let Some(m) = self.models.get(file) {
             return m.clone();
         }
@@ -143,8 +158,7 @@ impl ModelCache {
                     let mut rgba = t.rgba;
                     crate::level::tex_gamma(&mut rgba);
                     let image = images.add(rgba_image(t.width, t.height, rgba, false, TextureFormat::Rgba8UnormSrgb));
-                    // ⚠ Unlit until models are lit from the map's lightmaps like GoldSrc does.
-                    materials.add(StandardMaterial { base_color_texture: Some(image), unlit: true, alpha_mode: AlphaMode::Mask(0.5), ..default() })
+                    materials.add(crate::studio::material(image))
                 })
                 .collect();
             Arc::new(Loaded { model, materials: mats, skin: Default::default() })
@@ -159,9 +173,11 @@ impl ModelCache {
 
 /// Bevy mesh for one posed part, with `place` mapping GoldSrc model space to the target
 /// space. `mirrored`: `place` flips handedness, so triangles are wound the other way.
-/// No normals: models are drawn unlit (and they're rebuilt every frame when animated).
+/// Normals go through `place` too (as directions), for `studio` lighting.
 pub fn part_mesh(p: &MeshPart, place: impl Fn([f32; 3]) -> [f32; 3], mirrored: bool) -> Mesh {
     let positions: Vec<[f32; 3]> = p.positions.iter().map(|v| place(*v)).collect();
+    let o = place([0.0; 3]);
+    let normals: Vec<[f32; 3]> = p.normals.iter().map(|n| { let d = place(*n); [d[0] - o[0], d[1] - o[1], d[2] - o[2]] }).collect();
     let mut indices = p.indices.clone();
     if mirrored {
         for t in indices.chunks_exact_mut(3) {
@@ -171,11 +187,12 @@ pub fn part_mesh(p: &MeshPart, place: impl Fn([f32; 3]) -> [f32; 3], mirrored: b
     Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs.clone())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
         .with_inserted_indices(Indices::U32(indices))
 }
 
 /// A model posed once, as world-ready (Y-up) meshes with their materials.
-pub fn static_parts(l: &Loaded, pose: &[BoneTransform], meshes: &mut Assets<Mesh>) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
+pub fn static_parts(l: &Loaded, pose: &[BoneTransform], meshes: &mut Assets<Mesh>) -> Parts {
     l.model
         .posed_mesh(pose)
         .iter()

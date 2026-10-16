@@ -49,6 +49,7 @@ mod sky;
 mod smoke;
 mod sound;
 mod steam;
+mod studio;
 mod teammates;
 mod ui;
 mod viewmodel;
@@ -100,7 +101,7 @@ fn main() {
             killfeed::KillFeedPlugin,
             round_hud::RoundHudPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (bomb::BombPlugin, map_sounds::MapSoundsPlugin, teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
+            (bomb::BombPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
         .add_systems(Update, screenshot)
         .run();

@@ -110,7 +110,7 @@ pub(super) fn crosshair(
 ) {
     let me = w.client.me();
     let l = &w.client.state.loadout;
-    let alive = w.client.vitals.alive() && w.client.id().is_some();
+    let alive = w.client.vitals.alive() && w.client.id().is_some() && !crate::spectate::spectating(&w);
     let id = l.active_id();
     let scoped = l.active_gun().is_some_and(|g| g.fov() < 90) && is_sniper(id);
     scope.set_if_neq(if alive && scoped { Visibility::Inherited } else { Visibility::Hidden });

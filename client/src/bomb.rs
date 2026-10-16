@@ -35,6 +35,7 @@ fn show_bomb(
     mut cache: ResMut<models::ModelCache>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut studio: ResMut<Assets<crate::studio::StudioMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut parts: Local<Option<(Parts, Parts, Handle<Mesh>, Handle<StandardMaterial>)>>,
     mut shown: Local<Option<Shown>>,
@@ -54,7 +55,7 @@ fn show_bomb(
     }
     let Some(want) = want else { return };
     let (backpack, c4, light, red) = parts.get_or_insert_with(|| {
-        let mut load = |file: &str| match cache.get(file, &mut images, &mut materials) {
+        let mut load = |file: &str| match cache.get(file, &mut images, &mut studio) {
             Some(m) => models::static_parts(&m, &m.model.pose(0, 0, 0.0), &mut meshes),
             None => Vec::new(),
         };
@@ -66,10 +67,7 @@ fn show_bomb(
         Shown::Planted(at) => (at, &*c4),
     };
     let parent = commands.spawn((BombView, Transform::from_translation(Vec3::from(map::to_y_up(at))), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
-    for (mesh, mat) in list {
-        let child = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(mat.clone()))).id();
-        commands.entity(parent).add_child(child);
-    }
+    models::spawn_lit(&mut commands, parent, list, &mut studio);
     if matches!(want, Shown::Planted(_)) {
         let l = commands.spawn((BombLight, Mesh3d(light.clone()), MeshMaterial3d(red.clone()), Transform::from_xyz(0.0, 5.0, 0.0), Visibility::Hidden)).id();
         commands.entity(parent).add_child(l);
