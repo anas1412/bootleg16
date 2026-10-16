@@ -32,6 +32,8 @@ pub struct MatchConfig {
     pub loss_bonus: LossBonus,
     /// Bullets and grenades hurt teammates.
     pub friendly_fire: bool,
+    /// How far proximity voice carries (units); it fades out towards this distance.
+    pub voice_range: f32,
 }
 
 impl Default for MatchConfig {
@@ -51,6 +53,7 @@ impl Default for MatchConfig {
             max_money: 16_000,
             loss_bonus: LossBonus::PerTeam,
             friendly_fire: false,
+            voice_range: 1500.0,
         }
     }
 }
@@ -90,6 +93,7 @@ impl MatchConfig {
                     }
                 }
                 "friendly_fire" => c.friendly_fire = v.parse().map_err(|_| bad())?,
+                "voice_range" => c.voice_range = num(v)?,
                 _ => return Err(format!("line {}: unknown setting {k}", n + 1)),
             }
         }

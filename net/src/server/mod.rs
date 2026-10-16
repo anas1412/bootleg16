@@ -5,6 +5,7 @@ pub mod buy;
 mod ground;
 mod round;
 mod visibility;
+mod voice;
 
 use crate::config::MatchConfig;
 use crate::protocol::*;
@@ -770,6 +771,7 @@ impl Server {
                 self.drop_bomb(id);
                 self.place_dummies();
             }
+            ClientMsg::Voice { channel, data } => self.relay_voice(from, channel, data),
             ClientMsg::Bye => {
                 self.clients.remove(&from);
             }

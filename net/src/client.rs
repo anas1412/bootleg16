@@ -78,6 +78,8 @@ pub struct Client {
     pub map_hash: u64,
     /// Round trip to the server in ms (smoothed): how long until it acknowledges an input.
     pub ping_ms: f32,
+    /// Voice frames received and not yet taken: (from, channel, gain 0..255, Opus data).
+    voice: Vec<(u8, VoiceChannel, u8, Vec<u8>)>,
     /// The round (phase, clock, score), the bomb, and your money and limits.
     pub round: RoundNet,
     pub bomb: BombNet,
@@ -113,6 +115,7 @@ impl Client {
             map: None,
             map_hash: 0,
             ping_ms: 0.0,
+            voice: Vec::new(),
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0 },
             bomb: BombNet::None,
             me_info: Me { money: 0, limits: Default::default(), can_buy: false, defuse_kit: false },
@@ -193,6 +196,7 @@ impl Client {
                 }
             }
             ServerMsg::Scores(s) => self.scores = s,
+            ServerMsg::Voice { from, channel, gain, data } => self.voice.push((from, channel, gain, data)),
             ServerMsg::Reject { reason } => {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
@@ -304,6 +308,18 @@ impl Client {
     /// Ask the server for a weapon (the buy menu).
     pub fn buy(&mut self, item: BuyItem) {
         self.socket.send(self.server, encode(&ClientMsg::Buy { item }));
+    }
+
+    /// Send one encoded voice frame (while push-to-talk is held).
+    pub fn send_voice(&mut self, channel: VoiceChannel, data: Vec<u8>) {
+        if self.id().is_some() {
+            self.socket.send(self.server, encode(&ClientMsg::Voice { channel, data }));
+        }
+    }
+
+    /// Voice frames that arrived since the last call.
+    pub fn take_voice(&mut self) -> Vec<(u8, VoiceChannel, u8, Vec<u8>)> {
+        std::mem::take(&mut self.voice)
     }
 
     pub fn disconnect(&mut self) {

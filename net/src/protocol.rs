@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 14;
+pub const PROTOCOL_VERSION: u32 = 15;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -30,8 +30,23 @@ pub enum ClientMsg {
     Buy { item: BuyItem },
     /// Pick a side; None = auto (the smaller team).
     JoinTeam { team: Option<Team> },
+    /// One 20 ms Opus voice frame while a push-to-talk key is held.
+    Voice { channel: VoiceChannel, data: Vec<u8> },
     Bye,
 }
+
+/// The two voice channels, each on its own push-to-talk key.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VoiceChannel {
+    /// Your team, anywhere on the map, full volume.
+    Team,
+    /// Everyone alive near you, enemies too; quieter with distance.
+    Proximity,
+}
+
+/// Opus voice: 48 kHz mono, 20 ms frames.
+pub const VOICE_RATE: u32 = 48_000;
+pub const VOICE_FRAME: usize = 960;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Team {
@@ -181,6 +196,8 @@ pub enum ServerMsg {
     Reject { reason: String },
     /// Scoreboard, sent a few times a second.
     Scores(Vec<Score>),
+    /// Someone talking. `gain`: how loud (proximity voice fades with distance; 255 = full).
+    Voice { from: u8, channel: VoiceChannel, gain: u8, data: Vec<u8> },
     Snapshot {
         tick: u32,
         /// Last of your inputs the server has run; replay the ones after it.
