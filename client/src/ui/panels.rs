@@ -16,9 +16,10 @@ pub fn soft(node: Node) -> Node {
 /// on any background) and its soft shadow, farther the higher it sits (tokens.css --e1..3).
 pub fn elevation(h: u8) -> BoxShadow {
     let (edge, near, far, far_a) = match h {
-        0 | 1 => (3.0, 10.0, 30.0, 0.30),
-        2 => (5.0, 16.0, 52.0, 0.42),
-        _ => (7.0, 24.0, 90.0, 0.58),
+        // (Bevy's shadow blur spreads wider than the browser's: about half the mockup's numbers)
+        0 | 1 => (3.0, 6.0, 14.0, 0.26),
+        2 => (4.0, 8.0, 24.0, 0.34),
+        _ => (6.0, 12.0, 40.0, 0.46),
     };
     let s = |y: f32, blur: f32, a: f32| ShadowStyle { color: Color::srgba(0.0, 0.0, 0.0, a), x_offset: px(0), y_offset: vh(y), spread_radius: px(0), blur_radius: vh(blur) };
     BoxShadow(vec![

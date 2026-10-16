@@ -113,7 +113,7 @@ fn chip_node(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str, action: UiAct
     let frame = if selected && framed { AMBER } else if selected { Color::NONE } else { LINE_2 };
     let bg = if selected && framed { AMBER_WASH } else { Color::NONE };
     let node = Node { height: vh(44.0), padding: UiRect::horizontal(vh(18.0)), column_gap: vh(10.0), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(1)), border_radius: BorderRadius::all(vh(RADIUS_S)), ..default() };
-    let mut e = p.spawn((node, BackgroundColor(bg), BorderColor::all(frame), super::panels::lit()));
+    let mut e = p.spawn((node, BackgroundColor(bg), BorderColor::all(frame)));
     e.with_children(|c| {
         lead(c);
         c.spawn((kit_text(label.to_uppercase(), 13.0, if selected { AMBER } else { TX2 }, &kit.text), Pickable::IGNORE));
@@ -220,7 +220,7 @@ fn primary_node() -> Node {
 /// on the far edge.
 pub fn primary_button(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str, hint: &str, action: UiAction) -> Entity {
     let node = Node { border: UiRect { left: vh(6.0), right: vh(2.0), top: vh(2.0), bottom: vh(2.0) }, ..primary_node() };
-    let mut e = p.spawn((node, BackgroundColor(AMBER_WASH), BorderColor::all(AMBER), super::panels::lit(), super::panels::elevation(1)));
+    let mut e = p.spawn((node, BackgroundColor(AMBER_WASH), BorderColor::all(AMBER), super::panels::elevation(1)));
     e.with_children(|r| {
         r.spawn((kit_text(label.to_uppercase(), 18.0, TX1, &kit.text), Pickable::IGNORE));
         r.spawn((t(kit, Type::Label, hint, AMBER), Pickable::IGNORE));

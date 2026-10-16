@@ -96,7 +96,7 @@ fn small_button(p: &mut ChildSpawnerCommands, kit: &Kit, text: &str, fg: Color, 
 /// The whole Play screen.
 pub fn screen(root: &mut ChildSpawnerCommands, kit: &Kit, st: &MenuState, lobby: &Lobby, settings: &Settings, steam: Option<&Steam>) {
     let a = |x: LobbyAction| UiAction::Lobby(x);
-    let mode = lobby.shown.as_ref().map(|s| s.mode).unwrap_or(Mode::Casual);
+    let mode = lobby.shown.as_ref().or(crate::map_pick::fake().as_ref()).map(|s| s.mode).unwrap_or(Mode::Casual);
     root.spawn(abs(Node { left: vh(96.0), top: vh(72.0), flex_direction: FlexDirection::Column, ..default() })).with_children(|t| {
         page_title(t, kit, if mode == Mode::Custom { "Play · Custom game" } else { "Play · Casual 5v5" }, "Party", "パーティー");
     });
@@ -108,7 +108,8 @@ pub fn screen(root: &mut ChildSpawnerCommands, kit: &Kit, st: &MenuState, lobby:
 
     // Left column: party, mode, the big button, joining by code.
     root.spawn(abs(Node { left: vh(96.0), top: vh(200.0), width: vh(1200.0), flex_direction: FlexDirection::Column, ..default() })).with_children(|col| {
-        let Some(s) = &lobby.shown else {
+        let fake = crate::map_pick::fake();
+        let Some(s) = lobby.shown.as_ref().or(fake.as_ref()) else {
             label(col, kit, format!("Connecting to the lobby at {}...", lobby.address), TX2);
             field(col, kit, st, "Or connect to a server address (testing)");
             return;
@@ -127,7 +128,7 @@ pub fn screen(root: &mut ChildSpawnerCommands, kit: &Kit, st: &MenuState, lobby:
                 for (group, title, color) in [(Group::A, "Team A · starts Strays", T_COLOR), (Group::B, "Team B · starts Bureau", CT_COLOR)] {
                     col.spawn(Node { margin: UiRect::vertical(vh(8.0)), ..default() }).with_children(|r| label(r, kit, title, color));
                     let members: Vec<&Member> = s.members.iter().filter(|m| m.group == group).collect();
-                    slots(col, kit, s, &members, 5, 196.0, Some(group), steam);
+                    slots(col, kit, s, &members, 5, 156.0, Some(group), steam);
                 }
             }
         }
@@ -139,6 +140,9 @@ pub fn screen(root: &mut ChildSpawnerCommands, kit: &Kit, st: &MenuState, lobby:
                 small_button(r, kit, if s.mode == Mode::Custom { "Custom game · 10 players" } else { "Casual queue" }, AMBER, None);
             }
         });
+        if s.mode == Mode::Custom {
+            crate::map_pick::row(col, kit, s);
+        }
         col.spawn(Node { column_gap: vh(24.0), align_items: AlignItems::Center, margin: UiRect::top(vh(40.0)), ..default() }).with_children(|r| match s.searching {
             Some(t) => {
                 let t = t as u32;
@@ -162,7 +166,10 @@ pub fn screen(root: &mut ChildSpawnerCommands, kit: &Kit, st: &MenuState, lobby:
         if !lobby.notice.is_empty() {
             col.spawn((kit_text(lobby.notice.clone(), 15.0, AMBER, &kit.text), Node { margin: UiRect::top(vh(16.0)), ..default() }));
         }
-        field(col, kit, st, "Join with a party code, Enter");
+        // (a custom game is full height: joining by code is on the casual screen)
+        if s.mode != Mode::Custom {
+            field(col, kit, st, "Join with a party code, Enter");
+        }
     });
 }
 
@@ -173,10 +180,12 @@ fn label_block(p: &mut ChildSpawnerCommands, kit: &Kit, s: &str, top: f32) {
 /// A row of party slots: members first, then empty "invite" slots up to `count`.
 fn slots(p: &mut ChildSpawnerCommands, kit: &Kit, s: &net::lobby::LobbyState, members: &[&Member], count: usize, height: f32, group: Option<Group>, steam: Option<&Steam>) {
     let leader = s.leader == s.you;
-    let side = if height > 200.0 { 96.0 } else { 64.0 };
+    // custom games (two rows of five) use compact slots: picture and name side by side
+    let compact = height <= 200.0;
+    let side = if compact { 40.0 } else { 96.0 };
     p.spawn(Node { column_gap: vh(16.0), ..default() }).with_children(|row| {
         for i in 0..count {
-            let base = Node { flex_grow: 1.0, flex_basis: px(0), height: vh(height), flex_direction: FlexDirection::Column, row_gap: vh(16.0), padding: UiRect::all(vh(24.0)), border: UiRect::all(px(1)), ..default() };
+            let base = Node { flex_grow: 1.0, flex_basis: px(0), height: vh(height), flex_direction: FlexDirection::Column, row_gap: vh(if compact { 10.0 } else { 16.0 }), padding: UiRect::all(vh(if compact { 16.0 } else { 24.0 })), border: UiRect::all(px(1)), ..default() };
             let Some(m) = members.get(i) else {
                 // ponytail: the mockup's dashed outline; Bevy UI has no dashed borders, so solid LINE.
                 row.spawn((base, BorderColor::all(LINE))).with_children(|c| {
@@ -189,8 +198,15 @@ fn slots(p: &mut ChildSpawnerCommands, kit: &Kit, s: &net::lobby::LobbyState, me
             };
             let is_leader = m.id == s.leader;
             row.spawn(card(base, is_leader)).with_children(|c| {
-                avatar(c, kit, side, picture(steam, m.steam), &m.name, None);
-                c.spawn(kit_text(m.name.clone(), if height > 200.0 { 28.0 } else { 22.0 }, TX1, &kit.text));
+                if compact {
+                    c.spawn(Node { align_items: AlignItems::Center, column_gap: vh(12.0), ..default() }).with_children(|r| {
+                        avatar(r, kit, side, picture(steam, m.steam), &m.name, None);
+                        r.spawn(kit_text(m.name.clone(), 20.0, TX1, &kit.text));
+                    });
+                } else {
+                    avatar(c, kit, side, picture(steam, m.steam), &m.name, None);
+                    c.spawn(kit_text(m.name.clone(), 28.0, TX1, &kit.text));
+                }
                 let you = if m.id == s.you { " · you" } else { "" };
                 if is_leader {
                     label(c, kit, format!("Leader{you}"), AMBER);

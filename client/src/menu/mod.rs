@@ -143,7 +143,8 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
     commands.remove_resource::<MenuError>();
     // The page colour is the clear colour, so menu parts can tune in and out over it.
     // Flat screens (Play, a match found) over the 3D menu (stage3d), which clears to the page colour.
-    commands.spawn((Camera2d, Camera { order: 1, clear_color: ClearColorConfig::None, ..default() }, IsDefaultUiCamera, DespawnOnExit(AppState::Menu)));
+    // (no MSAA, like the 3D camera under it: cameras sharing a window must agree)
+    commands.spawn((Camera2d, Camera { order: 1, clear_color: ClearColorConfig::None, ..default() }, Msaa::Off, IsDefaultUiCamera, DespawnOnExit(AppState::Menu)));
 }
 
 /// Why we ended up back at the menu (shown once).
