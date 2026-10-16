@@ -310,3 +310,16 @@ mod shooting {
         assert!(!r.impacts.is_empty());
     }
 }
+
+#[test]
+fn bomb_site_a_is_the_right_one_on_each_map() {
+    // (map, A site centre, B site centre), from the maps themselves (de_dust2 names them) and
+    // what's known of each layout. de_train isn't in the list: not verified yet.
+    let expected = [("de_dust2", [1152.0, 2464.0], [-1536.0, 2688.0]), ("de_inferno", [1984.0, 456.0], [288.0, 2784.0]), ("de_nuke", [680.0, -776.0], [648.0, -904.0])];
+    for (map, a, b) in expected {
+        let Some(bsp) = load(map) else { continue };
+        let sites = sim::zones::Zones::from_bsp(&bsp).sites_a_first(map);
+        let near = |s: [f32; 3], p: [f32; 2]| (s[0] - p[0]).abs() < 1.0 && (s[1] - p[1]).abs() < 1.0;
+        assert!(near(sites[0], a) && near(sites[1], b), "{map}: {sites:?}");
+    }
+}

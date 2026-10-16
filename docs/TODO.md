@@ -46,7 +46,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Round HUD: score, clock, freeze/bomb states, money +/-, announcements, plant/defuse bars; bomb models, beeps, sounds
 - [x] Shop trimmed to the chosen list (docs/RULES.md 4); ammo not sold, refilled each round
 - [ ] Defuse needs only reach + looking roughly at it; CS traces +use to the bomb entity
-- [ ] Buy menu: "you can't buy now" feedback; CS2-style team money on the scoreboard
+- [ ] Buy menu: CS2-style team money on the scoreboard (B where you can't buy now says why)
 - [x] Hitboxes follow each weapon's aim pose (head moved up to ~7 units between poses; the old test simply aimed 9 units over the head)
 - [ ] Hitboxes don't follow shoot/reload/flinch upper-body animations or gait (aim pose frame 0 only)
 - [ ] ⚠ Defuse times (10 s / 5 s with kit)
@@ -86,6 +86,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Aim checks (net/src/server/aimcheck.rs): inhuman reactions and snap hits flagged for review, never auto-ban
 - [ ] Tune the aim checks against real players: thresholds come from bot tests only (honest bots never trip them); check flags against recordings once people play, before trusting them
 - [ ] A review tool for reports: list reports.jsonl, open the recording at the tick
+- [ ] de_train: check in game which bomb site is A (its map file doesn't name them; sim::zones::sites_a_first guesses east)
 - [ ] 64-tick server option (tick rate is a constant 128 today)
 - [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)
 - [x] Official servers only (decided 2026-10-16), no community servers, no server list:
@@ -140,10 +141,10 @@ land, and add new ones here instead of leaving them only in chat.
       ADR (average damage per round). Then show them as columns.
 - [ ] Scoreboard: round history is rebuilt from events seen since you joined; the server
       should send the full list so late joiners and reconnects see it too
-- [ ] Rewrite docs/UI.md for Interference (tokens, components, motion; the mockup is the spec)
-- [ ] ⚠ Not yet seen on screen in a real match: hit wash/heartbeat, reload line, money
+- [ ] ⚠ Not yet seen on screen in a real match: low-health heartbeat, reload line, money
       delta, timer ticks, vote panel, voted out / surrendered / kill limit announcements
-      (the uplink, voice rows, status icons, match found and Practice were checked)
+      (checked: hit wash and meter trail with net/examples/shooter and friendly fire on, the
+      uplink, voice rows, status icons, match found, Practice)
 - [ ] AI assistant: generated lines through OpenCode, free models first (plan in design notes)
 - [ ] Main menu character card + character select (waits for the new models)
 - [ ] Map pool screen (waits for the new maps)

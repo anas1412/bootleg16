@@ -79,7 +79,7 @@ fn play(what: &str, server: &mut Server, bots: &mut [Bot], secs: u32, events: &m
 #[test]
 fn ten_bots_play_a_whole_match() {
     let Some(bsp) = dust2() else { return };
-    let map = BotMap::new(bsp);
+    let map = BotMap::new(bsp, "de_dust2");
     // Recorded too, to keep an eye on recording sizes.
     let demos = std::env::temp_dir().join(format!("bootleg16-bot-demos-{}", std::process::id()));
     let (mut server, mut bots) = booked(&map, |l| net::config::MatchConfig { demos: demos.to_string_lossy().into(), ..short(l) });
@@ -99,7 +99,7 @@ fn ten_bots_play_a_whole_match() {
 #[test]
 fn bomb_goes_to_a_and_gets_defused() {
     let Some(bsp) = dust2() else { return };
-    let map = BotMap::new(bsp);
+    let map = BotMap::new(bsp, "de_dust2");
     let (mut server, mut bots) = booked(&map, short);
     // Nobody shoots: the terrorists take the bomb to A, the counter-terrorists come to defuse.
     net::bot::command(&mut bots, "all peaceful; all plant a").unwrap();
@@ -115,7 +115,7 @@ fn bomb_goes_to_a_and_gets_defused() {
 #[test]
 fn bots_leaving_pause_the_match_and_coming_back_resumes_it() {
     let Some(bsp) = dust2() else { return };
-    let map = BotMap::new(bsp);
+    let map = BotMap::new(bsp, "de_dust2");
     let (mut server, mut bots) = booked(&map, short);
     let mut events = Vec::new();
     play("round 1 live", &mut server, &mut bots, 30, &mut events, |b, _| b[0].client.round.round >= 1 && b[0].client.round.phase == net::rounds::Phase::Live);

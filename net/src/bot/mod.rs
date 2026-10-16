@@ -30,14 +30,13 @@ pub struct BotMap {
 
 impl BotMap {
     /// Takes a moment (the navigation is worked out from the map): load once, share.
-    pub fn new(bsp: goldsrc::bsp::Bsp) -> Arc<BotMap> {
+    /// `name`: the map's name (which bomb site is A depends on the map).
+    pub fn new(bsp: goldsrc::bsp::Bsp, name: &str) -> Arc<BotMap> {
         let world = sim::collision::World::from_bsp(&bsp);
         let m = &bsp.models[0];
         let nav = Nav::build(&world, m.mins, m.maxs);
         let zones = sim::zones::Zones::from_bsp(&bsp);
-        let mut sites: Vec<[f32; 3]> = zones.bomb_sites.iter().map(|(a, b)| [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, a[2] + 36.0]).collect();
-        // ponytail: maps don't name their sites; east (bigger x) is A, as on de_dust2.
-        sites.sort_by(|a, b| b[0].total_cmp(&a[0]));
+        let sites = zones.sites_a_first(name);
         Arc::new(BotMap { spawns: spawns_of(&zones), nav, sites, zones, bsp })
     }
 

@@ -29,7 +29,7 @@ fn main() {
     let difficulty = args.iter().position(|a| a == "--difficulty").and_then(|i| args.get(i + 1)).and_then(|d| Profile::parse(d)).unwrap_or(net::bot::Difficulty::Normal);
     let dir = std::env::var("BOOTLEG16_DIR").unwrap_or_else(|_| format!("{}/.steam/steam/steamapps/common/Half-Life", std::env::var("HOME").unwrap_or_default()));
     let bsp = goldsrc::bsp::Bsp::load(format!("{dir}/cstrike/maps/de_dust2.bsp")).expect("de_dust2.bsp (set BOOTLEG16_DIR)");
-    let map = BotMap::new(bsp);
+    let map = BotMap::new(bsp, "de_dust2");
 
     // Orders from the terminal and from the control port.
     let (tx, orders) = channel::<String>();
