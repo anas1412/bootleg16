@@ -5,13 +5,22 @@ Each keeps its classic layout and timings, so players' knowledge transfers. The
 geometry, textures, props and names are new. Valve map names stay out of the
 game and code.
 
-| New map | Layout of | Setting | Light |
-|---|---|---|---|
-| **Kiln** キルン | Dust2 | Desert solar-furnace town: sandstone blocks under mirror arrays, cable runs, water tanks | Hard noon sun, white-hot sky |
-| **Oasis** オアシス | Mirage | Market city on a dry lake: canopies, holo shop signs, the "palace" is a closed luxury hotel | Late afternoon, long shadows |
-| **Lantern** ランタン | Inferno | Hillside old town, Jiufen style: stairs, paper lanterns, tea houses; banana is a noodle alley | Dusk, lanterns on |
-| **Maglev** マグレブ | Train | Maglev freight depot: container trains on rails, gantry cranes, rain | Night, sodium and LED |
-| **Fusion** フュージョン | Nuke | Bureau fusion plant: clean white halls, reactor hall below, vents | Overcast, cold interior |
+## Story (2041)
+The **Bureau** is a private security agency in suits that guards the world
+energy grid. The **Strays** are a street crew of runaways and hackers who found
+"Keystone": proof the Bureau causes blackouts to raise power prices. Each map is
+one chapter. Strays attack (plant), Bureau defends.
+
+| Ch. | Layout of | Map | Real place | Story beat |
+|---|---|---|---|---|
+| 1 | Dust2 | **Noor** | Noor solar plant, Ouarzazate, Morocco (desert kasbah town) | Strays hit the plant where the blackouts start and steal the first Keystone logs |
+| 2 | Mirage | **Deira** | Old souk district, Dubai (gold souk, wind towers, skyline behind) | The money trail: the Bureau launders it through the souk; the palace is a Bureau-owned hotel |
+| 3 | Inferno | **Jiufen** | Hillside old town, Taiwan (lanterns, stairs, tea houses) | Bureau raids the Strays' hacker safehouse; Banana is the market alley, the bell tower a temple bell |
+| 4 | Train | **Shinagawa** | Shinagawa freight yard, Tokyo (future maglev terminal), night and rain | Bureau moves the decrypted core by maglev freight; Strays ambush the yard |
+| 5 | Nuke | **Cadarache** | ITER fusion site, southern France | Finale: Strays break into the Bureau's showcase reactor to broadcast Keystone |
+
+Each map borrows the real place's light, architecture, signage and language. The
+layout stays the original's.
 
 ## Rules for every map
 - **Layout:**
@@ -23,7 +32,12 @@ game and code.
   - no busy textures at head height;
   - bomb sites marked with a large painted letter plus a site-colored light.
 - **Factions:** Bureau defends (sites are Bureau assets: arrays, reclaimers, reactor), and Strays attack. Spawns are styled to match: Bureau vans and barriers vs Strays bikes and graffiti.
-- **One hero landmark per map,** visible from spawn: Kiln's mirror tower, Oasis's hotel dome, Lantern's bell tower, Maglev's crane, Fusion's cooling stack.
+- **One hero landmark per map,** visible from spawn:
+  - Noor's solar tower;
+  - Deira's hotel dome;
+  - Jiufen's temple bell;
+  - Shinagawa's maglev gantry;
+  - Cadarache's tokamak hall.
 
 ## Status
 **Not started.** We play on the CS 1.6 maps until the game itself is finished.
@@ -50,6 +64,6 @@ This remodel is the plan for after that.
 
 **Tools needed then:** VHLT (build from source), plus TrenchBroom and Blender for hand work. None are installed yet.
 
-**Mirage/Oasis:** not in the stock 1.6 install. The 1.6 community `de_mirage` (by BubkeZ, 2010) was installed 2026-10-16 from the user's download and loads in the client.
+**Mirage/Deira:** not in the stock 1.6 install. The 1.6 community `de_mirage` (by BubkeZ, 2010) was installed 2026-10-16 from the user's download and loads in the client.
 
-**Order:** Kiln (Dust2 is our test map) → Lantern → Maglev → Fusion → Oasis.
+**Order:** Noor (Dust2 is our test map) → Jiufen → Shinagawa → Cadarache → Deira.

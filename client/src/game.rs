@@ -253,7 +253,10 @@ fn move_camera(
     // Dead, spectating (or forced with BOOTLEG16_SPECTATE): watch another player.
     let spectate = !w.client.vitals.alive() || std::env::var_os("BOOTLEG16_SPECTATE").is_some();
     if spectate && !w.noclip {
-        if let Some(o) = w.client.others().into_iter().find(|o| o.alive) {
+        // Watch a teammate if one is alive (as in CS), else anyone.
+        let others = w.client.others();
+        let mine = w.client.team();
+        if let Some(o) = others.iter().find(|o| o.alive && o.team == mine).or_else(|| others.iter().find(|o| o.alive)).cloned() {
             let eye = [o.origin[0], o.origin[1], o.origin[2] + 20.0];
             let (s, c) = o.yaw.to_radians().sin_cos();
             // Chase view from behind (like CS); in front if there's no room (or

@@ -131,3 +131,12 @@ something surprises you.
   (a full separate Bevy build, ~45 min at -j 2); the trace JSON is ~1 GB for 10 s. gdb can't attach to a running
   process (ptrace_scope 1): run it under gdb instead.
 - Dev profile now builds our crates at opt-level 3 too (opt 1 cost a lot of fps); rebuilds ~3 min.
+
+## Rounds (2026-10-16)
+- Client snapshot state lags the server by a few ticks: tests that check "frozen during freeze time" must use
+  the server's phase (`Server::round_phase`), not the client's, or they run into the next phase.
+- Engine tests (movement, guns) now need a permissive `MatchConfig` (no freeze, money, friendly fire) or
+  freeze time and buy zones get in the way: `tests/common::setup` does that; `setup_with` takes real rules.
+- Child modules (`server/round.rs` etc.) can use the parent's private fields, but `fn`s in their `impl Server`
+  blocks must be `pub(super)` for `server/mod.rs` to call them.
+- `info_map_parameters bombradius` (de_nuke 350): C4 damage = radius, reach = 3.5 × radius, through walls.

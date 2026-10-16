@@ -6,6 +6,7 @@ use crate::ui::{button, panel, text, UiAction, UiActions, CT_COLOR, MUTED, T_COL
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use net::protocol::{BuyItem, Team};
+use net::server::buy::price;
 
 pub struct BuyPlugin;
 
@@ -44,7 +45,6 @@ fn layout(ct: bool) -> Vec<Entry> {
     if ct {
         equipment.push(("Defuse Kit", DefuseKit));
     }
-    equipment.push(("NightVision", NightVision));
     vec![
         Entry::Category(
             "Pistols",
@@ -67,17 +67,6 @@ fn layout(ct: bool) -> Vec<Entry> {
     ]
 }
 
-/// What an item costs (shown in the menu; the server charges).
-fn price(item: BuyItem) -> Option<u32> {
-    match item {
-        BuyItem::Weapon(id) => Some(sim::weapons::def(id).price),
-        BuyItem::Kevlar => Some(650),
-        BuyItem::KevlarHelmet => Some(1000),
-        BuyItem::DefuseKit => Some(200),
-        BuyItem::NightVision => Some(1250),
-        BuyItem::PrimaryAmmo | BuyItem::SecondaryAmmo => None,
-    }
-}
 
 #[derive(Component)]
 struct BuyRoot;
@@ -94,7 +83,7 @@ fn buy_menu(
     mut actions: ResMut<UiActions>,
     mut w: ResMut<Walker>,
     mut menu: ResMut<BuyMenu>,
-    mut shown: Local<Option<(Option<Option<usize>>, Team)>>,
+    mut shown: Local<Option<(Option<Option<usize>>, Team, i32)>>,
     mut cursor: Single<&mut CursorOptions>,
     roots: Query<Entity, With<BuyRoot>>,
 ) {
@@ -114,7 +103,8 @@ fn buy_menu(
     }
     // Number keys become the same actions as clicks.
     let digits = [KeyCode::Digit0, KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9];
-    if keys.just_pressed(KeyCode::KeyB) && team != Team::Spectator {
+    let can_buy = w.client.me_info.can_buy;
+    if keys.just_pressed(KeyCode::KeyB) && can_buy {
         menu.0 = if menu.0.is_some() { None } else { Some(None) };
     } else if let (Some(state), Some(n)) = (menu.0, digits.iter().position(|k| keys.just_pressed(*k))) {
         let i = n.wrapping_sub(1);
@@ -153,7 +143,8 @@ fn buy_menu(
         }
         _ => true,
     });
-    if team == Team::Spectator {
+    // Buy time over, left the buy zone, died: the menu goes away.
+    if !can_buy && !auto {
         menu.0 = None;
     }
     if auto && menu.0.is_none() {
@@ -168,20 +159,23 @@ fn buy_menu(
         cursor.visible = false;
     }
 
-    if *shown == Some((menu.0, team)) {
+    let money = w.client.me_info.money;
+    if *shown == Some((menu.0, team, money)) {
         return;
     }
-    *shown = Some((menu.0, team));
+    *shown = Some((menu.0, team, money));
     for e in &roots {
         commands.entity(e).despawn();
     }
     let Some(state) = menu.0 else { return };
-    let free = w.client.practice;
+    let free = w.client.practice || w.client.round.phase == net::rounds::Phase::Warmup;
     let cost = |item: BuyItem| match price(item) {
         _ if free => "free".to_string(),
         Some(p) => format!("${p}"),
         None => String::new(),
     };
+    // Prices you can't pay show red.
+    let afford = |item: BuyItem| free || price(item).is_none_or(|p| p <= money);
     commands
         .spawn((
             BuyRoot,
@@ -191,7 +185,8 @@ fn buy_menu(
         ))
         .with_children(|root| {
             root.spawn(panel(Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(20)), ..default() })).with_children(|p| {
-                p.spawn((text(format!("Buy  -  {}", if ct { "Counter-Terrorists" } else { "Terrorists" }), 24.0, if ct { CT_COLOR } else { T_COLOR }), Node { margin: UiRect::bottom(px(10)), ..default() }));
+                let header = if free { String::new() } else { format!("   ${money}") };
+                p.spawn((text(format!("Buy  -  {}{header}", if ct { "Counter-Terrorists" } else { "Terrorists" }), 24.0, if ct { CT_COLOR } else { T_COLOR }), Node { margin: UiRect::bottom(px(10)), ..default() }));
                 p.spawn(Node { flex_direction: FlexDirection::Row, column_gap: px(16), ..default() }).with_children(|row| {
                     row.spawn(Node { flex_direction: FlexDirection::Column, ..default() }).with_children(|col| {
                         for (i, e) in layout.iter().enumerate() {
@@ -208,7 +203,7 @@ fn buy_menu(
                             for (i, (name, item)) in items.iter().enumerate() {
                                 col.spawn(Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, ..default() }).with_children(|r| {
                                     button(r, &format!("{}  {name}", i + 1), UiAction::Buy(*item), false);
-                                    r.spawn((text(cost(*item), 18.0, MUTED), Node { margin: UiRect::left(px(12)), width: px(64), ..default() }));
+                                    r.spawn((text(cost(*item), 18.0, if afford(*item) { MUTED } else { Color::srgb(1.0, 0.4, 0.35) }), Node { margin: UiRect::left(px(12)), width: px(64), ..default() }));
                                 });
                             }
                         });

@@ -238,6 +238,11 @@ impl Client {
         }
     }
 
+    /// Our own command clock (input number x tick), which weapon timers use.
+    pub fn cmd_time(&self) -> f64 {
+        self.seq as f64 * TICK as f64
+    }
+
     /// Server time other players are currently drawn at (sent with each input).
     pub fn view_tick(&self) -> f32 {
         self.render_tick

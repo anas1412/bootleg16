@@ -1,7 +1,7 @@
 //! The authoritative server: owns the world, runs every player's movement and
 //! weapons from their inputs, resolves shots with lag compensation, and sends snapshots.
 mod bomb;
-mod buy;
+pub mod buy;
 mod ground;
 mod round;
 

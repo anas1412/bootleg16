@@ -28,7 +28,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] CS 1.6 keys: B buy menu (CS layout per side, 0 cancel), Q last weapon, wheel, G drop,
       `,`/`.` ammo, Tab scoreboard; drop/pickup on the ground; gun drops on death
 - [ ] hud_fastswitch 0 (CS default: number keys show a selection, mouse1 confirms); only fastswitch 1 now
-- [ ] Ground guns are never cleaned up (CS removes them at round start)
+- [x] Ground guns cleared at round start
 - [ ] First-person weapon models (viewmodels) and third-person weapon models
 - [x] Weapon sounds
 - [x] Bullet holes + dust for every bullet/pellet (server sends wall hits), blood spray (bigger on headshots), blood on the wall behind
@@ -37,12 +37,17 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] ⚠ Shotgun ground-recoil ranges (source-only); FAMAS/Glock follow-up timings per spec
 
 ### Rounds and economy (`docs/RULES.md`)
-- [ ] Teams (T/CT spawns), round flow: freeze time, buy time, round time, round end
-- [ ] Buy menu and buy zones; prices and money rules from RULES.md
-- [ ] Bomb: plant, defuse (kit), timer, explosion, win conditions
-- [ ] MR12 + halftime swap + MR3 overtime at $10,000
-- [ ] Loss bonus: per-team ladder (default) and 1.6 shared mode (config)
-- [ ] All rule values in a server config file
+- [x] Teams (T/CT spawns), round flow: warmup, freeze time, buy time, round time, round end (net/src/rounds.rs, server/round.rs)
+- [x] Buy zones (func_buyzone, or 200 units around own spawns), buy time, prices, team-only items, money
+- [x] Bomb: C4 to one T each round, drop (G/death) and pick up, plant (3 s in a site, frozen), defuse (use, 10/5 s kit, frozen), 40 s timer, explosion (map bombradius, ×3.5 reach), win conditions
+- [x] MR12 + halftime swap + MR3 overtime at $10,000 (unit tests)
+- [x] Loss bonus: per-team ladder (default) and 1.6 shared mode (config)
+- [x] All rule values in a server config file (config/server.cfg, `server --config`)
+- [x] Round HUD: score, clock, freeze/bomb states, money +/-, announcements, plant/defuse bars; bomb models, beeps, sounds
+- [ ] Night vision isn't sold (no effect yet)
+- [ ] Defuse needs only reach + looking roughly at it; CS traces +use to the bomb entity
+- [ ] Buy menu: "you can't buy now" feedback; CS2-style team money on the scoreboard
+- [ ] ⚠ Close-range head shots at 64 units with pitch -8 missed in a test (net/tests/rounds.rs uses body shots); check head hitbox placement
 - [ ] ⚠ Defuse times (10 s / 5 s with kit)
 - [ ] ⚠ Living Ts get no money when time runs out (`MarkLivingPlayersOnTeamAsNotReceivingMoneyNextRound` call sites)
 - [ ] ⚠ Team buy restrictions (`CanBuyWeaponByMaptype`)
@@ -62,7 +67,6 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Crosshair gap = real spread of the next shot; none on snipers; sniper scope overlay
 - [x] Scoreboard by team, clickable buy panel with prices (free in practice), team select (M, 1/2/5/6)
 - [x] Main menu: practice (map, dummies, strafe), join server, settings (name, sensitivity, volume); Esc menu
-- [ ] HUD: money, round timer, team score (with the round system)
 - [x] FPS + ping counter (top left); Max FPS and VSync settings
 - [ ] Settings: FOV, key binds, crosshair style
 - [x] Viewmodel GPU-skinned (mirrored bones through a reflection transform)
@@ -114,8 +118,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Engine works from a neutral map form so editor maps and BSPs both load
 - [ ] Modernized look: new maps and character models replace the CS assets
       (UI direction E in `design/mockups/e.html`; update `docs/UI.md` to E)
-- [ ] Five rebuilt maps per `docs/MAPS.md`: Kiln (Dust2 layout), Lantern (Inferno),
-      Maglev (Train), Fusion (Nuke), Oasis (Mirage; 1.6 community BSP installed)
+- [ ] Five rebuilt maps per `docs/MAPS.md`: Noor (Dust2 layout), Jiufen (Inferno),
+      Shinagawa (Train), Cadarache (Nuke), Deira (Mirage; 1.6 community BSP installed)
 - [ ] Renderer: PBR texture overrides by WAD name, glTF props, fog/bloom/grading
 - [ ] Factions Bureau (cyan) vs Strays (pink) replace CT/T in UI and code
 - [ ] Characters picked once in the main menu, independent of team; outfit

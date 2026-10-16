@@ -1,7 +1,7 @@
 //! The game client. Opens on the main menu; practice starts a server inside the game,
 //! "Join server" connects to one. Each part of the game is its own plugin module.
 //!
-//! Usage: `client [map] [--connect host:port] [--name name] [--give ak47,awp] [--practice N]`
+//! Usage: `client [map] [--connect host:port] [--name name] [--give ak47,awp] [--practice N | --dummies N]`
 //! (any argument skips the menu). The game directory comes from `BOOTLEG16_DIR`
 //! (default: the Steam Half-Life install).
 //! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.
@@ -10,6 +10,7 @@
 //! `BOOTLEG16_TEAM=t|ct|spec` picks the team in such runs (default auto).
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead);
 //! `BOOTLEG16_SPECTATE=front` watches them from the front.
+mod bomb;
 mod buy;
 mod effects;
 mod framerate;
@@ -21,6 +22,7 @@ mod map;
 mod menu;
 mod models;
 mod players;
+mod round_hud;
 mod sound;
 mod ui;
 mod viewmodel;
@@ -67,6 +69,8 @@ fn main() {
             sound::SoundPlugin,
             buy::BuyPlugin,
             hud::HudPlugin,
+            round_hud::RoundHudPlugin,
+            bomb::BombPlugin,
         ))
         .add_systems(Update, screenshot)
         .run();

@@ -19,6 +19,7 @@ pub enum UiAction {
     PickMap(String),
     Dummies(i32),
     ToggleDummyMove,
+    ToggleMatch,
     StartPractice,
     Connect,
     Sensitivity(f32),

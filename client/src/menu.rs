@@ -107,6 +107,8 @@ struct MenuState {
     map: String,
     dummies: i32,
     dummy_move: bool,
+    /// Play a real match (rounds and money) instead of the practice room.
+    matchup: bool,
     address: String,
     error: Option<String>,
     rebuild: bool,
@@ -131,7 +133,7 @@ impl Plugin for MenuPlugin {
     }
 }
 
-/// `client [map] [--connect host:port] [--name name] [--give ak47,awp] [--practice N]`:
+/// `client [map] [--connect host:port] [--name name] [--give ak47,awp] [--practice N | --dummies N]`:
 /// any argument skips the menu.
 fn from_command_line(mut commands: Commands, mut settings: ResMut<Settings>, mut next: ResMut<NextState<AppState>>) {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -146,7 +148,8 @@ fn from_command_line(mut commands: Commands, mut settings: ResMut<Settings>, mut
     let server = match (flag("--connect"), flag("--practice")) {
         (Some(addr), _) => ServerChoice::Remote(addr),
         (None, Some(n)) => ServerChoice::Local(net::server::Rules::practice(n.parse().unwrap_or(5), false)),
-        (None, None) => ServerChoice::Local(net::server::Rules::default()),
+        // A match; `--dummies N` puts standing dummies on the other team.
+        (None, None) => ServerChoice::Local(net::server::Rules { dummies: flag("--dummies").and_then(|n| n.parse().ok()).unwrap_or(0), ..Default::default() }),
     };
     let give = flag("--give").map(|l| l.split(',').filter_map(sim::weapons::data::by_name).collect()).unwrap_or_default();
     commands.insert_resource(GameConfig { map, server, give });
@@ -173,6 +176,7 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
         maps,
         dummies: 5,
         dummy_move: false,
+        matchup: false,
         address: "127.0.0.1:27015".into(),
         error: error.map(|e| e.0.clone()),
         rebuild: true,
@@ -209,7 +213,7 @@ fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res
             root.spawn(Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(56)), width: px(380), ..default() }).with_children(|col| {
                 col.spawn(text("BOOTLEG", 54.0, TEXT));
                 col.spawn((text("16", 54.0, ACCENT), Node { margin: UiRect { top: px(-18), bottom: px(36), ..default() }, ..default() }));
-                for (label, page) in [("Practice", Page::Practice), ("Join server", Page::Join), ("Settings", Page::Settings)] {
+                for (label, page) in [("Play", Page::Practice), ("Join server", Page::Join), ("Settings", Page::Settings)] {
                     button(col, label, UiAction::Page(page), st.page == page);
                 }
                 button(col, "Quit", UiAction::Quit, false);
@@ -230,8 +234,13 @@ fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res
                 }
                 Page::Practice => {
                     right.spawn(panel(Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(28)), ..default() })).with_children(|p| {
-                        p.spawn(text("Practice", 30.0, TEXT));
-                        p.spawn((text("No rounds, infinite ammo, instant respawn, dummies to shoot. Everything is free in the buy menu.", 16.0, MUTED), Node { margin: UiRect::vertical(px(10)), ..default() }));
+                        p.spawn(text("Play offline", 30.0, TEXT));
+                        let about = if st.matchup {
+                            "A real match: freeze time, money, the bomb, MR12. Dummies stand in for the other team until there are bots."
+                        } else {
+                            "Practice: no rounds, infinite ammo, instant respawn, dummies to shoot. Everything is free in the buy menu."
+                        };
+                        p.spawn((text(about, 16.0, MUTED), Node { margin: UiRect::vertical(px(10)), ..default() }));
                         p.spawn(Node { flex_direction: FlexDirection::Row, column_gap: px(28), ..default() }).with_children(|row| {
                             row.spawn(Node { flex_direction: FlexDirection::Column, max_height: px(420), overflow: Overflow::scroll_y(), ..default() }).with_children(|list| {
                                 for m in &st.maps {
@@ -239,6 +248,7 @@ fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res
                                 }
                             });
                             row.spawn(Node { flex_direction: FlexDirection::Column, ..default() }).with_children(|opts| {
+                                button(opts, if st.matchup { "Mode: match" } else { "Mode: practice" }, UiAction::ToggleMatch, st.matchup);
                                 opts.spawn(text(format!("Dummies: {}", st.dummies), 20.0, TEXT));
                                 opts.spawn(Node { flex_direction: FlexDirection::Row, column_gap: px(8), ..default() }).with_children(|r| {
                                     button(r, "-", UiAction::Dummies(-1), false);
@@ -333,10 +343,15 @@ fn menu_actions(
             UiAction::PickMap(m) => st.map = m,
             UiAction::Dummies(d) => st.dummies = (st.dummies + d).clamp(0, 20),
             UiAction::ToggleDummyMove => st.dummy_move = !st.dummy_move,
+            UiAction::ToggleMatch => st.matchup = !st.matchup,
             UiAction::StartPractice => {
                 commands.insert_resource(GameConfig {
                     map: st.map.clone(),
-                    server: ServerChoice::Local(net::server::Rules::practice(st.dummies as u8, st.dummy_move)),
+                    server: ServerChoice::Local(if st.matchup {
+                        net::server::Rules { dummies: st.dummies as u8, dummy_move: st.dummy_move, ..Default::default() }
+                    } else {
+                        net::server::Rules::practice(st.dummies as u8, st.dummy_move)
+                    }),
                     give: Vec::new(),
                 });
                 next.set(AppState::Connecting);

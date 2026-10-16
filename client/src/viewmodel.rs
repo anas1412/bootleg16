@@ -42,6 +42,7 @@ pub struct ViewModel {
     looping: bool,
     was_reloading: bool,
     was_pinned: bool,
+    was_planting: bool,
     slash: u8,
     pub cues: Cues,
     /// Animation frame reached last update (for firing animation sound events once).
@@ -168,6 +169,11 @@ fn update(
         play(&mut vm, seq, now, false);
     } else if cues.throw {
         play(&mut vm, m.model.sequence("throw"), now, false);
+    } else if l.planting.is_some() && !vm.was_planting {
+        play(&mut vm, m.model.sequence("pressbutton"), now, false);
+    } else if l.planting.is_none() && vm.was_planting && l.c4 {
+        // Let go before it was planted: back to holding it.
+        play(&mut vm, m.model.sequence("idle1"), now, true);
     } else if l.pin_pulled() && !vm.was_pinned {
         play(&mut vm, m.model.sequence("pullpin"), now, false);
     } else if reloading && !vm.was_reloading {
@@ -180,6 +186,7 @@ fn update(
     }
     vm.was_reloading = reloading;
     vm.was_pinned = l.pin_pulled();
+    vm.was_planting = l.planting.is_some();
 
     // A one-shot animation that has finished goes back to idle (looping).
     let s = &m.model.sequences[vm.seq.min(m.model.sequences.len() - 1)];

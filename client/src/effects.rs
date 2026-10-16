@@ -4,6 +4,7 @@ use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::menu::AppState;
 use crate::impacts::Hit;
+use crate::round_hud::RoundNews;
 use crate::models::Parts;
 use crate::players::PlayerAnim;
 use crate::{game_dir, map, models, sound};
@@ -143,9 +144,9 @@ fn ground_guns(
     }
 }
 
-/// An HE fireball: age in seconds.
+/// A fireball: age in seconds, size (1 = HE grenade).
 #[derive(Component)]
-struct Fireball(f32);
+struct Fireball(f32, f32);
 
 /// A smoke cloud's puffs, keyed by where the cloud is.
 #[derive(Component)]
@@ -185,10 +186,11 @@ fn grenade_effects(
     let me = w.client.id();
     for e in std::mem::take(&mut w.pending_fx) {
         match e {
-            GameEvent::Explosion { at } => {
+            GameEvent::Explosion { at } | GameEvent::BombExploded { at } => {
+                let size = if matches!(e, GameEvent::BombExploded { .. }) { 4.0 } else { 1.0 };
                 let mat = materials.add(StandardMaterial { base_color: Color::srgba(1.0, 0.6, 0.15, 0.9), unlit: true, alpha_mode: AlphaMode::Blend, ..default() });
                 commands.spawn((
-                    Fireball(0.0),
+                    Fireball(0.0, size),
                     Mesh3d(fx.sphere.clone()),
                     MeshMaterial3d(mat),
                     Transform::from_translation(Vec3::from(map::to_y_up(at))).with_scale(Vec3::splat(20.0)),
@@ -209,8 +211,8 @@ fn grenade_effects(
     }
     for (e, mut f, mut tf, mat) in &mut fireballs {
         f.0 += dt;
-        let t = f.0 / 0.35;
-        tf.scale = Vec3::splat(20.0 + 130.0 * t.min(1.0));
+        let t = f.0 / (0.35 * f.1.sqrt());
+        tf.scale = Vec3::splat((20.0 + 130.0 * t.min(1.0)) * f.1);
         if let Some(mut m) = materials.get_mut(&mat.0) {
             m.base_color.set_alpha(0.9 * (1.0 - t).max(0.0));
         }
@@ -259,7 +261,7 @@ fn grenade_effects(
 
 /// Server events: tracers, sounds, the kill feed, bullet holes and blood (`impacts`), player
 /// animations (`players`); explosions and flashes go on to `grenade_effects`.
-fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>) {
+fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>) {
     let me = w.client.id();
     // Where a player is now (for sounds and the direction blood flies).
     let eye_of = |w: &Walker, id: u8| -> Option<[f32; 3]> {
@@ -304,10 +306,14 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: 
                     if Some(id) == me {
                         return "you".to_string();
                     }
+                    if id == net::protocol::WORLD {
+                        return "the bomb".to_string();
+                    }
                     w.client.scores.iter().find(|s| s.id == id).map(|s| s.name.clone()).unwrap_or_else(|| format!("player {id}"))
                 };
                 let line = match weapon {
                     None => format!("{} fell", name(victim)),
+                    Some(sim::weapons::Id::C4) => format!("the bomb got {}", name(victim)),
                     Some(wp) => format!("{} [{}{}] {}", name(killer), sim::weapons::def(wp).name, if headshot { " HS" } else { "" }, name(victim)),
                 };
                 w.feed.push((line, 6.0));
@@ -319,6 +325,29 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: 
             GameEvent::Flash { at, .. } => {
                 w.cues.push(sound::Cue::Flash { at });
                 w.pending_fx.push(e);
+            }
+            GameEvent::BombPlanted { at, .. } => {
+                w.cues.push(sound::Cue::At { file: "weapons/c4_plant.wav", at, far: false });
+                round.write(RoundNews(e));
+            }
+            GameEvent::Defusing { .. } => {
+                if let net::protocol::BombNet::Planted { at, .. } = w.client.bomb {
+                    w.cues.push(sound::Cue::At { file: "weapons/c4_disarm.wav", at, far: false });
+                }
+            }
+            GameEvent::BombDefused { .. } => {
+                if let net::protocol::BombNet::Planted { at, .. } = w.client.bomb {
+                    w.cues.push(sound::Cue::At { file: "weapons/c4_disarmed.wav", at, far: false });
+                }
+                round.write(RoundNews(e));
+            }
+            GameEvent::BombExploded { at } => {
+                w.cues.push(sound::Cue::At { file: "weapons/c4_explode1.wav", at, far: true });
+                w.pending_fx.push(e.clone());
+                round.write(RoundNews(e));
+            }
+            GameEvent::RoundStart { .. } | GameEvent::RoundEnd { .. } | GameEvent::SidesSwapped | GameEvent::MatchOver { .. } => {
+                round.write(RoundNews(e));
             }
             _ => {}
         }
