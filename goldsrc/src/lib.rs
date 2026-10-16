@@ -3,4 +3,5 @@ pub mod bsp;
 pub mod materials;
 pub mod mdl;
 pub mod texture;
+pub mod tga;
 pub mod wad;

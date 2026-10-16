@@ -23,6 +23,7 @@ mod menu;
 mod models;
 mod players;
 mod round_hud;
+mod sky;
 mod smoke;
 mod sound;
 mod teammates;
@@ -75,7 +76,7 @@ fn main() {
             round_hud::RoundHudPlugin,
             bomb::BombPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin),
+            (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin),
         ))
         .add_systems(Update, screenshot)
         .run();

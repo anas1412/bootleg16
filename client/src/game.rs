@@ -147,6 +147,13 @@ fn mouse_look(
     let fov = w.client.state.loadout.active_gun().map(|g| g.fov()).unwrap_or(90) as f32;
     // CS: sensitivity × m_yaw (0.022°) per mouse count.
     let sens = (settings.sensitivity * 0.022).to_radians() * fov / 90.0;
+    // Screenshot runs can aim the camera: BOOTLEG16_LOOK=yaw,pitch (GoldSrc degrees).
+    if let Some((y, p)) = std::env::var("BOOTLEG16_LOOK").ok().and_then(|v| v.split_once(',').map(|(a, b)| (a.parse::<f32>().ok(), b.parse::<f32>().ok()))) {
+        if let (Some(y), Some(p)) = (y, p) {
+            fc.yaw = (y - 90.0).to_radians();
+            fc.pitch = -p.to_radians();
+        }
+    }
     if cursor.grab_mode != CursorGrabMode::None {
         fc.yaw -= motion.delta.x * sens;
         fc.pitch = (fc.pitch - motion.delta.y * sens).clamp(-1.55, 1.55);
