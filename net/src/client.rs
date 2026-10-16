@@ -52,6 +52,8 @@ pub struct Remote {
     pub team: Team,
     /// Jumping or falling.
     pub airborne: bool,
+    /// Reloading their gun.
+    pub reloading: bool,
     /// Health and kit: teammates only (None for enemies).
     pub mate: Option<crate::protocol::Mate>,
 }
@@ -398,12 +400,12 @@ impl Client {
                         Some(pa) => pa.yaw() + ((pb.yaw() - pa.yaw() + 540.0).rem_euclid(360.0) - 180.0) * t,
                         None => pb.yaw(),
                     };
-                    out.push(Remote { id: pb.id, origin, crouched: pb.crouched(), alive: pb.alive(), yaw, pitch: pb.pitch(), weapon: pb.weapon, team: pb.team, airborne: pb.airborne(), mate: pb.mate });
+                    out.push(Remote { id: pb.id, origin, crouched: pb.crouched(), alive: pb.alive(), yaw, pitch: pb.pitch(), weapon: pb.weapon, team: pb.team, airborne: pb.airborne(), reloading: pb.reloading(), mate: pb.mate });
                 }
             }
             None => {
                 for p in newest.players.iter().filter(|p| Some(p.id) != me) {
-                    out.push(Remote { id: p.id, origin: p.origin(), crouched: p.crouched(), alive: p.alive(), yaw: p.yaw(), pitch: p.pitch(), weapon: p.weapon, team: p.team, airborne: p.airborne(), mate: p.mate });
+                    out.push(Remote { id: p.id, origin: p.origin(), crouched: p.crouched(), alive: p.alive(), yaw: p.yaw(), pitch: p.pitch(), weapon: p.weapon, team: p.team, airborne: p.airborne(), reloading: p.reloading(), mate: p.mate });
                 }
             }
         }

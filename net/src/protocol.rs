@@ -138,7 +138,7 @@ pub struct PlayerNet {
     /// View angles in 1/65536 of a turn (yaw) and of half a turn (pitch).
     yaw: u16,
     pitch: i16,
-    /// Bit 0 crouched, bit 1 alive, bit 2 in the air (jumping, falling).
+    /// Bit 0 crouched, bit 1 alive, bit 2 in the air (jumping, falling), bit 3 reloading.
     flags: u8,
     /// Weapon in hand.
     pub weapon: Id,
@@ -159,13 +159,13 @@ pub struct Mate {
 impl PlayerNet {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_arguments)]
-    pub fn new(id: u8, origin: [f32; 3], yaw: f32, pitch: f32, crouched: bool, alive: bool, airborne: bool, weapon: Id, team: Team, mate: Option<Mate>) -> PlayerNet {
+    pub fn new(id: u8, origin: [f32; 3], yaw: f32, pitch: f32, crouched: bool, alive: bool, airborne: bool, reloading: bool, weapon: Id, team: Team, mate: Option<Mate>) -> PlayerNet {
         PlayerNet {
             id,
             origin: origin.map(|v| (v * 8.0).round() as i32),
             yaw: (yaw.rem_euclid(360.0) / 360.0 * 65536.0).round() as u32 as u16,
             pitch: (pitch.clamp(-90.0, 90.0) / 180.0 * 65535.0).round() as i16,
-            flags: crouched as u8 | (alive as u8) << 1 | (airborne as u8) << 2,
+            flags: crouched as u8 | (alive as u8) << 1 | (airborne as u8) << 2 | (reloading as u8) << 3,
             weapon,
             team,
             mate,
@@ -173,6 +173,9 @@ impl PlayerNet {
     }
     pub fn airborne(&self) -> bool {
         self.flags & 4 != 0
+    }
+    pub fn reloading(&self) -> bool {
+        self.flags & 8 != 0
     }
     pub fn origin(&self) -> [f32; 3] {
         self.origin.map(|v| v as f32 / 8.0)

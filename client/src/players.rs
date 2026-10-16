@@ -22,7 +22,16 @@ impl Plugin for PlayersPlugin {
                 l.dying.clear();
                 l.last_hit.clear();
             })
-            .add_systems(Update, (anim_events, draw_others, animate).chain().in_set(Frame::World));
+            .add_systems(Update, (clear_corpses, anim_events, draw_others, animate).chain().in_set(Frame::World));
+    }
+}
+
+/// A new round: the bodies are gone (CS clears them at round start).
+fn clear_corpses(mut commands: Commands, mut news: MessageReader<crate::effects::GameNews>, corpses: Query<Entity, With<Corpse>>) {
+    if news.read().any(|n| matches!(n.0, net::protocol::GameEvent::RoundStart { .. })) {
+        for e in &corpses {
+            commands.entity(e).despawn();
+        }
     }
 }
 
@@ -87,6 +96,8 @@ struct OtherPlayer {
     backwards: bool,
     /// When they left the ground (the jump animation plays once from there).
     jumped: Option<f32>,
+    /// Reloading last frame (the reload animation starts when it begins).
+    reloading: bool,
     last_origin: [f32; 3],
     speed: f32,
     crouched: bool,
@@ -214,7 +225,7 @@ fn draw_others(
         });
         let flash = crate::muzzle::spawn(&mut commands, &flash_look);
         commands.entity(parent).add_child(flash);
-        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, gait_frame: 0.0, gait_yaw: o.yaw, backwards: false, jumped: None, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None, flash, flash_until: 0.0 });
+        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, gait_frame: 0.0, gait_yaw: o.yaw, backwards: false, jumped: None, reloading: false, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None, flash, flash_until: 0.0 });
     }
 }
 
@@ -296,6 +307,13 @@ fn animate(
             gait = j;
             gait_frame = ((now - t0) * model.sequences[j].fps).min(model.sequences[j].frames as f32 - 1.0);
         }
+        // Started reloading: CS's third-person reload (`ref_reload_<weapon>`).
+        if o.reloading && !p.reloading {
+            if let Some(s) = seq(model, &format!("{stance}_reload_{}", sim::weapons::data::anim_ext(p.weapon))) {
+                p.action = Some((s, now));
+            }
+        }
+        p.reloading = o.reloading;
         // Upper body: a one-off action, else the weapon's aim pose.
         let aim = seq(model, &format!("{stance}_aim_{}", sim::weapons::data::anim_ext(p.weapon))).or_else(|| seq(model, &format!("{stance}_aim_carbine"))).unwrap_or(0);
         let mut upper = (aim, 0.0);
