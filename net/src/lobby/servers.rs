@@ -5,7 +5,7 @@ use super::*;
 impl LobbyServer {
     /// Write a report down for review: who, whom (Steam ids and names), why, where.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn file_report(&mut self, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: &str, round: u32, demo: &str, tick: u32) {
+    pub(super) fn file_report(&mut self, from: SocketAddr, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: &str, round: u32, demo: &str, tick: u32) {
         let (Some(by), Some(of)) = (self.seats.get(&reporter), self.seats.get(&target)) else { return };
         let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         // Names have no control characters (see Hello), so Debug quoting is valid JSON here.
@@ -13,7 +13,7 @@ impl LobbyServer {
             "{{\"time\":{time},\"reason\":\"{reason:?}\",\"reporter\":{{\"steam\":{},\"name\":{:?}}},\"reported\":{{\"steam\":{},\"name\":{:?}}},\"map\":{map:?},\"round\":{round},\"demo\":{demo:?},\"tick\":{tick}}}",
             by.0, by.1, of.0, of.1
         );
-        self.write_report(&line);
+        self.write_report(from, &line);
     }
 }
 
@@ -44,14 +44,14 @@ impl LobbyServer {
                 self.servers.insert(from, GameServer { public, region, key, official: true, busy, seen: Instant::now(), sent, deathmatch, players, max, seated, maps });
             }
             Some(LobbyMsg::Result { winners, losers, abandoned }) if self.role == Role::Active => self.match_result(&winners, &losers, &abandoned),
-            Some(LobbyMsg::Flag { ticket, reason, map, demo, tick }) if self.role == Role::Active => self.file_flag(ticket, &reason, &map, &demo, tick),
-            Some(LobbyMsg::Report { reporter, target, reason, map, round, demo, tick }) if self.role == Role::Active => self.file_report(reporter, target, reason, &map, round, &demo, tick),
+            Some(LobbyMsg::Flag { ticket, reason, map, demo, tick }) if self.role == Role::Active => self.file_flag(from, ticket, &reason, &map, &demo, tick),
+            Some(LobbyMsg::Report { reporter, target, reason, map, round, demo, tick }) if self.role == Role::Active => self.file_report(from, reporter, target, reason, &map, round, &demo, tick),
             _ => {}
         }
     }
 
     /// The aim checks flagged someone: filed with the reports, from "anti-cheat".
-    pub(super) fn file_flag(&mut self, ticket: u64, reason: &str, map: &str, demo: &str, tick: u32) {
+    pub(super) fn file_flag(&mut self, from: SocketAddr, ticket: u64, reason: &str, map: &str, demo: &str, tick: u32) {
         let Some(of) = self.seats.get(&ticket) else { return };
         let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let reason: String = reason.chars().filter(|c| !c.is_control()).take(200).collect();
@@ -59,11 +59,14 @@ impl LobbyServer {
             "{{\"time\":{time},\"reason\":\"AimCheck\",\"detail\":{reason:?},\"reporter\":\"anti-cheat\",\"reported\":{{\"steam\":{},\"name\":{:?}}},\"map\":{map:?},\"demo\":{demo:?},\"tick\":{tick}}}",
             of.0, of.1
         );
-        self.write_report(&line);
+        self.write_report(from, &line);
     }
 
     /// Append a report line to the reports file (and the log).
-    fn write_report(&self, line: &str) {
+    /// Appends which game server it came from (the recording is on that machine).
+    fn write_report(&self, from: SocketAddr, line: &str) {
+        let server = self.servers.get(&from).map(|s| s.public).unwrap_or(from);
+        let line = format!("{},\"server\":\"{server}\"}}", line.strip_suffix('}').unwrap_or(line));
         println!("report: {line}");
         if let Some(path) = &self.reports {
             use std::io::Write;

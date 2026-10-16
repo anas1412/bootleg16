@@ -85,7 +85,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Match recordings (net/src/demo.rs, replay with `server --play`), reports with recording + tick
 - [x] Aim checks (net/src/server/aimcheck.rs): inhuman reactions and snap hits flagged for review, never auto-ban
 - [ ] Tune the aim checks against real players: thresholds come from bot tests only (honest bots never trip them); check flags against recordings once people play, before trusting them
-- [ ] A review tool for reports: list reports.jsonl, open the recording at the tick
+- [x] A review tool for reports: `server --reports reports.jsonl`, `server --review reports.jsonl <n>` (from 10 s before)
 - [ ] de_mirage (community map, BubkeZ): on hold (2026-10-16); loads, plays and has its A/B table; add to MAP_POOL when wanted
 - [ ] de_train: check in game which bomb site is A (its map file doesn't name them; sim::zones::sites_a_first guesses east)
 - [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)

@@ -288,7 +288,7 @@ fn reports_are_filed_with_steam_ids() {
     std::thread::sleep(Duration::from_millis(300));
     let text = std::fs::read_to_string(&path).unwrap();
     assert_eq!(text.lines().count(), 1, "{text}");
-    for want in ["\"reason\":\"Cheating\"", "\"steam\":111", "\"steam\":222,\"name\":\"b \\\"quoted\\\"\"", "\"map\":\"test\""] {
+    for want in ["\"reason\":\"Cheating\"", "\"steam\":111", "\"steam\":222,\"name\":\"b \\\"quoted\\\"\"", "\"map\":\"test\"", "\"server\":\""] {
         assert!(text.contains(want), "{want} in {text}");
     }
     let _ = std::fs::remove_file(&path);

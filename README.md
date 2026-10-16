@@ -105,6 +105,16 @@ cargo run --release -p server -- --play hosting/demos/<file>.bdem --from <tick>
 cargo run -p client -- --connect 127.0.0.1:27015
 ```
 
+Reviewing reports: list them, then watch number n from 10 seconds before the moment (each report names the game server; copy the recording from its `hosting/demos/` into `demos/` first, or point `--demos` at it):
+
+```bash
+cargo run --release -p server -- --reports hosting/reports/reports.jsonl
+```
+
+```bash
+cargo run --release -p server -- --review hosting/reports/reports.jsonl 3 --demos hosting/demos
+```
+
 **Leavers and reports:** one player leaving changes nothing (their seat waits, they can come back). After 5 minutes away they count as abandoned, and their team can call a surrender vote in game (F3, then F1 yes / F2 no; a majority of the team still there). If a whole side is gone the match pauses, and forfeits after 5 minutes. Player reports land in `hosting/reports/reports.jsonl` on the lobby machine, one line per report with both players' Steam ids, the reason, map and round.
 
 **Match rules** (rounds, money, timers) live in `config/server.cfg`. Edit it, then run `./host.sh` again.

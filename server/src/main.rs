@@ -7,6 +7,9 @@
 //! There are no bots: matches are people only.
 //! `--play <recording.bdem> [port] [--speed N] [--from TICK]`: replay a match recording; join
 //! it with the game (`client --connect 127.0.0.1:<port>`) to watch it as a spectator.
+//! `--reports <reports.jsonl>` / `--review <reports.jsonl> <n> [port] [--demos dir]`: see `review`.
+mod review;
+
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::path::PathBuf;
@@ -19,6 +22,17 @@ fn main() {
     let all: Vec<String> = std::env::args().collect();
     if let Some(i) = all.iter().position(|a| a == "--play") {
         return play(&all, i);
+    }
+    if let Some(i) = all.iter().position(|a| a == "--reports") {
+        return review::list(all.get(i + 1).expect("--reports <reports.jsonl>"));
+    }
+    if let Some(i) = all.iter().position(|a| a == "--review") {
+        let file = all.get(i + 1).expect("--review <reports.jsonl> <n>");
+        let n = all.get(i + 2).and_then(|n| n.parse().ok()).expect("--review <reports.jsonl> <n>");
+        let demos = all.iter().position(|a| a == "--demos").and_then(|i| all.get(i + 1)).map_or("demos", |d| d.as_str());
+        let (demo, from) = review::find(file, n, std::path::Path::new(demos));
+        let port = all.iter().skip(i + 3).filter(|a| !a.starts_with("--")).find_map(|a| a.parse().ok()).unwrap_or(net::protocol::DEFAULT_PORT);
+        return watch(&demo, port, 1, Some(from));
     }
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -84,12 +98,16 @@ fn play(args: &[String], i: usize) {
     let file = args.get(i + 1).expect("--play <recording.bdem>");
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).and_then(|v| v.parse::<u32>().ok());
     let port = args.iter().skip(1).filter(|a| !a.starts_with("--")).filter_map(|a| a.parse::<u16>().ok()).next().unwrap_or(net::protocol::DEFAULT_PORT);
-    let mut replay = net::replay::Replay::open(SocketAddr::from(([127, 0, 0, 1], port)), std::path::Path::new(file)).unwrap_or_else(|e| panic!("{e}"));
-    replay.speed = flag("--speed").unwrap_or(1);
-    if let Some(tick) = flag("--from") {
+    watch(std::path::Path::new(file), port, flag("--speed").unwrap_or(1), flag("--from"));
+}
+
+fn watch(file: &std::path::Path, port: u16, speed: u32, from: Option<u32>) {
+    let mut replay = net::replay::Replay::open(SocketAddr::from(([127, 0, 0, 1], port)), file).unwrap_or_else(|e| panic!("{e}"));
+    replay.speed = speed;
+    if let Some(tick) = from {
         replay.skip_to(tick);
     }
     let h = replay.header();
-    println!("replaying {} ({}, recorded on {}): watch with  client --connect {}", file, h.map, h.server, replay.local_addr());
+    println!("replaying {} ({}, recorded on {}): watch with  client --connect {}", file.display(), h.map, h.server, replay.local_addr());
     replay.run();
 }
