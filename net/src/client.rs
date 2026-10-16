@@ -62,6 +62,8 @@ pub struct Client {
     ticks: u32,
     /// How far the last correction moved us (for stats and tests).
     pub last_correction: f32,
+    /// Corrections not yet taken by the camera (GoldSrc units).
+    pending_correction: [f32; 3],
     /// Server events not yet taken by the game (see `take_events`).
     events: Vec<GameEvent>,
     /// Grenades and smoke clouds as of the last snapshot.
@@ -112,6 +114,7 @@ impl Client {
             render_tick: 0.0,
             ticks: 0,
             last_correction: 0.0,
+            pending_correction: [0.0; 3],
             events: Vec::new(),
             grenades: Vec::new(),
             smokes: Vec::new(),
@@ -260,6 +263,10 @@ impl Client {
                     let now = self.state.movement.origin;
                     let d = [now[0] - before[0], now[1] - before[1], now[2] - before[2]];
                     self.last_correction = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+                    // How far we jumped, for the camera to glide over (`take_correction`).
+                    for i in 0..3 {
+                        self.pending_correction[i] += d[i];
+                    }
                 }
                 self.snaps.push_back(Snap { tick, players });
                 while self.snaps.len() > 32 {
@@ -267,6 +274,11 @@ impl Client {
                 }
             }
         }
+    }
+
+    /// How far prediction corrections moved us since the last call (the camera smooths it).
+    pub fn take_correction(&mut self) -> [f32; 3] {
+        std::mem::take(&mut self.pending_correction)
     }
 
     /// Our own command clock (input number x tick), which weapon timers use.

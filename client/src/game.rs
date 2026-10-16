@@ -57,7 +57,13 @@ pub struct Walker {
     pub pending_fx: Vec<net::protocol::GameEvent>,
     /// Sounds to play this frame.
     pub cues: Vec<sound::Cue>,
+    /// Camera offset still to glide away after a prediction correction (Y-up units).
+    smooth: Vec3,
 }
+
+/// Prediction corrections fade with this time constant; beyond this distance they snap.
+const SMOOTH_SECONDS: f32 = 0.05;
+const SNAP_DISTANCE: f32 = 64.0;
 
 #[derive(Component)]
 pub struct FlyCam {
@@ -95,6 +101,7 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res
         feed: Vec::new(),
         pending_fx: Vec::new(),
         cues: Vec::new(),
+        smooth: Vec3::ZERO,
     });
     commands.insert_resource(Overlay::None);
     let cam = commands
@@ -297,7 +304,12 @@ fn move_camera(
         }
         let a = fixed.overstep_fraction();
         let (p, c) = (Vec3::from(map::to_y_up(w.prev_eye)), Vec3::from(map::to_y_up(w.client.me().eye())));
-        tf.translation = p.lerp(c, a);
+        // Server corrections glide out over ~0.1 s instead of snapping; big jumps (respawn, a
+        // teleport) snap.
+        let d = Vec3::from(map::to_y_up(w.client.take_correction()));
+        w.smooth = if (w.smooth - d).length() > SNAP_DISTANCE { Vec3::ZERO } else { w.smooth - d };
+        w.smooth *= (-time.delta_secs() / SMOOTH_SECONDS).exp();
+        tf.translation = p.lerp(c, a) + w.smooth;
         return;
     }
     let mut dir = Vec3::ZERO;
