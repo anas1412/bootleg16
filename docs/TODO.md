@@ -24,7 +24,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Knife: GoldSrc line then crouch-box sweep (`trace_melee`); the 8-corner search only moves the impact point, skipped
 - [ ] Shield
 - [x] Breakables: shot/blast damage, dust2/train crates break with the bomb, restored each round
-- [ ] `func_button`; breakable gibs (only coloured debris now); bullets lose no damage through glass
+- [ ] `func_button`; breakable gibs (only coloured debris now)
 - [x] CS 1.6 keys: B buy menu (CS layout per side, 0 cancel), Q last weapon, wheel, G drop,
       `,`/`.` ammo, Tab scoreboard; drop/pickup on the ground; gun drops on death
 - [ ] hud_fastswitch 0 (CS default: number keys show a selection, mouse1 confirms); only fastswitch 1 now

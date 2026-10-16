@@ -100,7 +100,7 @@ pub fn fire_bullet(world: &World, materials: &Materials, hitboxes: &Hitboxes, ey
         }
         // Surface material changes how well the bullet carries on (players count as flesh).
         if player.is_none() {
-            let tex = world.texture_at(src, end).map(|t| materials.kind(t)).unwrap_or('C');
+            let tex = world.texture_of(wt.model, src, end).map(|t| materials.kind(t)).unwrap_or('C');
             match tex {
                 'M' => {
                     power = (power as f32 * 0.15) as i32;

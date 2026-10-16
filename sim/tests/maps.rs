@@ -397,3 +397,32 @@ fn knife_line_first_then_a_crouch_box_sweep() {
     assert_eq!(hit(-28.0), Some((1, HitGroup::Generic)));
     assert_eq!(hit(40.0), None, "out of reach");
 }
+
+#[test]
+fn bullets_read_the_texture_of_the_glass_they_hit() {
+    let Some(bsp) = load("de_nuke") else { return };
+    let world = World::from_bsp(&bsp);
+    let home = std::env::var("HOME").unwrap();
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
+    let Ok(text) = std::fs::read_to_string(format!("{dir}/cstrike/sound/materials.txt")) else { return };
+    let mats = goldsrc::materials::Materials::parse(&text);
+    let d = world.doors.doors.iter().find(|d| d.name.as_deref() == Some("GlassDoor1")).unwrap();
+    let (lo, hi) = d.bounds();
+    let thin = if hi[0] - lo[0] < hi[1] - lo[1] { 0 } else { 1 };
+    let wide = 1 - thin;
+    let (a, b) = (1..10)
+        .flat_map(|i| (1..10).map(move |k| (i, k)))
+        .map(|(i, k)| {
+            let mut a = [0.0; 3];
+            a[wide] = lo[wide] + (hi[wide] - lo[wide]) * i as f32 / 10.0;
+            a[2] = lo[2] + (hi[2] - lo[2]) * k as f32 / 10.0;
+            let mut b = a;
+            a[thin] = lo[thin] - 40.0;
+            b[thin] = hi[thin] + 40.0;
+            (a, b)
+        })
+        .find(|(a, b)| world.trace_line(*a, *b).model == d.model)
+        .expect("a line that meets the glass");
+    let tex = world.texture_of(d.model, a, b).expect("the glass's texture");
+    assert_eq!(mats.kind(tex), 'Y', "{tex} isn't glass");
+}

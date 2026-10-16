@@ -276,6 +276,18 @@ impl World {
         self.textures.get(self.surfaces[face].texture as usize).map(String::as_str)
     }
 
+    /// The texture a line meets on brush model `bsp_model` (0: the world), where it is now
+    /// (GoldSrc `TRACE_TEXTURE` on the entity a bullet hit: glass, crates, doors).
+    pub fn texture_of(&self, bsp_model: usize, start: Vec3, end: Vec3) -> Option<&str> {
+        if bsp_model == 0 {
+            return self.texture_at(start, end);
+        }
+        let m = self.models.iter().find(|m| m.bsp_model == bsp_model)?;
+        let door = self.door_of(m);
+        let face = self.surface_at(m.heads[0], to_local(m, door, start), to_local(m, door, end))?;
+        self.textures.get(self.surfaces[face].texture as usize).map(String::as_str)
+    }
+
     fn surface_at(&self, num: i32, start: Vec3, end: Vec3) -> Option<usize> {
         if num < 0 {
             return None;
