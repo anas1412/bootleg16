@@ -20,19 +20,19 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Smoke: soft sprite puffs that billow and thin out; smoke blocks the server's sight checks
 - [x] Flash "already flashed" combine rule and the HE/flash water rule (`grenades::combine`, `blast_reaches`)
 - [x] Grenade bounce sounds
-- [ ] ⚠ Flash white-out and HE fireball not yet checked on screen (only the smoke was)
+- [x] Flash white-out and HE explosion checked on screen (HE: CS's fexplo/eexplo/steam1 sprites, explosions.rs)
 - [x] Tagging: hits slow you (0.5, or 0.65 large flinch) and kick the view, as cs.so (`player::hit_by`)
 - [x] Knife: GoldSrc line then crouch-box sweep (`trace_melee`); the 8-corner search only moves the impact point, skipped
 - [x] Breakables: shot/blast damage, dust2/train crates break with the bomb, restored each round
 - [x] `func_button` / `func_rot_button` (E or touch, fires its target: sim/src/doors.rs)
-- [ ] Breakable gibs (only coloured debris now)
+- [x] Breakable gibs: CS's gib models (gibs.rs)
 - [x] CS 1.6 keys: B buy menu (CS layout per side, 0 cancel), Q last weapon, wheel, G drop,
       `,`/`.` ammo, Tab scoreboard; drop/pickup on the ground; gun drops on death
 - [x] Ground guns cleared at round start
-- [ ] First-person weapon models (viewmodels) and third-person weapon models
+- [x] First-person weapon models (viewmodels) and third-person weapon models
 - [x] Weapon sounds
 - [x] Bullet holes + dust for every bullet/pellet (server sends wall hits), blood spray (bigger on headshots), blood on the wall behind
-- [ ] Own bullet holes predicted locally (now they come back from the server, one ping late); CS decal textures from decals.wad; sparks on metal
+- [x] Own bullet holes predicted locally; CS decal textures from decals.wad (holes, blood, scorch, infodecal)
 - [x] Kill feed, round and bomb news reliable (numbered, resent until acked); team join resent until confirmed
 
 ### Rounds and economy (`docs/RULES.md`)
@@ -57,9 +57,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Player models drawn from the install's MDL files (static aim pose per stance)
 - [x] T vs CT models per team (4 classes each, picked by id)
 - [x] Player animations: gait (idle/walk/run/crouch) + upper body (aim pitch blend, shoot, flinch), death animation by hit place, corpses (16 kept)
-- [ ] Legs turned toward movement direction (gaityaw), jump/swim/ladder gaits, reload anims for others; class choice menu; corpses cleared each round
-- [ ] Light models from the map's lightmaps like GoldSrc (they're unlit now)
-- [ ] First-person weapon models (viewmodels)
+- [x] Legs turned toward movement direction (gaityaw) with the spine twisting back, jump animation, others' reload animation, corpses cleared each round (no water maps: no swim; CS has no ladder gait)
+- [x] Models lit from the map's lightmaps like GoldSrc (studio.rs)
 
 ### HUD and UI
 - [x] HUD: health, armor, ammo, grenades, kill feed (with names), notices
@@ -68,7 +67,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Main menu: practice (map, standing dummies), join server, settings (name, sensitivity, volume); Esc menu
 - [x] FPS + ping counter (top left); Max FPS and VSync settings
 - [x] CS2 "Show Team ID Through Walls": pip + name over teammates through walls (client/src/teammates.rs; Settings: off / pips / pips + names). Safe: hidden enemies are never sent
-- [ ] Team IDs: health/equipment like CS2's option 2; fade with distance
+- [ ] Team IDs: health/equipment like CS2's option 2 (data: `Remote::mate`; UI session)
 - [x] Settings: key binds (crosshair style done; FOV stays fixed at 90° at 4:3 for fairness, as in CS)
 - [x] Viewmodel GPU-skinned (mirrored bones through a reflection transform)
 - [ ] Try drawing the viewmodel without a second camera (depth range trick)
@@ -116,7 +115,6 @@ land, and add new ones here instead of leaving them only in chat.
       grenades (bounce, HE, flash, smoke), knife, dry fire, zoom; 3D with GoldSrc falloff
 - [x] Doors, ambience (`ambient_generic`, triggered ones too), `env_spark`, bullet impact and
       ricochet sounds (`EV_HLDM_PlayTextureSound`/`GunshotDecalTrace`), knife hits, jump/land
-- [ ] Other players' reload sounds
 - [x] Gunshot volumes and attenuations from client.so (`EV_Fire*`, `fire_attenuation`); footstep, jump and landing volumes from `PM_UpdateStepSound`/`PM_CheckFalling`, left and right feet
 - [x] Muzzle flash at the model's muzzle attachment (own view model and other players)
 
@@ -126,10 +124,10 @@ land, and add new ones here instead of leaving them only in chat.
 
 ### Rendering
 - [x] Sky: the map's skybox (TGA faces resampled into a cubemap)
-- [ ] Lighting looks flatter than the original (overbright/gamma tuning)
+- [x] Lighting through GoldSrc's light and texture gamma tables (level.rs)
 - [x] Translucent brushes (`rendermode` 1/2/3/5 by `renderamt`)
-- [ ] Decals, sprites, particles, muzzle flashes
-- [ ] Static props/models placed in maps (`env_model`, `cycler_sprite` …)
+- [x] Decals, sprites (env_glow, explosions), sparks, muzzle flashes
+- [x] Map props in the pool maps: env_glow, env_spark, infodecal (no env_model/cycler in them)
 
 ### UI (Interference: docs/UI.md, design/mockups/ui is the spec)
 - [x] Scoreboard data: `Score` has assists, MVPs, headshots, damage and rounds (ADR), server-measured
