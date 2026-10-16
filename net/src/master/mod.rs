@@ -15,7 +15,10 @@ use std::net::{SocketAddr, UdpSocket};
 use std::time::{Duration, Instant};
 
 mod client;
+mod persist;
 mod queue;
+mod standby;
+pub use standby::Role;
 pub use client::LobbyClient;
 
 pub const MASTER_PORT: u16 = 27010;
@@ -245,6 +248,12 @@ pub struct Master {
     /// Bookings the server hasn't confirmed yet (a busy heartbeat): the message, when it was
     /// first and last sent. Resent until confirmed, so a lost packet can't lose a match.
     pub(super) booking: HashMap<SocketAddr, (Vec<u8>, Instant, Instant)>,
+    /// Active (serving players) or standby (a paired lobby is; see `standby`).
+    pub role: Role,
+    pub(super) peer: Option<standby::Peer>,
+    /// Saved here every couple of seconds, and loaded at start (see `persist`).
+    pub state_file: Option<std::path::PathBuf>,
+    saved: Instant,
 }
 
 impl Master {
@@ -252,7 +261,7 @@ impl Master {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
         let keys = tokens.iter().map(|t| crate::crypto::ServerKey::from_token(t)).collect();
-        Ok(Master { udp, key: crate::crypto::LobbyKey::generate(), cookie_secret: crate::crypto::new_key(), keys, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new() })
+        Ok(Master { udp, key: crate::crypto::LobbyKey::generate(), cookie_secret: crate::crypto::new_key(), keys, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new(), role: Role::Active, peer: None, state_file: None, saved: Instant::now() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -320,6 +329,10 @@ impl Master {
                 self.from_server(from, &buf[..n]);
                 continue;
             }
+            // Standing by: the active lobby answers players.
+            if self.role == Role::Standby {
+                continue;
+            }
             if buf[0] == crate::crypto::CHANNEL {
                 self.from_player(from, &buf[..n]);
                 continue;
@@ -353,12 +366,24 @@ impl Master {
             }
             alive
         });
+        self.peer_step();
+        if self.role == Role::Standby {
+            return;
+        }
         let gone: Vec<(u32, u32)> = self.players.values().filter(|p| now - p.seen > PLAYER_TIMEOUT).map(|p| (p.id, p.party)).collect();
         for (id, party) in gone {
             self.leave(id, party);
             self.players.retain(|_, p| p.id != id);
         }
         self.matchmake();
+        if let Some(path) = &self.state_file {
+            if self.saved.elapsed() > Duration::from_secs(2) {
+                self.saved = now;
+                if let Err(e) = self.save(path) {
+                    println!("can't save the lobby state to {}: {e}", path.display());
+                }
+            }
+        }
         if now - self.reported > Duration::from_secs(60) {
             self.reported = now;
             let queued: usize = self.parties.values().filter(|p| p.queued.is_some()).map(|p| p.members.len()).sum();
@@ -655,7 +680,7 @@ impl Master {
                 let busy = busy || self.booking.contains_key(&from);
                 self.servers.insert(from, GameServer { public, region, key, official: true, busy, seen: Instant::now(), sent });
             }
-            Some(LobbyMsg::Report { reporter, target, reason, map, round }) => self.file_report(reporter, target, reason, &map, round),
+            Some(LobbyMsg::Report { reporter, target, reason, map, round }) if self.role == Role::Active => self.file_report(reporter, target, reason, &map, round),
             _ => {}
         }
     }

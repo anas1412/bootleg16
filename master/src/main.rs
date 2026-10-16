@@ -3,6 +3,10 @@
 //! `--reports file`: where player reports are appended (one JSON object per line).
 //! `--key file`: the lobby's long-term key (made on first start; keep it, its public half is
 //! built into the game). `--print-public file`: print that public half and exit.
+//! `--state file`: saved every couple of seconds and loaded at start (a restart loses nothing).
+//! `--peer host:port` + `--peer-port port`: pair with a standby lobby on another machine (both
+//! point at each other; same key and token): whichever is active streams its state to the
+//! other, which takes over if it dies.
 //! Built with `--features steam`, it checks Steam logins with Steam (`--steam-app <id>`,
 //! default 480, Valve's test app until we have our own), and only lets in players signed in
 //! with Steam unless started with `--allow-anonymous` (test lobbies: smoke tests, bots).
@@ -29,6 +33,19 @@ fn main() {
         None => println!("no --key: a new key this run (games built with the old one can't sign in)"),
     }
     println!("lobby public key: {}", net::crypto::to_hex(&m.public_key()));
+    if let Some(path) = flag("--state") {
+        let path = std::path::PathBuf::from(path);
+        if m.load(&path) {
+            println!("carrying on from {}", path.display());
+        }
+        m.state_file = Some(path);
+    }
+    if let Some(peer) = flag("--peer") {
+        let peer: SocketAddr = std::net::ToSocketAddrs::to_socket_addrs(peer.as_str()).ok().and_then(|mut a| a.next()).unwrap_or_else(|| panic!("--peer {peer}: not an address"));
+        let port: u16 = flag("--peer-port").and_then(|p| p.parse().ok()).unwrap_or(net::master::MASTER_PORT + 1);
+        m.pair(port, peer).unwrap_or_else(|e| panic!("pairing: {e}"));
+        println!("paired with {peer} (listening on {port}): standing by until it's clear who's active");
+    }
     println!("bootleg16 lobby on {}", m.local_addr());
     #[cfg(feature = "steam")]
     {

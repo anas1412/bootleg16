@@ -17,9 +17,12 @@ impl Server {
             return;
         }
         r.reports.push((reporter, target));
-        let (Some(lobby), Some(key)) = (self.lobby, &self.server_key) else { return };
+        let Some(key) = &self.server_key else { return };
         let msg = crate::master::LobbyMsg::Report { reporter, target, reason, map: self.map.clone(), round: self.round.round };
         let sealed = key.seal(&encode(&msg));
-        self.socket.send(lobby, sealed);
+        // To every lobby: only the active one files it.
+        for lobby in self.lobbies.clone() {
+            self.socket.send(lobby, sealed.clone());
+        }
     }
 }

@@ -2,12 +2,18 @@
 # Run bootleg16's servers in Docker. See README "Hosting".
 #
 #   ./host.sh                         this machine: the lobby + game servers (one per CPU core)
-#   ./host.sh join <lobby-ip> <token> this machine: game servers for an existing lobby
+#   ./host.sh join <lobby-ips> <token> this machine: game servers for an existing lobby
+#                                     (<lobby-ips>: the lobby, or "main-ip,standby-ip")
+#   ./host.sh standby <main-ip> <token> <key>
+#                                     this machine: a standby lobby (+ game servers) that takes
+#                                     over if the main one dies (`./host.sh pair-info` on the
+#                                     main machine prints this line)
 #   options: --servers N   game servers here (each runs one match at a time)
 #            --ip X        the public IP players connect to (found automatically otherwise)
 #            --region R    where this machine is, e.g. eu, na, sa, asia (players get the closest)
 #            --test        a test lobby: lets in players without Steam (test bots, smoke tests)
 #            --official    back to an official lobby (Steam players only; the default)
+#            --peer IP     (main lobby) the standby lobby machine to stream state to
 #   ./host.sh token | status | logs | update | stop
 #
 # Settings are remembered in hosting/: after the first run, plain `./host.sh` brings the
@@ -23,13 +29,21 @@ compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
 as_me="user: \"$(id -u):$(id -g)\", "
 
 [ -f hosting/settings ] && . hosting/settings
-LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}" TEST="${TEST:-}"
+LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}" TEST="${TEST:-}" PEER="${PEER:-}"
 
 case "${1:-}" in
   stop) compose down -t 5; exit ;;   # now: running matches end
   logs) compose logs -f --tail 50; exit ;;
   status) compose ps --format "table {{.Service}}\t{{.Status}}"; exit ;;
   token) cat hosting/tokens.txt; echo; exit ;;
+  pair-info)
+    # Secret: the token and the lobby's private key. Give it only to your standby machine.
+    echo "On the standby machine:  ./host.sh standby ${IP:-<this-ip>} $(cat hosting/tokens.txt) $(cat hosting/keys/lobby.key)"
+    echo "Then here:               ./host.sh --peer <standby-ip>"
+    exit ;;
+  standby)
+    [ $# -ge 4 ] || { echo "Usage: ./host.sh standby <main-ip> <token> <key>   (see ./host.sh pair-info on the main machine)"; exit 1; }
+    LOBBY=here; PEER="$2"; echo -n "$3" > hosting/tokens.txt; echo "$4" > hosting/keys/lobby.key; shift 4 ;;
   update) git pull --ff-only || echo "Not pulling (no remote, or local changes): updating to the code as it is."; UPDATE=1; shift ;;
   join)
     [ $# -ge 3 ] || { echo "Usage: ./host.sh join <lobby-ip> <token>"; exit 1; }
@@ -42,6 +56,7 @@ while [ $# -gt 0 ]; do
     --region) REGION="$2"; shift 2 ;;
     --test) TEST=1; shift ;;
     --official) TEST=""; shift ;;
+    --peer) PEER="$2"; shift 2 ;;
     *) echo "Unknown option $1 (see the top of host.sh)"; exit 1 ;;
   esac
 done
@@ -67,16 +82,21 @@ if [ -z "$IP" ]; then
   IP=$(curl -4fsS --max-time 5 https://api.ipify.org || true)
   [ -n "$IP" ] || { echo "Couldn't find this machine's public IP: run again with --ip <address>."; exit 1; }
 fi
-printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\nTEST=%q\n' "$LOBBY" "$SERVERS" "$IP" "$REGION" "$TEST" > hosting/settings
+printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\nTEST=%q\nPEER=%q\n' "$LOBBY" "$SERVERS" "$IP" "$REGION" "$TEST" "$PEER" > hosting/settings
 
 # One config per game server (the shipped rules, pointed at the lobby), and the compose file.
-lobby_addr=$([ "$LOBBY" = here ] && echo 127.0.0.1:27010 || echo "$LOBBY:27010")
+# Every lobby the game servers announce to (and take matches from).
+if [ "$LOBBY" = here ]; then
+  lobby_addr="127.0.0.1:27010${PEER:+,$PEER:27010}"
+else
+  lobby_addr=$(echo "$LOBBY" | tr ',' '\n' | sed 's/$/:27010/' | paste -sd,)
+fi
 rm -f hosting/server*.cfg
 {
   echo "# Made by host.sh: edit config/server.cfg instead, then run ./host.sh"
   echo "services:"
   if [ "$LOBBY" = here ]; then
-    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl --key /bootleg16/keys/lobby.key${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports, ./keys:/bootleg16/keys]}"
+    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl --key /bootleg16/keys/lobby.key --state /bootleg16/keys/lobby.state${PEER:+ --peer $PEER:27011 --peer-port 27011}${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports, ./keys:/bootleg16/keys]}"
   fi
   for i in $(seq 1 "$SERVERS"); do
     port=$((27014 + i))
@@ -108,8 +128,9 @@ compose up -d --remove-orphans
 last=$((27014 + SERVERS))
 echo
 echo "Running $SERVERS game server(s) on $IP (UDP $([ "$SERVERS" = 1 ] && echo 27015 || echo "27015-$last"))$([ "$LOBBY" = here ] && echo " and the lobby (UDP 27010)")."
-echo "Open those UDP ports in your firewall / router."
+echo "Open those UDP ports in your firewall / router.${PEER:+ Lobbies also talk to each other on TCP 27011 (open it to $PEER only).}"
 if [ "$LOBBY" = here ]; then
-  echo "More machines:  ./host.sh join $IP $token"
-  echo "Ship the game:  BOOTLEG16_LOBBY=$IP:27010 BOOTLEG16_LOBBY_KEY=$public cargo build --release -p client --no-default-features --features steam"
+  echo "More machines:  ./host.sh join $IP${PEER:+,$PEER} $token"
+  [ -z "$PEER" ] && echo "A standby lobby: ./host.sh pair-info"
+  echo "Ship the game:  BOOTLEG16_LOBBY=$IP:27010${PEER:+,$PEER:27010} BOOTLEG16_LOBBY_KEY=$public cargo build --release -p client --no-default-features --features steam"
 fi

@@ -198,11 +198,11 @@ pub struct Server {
     reserved: Option<reserve::Reserved>,
     /// Shutting down: no new matches (the lobby sees us busy), stop once the match is over.
     draining: Option<u32>,
-    /// The lobby's address (`master` in the config, looked up again at every heartbeat).
-    lobby: Option<SocketAddr>,
-    /// A name lookup of the lobby's address running in the background (a slow DNS server
-    /// must never stall the game loop).
-    lookup: Option<std::sync::mpsc::Receiver<Option<SocketAddr>>>,
+    /// The lobbies' addresses (`master` in the config: one, or the active and standby ones,
+    /// comma separated; names are looked up again every minute).
+    lobbies: Vec<SocketAddr>,
+    /// Name lookups running in the background (a slow DNS server must never stall the game).
+    lookup: Option<std::sync::mpsc::Receiver<Vec<SocketAddr>>>,
     /// The key for talking to the lobby (from the official token, which is never sent).
     server_key: Option<crate::crypto::ServerKey>,
     /// When the last booking we took was sealed (older ones are replays).
@@ -255,7 +255,7 @@ impl Server {
             guard: guard::Guard::new(),
             reserved: None,
             draining: None,
-            lobby: None,
+            lobbies: Vec::new(),
             lookup: None,
             server_key: None,
             last_booking: 0,
@@ -265,7 +265,7 @@ impl Server {
 
     /// Match settings (server config file). Restarts the match.
     pub fn set_config(&mut self, cfg: MatchConfig) {
-        self.lobby = cfg.master.parse().ok();
+        self.lobbies = cfg.master.split(',').filter_map(|a| a.trim().parse().ok()).collect();
         self.server_key = (!cfg.official_token.is_empty()).then(|| crate::crypto::ServerKey::from_token(&cfg.official_token));
         self.round = Match::new(cfg, TICK_RATE);
         self.look_up_lobby();
@@ -366,14 +366,17 @@ impl Server {
         }
     }
 
-    /// Start looking up the lobby's name (no-op for an address: that's parsed directly).
+    /// Start looking up the lobbies' names (no-op when they're all addresses: parsed directly).
     fn look_up_lobby(&mut self) {
         let master = self.round.cfg.master.clone();
-        if master.is_empty() || master.parse::<SocketAddr>().is_ok() {
+        if master.split(',').all(|a| a.trim().is_empty() || a.trim().parse::<SocketAddr>().is_ok()) {
             return;
         }
         let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || _ = tx.send(std::net::ToSocketAddrs::to_socket_addrs(&master).ok().and_then(|mut a| a.next())));
+        std::thread::spawn(move || {
+            let found = master.split(',').filter_map(|a| std::net::ToSocketAddrs::to_socket_addrs(a.trim()).ok().and_then(|mut a| a.next())).collect();
+            _ = tx.send(found);
+        });
         self.lookup = Some(rx);
     }
 
@@ -385,13 +388,14 @@ impl Server {
         }
         // A name (not an address): look it up again now and then, in the background.
         if let Some(found) = self.lookup.as_ref().and_then(|rx| rx.try_recv().ok()) {
-            self.lobby = found.or(self.lobby);
+            if !found.is_empty() {
+                self.lobbies = found;
+            }
             self.lookup = None;
         }
         if self.lookup.is_none() && self.tick % (60 * TICK_RATE) < HEARTBEAT_EVERY {
             self.look_up_lobby();
         }
-        let Some(master) = self.lobby else { return };
         let cfg = &self.round.cfg;
         let players = self.clients.values().filter(|c| !c.bot).count() as u8;
         let busy = self.reserved.is_some() || self.draining.is_some();
@@ -407,7 +411,10 @@ impl Server {
         // Sealed with the token's key (the token itself never goes out): only the lobby can
         // read it, and nobody can pretend to be us.
         if let Some(key) = &self.server_key {
-            self.socket.send(master, key.seal(&encode(&msg)));
+            let sealed = key.seal(&encode(&msg));
+            for lobby in self.lobbies.clone() {
+                self.socket.send(lobby, sealed.clone());
+            }
         }
     }
 
@@ -518,7 +525,7 @@ impl Server {
             // The lobby's bookings have their own way in, so strangers can't crowd them out
             // (its address can be faked; the key it seals them with can't).
             if bytes.first() == Some(&crate::crypto::SERVER) {
-                if Some(from) == self.lobby && bytes.len() <= guard::MAX_PACKET {
+                if self.lobbies.contains(&from) && bytes.len() <= guard::MAX_PACKET {
                     self.booking(&bytes);
                 }
                 continue;

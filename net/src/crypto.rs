@@ -70,6 +70,8 @@ impl Window {
 
 /// One side of an encrypted session.
 pub struct Channel {
+    shared: [u8; 32],
+    initiator: bool,
     send: ChaCha20Poly1305,
     recv: ChaCha20Poly1305,
     sent: u64,
@@ -83,7 +85,21 @@ impl Channel {
         let up = blake3::derive_key("bootleg16 2026 channel up", shared);
         let down = blake3::derive_key("bootleg16 2026 channel down", shared);
         let (send, recv) = if initiator { (up, down) } else { (down, up) };
-        Channel { send: cipher(&send), recv: cipher(&recv), sent: 0, window: Window::default() }
+        Channel { shared: *shared, initiator, send: cipher(&send), recv: cipher(&recv), sent: 0, window: Window::default() }
+    }
+
+    /// Everything needed to carry the session on elsewhere (a restarted or standby lobby).
+    pub fn export(&self) -> ChannelState {
+        ChannelState { shared: self.shared, initiator: self.initiator, sent: self.sent, top: self.window.top, seen: self.window.seen }
+    }
+
+    /// Carry on a saved session. Its counter jumps far ahead: messages sent after the save
+    /// must never have their counter (nonce) used again with this key.
+    pub fn import(s: &ChannelState) -> Channel {
+        let mut c = Channel::new(&s.shared, s.initiator);
+        c.sent = s.sent + RESTORE_GAP;
+        c.window = Window { top: s.top, seen: s.seen };
+        c
     }
 
     pub fn seal(&mut self, id: u64, plain: &[u8]) -> Vec<u8> {
@@ -106,6 +122,19 @@ impl Channel {
         // Only after it proved genuine: a forged packet can't move the window.
         self.window.accept(counter).then_some(plain)
     }
+}
+
+/// How far a restored channel's counter jumps (far more than it could send between saves).
+const RESTORE_GAP: u64 = 1 << 24;
+
+/// A channel saved (secret: keep it as safe as the keys themselves).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ChannelState {
+    shared: [u8; 32],
+    initiator: bool,
+    sent: u64,
+    top: u64,
+    seen: u64,
 }
 
 /// The `id` of a channel packet (which key it needs).
@@ -266,6 +295,12 @@ mod tests {
         let (p1, p2) = (a.seal(7, b"1"), a.seal(7, b"2"));
         assert!(b.open(&p2).is_some() && b.open(&p1).is_some());
         assert_eq!(Channel::new(&new_key(), false).open(&a.seal(7, b"z")), None);
+        // Saved and restored (a lobby restart): carries on, never reusing a counter.
+        let before = b.sent;
+        let mut b2 = Channel::import(&b.export());
+        assert!(b2.sent > before + 1000);
+        assert_eq!(a.open(&b2.seal(7, b"again")).as_deref(), Some(&b"again"[..]));
+        assert!(b2.open(&a.seal(7, b"on")).is_some());
     }
 
     #[test]

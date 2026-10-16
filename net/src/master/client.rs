@@ -5,7 +5,11 @@ use super::*;
 /// every second, and keeps the latest state. Never blocks.
 pub struct LobbyClient {
     udp: UdpSocket,
+    /// The lobbies (active and standby: see `standby`) and the one we're talking to.
+    lobbies: Vec<SocketAddr>,
     lobby: SocketAddr,
+    /// When we last heard from it (silent too long: try the next one).
+    heard: Instant,
     name: String,
     session: Option<u64>,
     last_sent: Option<Instant>,
@@ -49,9 +53,15 @@ const PING_WAIT: Duration = Duration::from_secs(2);
 impl LobbyClient {
     /// `lobby_key`: set it after this for builds with the lobby's key built in (`builtin_key`).
     pub fn new(lobby: SocketAddr, name: &str) -> std::io::Result<LobbyClient> {
+        Self::with_lobbies(vec![lobby], name)
+    }
+
+    /// Several lobbies (one active, the others standing by): we use whichever answers.
+    pub fn with_lobbies(lobbies: Vec<SocketAddr>, name: &str) -> std::io::Result<LobbyClient> {
+        let lobby = *lobbies.first().ok_or(std::io::Error::other("no lobby address"))?;
         let udp = UdpSocket::bind(if lobby.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" })?;
         udp.set_nonblocking(true)?;
-        Ok(LobbyClient { udp, lobby, name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new(), steam: None, login: None, lobby_key: None, builtin_key: false, hello: None, cookie: 0, channel: None, unanswered: None, unheard: 0, pinged: None, pinging: Vec::new(), pings: Vec::new() })
+        Ok(LobbyClient { udp, lobbies, lobby, heard: Instant::now(), name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new(), steam: None, login: None, lobby_key: None, builtin_key: false, hello: None, cookie: 0, channel: None, unanswered: None, unheard: 0, pinged: None, pinging: Vec::new(), pings: Vec::new() })
     }
 
     /// Signed in and heard from the lobby.
@@ -107,7 +117,11 @@ impl LobbyClient {
     pub fn tick(&mut self) {
         let mut buf = [0u8; 2048];
         while let Ok((n, from)) = self.udp.recv_from(&mut buf) {
-            if from != self.lobby {
+            if self.lobbies.contains(&from) {
+                // Whichever lobby answers is the active one.
+                self.lobby = from;
+                self.heard = Instant::now();
+            } else {
                 // A game server answering our ping.
                 if let Some(crate::protocol::ServerMsg::Info { .. }) = decode(&buf[..n]) {
                     if let Some(i) = self.pinging.iter().position(|(a, _, _)| *a == from) {
@@ -182,6 +196,14 @@ impl LobbyClient {
             self.pinging.clear();
             let pings = std::mem::take(&mut self.pings);
             self.send(Command::Pings(pings));
+        }
+        // Our lobby went quiet (it died, a standby is taking over): try the next one. Our
+        // session carries over (the standby has it) and so does its encryption.
+        if self.lobbies.len() > 1 && self.heard.elapsed() > Duration::from_secs(4) {
+            let i = self.lobbies.iter().position(|a| *a == self.lobby).unwrap_or(0);
+            self.lobby = self.lobbies[(i + 1) % self.lobbies.len()];
+            self.heard = Instant::now();
+            self.last_sent = None;
         }
         if let Some((cmd, at, tries)) = self.unanswered.clone() {
             if at.elapsed() > Duration::from_millis(400) && tries < 4 {
