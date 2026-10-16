@@ -1,5 +1,4 @@
-//! Matchmaking: filling two teams from queued parties and booking a free official server,
-//! close to the players. Each player measures their ping to every region; a party may play
+//! Booking servers close to the players (the matching itself is in `matchmaker`). Each player measures their ping to every region; a party may play
 //! in a region where all of them have a good ping, and "good" widens the longer they wait.
 use super::*;
 use crate::server::MatchSetup;
@@ -12,13 +11,13 @@ const PING_MAX: f32 = 200.0;
 
 impl Master {
     /// The ping a party accepts after waiting this long.
-    fn ping_limit(waited: Duration) -> f32 {
+    pub(super) fn ping_limit(waited: Duration) -> f32 {
         (PING_START + waited.as_secs_f32() * PING_WIDEN_PER_SECOND).min(PING_MAX)
     }
 
     /// The worst ping of these players to a region (None: someone hasn't measured it, or
     /// can't reach it; anyone who measured nothing at all goes anywhere).
-    fn worst_ping(&self, members: &[u32], region: &str) -> Option<f32> {
+    pub(super) fn worst_ping(&self, members: &[u32], region: &str) -> Option<f32> {
         let mut worst = 0.0f32;
         for m in members {
             let p = self.players.values().find(|p| p.id == *m)?;
@@ -63,6 +62,8 @@ impl Master {
         for (id, ticket, _, k) in tickets {
             if let Some(p) = self.players.values_mut().find(|p| p.id == id) {
                 p.found = Some((public, ticket, k));
+                let who = if p.steam != 0 { p.steam } else { 1 << 63 | p.id as u64 };
+                self.active.insert(who, (public, ticket, k));
                 self.seats.insert(ticket, (p.steam, p.name.clone(), Instant::now()));
             }
             if let Some(party) = self.parties.values_mut().find(|q| q.members.iter().any(|(m, _)| *m == id)) {
@@ -77,36 +78,6 @@ impl Master {
         let ids: Vec<u32> = members.iter().map(|(m, _)| *m).collect();
         let best = self.regions_for(&ids).into_iter().next().map(|(r, _)| r);
         self.start_match(members.clone(), true, best.as_deref()) || self.start_match(members, true, None)
-    }
-
-    /// Casual: per region, fill two teams from the parties that accept it (each party stays on
-    /// one team), oldest first.
-    pub(super) fn matchmake(&mut self) {
-        let side = self.match_size / 2;
-        let mut queued: Vec<(Instant, Vec<u32>)> = self.parties.values().filter_map(|p| Some((p.queued?, p.members.iter().map(|(m, _)| *m).collect()))).collect();
-        queued.sort_by_key(|q| q.0);
-        let mut regions: Vec<String> = self.servers.values().filter(|s| s.official && !s.busy).map(|s| s.region.clone()).collect();
-        regions.sort();
-        regions.dedup();
-        for region in regions {
-            let (mut a, mut b): (Vec<u32>, Vec<u32>) = (Vec::new(), Vec::new());
-            for (since, members) in &queued {
-                let ok = self.worst_ping(members, &region).is_some_and(|p| p <= Self::ping_limit(since.elapsed()));
-                if !ok {
-                    continue;
-                }
-                if a.len() + members.len() <= side {
-                    a.extend(members);
-                } else if b.len() + members.len() <= side {
-                    b.extend(members);
-                }
-                if a.len() == side && b.len() == side {
-                    let players: Vec<(u32, Group)> = a.iter().map(|m| (*m, Group::A)).chain(b.iter().map(|m| (*m, Group::B))).collect();
-                    self.start_match(players, false, Some(&region));
-                    return; // ponytail: one match per step; plenty at our scale
-                }
-            }
-        }
     }
 
     /// One official server per region for players to ping.

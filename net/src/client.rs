@@ -429,7 +429,12 @@ impl Client {
         self.socket.send(self.server, encode(&ClientMsg::Report { player, reason }));
     }
 
-    /// Answer your team's surrender vote.
+    /// Ask your team to vote this teammate out (reserved matches).
+    pub fn call_kick(&mut self, player: u8) {
+        self.socket.send(self.server, encode(&ClientMsg::CallKick { player }));
+    }
+
+    /// Answer your team's vote (surrender or kick).
     pub fn surrender_vote(&mut self, yes: bool) {
         self.socket.send(self.server, encode(&ClientMsg::Vote { yes }));
     }

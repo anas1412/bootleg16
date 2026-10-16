@@ -160,7 +160,7 @@ rm -f hosting/server*.cfg
   echo "# Made by host.sh: edit config/server.cfg instead, then run ./host.sh"
   echo "services:"
   if [ "$LOBBY" = here ]; then
-    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl --key /bootleg16/keys/lobby.key --state /bootleg16/keys/lobby.state${PEER:+ --peer $PEER:27011 --peer-port 27011}${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports, ./keys:/bootleg16/keys]}"
+    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl --key /bootleg16/keys/lobby.key --state /bootleg16/keys/lobby.state --ratings /bootleg16/keys/ratings.db${PEER:+ --peer $PEER:27011 --peer-port 27011}${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports, ./keys:/bootleg16/keys]}"
   fi
   for i in $(seq 1 "$SERVERS"); do
     port=$((27014 + i))

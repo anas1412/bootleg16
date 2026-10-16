@@ -116,6 +116,17 @@ Players sign in with Steam: their Steam name and avatar, their friends list on t
 - **Testing invites** needs two Steam accounts that are friends, each on its own machine (or a VM), both running the game against the same lobby.
 - **Our own App ID** (Steam Direct, $100): change `APP_ID` in `client/src/steam.rs` and pass `--steam-app <id>` to the lobby.
 
+## Matchmaking
+
+Casual has no ranks, but every player has a hidden skill rating (a Bayesian team rating, OpenSkill-style: wins and losses only, never shown) so matches come out fair:
+
+1. The party waiting longest goes first. Parties near its skill, with a good ping to the region, are candidates; the skill window widens the longer they wait.
+2. Of those, the 10 players and the 5 v 5 split (parties never split) with the predicted win chance closest to 50% win, with small extras for a narrow skill spread and premades facing premades. "Fair enough" widens with waiting too (4% off 50/50 at first, up to 20%).
+3. Everyone gets 20 seconds to accept. Not accepting: a short queue cooldown (1 minute, doubling each time that day). The others go back in the queue, keeping their place.
+4. At the end the game server reports the result; ratings update. Leaving and not coming back counts as a loss plus a cooldown (30 minutes, doubling). Being voted out doesn't.
+
+In a match: a team can vote a teammate out (a majority of the others; they can't come back), and once a teammate is gone for good (away 5 minutes, or voted out) the team can vote to surrender. A player whose game crashed or who left is offered their seat again (Reconnect) until the match ends: same team, money and score.
+
 ## Playing
 
 Open **Play** and share your party code with friends.

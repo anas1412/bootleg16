@@ -18,6 +18,8 @@ pub struct LobbyClient {
     pub found: Option<(SocketAddr, u64, [u8; 32])>,
     /// Kept until taken: the lobby's last message for the player.
     pub notice: String,
+    /// Accept found matches without asking (test players, bots).
+    pub auto_accept: bool,
     /// Makes a Steam login for each sign-in (None = anonymous).
     pub steam: Option<Box<dyn FnMut() -> Option<SteamLogin> + Send + Sync>>,
     /// The login for the sign-in in progress (a Steam ticket is used once).
@@ -61,7 +63,7 @@ impl LobbyClient {
         let lobby = *lobbies.first().ok_or(std::io::Error::other("no lobby address"))?;
         let udp = UdpSocket::bind(if lobby.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" })?;
         udp.set_nonblocking(true)?;
-        Ok(LobbyClient { udp, lobbies, lobby, heard: Instant::now(), name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new(), steam: None, login: None, lobby_key: None, builtin_key: false, hello: None, cookie: 0, channel: None, unanswered: None, unheard: 0, pinged: None, pinging: Vec::new(), pings: Vec::new() })
+        Ok(LobbyClient { udp, lobbies, lobby, heard: Instant::now(), name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new(), auto_accept: false, steam: None, login: None, lobby_key: None, builtin_key: false, hello: None, cookie: 0, channel: None, unanswered: None, unheard: 0, pinged: None, pinging: Vec::new(), pings: Vec::new() })
     }
 
     /// Signed in and heard from the lobby.
@@ -176,6 +178,9 @@ impl LobbyClient {
                 }
                 Some(LobbyMsg::State(s)) => {
                     self.unanswered = None;
+                    if self.auto_accept && s.ready.is_some_and(|r| !r.you) {
+                        self.unanswered = Some((Command::Accept, Instant::now() - Duration::from_secs(1), 0));
+                    }
                     let regions_changed = self.state.as_ref().is_none_or(|old| old.regions != s.regions);
                     if regions_changed || self.pinged.is_none_or(|t| t.elapsed() > PING_EVERY) {
                         self.ping(&s.regions);

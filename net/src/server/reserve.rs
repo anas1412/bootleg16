@@ -62,6 +62,11 @@ pub(super) struct Reserved {
     pub(super) empty_since: Option<u32>,
     /// Reports made in this match: (reporter's ticket, reported player's ticket).
     pub(super) reports: Vec<(u64, u64)>,
+    /// Who won the match (None until it's over, or a draw).
+    pub(super) winner: Option<Team>,
+    /// Seats voted out (they can't come back), and the round each player last called a kick.
+    pub(super) kicked: Vec<u64>,
+    pub(super) kick_called: HashMap<u8, u32>,
 }
 
 impl Server {
@@ -69,7 +74,7 @@ impl Server {
     pub fn reserve(&mut self, setup: MatchSetup) {
         self.clients.retain(|_, c| c.bot);
         let knife = if setup.knife_round { Knife::Pending } else { Knife::Done };
-        self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T, left_at: HashMap::new(), vote: None, voted_in_round: [None; 2], empty_since: None, reports: Vec::new() });
+        self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T, left_at: HashMap::new(), vote: None, voted_in_round: [None; 2], empty_since: None, reports: Vec::new(), winner: None, kicked: Vec::new(), kick_called: HashMap::new() });
         self.round = crate::rounds::Match::new(self.round.cfg.clone(), TICK_RATE);
     }
 
@@ -94,6 +99,9 @@ impl Server {
         let Some(&(_, group)) = r.setup.players.iter().find(|(t, _)| *t == ticket && ticket != 0) else {
             return Err("This server is playing a match.".into());
         };
+        if r.kicked.contains(&ticket) {
+            return Err("Your team voted you out of this match.".into());
+        }
         if self.clients.values().any(|c| c.ticket == ticket) {
             return Err("You're already in this match.".into());
         }
@@ -214,8 +222,24 @@ impl Server {
 
     /// The match is over: tell everyone, and free the server for the next one.
     pub(super) fn finish_reserved(&mut self) {
-        if self.reserved.take().is_none() {
-            return;
+        let Some(r) = self.reserved.take() else { return };
+        // Tell the lobby how it went (for the hidden skill ratings and abandon cooldowns).
+        let a = r.a_side;
+        let team_of = |g: Group| if g == Group::A { a } else { crate::rounds::other(a) };
+        let (mut winners, mut losers) = (Vec::new(), Vec::new());
+        if let Some(w) = r.winner {
+            for (ticket, g) in &r.setup.players {
+                if team_of(*g) == w { winners.push(*ticket) } else { losers.push(*ticket) }
+            }
+        }
+        // Still gone at the end (they never came back): abandoned.
+        // (Voted out isn't abandoning: no cooldown for them.)
+        let abandoned: Vec<u64> = r.left_at.keys().filter(|t| !r.kicked.contains(t)).copied().collect();
+        if let Some(key) = &self.server_key {
+            let sealed = key.seal(&encode(&crate::master::LobbyMsg::Result { winners, losers, abandoned }));
+            for lobby in self.lobbies.clone() {
+                self.socket.send(lobby, sealed.clone());
+            }
         }
         let addrs: Vec<SocketAddr> = self.clients.iter().filter(|(_, c)| !c.bot).map(|(a, _)| *a).collect();
         for a in addrs {

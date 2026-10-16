@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 23;
+pub const PROTOCOL_VERSION: u32 = 24;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -42,7 +42,9 @@ pub enum ClientMsg {
     SideVote { switch: bool },
     /// Ask your team to surrender (only once a teammate has abandoned the match).
     CallSurrender,
-    /// Your answer to your team's surrender vote.
+    /// Ask your team to vote this teammate out of the match.
+    CallKick { player: u8 },
+    /// Your answer to your team's vote (surrender or kick).
     Vote { yes: bool },
     /// Report a player in your match for review.
     Report { player: u8, reason: ReportReason },
@@ -194,6 +196,8 @@ pub enum GameEvent {
     SidesChosen { switched: bool },
     /// This team surrendered (the other wins the match).
     Surrendered { team: Team },
+    /// This player's team voted them out of the match.
+    VotedOut { player: u8 },
     /// A breakable broke (for its sound and debris; the state itself is `Snapshot::broken`).
     Broke { model: u16, material: sim::breakables::Material, at: [f32; 3] },
 }
@@ -215,6 +219,7 @@ impl GameEvent {
                 | GameEvent::KnifeWon { .. }
                 | GameEvent::SidesChosen { .. }
                 | GameEvent::Surrendered { .. }
+                | GameEvent::VotedOut { .. }
         )
     }
 }
@@ -241,10 +246,11 @@ pub struct RoundNet {
     pub paused: bool,
 }
 
-/// A team's surrender vote.
+/// A team's vote: to surrender, or (`kick`) to vote that player out.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub struct VoteNet {
     pub team: Team,
+    pub kick: Option<u8>,
     pub yes: u8,
     pub no: u8,
     /// Yes votes it takes (a majority of the team still connected).

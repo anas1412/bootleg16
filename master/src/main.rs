@@ -4,6 +4,7 @@
 //! `--key file`: the lobby's long-term key (made on first start; keep it, its public half is
 //! built into the game). `--print-public file`: print that public half and exit.
 //! `--state file`: saved every couple of seconds and loaded at start (a restart loses nothing).
+//! `--ratings file`: the hidden skill ratings, kept for good (saved after every match).
 //! `--peer host:port` + `--peer-port port`: pair with a standby lobby on another machine (both
 //! point at each other; same key and token): whichever is active streams its state to the
 //! other, which takes over if it dies.
@@ -33,6 +34,11 @@ fn main() {
         None => println!("no --key: a new key this run (games built with the old one can't sign in)"),
     }
     println!("lobby public key: {}", net::crypto::to_hex(&m.public_key()));
+    if let Some(path) = flag("--ratings") {
+        let path = std::path::PathBuf::from(path);
+        m.load_ratings(&path);
+        m.ratings_file = Some(path);
+    }
     if let Some(path) = flag("--state") {
         let path = std::path::PathBuf::from(path);
         if m.load(&path) {

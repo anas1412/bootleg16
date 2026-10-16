@@ -47,7 +47,13 @@ fn main() {
         println!("orders: type them here, or send to udp 127.0.0.1:{CONTROL_PORT}");
     }
 
-    let mut lobbies: Vec<LobbyClient> = (0..count).map(|i| LobbyClient::new(lobby, &format!("bot{i}")).unwrap()).collect();
+    let mut lobbies: Vec<LobbyClient> = (0..count)
+        .map(|i| {
+            let mut c = LobbyClient::new(lobby, &format!("bot{i}")).unwrap();
+            c.auto_accept = true; // bots accept every match they're found
+            c
+        })
+        .collect();
     let mut queued = vec![false; count];
     let mut bots: Vec<Option<Bot>> = (0..count).map(|_| None).collect();
     // Standing orders, kept for bots between matches.

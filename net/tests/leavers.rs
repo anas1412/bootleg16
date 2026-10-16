@@ -72,3 +72,32 @@ fn an_empty_side_pauses_then_forfeits() {
     run(&mut g, &mut [], 241 * 128, &mut ev);
     assert!(ev.iter().any(|e| *e == GameEvent::MatchOver { winner: Some(Team::T) }), "{ev:?}");
 }
+
+#[test]
+fn a_team_votes_a_teammate_out() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig { round_time: 1e6, ..Default::default() });
+    g.server.reserve(MatchSetup { players: vec![(1, Group::A), (2, Group::A), (3, Group::B)], knife_round: false, keys: Vec::new() });
+    g.a.ticket = 1;
+    g.b.ticket = 3;
+    let mut mate = net::Client::connect(g.server.local_addr(), "mate", sim::collision::World::from_bsp(&bsp)).unwrap();
+    mate.ticket = 2;
+    let mut ev = Vec::new();
+    run(&mut g, &mut [&mut mate], 256, &mut ev);
+    let target = mate.id().unwrap();
+    // A calls the vote; with the target not voting, A alone is the majority: out.
+    g.a.call_kick(target);
+    run(&mut g, &mut [&mut mate], 128, &mut ev);
+    assert!(ev.iter().any(|e| *e == GameEvent::VotedOut { player: target }), "{ev:?}");
+    assert_eq!(mate.status, net::client::Status::Rejected);
+    // They can't come back, and A's team may now surrender (a teammate is gone for good).
+    let mut back = net::Client::connect(g.server.local_addr(), "mate", sim::collision::World::from_bsp(&bsp)).unwrap();
+    back.ticket = 2;
+    run(&mut g, &mut [&mut back], 256, &mut ev);
+    assert!(back.id().is_none());
+    assert_eq!(g.a.round.abandoned, [true, false]);
+    // B can't vote someone off A's team.
+    g.b.call_kick(g.a.id().unwrap());
+    run(&mut g, &mut [], 64, &mut ev);
+    assert!(g.a.round.vote.is_none() && g.a.id().is_some());
+}

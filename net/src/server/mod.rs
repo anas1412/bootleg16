@@ -1006,6 +1006,7 @@ impl Server {
             ClientMsg::Buy { item } => self.buy(from, item),
             ClientMsg::SideVote { switch } => self.side_vote(from, switch),
             ClientMsg::CallSurrender => self.call_surrender(from),
+            ClientMsg::CallKick { player } => self.call_kick(from, player),
             ClientMsg::Report { player, reason } => self.report(from, player, reason),
             ClientMsg::Vote { yes } => self.surrender_vote(from, yes),
             ClientMsg::JoinTeam { .. } if self.reserved.is_some() => {} // teams are fixed in a reserved match

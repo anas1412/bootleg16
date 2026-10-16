@@ -12,6 +12,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// Test players accept found matches straight away.
+fn accepting(mut c: LobbyClient) -> LobbyClient {
+    c.auto_accept = true;
+    c
+}
+
 const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
 /// A short match: 4 rounds (sides swap after 2), quick timers.
@@ -26,7 +32,7 @@ fn booked(map: &Arc<BotMap>, cfg: impl Fn(SocketAddr) -> net::config::MatchConfi
     std::thread::spawn(move || m.run());
     let mut server = Server::new(SocketAddr::from(LOCAL), "test", &map.bsp, assets()).unwrap();
     server.set_config(cfg(lobby));
-    let mut queue: Vec<LobbyClient> = (0..10).map(|i| LobbyClient::new(lobby, &format!("bot{i}")).unwrap()).collect();
+    let mut queue: Vec<LobbyClient> = (0..10).map(|i| accepting(LobbyClient::new(lobby, &format!("bot{i}")).unwrap())).collect();
     let mut bots: Vec<Bot> = Vec::new();
     let mut asked = [false; 10];
     let start = Instant::now();

@@ -74,7 +74,12 @@ impl Server {
                 if tick >= self.round.phase_end {
                     match self.round.next(tick) {
                         Next::Round { swap, money } => self.new_round(swap, money),
-                        Next::GameOver(winner) => self.events.push(GameEvent::MatchOver { winner }),
+                        Next::GameOver(winner) => {
+                            if let Some(r) = &mut self.reserved {
+                                r.winner = winner;
+                            }
+                            self.events.push(GameEvent::MatchOver { winner })
+                        }
                     }
                 }
             }

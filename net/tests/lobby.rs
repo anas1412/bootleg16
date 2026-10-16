@@ -9,6 +9,12 @@ use sim::pmove::Input;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
+/// Test players accept found matches straight away.
+fn accepting(mut c: LobbyClient) -> LobbyClient {
+    c.auto_accept = true;
+    c
+}
+
 const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
 /// A lobby (in its own thread) and an official game server announcing to it.
@@ -64,7 +70,7 @@ fn play(server: &mut Server, bsp: &goldsrc::bsp::Bsp, found: [(SocketAddr, u64, 
 fn custom_game_with_a_friend() {
     let Some(bsp) = dust2() else { return };
     let (mut server, lobby) = world(&bsp, 2);
-    let (mut a, mut b) = (LobbyClient::new(lobby, "a").unwrap(), LobbyClient::new(lobby, "b").unwrap());
+    let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
     // B joins A's party by code; A makes it a custom game and puts B on team B.
     let code = a.state.as_ref().unwrap().code.clone();
@@ -88,7 +94,7 @@ fn custom_game_with_a_friend() {
 fn casual_queue_matches_two_strangers() {
     let Some(bsp) = dust2() else { return };
     let (mut server, lobby) = world(&bsp, 2);
-    let (mut a, mut b) = (LobbyClient::new(lobby, "a").unwrap(), LobbyClient::new(lobby, "b").unwrap());
+    let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
     a.send(Command::Play);
     until(&mut server, &mut [&mut a, &mut b], "queued", |c| c[0].state.as_ref().unwrap().searching.is_some());
@@ -103,9 +109,9 @@ fn steam_sign_in_and_lobby_restart() {
     let Some(bsp) = dust2() else { return };
     let (mut server, lobby) = world(&bsp, 2);
     let login = |id: u64| -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> { Some(Box::new(move || Some(net::master::SteamLogin { steam_id: id, ticket: vec![1, 2, 3] }))) };
-    let mut a = LobbyClient::new(lobby, "a").unwrap();
+    let mut a = accepting(LobbyClient::new(lobby, "a").unwrap());
     a.steam = login(76561197960287930);
-    let mut b = LobbyClient::new(lobby, "b").unwrap();
+    let mut b = accepting(LobbyClient::new(lobby, "b").unwrap());
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
     // B invites A (in the game, signed in with Steam); A accepts by joining that party.
     b.send(Command::Invite { steam: 76561197960287930 });
@@ -118,7 +124,7 @@ fn steam_sign_in_and_lobby_restart() {
     assert_eq!((m[0].steam, m[1].steam), (0, 76561197960287930), "B sees A's Steam id (for the avatar)");
     // Someone else claims A's Steam id on this unchecked (trust) lobby: they get in, but
     // without it, and A stays (a claim must never push anyone out).
-    let mut a2 = LobbyClient::new(lobby, "a").unwrap();
+    let mut a2 = accepting(LobbyClient::new(lobby, "a").unwrap());
     a2.steam = login(76561197960287930);
     until(&mut server, &mut [&mut a2, &mut b], "claimer in", |c| c[0].online());
     assert_eq!(a2.state.as_ref().unwrap().members[0].steam, 0);
@@ -131,7 +137,7 @@ fn a_checked_steam_sign_in_replaces_the_older_one() {
     let mut m = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
     m.steam_mode = net::master::SteamMode::Verify;
     let login = || -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> { Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 5, ticket: vec![9] }))) };
-    let (mut first, mut second) = (LobbyClient::new(m.local_addr(), "x").unwrap(), LobbyClient::new(m.local_addr(), "x").unwrap());
+    let (mut first, mut second) = (accepting(LobbyClient::new(m.local_addr(), "x").unwrap()), accepting(LobbyClient::new(m.local_addr(), "x").unwrap()));
     first.steam = login();
     second.steam = login();
     let start = Instant::now();
@@ -172,6 +178,9 @@ fn answers_never_outgrow_requests() {
         members: (0..net::master::MAX_CUSTOM).map(|i| net::master::Member { id: u32::MAX - i as u32, name: long.clone(), group: net::server::Group::B, steam: u64::MAX }).collect(),
         searching: Some(1e9),
         found: Some((addr, u64::MAX, [255; 32])),
+        rejoin: Some((addr, u64::MAX, [255; 32])),
+        ready: Some(net::master::ReadyNet { accepted: 10, total: 10, left: 20.0, you: true }),
+        cooldown: Some(1e9),
         notice: "Too many players from your address, or the lobby is full. Try again later.".into(),
         invites: (0..net::master::MAX_INVITES).map(|_| net::master::Invite { from: long.clone(), steam: u64::MAX, code: "ABC-DEF".into(), left: 30.0 }).collect(),
         regions: (0..net::master::MAX_REGIONS).map(|_| ("x".repeat(16), addr)).collect(),
@@ -187,7 +196,7 @@ fn signs_in_again_after_the_lobby_restarts() {
     // A lobby that has never heard of our session answers Expired; the client signs in again.
     let first = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
     let addr = first.local_addr();
-    let mut c = LobbyClient::new(addr, "a").unwrap();
+    let mut c = accepting(LobbyClient::new(addr, "a").unwrap());
     let mut m = first;
     let start = Instant::now();
     while !c.online() {
@@ -212,7 +221,7 @@ fn queue_books_the_region_players_ping_best() {
     let (mut eu, lobby) = world(&bsp, 2);
     let mut na = Server::new(SocketAddr::from(LOCAL), "test", &bsp, assets()).unwrap();
     na.set_config(net::config::MatchConfig { master: lobby.to_string(), official_token: "tok".into(), region: "na".into(), ..Default::default() });
-    let (mut a, mut b) = (LobbyClient::new(lobby, "a").unwrap(), LobbyClient::new(lobby, "b").unwrap());
+    let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     let both = |eu: &mut Server, na: &mut Server, cs: &mut [&mut LobbyClient], what: &str, done: &dyn Fn(&[&mut LobbyClient]) -> bool| {
         let start = Instant::now();
         while !done(cs) {
@@ -241,9 +250,9 @@ fn reports_are_filed_with_steam_ids() {
     let path = std::env::temp_dir().join(format!("bootleg16-reports-{}.jsonl", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let (mut server, lobby) = world_with(&bsp, 2, Some(path.clone()));
-    let mut a = LobbyClient::new(lobby, "a").unwrap();
+    let mut a = accepting(LobbyClient::new(lobby, "a").unwrap());
     a.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 111, ticket: vec![] })));
-    let mut b = LobbyClient::new(lobby, "b \"quoted\"").unwrap();
+    let mut b = accepting(LobbyClient::new(lobby, "b \"quoted\"").unwrap());
     b.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 222, ticket: vec![] })));
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
     a.send(Command::Play);
@@ -286,8 +295,8 @@ fn reports_are_filed_with_steam_ids() {
 fn official_lobbies_turn_away_players_without_steam() {
     let mut m = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
     m.require_steam = true;
-    let mut anon = LobbyClient::new(m.local_addr(), "bot").unwrap();
-    let mut steam = LobbyClient::new(m.local_addr(), "player").unwrap();
+    let mut anon = accepting(LobbyClient::new(m.local_addr(), "bot").unwrap());
+    let mut steam = accepting(LobbyClient::new(m.local_addr(), "player").unwrap());
     steam.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 7, ticket: vec![] })));
     let start = Instant::now();
     while anon.notice.is_empty() || !steam.online() {
@@ -320,7 +329,7 @@ fn official_servers_only_take_booked_players() {
 fn a_seen_ticket_without_its_key_gets_nobody_in() {
     let Some(bsp) = dust2() else { return };
     let (mut server, lobby) = world(&bsp, 2);
-    let (mut a, mut b) = (LobbyClient::new(lobby, "a").unwrap(), LobbyClient::new(lobby, "b").unwrap());
+    let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
     a.send(Command::Play);
     b.send(Command::Play);
@@ -344,4 +353,73 @@ fn a_seen_ticket_without_its_key_gets_nobody_in() {
     }
     assert!(thief.id().is_none(), "the wrong key gets nowhere");
     assert!(real.id().is_some(), "the seat is still A's");
+}
+
+/// A lobby stepped by the test itself (to stand in for Steam's answers), with an official
+/// server in its pool.
+fn manual_world(bsp: &goldsrc::bsp::Bsp) -> (Master, Server) {
+    let mut m = Master::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
+    m.match_size = 2;
+    m.steam_mode = net::master::SteamMode::Verify;
+    let mut server = Server::new(SocketAddr::from(LOCAL), "test", bsp, assets()).unwrap();
+    server.set_config(net::config::MatchConfig { master: m.local_addr().to_string(), official_token: "tok".into(), ..Default::default() });
+    (m, server)
+}
+
+fn steam(id: u64) -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> {
+    Some(Box::new(move || Some(net::master::SteamLogin { steam_id: id, ticket: vec![1] })))
+}
+
+fn step_all(m: &mut Master, server: &mut Server, cs: &mut [&mut LobbyClient], secs: u64, what: &str, done: &dyn Fn(&[&mut LobbyClient]) -> bool) {
+    let start = Instant::now();
+    while !done(cs) {
+        assert!(start.elapsed() < Duration::from_secs(secs), "timed out: {what}");
+        m.step();
+        server.step();
+        cs.iter_mut().for_each(|c| c.tick());
+        for (session, id, _) in m.take_steam_checks() {
+            m.steam_checked(id, Some(session)); // Steam says yes
+        }
+    }
+}
+
+#[test]
+fn not_accepting_a_match_costs_a_cooldown_and_the_other_keeps_their_place() {
+    let Some(bsp) = dust2() else { return };
+    let (mut m, mut server) = manual_world(&bsp);
+    let (mut a, mut b) = (LobbyClient::new(m.local_addr(), "a").unwrap(), accepting(LobbyClient::new(m.local_addr(), "b").unwrap()));
+    a.steam = steam(1);
+    b.steam = steam(2);
+    step_all(&mut m, &mut server, &mut [&mut a, &mut b], 5, "sign in", &|c| c.iter().all(|c| c.online()));
+    a.send(Command::Play);
+    b.send(Command::Play);
+    step_all(&mut m, &mut server, &mut [&mut a, &mut b], 5, "match found", &|c| c[0].state.as_ref().unwrap().ready.is_some());
+    a.send(Command::Decline);
+    step_all(&mut m, &mut server, &mut [&mut a, &mut b], 5, "check over", &|c| c[0].state.as_ref().unwrap().ready.is_none() && c[1].state.as_ref().unwrap().ready.is_none());
+    let (sa, sb) = (a.state.clone().unwrap(), b.state.clone().unwrap());
+    assert!(sa.cooldown.is_some() && sa.searching.is_none(), "A: out of the queue, cooling down");
+    assert!(sb.cooldown.is_none() && sb.searching.is_some(), "B: still queued");
+    a.send(Command::Play);
+    step_all(&mut m, &mut server, &mut [&mut a, &mut b], 5, "refused", &|c| !c[0].notice.is_empty());
+    assert!(a.state.as_ref().unwrap().searching.is_none(), "can't queue while cooling down");
+}
+
+#[test]
+fn a_restarted_game_is_offered_its_running_match() {
+    let Some(bsp) = dust2() else { return };
+    let (mut m, mut server) = manual_world(&bsp);
+    let (mut a, mut b) = (accepting(LobbyClient::new(m.local_addr(), "a").unwrap()), accepting(LobbyClient::new(m.local_addr(), "b").unwrap()));
+    a.steam = steam(1);
+    b.steam = steam(2);
+    step_all(&mut m, &mut server, &mut [&mut a, &mut b], 5, "sign in", &|c| c.iter().all(|c| c.online()));
+    a.send(Command::Play);
+    b.send(Command::Play);
+    step_all(&mut m, &mut server, &mut [&mut a, &mut b], 5, "booked", &|c| c.iter().all(|c| c.found.is_some()));
+    let seat = a.found.unwrap();
+    // A's game crashes and starts again: a new sign-in, same Steam account.
+    drop(a);
+    let mut again = LobbyClient::new(m.local_addr(), "a").unwrap();
+    again.steam = steam(1);
+    step_all(&mut m, &mut server, &mut [&mut again, &mut b], 5, "offered", &|c| c[0].state.as_ref().is_some_and(|s| s.rejoin.is_some()));
+    assert_eq!(again.state.unwrap().rejoin, Some(seat), "the same seat, key and server");
 }

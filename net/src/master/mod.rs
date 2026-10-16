@@ -16,7 +16,9 @@ use std::time::{Duration, Instant};
 
 mod client;
 mod persist;
+mod matchmaker;
 mod queue;
+pub mod rating;
 mod standby;
 pub use standby::Role;
 pub use client::LobbyClient;
@@ -70,6 +72,9 @@ pub enum LobbyMsg {
     Expired,
     /// Lobby -> player: not let in (this lobby needs a Steam login).
     Refused { reason: String },
+    /// Game server -> lobby, at the end of a match (sealed): who won and lost, by ticket, and
+    /// who abandoned (gone for good before the end). Empty `winners`: a draw.
+    Result { winners: Vec<u64>, losers: Vec<u64>, abandoned: Vec<u64> },
     /// Game server -> lobby: a player reported another (by their match tickets). Sealed.
     Report { reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: String, round: u32 },
 }
@@ -129,6 +134,20 @@ pub enum Command {
     Invite { steam: u64 },
     /// Your ping (ms) to each region (from `LobbyState::regions`); the queue uses it.
     Pings(Vec<(String, u16)>),
+    /// A match was found (`LobbyState::ready`): in, or out (out: a short queue cooldown).
+    Accept,
+    Decline,
+}
+
+/// A match found, waiting for everyone to accept.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct ReadyNet {
+    pub accepted: u8,
+    pub total: u8,
+    /// Seconds left to accept.
+    pub left: f32,
+    /// You've accepted.
+    pub you: bool,
 }
 
 /// How long an invite stays up.
@@ -164,9 +183,14 @@ pub struct LobbyState {
     pub members: Vec<Member>,
     /// Seconds in the casual queue, if queued.
     pub searching: Option<f32>,
-    /// Match ready: the server and your ticket.
+    /// A match found: accept it (`Command::Accept`) before the time runs out.
+    pub ready: Option<ReadyNet>,
+    /// Can't queue for this many more seconds (didn't accept matches, abandoned one).
+    pub cooldown: Option<f32>,
     /// Match ready: the server, your ticket and your key for it.
     pub found: Option<(SocketAddr, u64, [u8; 32])>,
+    /// Your match is still running (you left it, or your game restarted): go back with this.
+    pub rejoin: Option<(SocketAddr, u64, [u8; 32])>,
     /// Something to tell the player ("no server free", "party full"...).
     pub notice: String,
     /// Invites to other parties, newest last.
@@ -253,6 +277,17 @@ pub struct Master {
     pub(super) peer: Option<standby::Peer>,
     /// Saved here every couple of seconds, and loaded at start (see `persist`).
     pub state_file: Option<std::path::PathBuf>,
+    /// Hidden skill per Steam id (see `rating`), kept in `ratings_file` for good.
+    pub(super) ratings: HashMap<u64, rating::Rating>,
+    pub ratings_file: Option<std::path::PathBuf>,
+    /// Queue cooldowns: (who: Steam id, or a session's player id for players without Steam)
+    /// -> (how many in the last day, until when: unix seconds).
+    pub(super) penalties: HashMap<u64, (u32, u64)>,
+    /// Matches found, waiting for everyone to accept.
+    pub(super) checks: Vec<matchmaker::ReadyCheck>,
+    /// Running matches, per player (Steam id, or a session's player key): where, and their
+    /// seat. Offered as `rejoin` until the match ends.
+    pub(super) active: HashMap<u64, (SocketAddr, u64, [u8; 32])>,
     saved: Instant,
 }
 
@@ -261,7 +296,7 @@ impl Master {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
         let keys = tokens.iter().map(|t| crate::crypto::ServerKey::from_token(t)).collect();
-        Ok(Master { udp, key: crate::crypto::LobbyKey::generate(), cookie_secret: crate::crypto::new_key(), keys, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new(), role: Role::Active, peer: None, state_file: None, saved: Instant::now() })
+        Ok(Master { udp, key: crate::crypto::LobbyKey::generate(), cookie_secret: crate::crypto::new_key(), keys, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new(), role: Role::Active, peer: None, state_file: None, saved: Instant::now(), ratings: HashMap::new(), ratings_file: None, penalties: HashMap::new(), checks: Vec::new(), active: HashMap::new() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -573,9 +608,14 @@ impl Master {
                     m.1 = group;
                 }
             }
+            Command::Accept => self.accept(me),
+            Command::Decline => self.decline(me),
             Command::Play if leader => {
                 let mode = self.parties[&party].mode;
+                // Anyone in the party on a cooldown keeps the party out of the queue.
+                let cooling = self.parties[&party].members.iter().any(|(m, _)| self.cooldown_of(*m).is_some());
                 match mode {
+                    Mode::Casual if cooling => notice = "Someone in your party can't queue yet (they didn't accept a match, or left one).".into(),
                     Mode::Casual => self.parties.get_mut(&party).unwrap().queued = Some(Instant::now()),
                     Mode::Custom => {
                         let members = self.parties[&party].members.clone();
@@ -587,7 +627,10 @@ impl Master {
                     }
                 }
             }
-            Command::Cancel if leader => self.parties.get_mut(&party).unwrap().queued = None,
+            Command::Cancel if leader => {
+                self.parties.get_mut(&party).unwrap().queued = None;
+                self.decline(me);
+            }
             Command::Pings(pings) => {
                 if let Some(p) = self.players.get_mut(&session) {
                     p.pings = pings.into_iter().take(32).map(|(r, ms)| (r.chars().take(16).collect(), ms)).collect();
@@ -627,6 +670,9 @@ impl Master {
             mode: party.mode,
             members: party.members.iter().map(|(m, g)| (*m, who(*m), *g)).map(|(id, (name, steam), group)| Member { id, name, group, steam }).collect(),
             searching: party.queued.map(|t| t.elapsed().as_secs_f32()),
+            ready: self.ready_of(you),
+            rejoin: self.active.get(&self.penalty_key(you)).copied(),
+            cooldown: self.cooldown_of(you),
             found,
             notice,
             regions: self.ping_targets().into_iter().take(MAX_REGIONS).collect(),
@@ -687,6 +733,7 @@ impl Master {
                 let busy = busy || self.booking.contains_key(&from);
                 self.servers.insert(from, GameServer { public, region, key, official: true, busy, seen: Instant::now(), sent });
             }
+            Some(LobbyMsg::Result { winners, losers, abandoned }) if self.role == Role::Active => self.match_result(&winners, &losers, &abandoned),
             Some(LobbyMsg::Report { reporter, target, reason, map, round }) if self.role == Role::Active => self.file_report(reporter, target, reason, &map, round),
             _ => {}
         }
