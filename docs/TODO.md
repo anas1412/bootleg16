@@ -111,5 +111,20 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] In-game map editor (Forge-style: place, test instantly, share)
 - [ ] First original map `rust2`: Dust2-style flow, new geometry, own/CC0 textures
 - [ ] Engine works from a neutral map form so editor maps and BSPs both load
+- [ ] Modernized look: new maps and character models replace the CS assets
+      (UI direction E in `design/mockups/e.html`; update `docs/UI.md` to E)
+- [ ] Five rebuilt maps per `docs/MAPS.md`: Kiln (Dust2 layout), Lantern (Inferno),
+      Maglev (Train), Fusion (Nuke), Oasis (Mirage; 1.6 community BSP installed)
+- [ ] Renderer: PBR texture overrides by WAD name, glTF props, fog/bloom/grading
+- [ ] Factions Bureau (cyan) vs Strays (pink) replace CT/T in UI and code
+- [ ] Characters picked once in the main menu, independent of team; outfit
+      follows the team: Bureau = suits for everyone (women too), Strays = street-tactical
+      (bulky, layered; Bureau silhouette narrow). Each keeps a signature trait in both.
+      Roster v1, named by archetype, all adult: Gyaru, Femme Fatale, Tsundere (F);
+      Yakuza, Idol, Hacker (M).
+      Character select mocked in `design/mockups/e.html?s=char`.
+      Each character has its own height, so its hitboxes scale with it (server-side
+      hitboxes per character). Balance check: a shorter character is harder to hit,
+      so keep the height spread small (about ±6 %) or adjust it if the stats show an edge.
 - [ ] Standalone release: own assets, own name (`bootleg16` is a codename;
       pick e.g. Oxidestrike/Fuseline), legal check before selling

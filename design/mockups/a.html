@@ -1,0 +1,200 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>A · 1.6 faithful</title>
+<link rel="stylesheet" href="base.css">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,800&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --amb: #FFA000; --ct: #99CCFF; --t: #FF5040; --ol: #4C5844; --ol2: #3E4637; --hi: #8C9880; --lo: #22281D; }
+body { font-family: 'Barlow Semi Condensed', sans-serif; color: #fff; }
+.amb { color: var(--amb); }
+.num { display: inline-flex; gap: 3px; color: var(--amb); }
+.num i { width: 40px; height: 50px; }
+.shadow { filter: drop-shadow(0 2px 0 #0008) drop-shadow(0 0 6px #0006); }
+.kf { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 14px; background: #0009; font: 600 21px 'Barlow Semi Condensed'; margin-bottom: 6px; }
+.kf.me { box-shadow: inset 0 0 0 2px #FFA000aa; }
+.vg { background: var(--ol); border: 2px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi); }
+.vg-in { background: var(--ol2); border: 2px solid; border-color: var(--lo) var(--hi) var(--hi) var(--lo); }
+.vbtn { background: var(--ol); border: 2px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi); color: #dfe5d6; font: 600 20px 'Barlow Semi Condensed'; padding: 8px 18px; letter-spacing: .5px; }
+.mi { font: 600 34px 'Barlow Semi Condensed'; color: #e8e4d8; padding: 7px 0 7px 26px; position: relative; letter-spacing: .5px; }
+.mi.on { color: var(--amb); }
+.mi.on::before { content: ''; position: absolute; left: 0; top: 50%; width: 12px; height: 3px; background: var(--amb); }
+.row { display: grid; grid-template-columns: 1fr 120px 120px 120px 130px; padding: 0 22px; height: 44px; align-items: center; font: 600 22px 'Barlow Semi Condensed'; }
+</style></head>
+<body>
+
+<!-- ============ MAIN MENU ============ -->
+<section class="stage" id="menu">
+  <img class="bg" src="../assets/shots/spec_de_dust2_front.jpg" style="filter: saturate(.75) brightness(.55)">
+  <div class="abs" style="inset:0;background:linear-gradient(90deg,#0b0d08f2 0%,#0b0d08cc 34%,#0b0d0800 60%)"></div>
+  <div class="abs" style="left:120px;top:150px">
+    <div style="font:800 italic 118px/0.9 'Barlow Condensed';letter-spacing:-1px">BOOTLEG<span class="amb">16</span></div>
+    <div style="font:600 22px 'Barlow Semi Condensed';color:#b7b29f;letter-spacing:7px;margin:14px 0 0 6px">CLASSIC 1.6 · REBUILT</div>
+  </div>
+  <div class="abs" style="left:110px;top:440px">
+    <div class="mi on">Find servers</div>
+    <div class="mi">Create server</div>
+    <div class="mi">Practice with bots</div>
+    <div class="mi">Options</div>
+    <div class="mi" style="color:#8f8b7e">Quit</div>
+  </div>
+  <div class="abs" style="left:136px;bottom:70px;font:500 18px 'Barlow Semi Condensed';color:#8f8b7e;letter-spacing:1px">v0.4 · protocol 48 · 128 tick</div>
+
+  <!-- VGUI server browser, rebuilt crisp -->
+  <div class="abs vg" style="right:90px;top:190px;width:820px;height:640px;padding:0">
+    <div style="display:flex;align-items:center;height:46px;padding:0 16px;background:var(--ol2);font:700 21px 'Barlow Semi Condensed';letter-spacing:1px;color:#e6eadc">
+      <i class="ti ti-server" style="margin-right:10px;font-size:22px;color:var(--amb)"></i>FIND SERVERS<span style="margin-left:auto;color:#a9b19c"><i class="ti ti-x"></i></span>
+    </div>
+    <div style="display:flex;gap:4px;padding:14px 16px 0">
+      <div class="vbtn" style="background:var(--ol2);color:var(--amb);border-bottom-color:var(--ol2)">Internet</div>
+      <div class="vbtn">Favorites</div><div class="vbtn">History</div><div class="vbtn">LAN</div>
+    </div>
+    <div class="vg-in" style="margin:0 16px;height:452px">
+      <div style="display:grid;grid-template-columns:34px 1fr 150px 90px 80px;padding:10px 14px;font:700 17px 'Barlow Semi Condensed';color:#a9b19c;letter-spacing:1px;border-bottom:1px solid var(--lo)">
+        <span><i class="ti ti-lock"></i></span><span>SERVER</span><span>MAP</span><span>PLAYERS</span><span>PING</span></div>
+      <div id="srv"></div>
+    </div>
+    <div style="display:flex;gap:8px;padding:16px;justify-content:flex-end">
+      <div class="vbtn">Filters</div><div class="vbtn">Refresh</div>
+      <div class="vbtn" style="color:#111;background:var(--amb);border-color:#ffd27a #8a5600 #8a5600 #ffd27a">Connect</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN-GAME HUD ============ -->
+<section class="stage" id="hud">
+  <img class="bg" src="../assets/shots/de_dust_ct.jpg">
+  <div class="abs" style="left:0;right:0;bottom:0;height:240px;background:linear-gradient(0deg,#0006,#0000)"></div>
+
+  <!-- radar -->
+  <div class="abs" style="left:28px;top:28px;width:250px;height:250px">
+    <div class="abs" style="inset:0;border-radius:50%;background:#1a1408a8;box-shadow:inset 0 0 0 2px #FFA000cc"></div>
+    <div class="abs" style="left:124px;top:12px;width:2px;height:226px;background:#FFA00055"></div>
+    <div class="abs" style="top:124px;left:12px;height:2px;width:226px;background:#FFA00055"></div>
+    <div class="abs" style="left:55px;top:15px;width:0;height:0;border-left:70px solid transparent;border-right:70px solid transparent;border-top:110px solid #FFA00024"></div>
+    <div class="abs" style="left:121px;top:118px;width:9px;height:9px;background:#fff"></div>
+    <div class="abs" style="left:84px;top:96px;width:8px;height:8px;background:var(--ct)"></div>
+    <div class="abs" style="left:150px;top:170px;width:8px;height:8px;background:var(--ct)"></div>
+    <div class="abs" style="left:176px;top:72px;width:8px;height:8px;background:var(--ct)"></div>
+  </div>
+  <div class="abs" style="left:40px;top:288px;font:700 20px 'Barlow Semi Condensed';color:var(--ct);text-shadow:0 1px 2px #000">Long A · 3 alive</div>
+
+  <!-- top centre: score (modern addition, 1.6 colours) -->
+  <div class="abs shadow" style="left:50%;top:22px;transform:translateX(-50%);display:flex;align-items:center;gap:22px;font:700 30px 'Barlow Condensed'">
+    <span style="color:var(--ct)">CT</span><span style="font-size:44px;color:var(--ct)">7</span>
+    <span style="font-size:20px;color:#fff;background:#0008;padding:3px 12px;letter-spacing:2px">ROUND 13</span>
+    <span style="font-size:44px;color:var(--t)">5</span><span style="color:var(--t)">T</span>
+  </div>
+
+  <!-- kill feed -->
+  <div class="abs" style="right:28px;top:28px;display:flex;flex-direction:column;align-items:flex-end">
+    <div class="kf"><span style="color:var(--t)">Viper</span><i class="spr amb" style="--s:url(../assets/hud/d_ak47.png);width:108px;height:36px"></i><span style="color:var(--ct)">Hawk</span></div>
+    <div class="kf me"><span style="color:var(--ct)">anas</span><i class="spr amb" style="--s:url(../assets/hud/d_awp.png);width:108px;height:36px"></i><i class="spr" style="--s:url(../assets/hud/d_headshot.png);width:81px;height:36px;color:#ff5a3c"></i><span style="color:var(--t)">Rook</span></div>
+    <div class="kf"><span style="color:var(--ct)">Ghost</span><i class="spr amb" style="--s:url(../assets/hud/d_m4a1.png);width:108px;height:36px"></i><span style="color:var(--t)">Blitz</span></div>
+  </div>
+
+  <!-- buyzone icon -->
+  <i class="spr abs" style="--s:url(../assets/hud/buyzone.png);left:34px;top:470px;width:64px;height:64px;color:#3fd04a"></i>
+
+  <!-- crosshair 1.6 -->
+  <div class="abs" style="left:960px;top:540px">
+    <div class="abs" style="left:-1px;top:-24px;width:3px;height:14px;background:#33ff33"></div>
+    <div class="abs" style="left:-1px;top:10px;width:3px;height:14px;background:#33ff33"></div>
+    <div class="abs" style="top:-1px;left:-24px;height:3px;width:14px;background:#33ff33"></div>
+    <div class="abs" style="top:-1px;left:10px;height:3px;width:14px;background:#33ff33"></div>
+  </div>
+
+  <!-- chat -->
+  <div class="abs" style="left:34px;bottom:150px;font:600 22px 'Barlow Semi Condensed';text-shadow:0 1px 2px #000,0 0 6px #000">
+    <div><span style="color:#b9b9b9">(Counter-Terrorist)</span> <span style="color:var(--ct)">Hawk</span> : rotate B, they're mid</div>
+    <div style="margin-top:4px"><span style="color:var(--ct)">Ghost</span> <span style="color:#7dff6a">(RADIO): Enemy spotted.</span></div>
+  </div>
+
+  <!-- health | armour -->
+  <div class="abs shadow" style="left:34px;bottom:34px;display:flex;align-items:center;gap:16px">
+    <i class="spr amb" style="--s:url(../assets/hud/cross.png);width:52px;height:52px"></i><span class="num" data-n="100"></span>
+    <div style="width:3px;height:56px;background:var(--amb);margin:0 22px;opacity:.8"></div>
+    <i class="spr amb" style="--s:url(../assets/hud/suithelmet_full.png);width:52px;height:52px"></i><span class="num" data-n="67"></span>
+  </div>
+  <!-- timer -->
+  <div class="abs shadow" style="left:50%;bottom:34px;transform:translateX(-50%);display:flex;align-items:center;gap:14px">
+    <i class="spr amb" style="--s:url(../assets/hud/stopwatch.png);width:52px;height:52px"></i><span class="num" data-n="1:42"></span>
+  </div>
+  <!-- money above ammo -->
+  <div class="abs shadow" style="right:40px;bottom:118px;display:flex;align-items:center;gap:8px">
+    <i class="spr amb" style="--s:url(../assets/hud/dollar.png);width:38px;height:52px"></i><span class="num" data-n="3250"></span>
+  </div>
+  <div class="abs shadow" style="right:40px;bottom:34px;display:flex;align-items:center;gap:16px">
+    <span class="num" data-n="24"></span>
+    <div style="width:3px;height:56px;background:var(--amb);opacity:.8"></div>
+    <span class="num" data-n="90"></span>
+    <i class="spr amb" style="--s:url(../assets/weap/ak47__ammo.png);width:52px;height:52px"></i>
+  </div>
+</section>
+
+<!-- ============ BUY MENU ============ -->
+<section class="stage" id="buy">
+  <img class="bg" src="../assets/shots/de_dust_ct.jpg">
+  <div class="abs" style="inset:0;background:#000a"></div>
+  <div class="abs vg" style="left:260px;top:150px;width:1400px;height:780px">
+    <div style="display:flex;align-items:center;height:56px;padding:0 22px;background:var(--ol2);font:700 24px 'Barlow Semi Condensed';letter-spacing:2px;color:#e6eadc">
+      BUY<span style="display:flex;gap:6px;margin-left:30px;font-size:19px;letter-spacing:1px"><span style="padding:6px 14px;color:#a9b19c">1 PISTOLS</span><span style="padding:6px 14px;color:#a9b19c">2 SHOTGUNS</span><span style="padding:6px 14px;color:#a9b19c">3 SMGS</span><span style="padding:6px 14px;background:#FFA000;color:#111">4 RIFLES</span><span style="padding:6px 14px;color:#a9b19c">5 MG</span><span style="padding:6px 14px;color:#a9b19c">6 GEAR</span><span style="padding:6px 14px;color:#a9b19c">7 GRENADES</span></span><span style="margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--amb)"><i class="spr" style="--s:url(../assets/hud/dollar.png);width:18px;height:25px"></i>3250</span>
+    </div>
+    <div style="display:flex;gap:22px;padding:22px">
+      <div style="width:520px;display:flex;flex-direction:column;gap:6px" id="buylist"></div>
+      <div class="vg-in" style="flex:1;height:660px;padding:30px 36px;position:relative">
+        <div style="font:700 46px 'Barlow Condensed';letter-spacing:1px">AK-47</div>
+        <div style="font:600 20px 'Barlow Semi Condensed';color:#a9b19c;letter-spacing:2px">CV-47 · ASSAULT RIFLE · TERRORIST</div>
+        <i class="gun" style="--s:url(../assets/gun/ak47.png);width:660px;height:175px;margin:40px 0 30px;filter:drop-shadow(0 6px 0 #0004)"></i>
+        <div id="stats" style="display:grid;grid-template-columns:200px 1fr 90px;gap:16px 18px;align-items:center;font:600 21px 'Barlow Semi Condensed'"></div>
+        <div style="position:absolute;right:36px;bottom:30px;display:flex;gap:10px">
+          <div class="vbtn">Cancel</div>
+          <div class="vbtn" style="color:#111;background:var(--amb);border-color:#ffd27a #8a5600 #8a5600 #ffd27a">Buy · $2500</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCOREBOARD ============ -->
+<section class="stage" id="score">
+  <img class="bg" src="../assets/shots/de_dust_ct.jpg">
+  <div class="abs" style="inset:0;background:#0006"></div>
+  <div class="abs" style="left:310px;top:110px;width:1300px;background:#0b0d08e6;border:1px solid #ffffff22">
+    <div style="display:flex;align-items:baseline;padding:22px 26px 14px;border-bottom:1px solid #ffffff22">
+      <span style="font:700 30px 'Barlow Condensed';letter-spacing:1px">bootleg16 · public #1</span>
+      <span style="margin-left:auto;font:600 20px 'Barlow Semi Condensed';color:#9a978a">de_dust · round 13 of 24 · 1:42</span>
+    </div>
+    <div id="sb"></div>
+    <div style="padding:14px 26px;font:600 19px 'Barlow Semi Condensed';color:#9a978a;border-top:1px solid #ffffff22">Spectators: kova, lux</div>
+  </div>
+</section>
+
+<script>
+const D = n => `<i class="spr" style="--s:url(../assets/hud/number_${n}.png)"></i>`;
+for (const el of document.querySelectorAll('.num')) {
+  el.innerHTML = [...el.dataset.n].map(c => c === ':' ? '<b style="width:14px;display:inline-flex;flex-direction:column;justify-content:center;gap:12px;align-items:center"><i style="width:7px;height:7px;background:var(--amb)"></i><i style="width:7px;height:7px;background:var(--amb)"></i></b>' : D(c)).join('');
+}
+document.getElementById('srv').innerHTML = [
+  ['bootleg16 · public #1', 'de_dust', '19/20', 12, 0], ['[EU] Dust2 only 24/7', 'de_dust2', '31/32', 24, 0],
+  ['Inferno pugs · 128 tick', 'de_inferno', '10/10', 31, 1], ['aim_map training', 'aim_map', '6/16', 38, 0],
+  ['Classic 1.6 · no ff', 'de_nuke', '14/20', 46, 0], ['Late night public', 'cs_office', '8/24', 63, 0],
+  ['Retro LAN cafe', 'de_aztec', '12/16', 71, 1], ['Train 24/7', 'de_train', '18/24', 88, 0],
+].map((r, i) => `<div style="display:grid;grid-template-columns:34px 1fr 150px 90px 80px;padding:0 14px;height:46px;align-items:center;font:600 20px 'Barlow Semi Condensed';${i === 0 ? 'background:#FFA00026;color:#FFA000' : 'color:#dfe5d6'}">
+  <span style="color:#a9b19c">${r[4] ? '<i class="ti ti-lock"></i>' : ''}</span><span>${r[0]}</span><span style="opacity:.8">${r[1]}</span><span>${r[2]}</span><span style="color:${r[3] < 40 ? '#9fe08f' : '#e8d27a'}">${r[3]}</span></div>`).join('');
+document.getElementById('buylist').innerHTML = [
+  ['1', 'Galil', 2000], ['2', 'AK-47', 2500, 1], ['3', 'Scout', 2750], ['4', 'SG 552', 3500, 0, 1], ['5', 'AWP', 4750, 0, 1], ['6', 'G3SG1', 5000, 0, 1],
+].map(r => `<div class="${r[3] ? 'vg-in' : 'vg'}" style="display:flex;align-items:center;height:62px;padding:0 18px;font:600 24px 'Barlow Semi Condensed';${r[3] ? 'color:#FFA000' : r[4] ? 'color:#7f8676' : 'color:#e6eadc'}">
+  <span style="width:42px;opacity:.7">${r[0]}</span><span>${r[1]}</span><span style="margin-left:auto">$${r[2]}</span></div>`).join('') +
+  `<div class="vg" style="display:flex;align-items:center;height:62px;padding:0 18px;font:600 24px 'Barlow Semi Condensed';color:#e6eadc;margin-top:auto"><span style="width:42px;opacity:.7">0</span>Back</div>`;
+document.getElementById('stats').innerHTML = [['Damage', 36, 0.72], ['Fire rate', '600 rpm', 0.66], ['Accuracy', '', 0.48], ['Movement', '221 u/s', 0.88], ['Magazine', '30 / 90', 0.6]].map(s =>
+  `<span style="color:#cfd6c4">${s[0]}</span><div style="height:10px;background:#22281D"><div style="height:10px;width:${s[2] * 100}%;background:#FFA000"></div></div><span style="color:#a9b19c;text-align:right">${s[1]}</span>`).join('');
+const team = (name, score, col, rows) => `
+  <div style="display:flex;align-items:baseline;padding:18px 22px 8px;color:${col};font:700 26px 'Barlow Condensed';letter-spacing:1px">${name}<span style="margin-left:14px;font-size:20px;opacity:.7">${rows.length} players</span><span style="margin-left:auto;font-size:40px">${score}</span></div>
+  <div class="row" style="height:32px;font-size:17px;color:#8a877c;letter-spacing:1px"><span>NAME</span><span style="text-align:right">KILLS</span><span style="text-align:right">DEATHS</span><span style="text-align:right">PING</span><span></span></div>
+  ${rows.map(r => `<div class="row" style="color:${r[5] ? '#fff' : col};${r[5] ? 'background:#FFA00022;box-shadow:inset 3px 0 0 #FFA000' : ''};${r[4] === 'Dead' ? 'opacity:.45' : ''}">
+    <span>${r[0]}</span><span style="text-align:right">${r[1]}</span><span style="text-align:right">${r[2]}</span><span style="text-align:right">${r[3]}</span><span style="text-align:right;color:#FFA000;font-size:18px;letter-spacing:1px">${r[4]}</span></div>`).join('')}`;
+document.getElementById('sb').innerHTML =
+  team('Counter-Terrorists', 7, '#99CCFF', [['anas', 18, 9, 12, '', 1], ['Ghost', 15, 10, 34, ''], ['Hawk', 11, 12, 22, 'Dead'], ['Sarge', 9, 11, 48, ''], ['Nova', 6, 13, 61, 'Dead']]) +
+  team('Terrorists', 5, '#FF5040', [['Viper', 17, 11, 19, ''], ['Rook', 12, 13, 41, 'Dead'], ['Blitz', 10, 12, 27, 'Dead'], ['Kane', 8, 12, 55, 'Bomb'], ['Mako', 7, 13, 72, '']]);
+</script>
+<script src="stage.js"></script>
+</body></html>

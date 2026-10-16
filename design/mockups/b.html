@@ -1,0 +1,210 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>B · CS2-grade clean</title>
+<link rel="stylesheet" href="base.css">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --ct: #7EA3E6; --ctd: #5D79AE; --t: #EAB54A; --td: #DE9B35; --tx: #E8ECEF; --mu: #8E99A8; --pn: rgba(16,20,26,.72); --ln: rgba(255,255,255,.09); --go: #4FD17A; }
+body { font-family: 'Barlow', sans-serif; color: var(--tx); }
+.r { font-family: 'Rajdhani', sans-serif; }
+.pn { background: var(--pn); border: 1px solid var(--ln); border-radius: 6px; }
+.tab { font: 700 21px 'Rajdhani'; letter-spacing: 2px; color: var(--mu); padding: 0 4px; height: 76px; display: flex; align-items: center; border-bottom: 3px solid transparent; }
+.tab.on { color: #fff; border-bottom-color: #fff; }
+.kf { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 14px; background: rgba(10,12,16,.78); border-radius: 4px; font: 600 20px 'Barlow'; margin-bottom: 5px; }
+.kf.me { box-shadow: inset 0 0 0 2px #E5484D; }
+.kf i.spr { color: #fff; }
+.tile { position: relative; height: 112px; background: rgba(22,27,34,.9); border: 1px solid var(--ln); border-radius: 5px; padding: 10px 12px; }
+.tile .k { position: absolute; left: 10px; top: 8px; font: 700 15px 'Rajdhani'; color: var(--mu); }
+.tile .p { position: absolute; right: 12px; bottom: 9px; font: 700 19px 'Rajdhani'; }
+.tile .n { position: absolute; left: 12px; bottom: 9px; font: 600 16px 'Barlow'; color: #cfd6df; }
+.tile .gun { position: absolute; left: 22px; right: 22px; top: 18px; height: 56px; }
+.th { font: 700 15px 'Rajdhani'; letter-spacing: 2px; color: var(--mu); }
+.sr { display: grid; grid-template-columns: 54px 1fr 110px 70px 70px 70px 90px 90px 80px 70px; align-items: center; height: 50px; padding: 0 18px; font: 600 21px 'Rajdhani'; border-top: 1px solid var(--ln); }
+.sr > span:nth-child(n+3) { text-align: right; }
+</style></head>
+<body>
+
+<!-- ============ MAIN MENU ============ -->
+<section class="stage" id="menu">
+  <img class="bg" src="../assets/shots/spec_de_inferno_front.jpg" style="filter: saturate(.85) brightness(.62)">
+  <div class="abs" style="inset:0;background:linear-gradient(180deg,#0b0e13 0%,#0b0e13cc 7%,#0b0e1300 22%),linear-gradient(270deg,#0b0e13f5 0%,#0b0e13d9 30%,#0b0e1300 55%)"></div>
+  <!-- top bar -->
+  <div class="abs" style="left:0;right:0;top:0;height:76px;display:flex;align-items:center;padding:0 40px;gap:38px;border-bottom:1px solid var(--ln);background:#0b0e13">
+    <div class="r" style="font-size:30px;font-weight:700;letter-spacing:1px;margin-right:24px">BOOTLEG<span style="color:var(--t)">16</span></div>
+    <div class="tab on">PLAY</div><div class="tab">LOADOUT</div><div class="tab">SERVERS</div><div class="tab">WATCH</div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:26px;font-size:22px;color:var(--mu)">
+      <i class="ti ti-bell"></i><i class="ti ti-settings"></i>
+      <div style="display:flex;align-items:center;gap:12px;color:#fff;font:600 19px 'Barlow'">
+        <div style="width:40px;height:40px;border-radius:4px;background:var(--ctd);display:grid;place-items:center;font:700 18px 'Rajdhani'">A</div>
+        <div>anas_1412<div style="font:500 14px 'Barlow';color:var(--go)">Online</div></div>
+      </div>
+      <i class="ti ti-power"></i>
+    </div>
+  </div>
+  <!-- news -->
+  <div class="abs pn" style="left:40px;bottom:40px;width:430px;padding:18px 20px;display:flex;gap:16px;align-items:center">
+    <div style="width:92px;height:62px;border-radius:4px;background:url(../assets/shots/de_dust2_t.jpg) center/cover"></div>
+    <div><div class="th" style="color:var(--t)">UPDATE 0.4</div><div style="font:600 19px 'Barlow'">Movement rebuilt at 128 tick</div><div style="font:500 15px 'Barlow';color:var(--mu)">Bunny hop, ladders, crouch jumps</div></div>
+  </div>
+  <!-- play panel -->
+  <div class="abs" style="right:150px;top:126px;width:760px">
+    <div style="display:flex;gap:8px;margin-bottom:26px">
+      <div class="pn r" style="flex:1;text-align:center;padding:13px 0;font-weight:700;font-size:20px;letter-spacing:2px;background:#fff;color:#0b0e13;border-color:#fff">COMPETITIVE</div>
+      <div class="pn r" style="flex:1;text-align:center;padding:13px 0;font-weight:700;font-size:20px;letter-spacing:2px;color:var(--mu)">CASUAL</div>
+      <div class="pn r" style="flex:1;text-align:center;padding:13px 0;font-weight:700;font-size:20px;letter-spacing:2px;color:var(--mu)">DEATHMATCH</div>
+      <div class="pn r" style="flex:1;text-align:center;padding:13px 0;font-weight:700;font-size:20px;letter-spacing:2px;color:var(--mu)">PRACTICE</div>
+    </div>
+    <div class="th" style="margin-bottom:12px">MAP POOL · 2 SELECTED</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" id="maps"></div>
+    <div style="display:flex;gap:12px;margin-top:22px">
+      <div class="pn" style="flex:1;padding:12px 16px"><div class="th">REGION</div><div class="r" style="font-size:22px;font-weight:600">EU West · 18 ms</div></div>
+      <div class="pn" style="flex:1;padding:12px 16px"><div class="th">PARTY</div><div style="display:flex;gap:6px;margin-top:4px">
+        <div style="width:30px;height:30px;border-radius:3px;background:var(--ctd)"></div><div style="width:30px;height:30px;border-radius:3px;background:#6B8F71"></div>
+        <div style="width:30px;height:30px;border-radius:3px;border:1px dashed #ffffff40;display:grid;place-items:center;color:var(--mu)"><i class="ti ti-plus"></i></div></div></div>
+    </div>
+    <div class="r" style="margin-top:22px;height:78px;border-radius:6px;background:var(--go);color:#062312;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:700;letter-spacing:6px">GO</div>
+    <div style="margin-top:10px;text-align:center;font:500 16px 'Barlow';color:var(--mu)">Average queue 0:42 · 2,184 players online</div>
+  </div>
+  <!-- friends rail -->
+  <div class="abs" style="right:0;top:76px;bottom:0;width:90px;border-left:1px solid var(--ln);background:#0b0e13e6;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:22px" id="friends"></div>
+</section>
+
+<!-- ============ IN-GAME HUD ============ -->
+<section class="stage" id="hud">
+  <img class="bg" src="../assets/shots/de_dust_ct.jpg">
+  <!-- radar -->
+  <div class="abs" style="left:24px;top:24px;width:280px;height:280px;border-radius:6px;overflow:hidden;background:rgba(10,12,16,.72);border:1px solid var(--ln)">
+    <img src="../assets/ov/de_dust.png" class="abs" style="width:768px;left:-490px;top:-107px;opacity:.85;filter:saturate(.6)">
+    <div class="abs" style="left:132px;top:118px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:22px solid #fff;filter:drop-shadow(0 0 2px #000)"></div>
+    <div class="abs" style="left:96px;top:184px;width:12px;height:12px;border-radius:50%;background:var(--ct);box-shadow:0 0 0 2px #0b0e13"></div>
+    <div class="abs" style="left:190px;top:86px;width:12px;height:12px;border-radius:50%;background:var(--ct);box-shadow:0 0 0 2px #0b0e13"></div>
+    <div class="abs" style="left:60px;top:60px;width:14px;height:14px;background:#E5484D;transform:rotate(45deg);box-shadow:0 0 0 2px #0b0e13"></div>
+  </div>
+  <div class="abs r" style="left:24px;top:310px;width:280px;font-size:30px;font-weight:700;background:rgba(10,12,16,.72);border-radius:6px;padding:4px 16px;display:flex;align-items:baseline;gap:6px"><span style="color:var(--go)">$</span>3,250<span style="margin-left:auto;font-size:16px;color:var(--mu);letter-spacing:1px">BUY ZONE</span></div>
+  <!-- top centre -->
+  <div class="abs" style="left:50%;top:0;transform:translateX(-50%);display:flex;align-items:stretch;gap:4px">
+    <div style="display:flex;gap:4px;align-items:center;padding:8px 10px;background:rgba(10,12,16,.72);border-radius:0 0 0 6px" id="ctav"></div>
+    <div class="r" style="display:flex;align-items:center;background:rgba(10,12,16,.86);padding:0 4px">
+      <span style="font-size:40px;font-weight:700;color:var(--ct);width:56px;text-align:center">7</span>
+      <span style="font-size:30px;font-weight:600;width:96px;text-align:center;border-left:1px solid var(--ln);border-right:1px solid var(--ln)">1:42</span>
+      <span style="font-size:40px;font-weight:700;color:var(--t);width:56px;text-align:center">5</span>
+    </div>
+    <div style="display:flex;gap:4px;align-items:center;padding:8px 10px;background:rgba(10,12,16,.72);border-radius:0 0 6px 0" id="tav"></div>
+  </div>
+  <!-- kill feed -->
+  <div class="abs" style="right:24px;top:24px;display:flex;flex-direction:column;align-items:flex-end">
+    <div class="kf"><span style="color:var(--t)">Viper</span><i class="spr" style="--s:url(../assets/hud/d_ak47.png);width:96px;height:32px"></i><span style="color:var(--ct)">Hawk</span></div>
+    <div class="kf me"><span style="color:var(--ct)">anas</span><i class="spr" style="--s:url(../assets/hud/d_awp.png);width:96px;height:32px"></i><i class="spr" style="--s:url(../assets/hud/d_headshot.png);width:72px;height:32px"></i><span style="color:var(--t)">Rook</span></div>
+    <div class="kf"><span style="color:var(--ct)">Ghost</span><i class="spr" style="--s:url(../assets/hud/d_m4a1.png);width:96px;height:32px"></i><span style="color:var(--t)">Blitz</span></div>
+  </div>
+  <!-- crosshair -->
+  <div class="abs" style="left:960px;top:540px">
+    <div class="abs" style="left:-1px;top:-14px;width:2px;height:9px;background:#4CFF7A;box-shadow:0 0 0 1px #000a"></div>
+    <div class="abs" style="left:-1px;top:5px;width:2px;height:9px;background:#4CFF7A;box-shadow:0 0 0 1px #000a"></div>
+    <div class="abs" style="top:-1px;left:-14px;height:2px;width:9px;background:#4CFF7A;box-shadow:0 0 0 1px #000a"></div>
+    <div class="abs" style="top:-1px;left:5px;height:2px;width:9px;background:#4CFF7A;box-shadow:0 0 0 1px #000a"></div>
+  </div>
+  <!-- health / armour -->
+  <div class="abs" style="left:24px;bottom:24px;display:flex;align-items:stretch;gap:4px">
+    <div style="background:rgba(10,12,16,.72);border-radius:6px 0 0 6px;padding:12px 20px 14px;display:flex;align-items:center;gap:14px">
+      <i class="spr" style="--s:url(../assets/hud/cross.png);width:34px;height:34px;color:#fff"></i>
+      <div><div class="r" style="font-size:54px;font-weight:700;line-height:.9">100</div>
+      <div style="width:150px;height:5px;background:#ffffff22;margin-top:8px;border-radius:3px"><div style="height:5px;width:100%;background:#fff;border-radius:3px"></div></div></div>
+    </div>
+    <div style="background:rgba(10,12,16,.72);border-radius:0 6px 6px 0;padding:12px 20px 14px;display:flex;align-items:center;gap:12px">
+      <i class="spr" style="--s:url(../assets/hud/suithelmet_full.png);width:32px;height:32px;color:var(--mu)"></i>
+      <div><div class="r" style="font-size:40px;font-weight:700;line-height:.9;color:#cfd6df">67</div>
+      <div style="width:90px;height:5px;background:#ffffff22;margin-top:8px;border-radius:3px"><div style="height:5px;width:67%;background:#cfd6df;border-radius:3px"></div></div></div>
+    </div>
+  </div>
+  <!-- inventory + ammo -->
+  <div class="abs" style="right:24px;bottom:120px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font:700 16px 'Rajdhani';color:#cfd6df;background:rgba(10,12,16,.6);border-radius:6px;padding:12px 16px">
+    <div style="display:flex;align-items:center;gap:12px;opacity:.6">5 <i class="spr" style="--s:url(../assets/hud/d_flashbang.png);width:66px;height:22px"></i><i class="spr" style="--s:url(../assets/hud/d_grenade.png);width:66px;height:22px"></i></div>
+    <div style="display:flex;align-items:center;gap:12px;opacity:.6">3 <i class="spr" style="--s:url(../assets/hud/d_knife.png);width:96px;height:32px"></i></div>
+    <div style="display:flex;align-items:center;gap:12px;opacity:.6">2 <i class="spr" style="--s:url(../assets/hud/d_glock18.png);width:96px;height:32px"></i></div>
+    <div style="display:flex;align-items:center;gap:12px;color:#fff">1 <i class="spr" style="--s:url(../assets/hud/d_ak47.png);width:132px;height:44px"></i></div>
+  </div>
+  <div class="abs" style="right:24px;bottom:24px;background:rgba(10,12,16,.72);border-radius:6px;padding:12px 22px 14px;display:flex;align-items:baseline;gap:10px">
+    <span class="r" style="font-size:54px;font-weight:700;line-height:.9">24</span><span class="r" style="font-size:28px;font-weight:600;color:var(--mu)">/ 90</span>
+  </div>
+</section>
+
+<!-- ============ BUY MENU ============ -->
+<section class="stage" id="buy">
+  <img class="bg" src="../assets/shots/de_dust_ct.jpg">
+  <div class="abs" style="inset:0;background:rgba(8,10,14,.82)"></div>
+  <div class="abs" style="left:150px;right:150px;top:90px;display:flex;align-items:flex-end;border-bottom:1px solid var(--ln);padding-bottom:18px">
+    <div><div class="th">BUY MENU · 0:14 LEFT</div><div class="r" style="font-size:52px;font-weight:700;line-height:1">TERRORIST LOADOUT</div></div>
+    <div style="margin-left:auto;text-align:right"><div class="th">MONEY</div><div class="r" style="font-size:52px;font-weight:700;line-height:1"><span style="color:var(--go)">$</span>3,250</div></div>
+  </div>
+  <div class="abs" style="left:150px;right:150px;top:236px;display:grid;grid-template-columns:repeat(5,1fr);gap:22px" id="grid"></div>
+  <div class="abs" style="left:150px;right:150px;bottom:70px;display:flex;align-items:center;gap:30px;font:600 17px 'Barlow';color:var(--mu)">
+    <span><b class="r" style="color:#fff;background:#ffffff1a;padding:3px 9px;border-radius:3px">B</b>&nbsp; close</span>
+    <span><b class="r" style="color:#fff;background:#ffffff1a;padding:3px 9px;border-radius:3px">1–5</b>&nbsp; column</span>
+    <span><b class="r" style="color:#fff;background:#ffffff1a;padding:3px 9px;border-radius:3px">RMB</b>&nbsp; drop for teammate</span>
+    <span style="margin-left:auto">Loss bonus next round <b class="r" style="color:#fff">$1,900</b></span>
+  </div>
+</section>
+
+<!-- ============ SCOREBOARD ============ -->
+<section class="stage" id="score">
+  <img class="bg" src="../assets/shots/de_dust_ct.jpg">
+  <div class="abs" style="inset:0;background:rgba(8,10,14,.72)"></div>
+  <div class="abs" style="left:240px;right:240px;top:70px">
+    <div style="display:flex;align-items:center;gap:30px;margin-bottom:18px">
+      <div class="r" style="font-size:22px;font-weight:600;color:var(--mu);letter-spacing:2px">COMPETITIVE · DE_DUST</div>
+      <div class="r" style="margin-left:auto;display:flex;align-items:center;gap:22px;font-weight:700">
+        <span style="font-size:20px;color:var(--ct);letter-spacing:2px">COUNTER-TERRORISTS</span><span style="font-size:58px;color:var(--ct)">7</span>
+        <span style="font-size:24px;color:var(--mu)">:</span>
+        <span style="font-size:58px;color:var(--t)">5</span><span style="font-size:20px;color:var(--t);letter-spacing:2px">TERRORISTS</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:22px" id="hist"></div>
+    <div id="sb"></div>
+  </div>
+</section>
+
+<script>
+const ico = (n, w, h, c = '#fff') => `<i class="spr" style="--s:url(../assets/hud/${n}.png);width:${w}px;height:${h}px;color:${c}"></i>`;
+document.getElementById('maps').innerHTML = [['de_dust', 'de_dust_ct', 1], ['de_dust2', 'de_dust2_t', 1], ['de_inferno', 'de_inferno_t', 0]].map(m =>
+  `<div style="position:relative;height:150px;border-radius:6px;overflow:hidden;background:url(../assets/shots/${m[1]}.jpg) 30% 20%/170% auto;${m[2] ? 'box-shadow:inset 0 0 0 3px #fff' : 'filter:grayscale(.7) brightness(.6)'}">
+    <div style="position:absolute;inset:0;background:linear-gradient(0deg,#000c,#0000 60%)"></div>
+    <div class="r" style="position:absolute;left:14px;bottom:10px;font-size:22px;font-weight:700;letter-spacing:1px">${m[0].toUpperCase()}</div>
+    ${m[2] ? '<div style="position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:4px;background:#fff;color:#0b0e13;display:grid;place-items:center;font-size:20px"><i class="ti ti-check"></i></div>' : ''}</div>`).join('');
+document.getElementById('friends').innerHTML = [['K', '#6B8F71', 1], ['L', '#8E6BB0', 1], ['M', '#B0786B', 0], ['R', '#6B98B0', 0], ['Z', '#9AA06B', 0]].map(f =>
+  `<div style="position:relative;width:52px;height:52px;border-radius:5px;background:${f[1]};display:grid;place-items:center;font:700 22px 'Rajdhani';${f[2] ? '' : 'opacity:.4'}">${f[0]}<span style="position:absolute;right:-3px;bottom:-3px;width:14px;height:14px;border-radius:50%;background:${f[2] ? 'var(--go)' : '#55606e'};border:3px solid #0b0e13"></span></div>`).join('') +
+  `<div style="width:52px;height:52px;border-radius:5px;border:1px dashed #ffffff40;display:grid;place-items:center;color:var(--mu);font-size:22px"><i class="ti ti-user-plus"></i></div>`;
+const av = (c, alive) => `<div style="width:36px;height:36px;border-radius:3px;background:${alive ? c : 'transparent'};${alive ? '' : 'border:1px solid #ffffff22'};display:grid;place-items:center">${alive ? '' : ico('d_skull', 30, 30, '#ffffff55')}</div>`;
+document.getElementById('ctav').innerHTML = [1, 1, 0, 1, 0].map(a => av('var(--ctd)', a)).join('');
+document.getElementById('tav').innerHTML = [1, 0, 0, 1, 1].map(a => av('var(--td)', a)).join('');
+const cols = [
+  ['PISTOLS', [['Glock-18', 200, 'glock18', 1], ['USP', 500, 'usp'], ['P228', 600, 'p228'], ['Desert Eagle', 650, 'deagle'], ['Dual Elites', 800, 'elite']]],
+  ['MID-TIER', [['MAC-10', 1400, 'mac10'], ['MP5', 1500, 'mp5navy'], ['UMP45', 1700, 'ump45'], ['P90', 2350, 'p90'], ['XM1014', 3000, 'xm1014']]],
+  ['RIFLES', [['Galil', 2000, 'galil'], ['AK-47', 2500, 'ak47', 2], ['Scout', 2750, 'scout'], ['SG 552', 3500, 'sg552'], ['AWP', 4750, 'awp']]],
+  ['EQUIPMENT', [['Kevlar', 650, ''], ['Kevlar + helmet', 1000, '', 1], ['Night vision', 1250, ''], ['Defuse kit · CT', 9999, 'defuser'], ['C4 · carried', 0, 'c4', 1]]],
+  ['GRENADES', [['HE grenade', 300, 'hegrenade'], ['Flashbang', 200, 'flashbang'], ['Smoke', 300, 'smokegrenade'], ['', 0, ''], ['', 0, '']]],
+];
+document.getElementById('grid').innerHTML = cols.map((c, ci) => `<div><div class="th" style="margin-bottom:12px"><span style="color:#fff">${ci + 1}</span>&nbsp; ${c[0]}</div><div style="display:flex;flex-direction:column;gap:10px">${c[1].map((w, i) => {
+  if (!w[0]) return `<div class="tile" style="opacity:.25;border-style:dashed;background:transparent"></div>`;
+  const cant = w[1] > 3250, sel = w[3] === 2, own = w[3] === 1;
+  return `<div class="tile" style="${sel ? 'box-shadow:inset 0 0 0 2px #fff;background:rgba(40,46,56,.95)' : ''}${cant ? ';opacity:.45' : ''}">
+    <span class="k">${i + 1}</span>${w[2] && w[2] !== 'defuser' ? `<i class="gun" style="--s:url(../assets/gun/${w[2]}.png)"></i>` : `<div style="position:absolute;inset:18px 0 34px;display:grid;place-items:center">${ico(w[2] || (i === 1 ? 'suithelmet_full' : i === 0 ? 'suit_full' : 'flash_full'), 44, 44, '#cfd6df')}</div>`}
+    <span class="n">${w[0]}</span><span class="p" style="color:${own ? 'var(--mu)' : cant ? '#E5484D' : '#fff'}">${own ? 'OWNED' : w[1] === 9999 ? '—' : '$' + w[1].toLocaleString()}</span></div>`;
+}).join('')}</div></div>`).join('');
+document.getElementById('hist').innerHTML = ['ct:d_skull', 't:c4', 'ct:defuser', 'ct:d_skull', 't:d_skull', 'ct:stopwatch', 't:c4', 'ct:d_skull', 't:d_skull', 'ct:defuser', 'ct:d_skull', 't:d_skull', '', '', '', '', '', '', '', '', '', '', '', ''].map((r, i) => {
+  if (!r) return `<div style="flex:1;height:44px;border-radius:3px;background:#ffffff08;${i === 12 ? 'box-shadow:inset 0 0 0 2px #ffffff55' : ''}"></div>`;
+  const [t, n] = r.split(':');
+  return `<div style="flex:1;height:44px;border-radius:3px;background:${t === 'ct' ? 'rgba(93,121,174,.35)' : 'rgba(222,155,53,.3)'};display:grid;place-items:center">${ico(n, 24, 24, t === 'ct' ? 'var(--ct)' : 'var(--t)')}</div>`;
+}).join('');
+const head = `<div class="sr th" style="height:38px;border-top:0"><span></span><span>PLAYER</span><span>MONEY</span><span>K</span><span>A</span><span>D</span><span>HS%</span><span>ADR</span><span>MVP</span><span>PING</span></div>`;
+const team = (col, dark, rows) => `<div style="background:rgba(14,17,22,.86);border-radius:6px;border-left:4px solid ${col};margin-bottom:16px">${head}${rows.map(r => `
+  <div class="sr" style="${r[10] ? 'background:rgba(255,255,255,.07)' : ''};${r[9] ? 'color:#ffffff66' : ''}">
+    <span><div style="width:34px;height:34px;border-radius:3px;background:${r[9] ? 'transparent' : dark};${r[9] ? 'border:1px solid #ffffff22' : ''};display:grid;place-items:center">${r[9] ? ico('d_skull', 30, 30, '#ffffff55') : ''}</div></span>
+    <span style="font-family:Barlow;font-weight:600;font-size:20px">${r[0]}${r[11] ? ' &nbsp;' + ico('c4', 20, 20, 'var(--t)') : ''}</span>
+    <span style="color:${r[9] ? '' : 'var(--go)'}">$${r[1].toLocaleString()}</span><span>${r[2]}</span><span>${r[3]}</span><span>${r[4]}</span><span>${r[5]}%</span><span>${r[6]}</span>
+    <span style="color:${r[7] ? 'var(--t)' : '#ffffff40'}">${r[7] ? '★ ' + r[7] : '—'}</span><span style="color:var(--mu)">${r[8]}</span></div>`).join('')}</div>`;
+document.getElementById('sb').innerHTML =
+  team('var(--ct)', 'var(--ctd)', [['anas', 3250, 18, 4, 9, 61, 112, 4, 12, 0, 1], ['Ghost', 5400, 15, 6, 10, 47, 96, 2, 34, 0], ['Sarge', 2100, 9, 3, 11, 39, 71, 1, 48, 0], ['Hawk', 800, 11, 2, 12, 52, 84, 0, 22, 1], ['Nova', 650, 6, 7, 13, 33, 58, 0, 61, 1]]) +
+  team('var(--t)', 'var(--td)', [['Viper', 4100, 17, 3, 11, 58, 104, 3, 19, 0], ['Kane', 2900, 8, 5, 12, 41, 66, 1, 55, 0, 0, 1], ['Mako', 1650, 7, 4, 13, 29, 57, 0, 72, 0], ['Rook', 3300, 12, 2, 13, 50, 88, 1, 41, 1], ['Blitz', 1200, 10, 6, 12, 44, 79, 0, 27, 1]]);
+</script>
+<script src="stage.js"></script>
+</body></html>
