@@ -28,6 +28,8 @@ pub enum Cue {
     Flash { at: [f32; 3] },
     Smoke { at: [f32; 3] },
     Bounce { kind: Kind, at: [f32; 3] },
+    /// A bullet hit the map here: its material's sound, and half the time a ricochet.
+    Impact { at: [f32; 3], normal: [f32; 3] },
     DryFire { pistol: bool },
     Swing,
     Zoom,
@@ -39,7 +41,8 @@ pub enum Cue {
 
 #[derive(Resource)]
 pub struct Sounds {
-    dir: PathBuf,
+    /// Where sounds are looked for: the mod's, then Half-Life's (like GoldSrc).
+    dirs: [PathBuf; 2],
     cache: HashMap<String, Option<Handle<AudioSource>>>,
     materials: Materials,
     /// Cheap per-sound randomness (pitch, variant picks); doesn't need to be deterministic.
@@ -51,7 +54,7 @@ pub struct Sounds {
 impl Sounds {
     pub fn new(game_dir: PathBuf) -> Sounds {
         let materials = std::fs::read_to_string(game_dir.join("cstrike/sound/materials.txt")).map(|t| Materials::parse(&t)).unwrap_or_default();
-        Sounds { dir: game_dir.join("cstrike/sound"), cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new() }
+        Sounds { dirs: [game_dir.join("cstrike/sound"), game_dir.join("valve/sound")], cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new() }
     }
 
     fn rand(&mut self) -> f32 {
@@ -65,11 +68,11 @@ impl Sounds {
         options[((self.rand() * options.len() as f32) as usize).min(options.len() - 1)].to_string()
     }
 
-    fn get(&mut self, file: &str, assets: &mut Assets<AudioSource>) -> Option<Handle<AudioSource>> {
+    pub fn get(&mut self, file: &str, assets: &mut Assets<AudioSource>) -> Option<Handle<AudioSource>> {
         if let Some(h) = self.cache.get(file) {
             return h.clone();
         }
-        let h = std::fs::read(self.dir.join(file)).ok().map(|bytes| assets.add(AudioSource { bytes: bytes.into() }));
+        let h = self.dirs.iter().find_map(|d| std::fs::read(d.join(file)).ok()).map(|bytes| assets.add(AudioSource { bytes: bytes.into() }));
         if h.is_none() {
             warn!("missing sound {file}");
         }
@@ -199,6 +202,36 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
             Cue::Bounce { kind, at } => {
                 let file = if kind == Kind::He { "weapons/he_bounce-1.wav".into() } else { sounds.pick(&["weapons/grenade_hit1.wav", "weapons/grenade_hit2.wav", "weapons/grenade_hit3.wav"]) };
                 plays.push(Play { file, at: Some(at), volume: 0.5, attn: ATTN_NORM, pitch: 1.0 });
+            }
+            Cue::Impact { at, normal } => {
+                // `EV_HLDM_PlayTextureSound`: the surface's sound (pitch 96-111%), ATTN_NORM.
+                let (a, b) = (std::array::from_fn(|i| at[i] + normal[i] * 2.0), std::array::from_fn(|i| at[i] - normal[i] * 2.0));
+                let world = &w.client.world;
+                let material = world.texture_of(world.trace_line(a, b).model, a, b).map(|t| sounds.materials.kind(t)).unwrap_or('C');
+                let (volume, options): (f32, &[&str]) = match material {
+                    'M' => (0.9, &["player/pl_metal1.wav", "player/pl_metal2.wav"]),
+                    'D' => (0.9, &["player/pl_dirt1.wav", "player/pl_dirt2.wav", "player/pl_dirt3.wav"]),
+                    'V' => (0.5, &["player/pl_duct1.wav"]),
+                    'G' => (0.9, &["player/pl_grate1.wav", "player/pl_grate4.wav"]),
+                    'T' => (0.8, &["player/pl_tile1.wav", "player/pl_tile2.wav", "player/pl_tile3.wav", "player/pl_tile4.wav"]),
+                    'S' => (0.9, &["player/pl_slosh1.wav", "player/pl_slosh2.wav", "player/pl_slosh3.wav", "player/pl_slosh4.wav"]),
+                    'W' => (0.9, &["debris/wood1.wav", "debris/wood2.wav", "debris/wood3.wav"]),
+                    'Y' | 'P' => (0.8, &["debris/glass1.wav", "debris/glass2.wav", "debris/glass3.wav"]),
+                    'N' => (0.7, &["player/pl_snow1.wav", "player/pl_snow2.wav", "player/pl_snow3.wav", "player/pl_snow4.wav"]),
+                    _ => (0.9, &["player/pl_step1.wav", "player/pl_step2.wav"]),
+                };
+                let pitch = 0.96 + (sounds.rand() * 16.0).floor() / 100.0;
+                let file = sounds.pick(options);
+                plays.push(Play { file, at: Some(at), volume, attn: ATTN_NORM, pitch });
+                // `EV_HLDM_GunshotDecalTrace`: half the impacts ricochet, metal and vents ring.
+                if sounds.rand() < 0.5 {
+                    let file = if matches!(material, 'M' | 'V') {
+                        sounds.pick(&["weapons/ric_metal-1.wav", "weapons/ric_metal-2.wav"])
+                    } else {
+                        sounds.pick(&["weapons/ric1.wav", "weapons/ric2.wav", "weapons/ric3.wav", "weapons/ric4.wav", "weapons/ric5.wav", "weapons/ric_conc-1.wav"])
+                    };
+                    plays.push(Play { file, at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch: 1.0 });
+                }
             }
             Cue::DryFire { pistol } => {
                 plays.push(Play { file: if pistol { "weapons/dryfire_pistol.wav" } else { "weapons/dryfire_rifle.wav" }.into(), at: None, volume: 0.8, attn: ATTN_NORM, pitch: 1.0 })

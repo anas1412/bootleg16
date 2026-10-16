@@ -185,6 +185,9 @@ pub enum GameEvent {
     Damage { attacker: u8, victim: u8, amount: f32, group: HitGroup, sound: HitSound, at: Option<[f32; 3]> },
     /// Someone's footstep (everyone else hears it; you hear your own predicted ones).
     Footstep { player: u8, at: [f32; 3], step: sim::pmove::Step },
+    /// The map fired a target by name (a trigger zone or a button): `ambient_generic` sounds
+    /// with that name play (train's jet fly-by, birds, dogs).
+    Fired { name: String },
     GrenadeBounce { kind: sim::grenades::Kind, at: [f32; 3] },
     /// `weapon` None = fell to death.
     Kill { killer: u8, victim: u8, weapon: Option<Id>, headshot: bool },
@@ -225,6 +228,7 @@ impl GameEvent {
         matches!(
             self,
             GameEvent::Kill { .. }
+                | GameEvent::Fired { .. }
                 | GameEvent::RoundStart { .. }
                 | GameEvent::RoundEnd { .. }
                 | GameEvent::SidesSwapped

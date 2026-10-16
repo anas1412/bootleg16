@@ -28,6 +28,8 @@ pub enum Hit {
     Player { at: [f32; 3], dir: [f32; 3], head: bool },
     /// A breakable broke here: a burst of bits in its material's colour.
     Debris { at: [f32; 3], material: sim::breakables::Material },
+    /// Sparks (`env_spark`, bullets on metal).
+    Sparks { at: [f32; 3] },
 }
 
 /// Most decals kept at once (oldest go first, like GoldSrc's decal limit).
@@ -44,6 +46,8 @@ struct Looks {
     splat: Handle<StandardMaterial>,
     dust: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
+    /// Hot sparks (additive, bright).
+    spark: Handle<StandardMaterial>,
     /// Breakable debris: glass, wood, metal.
     shards: [Handle<StandardMaterial>; 3],
 }
@@ -83,6 +87,7 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
         splat: materials.add(decal(images.add(spot(64, [110, 6, 4], 0.3, 0.45)))),
         dust: materials.add(solid(Color::srgb(0.55, 0.5, 0.42))),
         blood: materials.add(solid(Color::srgb(0.55, 0.02, 0.01))),
+        spark: materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.8, 0.35), unlit: true, alpha_mode: AlphaMode::Add, ..default() }),
         shards: [
             materials.add(StandardMaterial { base_color: Color::srgba(0.8, 0.9, 1.0, 0.6), unlit: true, alpha_mode: AlphaMode::Blend, ..default() }),
             materials.add(solid(Color::srgb(0.45, 0.3, 0.15))),
@@ -150,6 +155,8 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
                 decal(&mut commands, p, n, 4.0, &looks.hole, spin);
                 burst(&mut commands, p + n, n, 5, 90.0, 0.9, 0.35, &looks.dust, true);
             }
+            // GoldSrc's TE_SPARKS: a spray of hot bits that fall and fade fast.
+            Hit::Sparks { at } => burst(&mut commands, y_up(at), Vec3::Y * 0.3, 14, 220.0, 0.5, 0.45, &looks.spark, true),
             Hit::Debris { at, material } => {
                 use sim::breakables::Material::*;
                 let m = match material {

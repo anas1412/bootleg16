@@ -27,7 +27,11 @@ for d in maps models sound sprites gfx overviews; do
   [ -d "$game/cstrike/$d" ] && cp -r "$game/cstrike/$d" "$out/Half-Life/cstrike/"
 done
 cp "$game"/cstrike/*.wad "$out/Half-Life/cstrike/"
-cp -r "$game/valve/gfx" "$out/Half-Life/valve/"
+# Half-Life's own files the game falls back to, like GoldSrc (door, button and ambient
+# sounds, debris, gibs, sprites).
+for d in gfx sound sprites models; do
+  [ -d "$game/valve/$d" ] && cp -r "$game/valve/$d" "$out/Half-Life/valve/"
+done
 cp "$game"/valve/*.wad "$out/Half-Life/valve/"
 cat > "$out/play.sh" <<'RUN'
 #!/usr/bin/env bash

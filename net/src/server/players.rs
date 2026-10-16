@@ -84,5 +84,8 @@ impl Server {
             }
         }
         self.world.update(TICK, &actors);
+        for name in self.world.doors.take_fired() {
+            self.events.push(GameEvent::Fired { name });
+        }
     }
 }

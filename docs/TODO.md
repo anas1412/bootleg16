@@ -19,7 +19,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Grenade models in flight, HE fireball, flash white-out, smoke cloud, HUD counts
 - [x] Smoke: soft sprite puffs that billow and thin out; smoke blocks the server's sight checks
 - [x] Flash "already flashed" combine rule and the HE/flash water rule (`grenades::combine`, `blast_reaches`)
-- [ ] Grenade bounce sounds
+- [x] Grenade bounce sounds
 - [ ] ⚠ Flash white-out and HE fireball not yet checked on screen (only the smoke was)
 - [x] Tagging: hits slow you (0.5, or 0.65 large flinch) and kick the view, as cs.so (`player::hit_by`)
 - [x] Knife: GoldSrc line then crouch-box sweep (`trace_melee`); the 8-corner search only moves the impact point, skipped
@@ -114,13 +114,14 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Gunshots (silenced variants, random pitch), reload/draw/pin sounds from model events,
       footsteps by surface/ladder/water, hits (flesh/kevlar/helmet/headshot), deaths,
       grenades (bounce, HE, flash, smoke), knife, dry fire, zoom; 3D with GoldSrc falloff
-- [ ] Doors, ambience (`ambient_generic`), bullet ricochets/impacts,
-      knife hit sounds, jump/land variants, menu sounds; other players' reload sounds
+- [x] Doors, ambience (`ambient_generic`, triggered ones too), `env_spark`, bullet impact and
+      ricochet sounds (`EV_HLDM_PlayTextureSound`/`GunshotDecalTrace`), knife hits, jump/land
+- [ ] Other players' reload sounds
 - [x] Gunshot volumes and attenuations from client.so (`EV_Fire*`, `fire_attenuation`); footstep, jump and landing volumes from `PM_UpdateStepSound`/`PM_CheckFalling`, left and right feet
 - [x] Muzzle flash at the model's muzzle attachment (own view model and other players)
 
 ### Movement leftovers (`docs/MOVEMENT.md`)
-- [ ] Door sounds
+- [x] Door sounds (`movesnd`/`stopsnd`), button clicks: client/src/map_sounds.rs
 - [x] Footstep timing as `PM_UpdateStepSound` (3D speed over 150; 300 ms, ladder 350, wading 600, +100 crouched or on a ladder; 400 ms wait after moving slowly)
 
 ### Rendering

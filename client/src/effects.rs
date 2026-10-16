@@ -251,6 +251,7 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mu
             GameEvent::Shot { shooter, weapon, silenced, from, to, holes } => {
                 for (at, normal) in holes {
                     hits.write(Hit::Wall { at, normal });
+                    w.cues.push(sound::Cue::Impact { at, normal });
                 }
                 if Some(shooter) != me {
                     w.tracers.push((from, to, 0.08));

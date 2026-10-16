@@ -58,6 +58,10 @@ pub struct Door {
     progress: f32,
     /// A button: what it fires when pressed in.
     button: Option<Button>,
+    /// Sounds: doors' `movesnd`/`stopsnd` (doors/doormoveN.wav, doors/doorstopN.wav), a
+    /// button's `sounds` (buttons/buttonN.wav) in `move_sound`. 0 = none.
+    pub move_sound: u8,
+    pub stop_sound: u8,
     /// Rotating doors: +1 or -1, picked so the door swings away from the opener.
     sign: f32,
     pub state: DoorState,
@@ -122,6 +126,10 @@ impl Door {
                 self.state = DoorState::Opening;
             }
         }
+    }
+
+    pub fn is_button(&self) -> bool {
+        self.button.is_some()
     }
 
     /// Opened with +use: use-only doors, and buttons that aren't touch-only.
@@ -199,6 +207,8 @@ pub struct Doors {
     triggers: Vec<Trigger>,
     /// (time, target name) waiting to fire.
     pending: Vec<(f32, String)>,
+    /// Names fired since the last `take_fired` (sounds and other things the clients play).
+    fired: Vec<String>,
     time: f32,
 }
 
@@ -305,6 +315,8 @@ impl Doors {
                         flags: if button { flags & (SF_TOGGLE | SF_REVERSE | SF_ROTATE_X | SF_ROTATE_Y | SF_BUTTON_TOUCH_ONLY) } else { flags },
                         progress: 0.0,
                         button: button.then(|| Button { target: e.get("target").cloned().unwrap_or_default(), delay: num(&e, "delay", 0.0) }),
+                        move_sound: num(&e, if button { "sounds" } else { "movesnd" }, 0.0) as u8,
+                        stop_sound: if button { 0 } else { num(&e, "stopsnd", 0.0) as u8 },
                         sign: if rotating && flags & SF_REVERSE != 0 { -1.0 } else { 1.0 },
                         state: DoorState::Closed,
                     };
@@ -333,6 +345,11 @@ impl Doors {
         }
     }
 
+    /// Target names fired since the last call (`ambient_generic` sounds listen for them).
+    pub fn take_fired(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.fired)
+    }
+
     /// Index of the door using this brush model, if it is one.
     pub fn door_for_model(&self, model: usize) -> Option<usize> {
         self.doors.iter().position(|d| d.model == model)
@@ -355,6 +372,7 @@ impl Doors {
         let (due, later): (Vec<_>, Vec<_>) = self.pending.drain(..).partition(|(t, _)| *t <= now);
         self.pending = later;
         for (_, name) in due {
+            self.fired.push(name.clone());
             for d in self.doors.iter_mut().filter(|d| d.name.as_deref() == Some(name.as_str())) {
                 d.activate(None);
             }
@@ -452,6 +470,8 @@ mod tests {
             sign: 1.0,
             state: DoorState::Closed,
             button: button.map(|t| Button { target: t.into(), delay: 0.0 }),
+            move_sound: 0,
+            stop_sound: 0,
         }
     }
 
