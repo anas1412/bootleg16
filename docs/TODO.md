@@ -17,14 +17,14 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Grenades: throw formula, GoldSrc bounce physics, 1.5 s fuse; HE (100 dmg, 350 radius,
       armor 1x), flash (1500 radius, line of sight, facing rules), smoke (21 s, pops on the ground)
 - [x] Grenade models in flight, HE fireball, flash white-out, smoke cloud, HUD counts
-- [ ] Smoke looks like a solid grey blob: use CS-style soft sprite puffs; smoke should also hide
-      players from the server's visibility checks (anti-wallhack)
+- [x] Smoke: soft sprite puffs that billow and thin out; smoke blocks the server's sight checks
 - [ ] Flash "already flashed" combine rule (simplified to max); HE water rule; grenade bounce sounds
 - [ ] ⚠ Flash white-out and HE fireball not yet checked on screen (only the smoke was)
-- [ ] Hit flinch/slow-down (`velocity_modifier`) and victim view punch on hit
+- [x] Tagging: hits slow you (0.5, or 0.65 large flinch) and kick the view, as cs.so (`player::hit_by`)
 - [ ] Knife: GoldSrc hull sweep and 8-corner search (approximated by 5 rays now)
 - [ ] Shield
-- [ ] Breakables (`func_breakable`: dust2 glass/boxes), `func_button`
+- [x] Breakables: shot/blast damage, dust2/train crates break with the bomb, restored each round
+- [ ] `func_button`; breakable gibs (only coloured debris now); bullets lose no damage through glass
 - [x] CS 1.6 keys: B buy menu (CS layout per side, 0 cancel), Q last weapon, wheel, G drop,
       `,`/`.` ammo, Tab scoreboard; drop/pickup on the ground; gun drops on death
 - [ ] hud_fastswitch 0 (CS default: number keys show a selection, mouse1 confirms); only fastswitch 1 now
@@ -33,7 +33,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Weapon sounds
 - [x] Bullet holes + dust for every bullet/pellet (server sends wall hits), blood spray (bigger on headshots), blood on the wall behind
 - [ ] Own bullet holes predicted locally (now they come back from the server, one ping late); CS decal textures from decals.wad; sparks on metal
-- [ ] Kill feed and other events are sent unreliably (a lost snapshot loses them)
+- [x] Kill feed, round and bomb news reliable (numbered, resent until acked); team join resent until confirmed
 - [ ] ⚠ Shotgun ground-recoil ranges (source-only); FAMAS/Glock follow-up timings per spec
 
 ### Rounds and economy (`docs/RULES.md`)
@@ -103,7 +103,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Doors, ambience (`ambient_generic`), bullet ricochets/impacts,
       knife hit sounds, jump/land variants, menu sounds; other players' reload sounds
 - [ ] ⚠ Silenced shot loudness/attenuation and footstep volumes are estimates
-- [ ] Muzzle flash (view model event 5001)
+- [x] Muzzle flash at the model's muzzle attachment (own view model and other players)
 
 ### Movement leftovers (`docs/MOVEMENT.md`)
 - [ ] Water jump-out onto ledges (`PM_CheckWaterJump`)
@@ -112,9 +112,9 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] ⚠ Ladder face direction from the ladder box (fine for stock ladders)
 
 ### Rendering
-- [ ] Sky (currently a flat blue clear colour)
+- [x] Sky: the map's skybox (TGA faces resampled into a cubemap)
 - [ ] Lighting looks flatter than the original (overbright/gamma tuning)
-- [ ] Translucent brushes (`rendermode`/`renderamt`, e.g. nuke's glass doors draw opaque)
+- [x] Translucent brushes (`rendermode` 1/2/3/5 by `renderamt`)
 - [ ] Decals, sprites, particles, muzzle flashes
 - [ ] Static props/models placed in maps (`env_model`, `cycler_sprite` …)
 

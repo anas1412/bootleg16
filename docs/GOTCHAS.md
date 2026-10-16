@@ -143,3 +143,13 @@ something surprises you.
 - Head height: in the CS models the head centre is ~+19 over the origin, i.e. at eye level (+17), and leans
   forward of the origin by 1-12 units depending on the weapon pose. Shooting someone's back at eye level can
   hit the upper chest first. Hitboxes are posed per weapon (`Target::weapon`).
+
+## Polish batch (2026-10-16)
+- GoldSrc sky faces (gl_warp.c): rt +X, lf -X, bk +Y, ft -Y, up +Z, dn -Z; sides have s to the right, t up
+  (as seen from inside). Bevy samples cubemaps in the WebGPU layout with world directions, so faces can't
+  just be stacked: `sky.rs` resamples every cubemap texel by direction. Sky file names differ in case
+  ("Des" -> "Desbk.tga"): look them up case-insensitively.
+- CS 1.6 tagging is per *server frame* (+0.01 to the modifier and velocity × modifier each frame); HLDS ran
+  ~100 fps, so `player::tagging` scales it to 1/100 s steps.
+- Helper binaries (net/examples/*) go stale silently after a protocol bump: rebuild them or they're rejected.
+- dust2's bomb-site crates are `func_breakable` with spawnflag 1 (only trigger), fired by the site's `target`.
