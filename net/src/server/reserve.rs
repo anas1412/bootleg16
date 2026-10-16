@@ -42,6 +42,8 @@ pub(super) struct Reserved {
     pub(super) setup: MatchSetup,
     pub(super) knife: Knife,
     since: u32,
+    /// Last tick a player of the match was connected.
+    last_seen: u32,
     /// Winners' votes: player id -> switch sides?
     votes: HashMap<u8, bool>,
     /// What a player had when they left, for when they come back: money, kills, deaths.
@@ -55,7 +57,7 @@ impl Server {
     pub fn reserve(&mut self, setup: MatchSetup) {
         self.clients.retain(|_, c| c.bot);
         let knife = if setup.knife_round { Knife::Pending } else { Knife::Done };
-        self.reserved = Some(Reserved { setup, knife, since: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T });
+        self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T });
         self.round = crate::rounds::Match::new(self.round.cfg.clone(), TICK_RATE);
     }
 
@@ -82,6 +84,11 @@ impl Server {
         Ok(Some((group, self.team_for(group), saved)))
     }
 
+    /// Running a match (busy for the lobby).
+    pub fn is_reserved(&self) -> bool {
+        self.reserved.is_some()
+    }
+
     /// A ticket holder left: keep their money and score for when they reconnect.
     pub(super) fn remember(&mut self, c: &Remote) {
         if let Some(r) = &mut self.reserved {
@@ -94,10 +101,18 @@ impl Server {
     /// Before the first round: wait for everyone (or a while), then knife round or round 1.
     /// True while this handles the round flow (the normal flow must not run).
     pub(super) fn reserved_step(&mut self) -> bool {
-        let Some(r) = &self.reserved else { return false };
         let tick = self.tick;
-        let expected = r.setup.players.len();
         let here = self.clients.values().filter(|c| c.ticket != 0).count();
+        let Some(r) = &mut self.reserved else { return false };
+        // Nobody from the match here for a while (never came, or all left): free the server.
+        if here > 0 {
+            r.last_seen = tick;
+        } else if tick - r.last_seen > WAIT_SECONDS * TICK_RATE {
+            self.finish_reserved();
+            return false;
+        }
+        let r = self.reserved.as_ref().unwrap();
+        let expected = r.setup.players.len();
         let waited = tick - r.since > WAIT_SECONDS * TICK_RATE;
         match r.knife {
             Knife::Pending if self.round.phase == Phase::Warmup => {

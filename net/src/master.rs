@@ -121,6 +121,8 @@ pub struct Master {
     rng: u64,
     /// Players per casual match (10; tests use 2).
     pub match_size: usize,
+    /// When the last status line was printed.
+    reported: Instant,
 }
 
 impl Master {
@@ -128,7 +130,7 @@ impl Master {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7) ^ ((std::process::id() as u64) << 32);
-        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10 })
+        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -183,6 +185,9 @@ impl Master {
                 Some(LobbyMsg::Heartbeat { token, busy, address, .. }) => {
                     let public = address.parse().unwrap_or(from);
                     let official = !token.is_empty() && self.tokens.contains(&token);
+                    if !self.servers.contains_key(&from) {
+                        println!("server {public} joined the pool{}", if official { "" } else { " (wrong token: never gets matches)" });
+                    }
                     self.servers.insert(from, GameServer { public, token, official, busy, seen: Instant::now() });
                 }
                 Some(LobbyMsg::Hello { name, pad }) if pad.len() >= PAD => {
@@ -206,13 +211,26 @@ impl Master {
             }
         }
         let now = Instant::now();
-        self.servers.retain(|_, s| now - s.seen < SERVER_TIMEOUT);
+        self.servers.retain(|_, s| {
+            let alive = now - s.seen < SERVER_TIMEOUT;
+            if !alive {
+                println!("server {} stopped answering, out of the pool", s.public);
+            }
+            alive
+        });
         let gone: Vec<(u32, u32)> = self.players.values().filter(|p| now - p.seen > PLAYER_TIMEOUT).map(|p| (p.id, p.party)).collect();
         for (id, party) in gone {
             self.leave(id, party);
             self.players.retain(|_, p| p.id != id);
         }
         self.matchmake();
+        if now - self.reported > Duration::from_secs(60) {
+            self.reported = now;
+            let queued: usize = self.parties.values().filter(|p| p.queued.is_some()).map(|p| p.members.len()).sum();
+            let free = self.servers.values().filter(|s| s.official && !s.busy).count();
+            let busy = self.servers.values().filter(|s| s.busy).count();
+            println!("{} online, {queued} in queue, servers: {free} free, {busy} in a match", self.players.len());
+        }
     }
 
     pub fn run(&mut self) {
@@ -306,6 +324,7 @@ impl Master {
         // The server checks the token: only we can reserve official servers.
         let _ = self.udp.send_to(&encode(&ClientMsg::Reserve { token, setup }), addr);
         self.servers.get_mut(&addr).unwrap().busy = true;
+        println!("match booked on {public}: {} players{}", players.len(), if knife_round { ", custom" } else { "" });
         for (id, ticket, _) in tickets {
             if let Some(p) = self.players.values_mut().find(|p| p.id == id) {
                 p.found = Some((public, ticket));

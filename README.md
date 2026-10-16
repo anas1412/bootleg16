@@ -2,32 +2,36 @@
 
 Counter-Strike 1.6 rebuilt in Rust. It reads the maps and models from your own CS 1.6 install; no game files are shipped.
 
+## How it fits together
+
+- **The game** is what players download. It holds no server; it talks to the lobby.
+- **The lobby** (one for the whole game) holds parties, invite codes and the casual queue, and keeps the pool of game servers. When a match is ready it books a free game server and sends the 10 players there with a ticket each.
+- **Game servers** (as many as we need, over as many machines as we want) each run one match at a time and go back to the pool when it ends. A server nobody joins, or everyone leaves, frees itself after 90 seconds.
+
 ## Hosting
 
-One command starts everything: the lobby (parties, matchmaking) and a game server.
+All of it runs in Docker. On the main machine:
 
 ```bash
 ./host.sh
 ```
 
-That's it. The first run:
+That starts the lobby and one game server per CPU core, so one match per core. The first run copies the 3 game files the servers need from your CS 1.6 install, makes the secret token, and finds the public IP. It remembers everything in `hosting/`, so later runs bring the same setup back up, and Docker restarts it all after a reboot.
 
-1. copies the 3 game files the server needs from your CS 1.6 install (Steam's default folder; set `BOOTLEG16_DIR` if it's elsewhere),
-2. makes a secret token so only your lobby can book your server,
-3. finds your public IP and writes the server config,
-4. builds and starts both in Docker (they restart by themselves after a reboot).
-
-It ends by printing the line your friends use to start the game.
-
-**You need:** Linux with [Docker](https://docs.docker.com/engine/install/), and UDP ports **27010** (lobby) and **27015** (game) open:
-
-- On a VPS: open them in the provider's firewall (and `sudo ufw allow 27010,27015/udp` if you use ufw).
-- At home: forward both UDP ports on your router to this PC.
-
-**Other commands:**
+**More capacity:** on each extra machine (it needs the repo and Docker), run the line the first machine printed:
 
 ```bash
-./host.sh stop
+./host.sh join <lobby-ip> <token>
+```
+
+Its game servers join the same pool. Run `./host.sh token` on the main machine if you lost the token.
+
+**Ports (UDP):** 27010 for the lobby, 27015 and up for game servers (27015-27022 for 8). Open them in the provider's firewall, or forward them on your router at home.
+
+**Running it:**
+
+```bash
+./host.sh status
 ```
 
 ```bash
@@ -35,22 +39,40 @@ It ends by printing the line your friends use to start the game.
 ```
 
 ```bash
-./host.sh 203.0.113.7
+./host.sh update
 ```
 
-The last one is for when the IP it finds is wrong: give the address players should use.
+```bash
+./host.sh stop
+```
 
-**Settings:** the match rules (rounds, money, timers) are in `hosting/server1.cfg`; restart with `./host.sh` after editing. Re-running `./host.sh` rewrites it from `config/server.cfg`, so make lasting changes there.
+`update` pulls the latest code and restarts everything (matches in progress end, so do it when it's quiet). `logs` shows servers joining the pool, matches being booked, and a status line every minute (players online, queue, free and busy servers).
 
-**More servers:** each match takes a whole server. For more matches at once, copy the `server1` block in `compose.yaml` as `server2` on port `27016` (and its own `hosting/server2.cfg` with `public_address` ending in `:27016`).
+**Options:** `--servers N` sets how many game servers run on this machine. `--ip X` sets the address players connect to, if the one found is wrong.
+
+**Match rules** (rounds, money, timers) live in `config/server.cfg`. Edit it, then run `./host.sh` again.
+
+**Check a deployment** from any machine with the repo:
+
+```bash
+cargo run -p net --example smoke -- <lobby-ip>:27010
+```
+
+Two test players party up, start a custom game and join the booked server. Add `--local` when testing on the hosting machine itself behind a home router (it can't reach its own public IP).
+
+## Shipping the game
+
+Build the release with the lobby's address inside, so players just open the game:
+
+```bash
+BOOTLEG16_LOBBY=203.0.113.7:27010 cargo build --release -p client --no-default-features
+```
+
+Use a domain name instead of an IP if you have one (`play.example.com:27010`), so the lobby can move to a new machine without a new build. Players still need their own CS 1.6 install for now (maps and models come from it).
 
 ## Playing
 
-Start the game with your host's lobby address, open **Play**, and share your party code with friends:
+Open **Play** and share your party code with friends.
 
-```bash
-BOOTLEG16_LOBBY=203.0.113.7:27010 cargo run --release -p client --no-default-features
-```
-
-- **Casual:** party of 1 to 5, press Find match. 10 players make a match (5 v 5).
-- **Custom game:** up to 10 friends, the leader puts people on team A or B and presses Start. A knife round decides who picks sides.
+- **Casual:** a party of 1 to 5 presses Find match. 10 players make a match (5 v 5), and a party always stays on one team.
+- **Custom game:** up to 10 friends. The leader puts people on team A or B and presses Start. A knife round decides who picks sides.

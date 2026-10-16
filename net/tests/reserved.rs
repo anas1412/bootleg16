@@ -74,3 +74,15 @@ fn knife_round_then_winners_pick_sides() {
     assert_eq!(back.team(), Team::T);
     assert_eq!(g.server.money(id), Some(money));
 }
+
+#[test]
+fn abandoned_match_frees_the_server() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig::default());
+    g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: false });
+    // Nobody with a ticket shows up (a and b have none): after the wait, the server is free again.
+    for _ in 0..92 * 128 {
+        g.server.step();
+    }
+    assert!(!g.server.is_reserved());
+}
