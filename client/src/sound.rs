@@ -38,6 +38,8 @@ pub enum Cue {
     Zoom,
     /// A sound file named by a view model animation event (reloads, draws, pins).
     File(String),
+    /// A sound file played somewhere at this volume (ATTN_NORM).
+    Quiet { file: &'static str, at: [f32; 3], volume: f32 },
     /// A sound file played somewhere in the world; `far`: carries across the map (the bomb).
     At { file: &'static str, at: [f32; 3], far: bool },
 }
@@ -263,6 +265,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
             }
             Cue::Zoom => plays.push(Play { file: "weapons/zoom.wav".into(), at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
             Cue::File(file) => plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
+            Cue::Quiet { file, at, volume } => plays.push(Play { file: file.into(), at: Some(at), volume, attn: ATTN_NORM, pitch: 1.0 }),
             Cue::At { file, at, far } => plays.push(Play { file: file.into(), at: Some(at), volume: 1.0, attn: if far { ATTN_FAR } else { ATTN_NORM }, pitch: 1.0 }),
         }
         for p in plays {

@@ -23,6 +23,7 @@ mod bomb;
 mod assistant;
 mod buy;
 mod effects;
+mod explosions;
 mod framerate;
 mod game;
 mod gibs;
@@ -104,7 +105,7 @@ fn main() {
             killfeed::KillFeedPlugin,
             round_hud::RoundHudPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (bomb::BombPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin),
+            (bomb::BombPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin),
             (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
         .add_systems(Update, screenshot)

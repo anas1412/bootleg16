@@ -11,6 +11,13 @@ pub struct Sprite {
     pub rgba: Vec<u8>,
     /// The palette colour of each pixel (RGB), as world sprites draw it.
     pub colors: Vec<u8>,
+    /// Every frame as a world sprite draws it (RGBA): normal and additive take the palette
+    /// colours (additive: black adds nothing), index-alpha one colour (palette entry 255) with
+    /// the index as opacity, alpha-test drops index 255. Frames are `width` x `height`.
+    pub frames: Vec<Vec<u8>>,
+    /// Each frame's top-left corner relative to the sprite's origin (x right, y up), so a
+    /// frame spans x..x+width, y-height..y (an explosion grows up from where it is).
+    pub origins: Vec<(i32, i32)>,
 }
 
 impl Sprite {
@@ -51,7 +58,32 @@ impl Sprite {
             rgba.extend_from_slice(&[255, 255, 255, alpha]);
             colors.extend_from_slice(c);
         }
-        Some(Sprite { width, height, rgba, colors })
+        // Every frame (single frames only: group frames are rare in world sprites).
+        let mut frames = Vec::new();
+        let mut origins = Vec::new();
+        let mut at = f;
+        let count = i32_at(28)?.max(1) as usize;
+        for _ in 0..count {
+            if i32_at(at)? != 0 {
+                break;
+            }
+            let (w, h) = (i32_at(at + 12)? as usize, i32_at(at + 16)? as usize);
+            let Some(px) = data.get(at + 20..at + 20 + w * h) else { break };
+            if (w as u32, h as u32) == (width, height) {
+                origins.push((i32_at(at + 4)?, i32_at(at + 8)?));
+                let last = palette.get(255 * 3..256 * 3).unwrap_or(&[255, 255, 255]);
+                frames.push(px.iter().flat_map(|&i| {
+                    let c = palette.get(i as usize * 3..i as usize * 3 + 3).unwrap_or(&[0, 0, 0]);
+                    match format {
+                        2 => [last[0], last[1], last[2], i],
+                        3 if i == 255 => [0, 0, 0, 0],
+                        _ => [c[0], c[1], c[2], 255],
+                    }
+                }).collect());
+            }
+            at += 20 + w * h;
+        }
+        Some(Sprite { width, height, rgba, colors, frames, origins })
     }
 }
 

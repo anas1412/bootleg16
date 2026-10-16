@@ -32,7 +32,6 @@ impl Plugin for EffectsPlugin {
 struct Effects {
     /// HE, flash, smoke world models.
     grenades: Vec<Parts>,
-    sphere: Handle<Mesh>,
 }
 
 /// Flashbang: seconds of full white left, seconds of fade left (and total), strength.
@@ -55,7 +54,6 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
         .collect();
     commands.insert_resource(Effects {
         grenades,
-        sphere: meshes.add(Sphere::new(1.0)),
     });
 }
 
@@ -131,15 +129,12 @@ fn ground_guns(
     }
 }
 
-/// A fireball: age in seconds, size (1 = HE grenade).
-#[derive(Component)]
-struct Fireball(f32, f32);
 
 
 #[derive(Component)]
 struct FlashOverlay;
 
-/// Grenades in flight, fireballs, and the flashbang white-out (smoke: `smoke.rs`).
+/// Grenades in flight and the flashbang white-out (explosions: `explosions.rs`, smoke: `smoke.rs`).
 #[allow(clippy::too_many_arguments)]
 fn grenade_effects(
     mut commands: Commands,
@@ -147,10 +142,8 @@ fn grenade_effects(
     mut w: ResMut<Walker>,
     mut flash: ResMut<Flash>,
     fx: Res<Effects>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut studio: ResMut<Assets<crate::studio::StudioMaterial>>,
     views: Query<Entity, With<GrenadeView>>,
-    mut fireballs: Query<(Entity, &mut Fireball, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
     mut overlay: Single<&mut BackgroundColor, With<FlashOverlay>>,
 ) {
     let dt = time.delta_secs();
@@ -170,17 +163,6 @@ fn grenade_effects(
     let me = w.client.id();
     for e in std::mem::take(&mut w.pending_fx) {
         match e {
-            GameEvent::Explosion { at } | GameEvent::BombExploded { at } => {
-                let size = if matches!(e, GameEvent::BombExploded { .. }) { 4.0 } else { 1.0 };
-                let mat = materials.add(StandardMaterial { base_color: Color::srgba(1.0, 0.6, 0.15, 0.9), unlit: true, alpha_mode: AlphaMode::Blend, ..default() });
-                commands.spawn((
-                    Fireball(0.0, size),
-                    Mesh3d(fx.sphere.clone()),
-                    MeshMaterial3d(mat),
-                    Transform::from_translation(Vec3::from(map::to_y_up(at))).with_scale(Vec3::splat(20.0)),
-                    DespawnOnExit(AppState::InGame),
-                ));
-            }
             GameEvent::Flash { blinded, .. } => {
                 if let Some((_, b)) = blinded.iter().find(|(id, _)| Some(*id) == me) {
                     // The server already combined it with any flash still on (`grenades::combine`).
@@ -191,17 +173,6 @@ fn grenade_effects(
                 }
             }
             _ => {}
-        }
-    }
-    for (e, mut f, mut tf, mat) in &mut fireballs {
-        f.0 += dt;
-        let t = f.0 / (0.35 * f.1.sqrt());
-        tf.scale = Vec3::splat((20.0 + 130.0 * t.min(1.0)) * f.1);
-        if let Some(mut m) = materials.get_mut(&mat.0) {
-            m.base_color.set_alpha(0.9 * (1.0 - t).max(0.0));
-        }
-        if t >= 1.0 {
-            commands.entity(e).despawn();
         }
     }
     // Flashbang white-out: full for `hold` seconds, then fades out over `fade`.
