@@ -285,3 +285,28 @@ fn welcome_carries_the_servers_map_file_hash() {
     assert_eq!(g.a.map_hash, bsp.hash);
     assert_ne!(bsp.hash, 0);
 }
+
+#[test]
+fn kill_feed_survives_packet_loss() {
+    let Some(bsp) = dust2() else { return };
+    // 40% of packets lost: plain events would often vanish.
+    let mut g = setup(&bsp, 50, 0.4);
+    g.server.set_give(vec![sim::weapons::Id::Ak47]);
+    g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
+    let target = g.server.player(b).unwrap().origin;
+    let eye = g.server.player(a).unwrap().eye();
+    let d = [target[0] - eye[0], target[1] - eye[1], target[2] + 8.0 - eye[2]];
+    let yaw = d[1].atan2(d[0]).to_degrees();
+    let pitch = -(d[2] / (d[0] * d[0] + d[1] * d[1]).sqrt()).atan().to_degrees();
+    let (mut kills_a, mut kills_b) = (0, 0);
+    for t in 0..1200 {
+        let fire = t < 400;
+        g.tick(Input { yaw, pitch, attack: fire, ..Default::default() }, Input::default());
+        kills_a += g.a.take_events().iter().filter(|e| matches!(e, net::protocol::GameEvent::Kill { .. })).count();
+        kills_b += g.b.take_events().iter().filter(|e| matches!(e, net::protocol::GameEvent::Kill { .. })).count();
+    }
+    let deaths = g.a.scores.iter().find(|s| s.id == b).map(|s| s.deaths).unwrap_or(0);
+    assert!(deaths >= 1, "B never died (health {:?})", g.server.vitals(b));
+    assert!(kills_a >= 1 && kills_a == kills_b, "kills seen: A {kills_a}, B {kills_b}");
+}

@@ -132,6 +132,9 @@ pub struct Player {
     fall_velocity: f32,
     /// Milliseconds until the next footstep may play.
     step_timer: f32,
+    /// Getting shot slows you (CS 1.6 `m_flVelocityModifier`): 0.5 or 0.65 after a hit,
+    /// back to 1 over about half a second while on the ground (`player::tagging`).
+    pub velocity_modifier: f32,
 }
 
 /// Things that happened during a step, for the game rules to act on.
@@ -162,6 +165,7 @@ impl Player {
             duck_time: 0.0,
             fall_velocity: 0.0,
             step_timer: 0.0,
+            velocity_modifier: 1.0,
         }
     }
 

@@ -78,6 +78,10 @@ pub struct Client {
     pub map_hash: u64,
     /// Round trip to the server in ms (smoothed): how long until it acknowledges an input.
     pub ping_ms: f32,
+    /// A side we asked for, until the server confirms it.
+    wanted_team: Option<Option<Team>>,
+    /// Highest reliable event number received (each is kept once).
+    reliable_seen: u32,
     /// Voice frames received and not yet taken: (from, channel, gain 0..255, Opus data).
     voice: Vec<(u8, VoiceChannel, u8, Vec<u8>)>,
     /// The round (phase, clock, score), the bomb, and your money and limits.
@@ -116,6 +120,8 @@ impl Client {
             map_hash: 0,
             ping_ms: 0.0,
             voice: Vec::new(),
+            reliable_seen: 0,
+            wanted_team: None,
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0 },
             bomb: BombNet::None,
             me_info: Me { money: 0, limits: Default::default(), can_buy: false, defuse_kit: false },
@@ -159,6 +165,7 @@ impl Client {
             return Default::default();
         };
 
+        self.resend_join();
         // Predict: run the input now, keep it until the server confirms it.
         self.seq += 1;
         self.history.push_back((self.seq, TimedInput { input, view_tick: self.render_tick }));
@@ -171,7 +178,7 @@ impl Client {
 
         let recent: Vec<_> = self.history.iter().rev().take(INPUT_REDUNDANCY).rev().collect();
         let first_seq = recent.first().map(|(s, _)| *s).unwrap_or(self.seq);
-        let msg = ClientMsg::Inputs { first_seq, inputs: recent.iter().map(|(_, i)| *i).collect() };
+        let msg = ClientMsg::Inputs { first_seq, inputs: recent.iter().map(|(_, i)| *i).collect(), events: self.reliable_seen };
         self.socket.send(self.server, encode(&msg));
 
         // Advance the clock others are drawn at, staying INTERP_TICKS behind the newest snapshot.
@@ -201,7 +208,7 @@ impl Client {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
             }
-            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, grenades, smokes, ground, round, bomb, me } => {
+            ServerMsg::Snapshot { tick, ack, players, doors, loadout, events, reliable, grenades, smokes, ground, round, bomb, me } => {
                 let Status::Connected { id } = self.status else { return };
                 if tick <= self.latest_tick {
                     return; // old or duplicate
@@ -209,6 +216,12 @@ impl Client {
                 self.latest_tick = tick;
                 self.world.doors.apply_net_state(&doors);
                 self.events.extend(events);
+                for (n, e) in reliable {
+                    if n > self.reliable_seen {
+                        self.reliable_seen = n;
+                        self.events.push(e);
+                    }
+                }
                 self.grenades = grenades;
                 self.smokes = smokes;
                 self.ground = ground;
@@ -296,8 +309,25 @@ impl Client {
     }
 
     /// Pick a side (None = auto).
+    /// Ask for a side. Resent until the scoreboard shows it (a lost packet must not leave you
+    /// spectating); None = auto, done once you're on either team.
     pub fn join_team(&mut self, team: Option<Team>) {
+        self.wanted_team = Some(team);
         self.socket.send(self.server, encode(&ClientMsg::JoinTeam { team }));
+    }
+
+    fn resend_join(&mut self) {
+        let Some(want) = self.wanted_team else { return };
+        let now = self.team();
+        let done = match want {
+            Some(t) => now == t,
+            None => now != Team::Spectator,
+        };
+        if done {
+            self.wanted_team = None;
+        } else if self.ticks % (TICK_RATE / 4) == 0 {
+            self.socket.send(self.server, encode(&ClientMsg::JoinTeam { team: want }));
+        }
     }
 
     /// Our team according to the scoreboard (Spectator until we pick).

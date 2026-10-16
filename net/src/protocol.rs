@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 15;
+pub const PROTOCOL_VERSION: u32 = 16;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -25,7 +25,8 @@ pub const MAX_PLAYERS: usize = 32;
 pub enum ClientMsg {
     Hello { version: u32, name: String },
     /// Inputs numbered `first_seq`, `first_seq + 1`, ...
-    Inputs { first_seq: u32, inputs: Vec<TimedInput> },
+    /// `events`: the last reliable event number received (the server resends newer ones).
+    Inputs { first_seq: u32, inputs: Vec<TimedInput>, events: u32 },
     /// Buy something (checked against money, buy time, buy zone and team).
     Buy { item: BuyItem },
     /// Pick a side; None = auto (the smaller team).
@@ -132,6 +133,24 @@ pub enum GameEvent {
     BombExploded { at: [f32; 3] },
 }
 
+impl GameEvent {
+    /// Events that must arrive (kill feed, round and bomb news). The rest are sounds and effects
+    /// that are useless if late, so a lost one is simply lost.
+    pub fn reliable(&self) -> bool {
+        matches!(
+            self,
+            GameEvent::Kill { .. }
+                | GameEvent::RoundStart { .. }
+                | GameEvent::RoundEnd { .. }
+                | GameEvent::SidesSwapped
+                | GameEvent::MatchOver { .. }
+                | GameEvent::BombPlanted { .. }
+                | GameEvent::BombDefused { .. }
+                | GameEvent::BombExploded { .. }
+        )
+    }
+}
+
 /// Killer id for deaths nobody caused (the bomb).
 pub const WORLD: u8 = u8::MAX;
 
@@ -207,6 +226,8 @@ pub enum ServerMsg {
         /// Your own weapons, for prediction and the HUD.
         loadout: Loadout,
         events: Vec<GameEvent>,
+        /// Kill feed, round and bomb news, numbered: resent in every snapshot until acknowledged.
+        reliable: Vec<(u32, GameEvent)>,
         /// Grenades in flight or lying around, and smoke clouds.
         grenades: Vec<(sim::grenades::Kind, [f32; 3])>,
         smokes: Vec<SmokeNet>,

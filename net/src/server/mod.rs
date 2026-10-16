@@ -34,6 +34,8 @@ const MAX_INPUT_BUDGET: f32 = 16.0;
 /// loading the map, turns into permanent input lag: the budget only allows real time).
 const BACKLOG_INPUTS: usize = 4;
 const BACKLOG_TICKS: u32 = TICK_RATE / 4;
+/// Reliable events kept per client while unacknowledged.
+const MAX_OUTBOX: usize = 64;
 
 /// Practice room or a real match (the match settings are in `MatchConfig`).
 #[derive(Clone, Debug)]
@@ -111,6 +113,9 @@ struct Remote {
     deaths: u32,
     money: i32,
     defuse_kit: bool,
+    /// Reliable events not yet acknowledged, numbered (resent in every snapshot).
+    outbox: VecDeque<(u32, GameEvent)>,
+    next_reliable: u32,
     state: PlayerState,
     vitals: Vitals,
     /// Tick to respawn at while dead.
@@ -544,6 +549,17 @@ impl Server {
                 })
                 .collect();
             for (addr, ack, loadout, bomb, me, players, events) in sends {
+                // Reliable events go in the client's numbered outbox until it confirms them.
+                let (reliable_new, events): (Vec<GameEvent>, Vec<GameEvent>) = events.into_iter().partition(|e| e.reliable());
+                let c = self.clients.get_mut(&addr).unwrap();
+                for e in reliable_new {
+                    c.next_reliable += 1;
+                    c.outbox.push_back((c.next_reliable, e));
+                }
+                while c.outbox.len() > MAX_OUTBOX {
+                    c.outbox.pop_front(); // a client that stopped acknowledging: don't grow forever
+                }
+                let reliable: Vec<(u32, GameEvent)> = c.outbox.iter().cloned().collect();
                 let msg = ServerMsg::Snapshot {
                     tick,
                     ack,
@@ -551,6 +567,7 @@ impl Server {
                     doors: doors.clone(),
                     loadout,
                     events,
+                    reliable,
                     grenades: grenades.clone(),
                     smokes: smokes.clone(),
                     ground: ground.clone(),
@@ -677,6 +694,13 @@ impl Server {
                 _ if c.vitals.armor > 0.0 => HitSound::Kevlar,
                 _ => HitSound::Flesh,
             };
+            // Slowdown and view kick (CS 1.6); the kick only where that part had no armor.
+            let unarmored = match group {
+                HitGroup::Head => !(c.vitals.helmet && c.vitals.armor > 0.0),
+                _ => c.vitals.armor <= 0.0,
+            };
+            let roll = ((tick.wrapping_mul(2_654_435_761) ^ victim as u32) % 2001) as f32 / 1000.0 - 1.0;
+            player::hit_by(&mut c.state, weapon, group, damage, unarmored, roll);
             let killed = c.vitals.hurt(health, armor);
             self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group, sound, at });
             if killed {
@@ -734,9 +758,12 @@ impl Server {
                 let id = self.clients[&from].id;
                 self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), map_hash: self.map_hash, tick_rate: TICK_RATE, practice: self.rules.practice }));
             }
-            ClientMsg::Inputs { first_seq, inputs } => {
+            ClientMsg::Inputs { first_seq, inputs, events } => {
                 let Some(c) = self.clients.get_mut(&from) else { return };
                 c.last_heard = self.tick;
+                while c.outbox.front().is_some_and(|(n, _)| *n <= events) {
+                    c.outbox.pop_front();
+                }
                 for (i, input) in inputs.into_iter().enumerate() {
                     let seq = first_seq + i as u32;
                     if seq > c.last_queued {
@@ -791,6 +818,8 @@ impl Remote {
             deaths: 0,
             money: 0,
             defuse_kit: false,
+            outbox: VecDeque::new(),
+            next_reliable: 0,
             state: PlayerState { movement: Player::new([0.0; 3]), loadout: Loadout::knife_only() },
             vitals: Vitals { health: 0.0, ..Vitals::default() },
             respawn_at: None,
