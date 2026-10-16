@@ -6,6 +6,7 @@
 //! `--practice <dummies>` runs the practice room (infinite ammo, quick respawn, standing dummies).
 //! There are no bots: matches are people only.
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::path::PathBuf;
 
 fn main() {
@@ -48,5 +49,25 @@ fn main() {
         server.set_rules(net::server::Rules::practice(n));
     }
     println!("bootleg16 server: {map} on {} at {} tick", server.local_addr(), net::protocol::TICK_RATE);
-    server.run();
+    // SIGTERM / Ctrl-C (docker stop, updates): finish the current match, then exit.
+    on_stop_signal();
+    server.run_draining(&STOP);
+}
+
+static STOP: AtomicBool = AtomicBool::new(false);
+
+/// Set STOP on SIGINT / SIGTERM (std has no signal API; libc's `signal` is always linked).
+fn on_stop_signal() {
+    extern "C" fn handler(_: i32) {
+        STOP.store(true, Ordering::Relaxed);
+    }
+    extern "C" {
+        fn signal(sig: i32, handler: extern "C" fn(i32)) -> usize;
+    }
+    const SIGINT: i32 = 2;
+    const SIGTERM: i32 = 15;
+    unsafe {
+        signal(SIGINT, handler);
+        signal(SIGTERM, handler);
+    }
 }

@@ -3,7 +3,7 @@ FROM rust:1-slim-bookworm AS build
 WORKDIR /src
 COPY . .
 RUN cargo build --release -j 2 -p server && cargo build --release -j 2 -p master --features steam \
- && cp target/release/build/steamworks-sys-*/out/libsteam_api.so /src/
+ && cp target/release/libsteam_api.so /src/
 
 FROM debian:bookworm-slim
 # Steam's client library (steamclient.so), which the lobby needs to check Steam logins:

@@ -86,3 +86,27 @@ fn abandoned_match_frees_the_server() {
     }
     assert!(!g.server.is_reserved());
 }
+
+#[test]
+fn draining_waits_for_the_match_to_end() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig::default());
+    g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: false });
+    g.a.ticket = 111;
+    g.b.ticket = 222;
+    for _ in 0..128 {
+        g.tick(Input::default(), Input::default());
+    }
+    g.server.drain();
+    for _ in 0..4 * 128 {
+        g.tick(Input::default(), Input::default());
+    }
+    assert!(!g.server.drained(), "a match is running: keep going");
+    // Everyone leaves; the match frees the server after its wait, and draining is done.
+    g.a.disconnect();
+    g.b.disconnect();
+    for _ in 0..95 * 128 {
+        g.server.step();
+    }
+    assert!(g.server.drained());
+}

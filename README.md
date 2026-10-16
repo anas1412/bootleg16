@@ -46,7 +46,7 @@ Its game servers join the same pool. Run `./host.sh token` on the main machine i
 ./host.sh stop
 ```
 
-`update` pulls the latest code and restarts everything (matches in progress end, so do it when it's quiet). `logs` shows servers joining the pool, matches being booked, and a status line every minute (players online, queue, free and busy servers).
+`update` pulls the latest code and restarts without cutting matches short: the lobby restarts right away (players sign back in by themselves), idle game servers restart now, and busy ones finish their match first (no new match is booked on them meanwhile). `stop` stops everything at once, ending running matches. `logs` shows servers joining the pool, matches being booked, and a status line every minute (players online, queue, free and busy servers).
 
 **Options:** `--servers N` sets how many game servers run on this machine. `--ip X` sets the address players connect to, if the one found is wrong. `--region R` says where the machine is (`eu`, `na`, `sa`, `asia`...).
 

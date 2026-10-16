@@ -19,11 +19,11 @@ compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
 LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}"
 
 case "${1:-}" in
-  stop) compose down; exit ;;
+  stop) compose down -t 5; exit ;;   # now: running matches end
   logs) compose logs -f --tail 50; exit ;;
   status) compose ps --format "table {{.Service}}\t{{.Status}}"; exit ;;
   token) cat hosting/tokens.txt; echo; exit ;;
-  update) git pull --ff-only; shift ;;
+  update) git pull --ff-only || echo "Not pulling (no remote, or local changes): updating to the code as it is."; UPDATE=1; shift ;;
   join)
     [ $# -ge 3 ] || { echo "Usage: ./host.sh join <lobby-ip> <token>"; exit 1; }
     LOBBY="$2"; echo -n "$3" > hosting/tokens.txt; shift 3 ;;
@@ -77,11 +77,20 @@ rm -f hosting/server*.cfg
         -e "s|^name = .*|name = \"$(hostname)-$i\"|" \
         -e "s|^region = .*|region = \"$REGION\"|" \
         config/server.cfg > "hosting/server$i.cfg"
-    echo "  server$i: {image: bootleg16, network_mode: host, restart: unless-stopped, command: server de_dust2 $port --config /bootleg16/server.cfg, volumes: [./server$i.cfg:/bootleg16/server.cfg:ro, ./game:/game:ro]}"
+    echo "  server$i: {image: bootleg16, network_mode: host, restart: unless-stopped, stop_grace_period: 3h, command: server de_dust2 $port --config /bootleg16/server.cfg, volumes: [./server$i.cfg:/bootleg16/server.cfg:ro, ./game:/game:ro]}"
   done
 } > hosting/compose.yaml
 
 docker build -q -t bootleg16 . >/dev/null
+if [ -n "${UPDATE:-}" ] && [ -n "$(compose ps -q 2>/dev/null)" ]; then
+  # Rolling update: the lobby now (players sign back in by themselves), each game server once
+  # its match is over (it finishes the match on SIGTERM; nothing new is booked on it meanwhile).
+  [ "$LOBBY" = here ] && compose up -d --no-deps --force-recreate lobby
+  services=$(seq -f "server%g" 1 "$SERVERS" | tr '\n' ' ')
+  nohup bash -c "for s in $services; do docker compose -p bootleg16 -f hosting/compose.yaml up -d --no-deps --force-recreate \$s & done; wait; echo update done" > hosting/update.log 2>&1 &
+  echo "Updating: idle game servers restart now, busy ones when their match ends (progress: hosting/update.log)."
+  exit
+fi
 compose up -d --remove-orphans
 last=$((27014 + SERVERS))
 echo
@@ -89,5 +98,5 @@ echo "Running $SERVERS game server(s) on $IP (UDP $([ "$SERVERS" = 1 ] && echo 2
 echo "Open those UDP ports in your firewall / router."
 if [ "$LOBBY" = here ]; then
   echo "More machines:  ./host.sh join $IP $token"
-  echo "Ship the game:  BOOTLEG16_LOBBY=$IP:27010 cargo build --release -p client --no-default-features"
+  echo "Ship the game:  BOOTLEG16_LOBBY=$IP:27010 cargo build --release -p client --no-default-features --features steam"
 fi

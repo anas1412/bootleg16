@@ -190,6 +190,8 @@ pub struct Server {
     guard: guard::Guard,
     /// Set while running a match for a fixed list of players.
     reserved: Option<reserve::Reserved>,
+    /// Shutting down: no new matches (the lobby sees us busy), stop once the match is over.
+    draining: Option<u32>,
     /// Size of the last snapshot sent (bandwidth checks).
     snapshot_bytes: usize,
     /// Anti-wallhack: when each (viewer, target) pair last had line of sight.
@@ -235,6 +237,7 @@ impl Server {
             snapshot_bytes: 0,
             guard: guard::Guard::new(),
             reserved: None,
+            draining: None,
         })
     }
 
@@ -334,7 +337,7 @@ impl Server {
         }
         let Some(master) = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next()) else { return };
         let players = self.clients.values().filter(|c| !c.bot).count() as u8;
-        let busy = self.reserved.is_some();
+        let busy = self.reserved.is_some() || self.draining.is_some();
         let msg = crate::master::LobbyMsg::Heartbeat {
             name: cfg.name.clone(),
             map: self.map.clone(),
@@ -404,9 +407,37 @@ impl Server {
 
     /// Run at the tick rate until `stop` is set (the game's built-in server stops when you leave).
     pub fn run_until(&mut self, stop: &std::sync::atomic::AtomicBool) {
+        self.run_while(|_| !stop.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    /// Run at the tick rate; once `stop` is set, take no new matches and return when the
+    /// current one is over (updates don't cut matches short).
+    pub fn run_draining(&mut self, stop: &std::sync::atomic::AtomicBool) {
+        self.run_while(|s| {
+            if stop.load(std::sync::atomic::Ordering::Relaxed) && s.draining.is_none() {
+                println!("{}", if s.is_reserved() { "stopping after this match" } else { "stopping" });
+                s.draining = Some(s.tick);
+                s.heartbeat(); // tell the lobby now: no new matches here
+            }
+            !s.drained()
+        });
+    }
+
+    /// Draining and done: no match, and no booking can still be on its way (a few seconds
+    /// since the lobby heard we're busy).
+    pub fn drained(&self) -> bool {
+        self.draining.is_some_and(|since| !self.is_reserved() && self.tick - since > 2 * TICK_RATE)
+    }
+
+    /// Start draining (see `run_draining`).
+    pub fn drain(&mut self) {
+        self.draining.get_or_insert(self.tick);
+    }
+
+    fn run_while(&mut self, mut go_on: impl FnMut(&mut Self) -> bool) {
         let tick = Duration::from_secs_f64(1.0 / TICK_RATE as f64);
         let mut next = Instant::now();
-        while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+        while go_on(self) {
             self.step();
             next += tick;
             let now = Instant::now();
