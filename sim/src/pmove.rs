@@ -55,10 +55,15 @@ const LIFT_OFF_SPEED: f32 = 180.0;
 const CROUCH_OFFSET: f32 = 18.0;
 /// Shift-walk multiplier: client cvar `cl_movespeedkey` (client.so).
 const WALK_SPEED: f32 = 0.52;
-/// Below this ground speed there are no footsteps (`PM_UpdateStepSound`).
+/// `PM_UpdateStepSound`: at this speed or slower no footsteps (and the next waits
+/// `FOOTSTEP_QUIET_MS`); faster, one every `FOOTSTEP_MS` (ladders, wading knee-deep slower),
+/// `FOOTSTEP_SLOW_MS` more crouched or on a ladder.
 const FOOTSTEP_MIN_SPEED: f32 = 150.0;
-/// Milliseconds between footsteps when running. ⚠ HL convention; verify in `PM_UpdateStepSound`.
-const FOOTSTEP_INTERVAL_MS: f32 = 300.0;
+const FOOTSTEP_QUIET_MS: f32 = 400.0;
+const FOOTSTEP_MS: f32 = 300.0;
+const FOOTSTEP_LADDER_MS: f32 = 350.0;
+const FOOTSTEP_WADE_MS: f32 = 600.0;
+const FOOTSTEP_SLOW_MS: f32 = 100.0;
 /// Seconds to crouch on the ground (`PM_Duck`).
 const TIME_TO_DUCK: f32 = 0.4;
 /// Ladders (`PM_LadderMove`).
@@ -282,10 +287,25 @@ pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVa
         p.fall_velocity = 0.0;
     }
     p.step_timer = (p.step_timer - ms).max(0.0);
-    let moving_loud = (p.on_ground || p.on_ladder) && p.speed_2d().max(p.velocity[2].abs() * p.on_ladder as i32 as f32) >= FOOTSTEP_MIN_SPEED;
-    if moving_loud && p.step_timer == 0.0 {
-        ev.footstep = true;
-        p.step_timer = FOOTSTEP_INTERVAL_MS;
+    if p.step_timer == 0.0 {
+        if crate::length(p.velocity) <= FOOTSTEP_MIN_SPEED {
+            p.step_timer = FOOTSTEP_QUIET_MS;
+        } else if p.on_ground || p.on_ladder {
+            let h = p.hull();
+            let knee = p.origin[2] - 0.3 * (h.maxs()[2] - h.mins()[2]);
+            let wading = world.point_contents([p.origin[0], p.origin[1], knee]) == Contents::Water;
+            p.step_timer = if p.on_ladder {
+                FOOTSTEP_LADDER_MS
+            } else if wading {
+                FOOTSTEP_WADE_MS
+            } else {
+                FOOTSTEP_MS
+            };
+            if p.crouched || p.on_ladder {
+                p.step_timer += FOOTSTEP_SLOW_MS;
+            }
+            ev.footstep = true;
+        }
     }
     ev
 }
@@ -751,6 +771,14 @@ mod tests {
         for _ in 0..256 {
             steps += step(&mut p, &run_input, DT, &w, &MoveVars::default()).footstep as i32;
         }
-        assert!(steps >= 4, "running made {steps} footsteps in 2 s");
+        // One every 300 ms once over 150 (after up to 400 ms from walking): 6 in 2 s.
+        assert!((5..=7).contains(&steps), "running made {steps} footsteps in 2 s");
+        // Crouch-running is under 150: silent.
+        let mut quiet = 0;
+        for _ in 0..256 {
+            quiet += step(&mut p, &Input { crouch: true, ..run_input }, DT, &w, &MoveVars::default()).footstep as i32;
+        }
+        assert!(p.crouched);
+        assert!(quiet <= 1, "{quiet} footsteps crouched");
     }
 }

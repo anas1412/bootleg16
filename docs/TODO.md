@@ -124,9 +124,9 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Muzzle flash at the model's muzzle attachment (own view model and other players)
 
 ### Movement leftovers (`docs/MOVEMENT.md`)
-- [ ] Water jump-out onto ledges (`PM_CheckWaterJump`)
+- [ ] Water jump-out onto ledges (`PM_CheckWaterJump`, needs hull 2): no pool map has water, so only with a water map
 - [ ] Doors pushing players; door sounds
-- [ ] ⚠ Footstep interval (300 ms is the HL convention; read `PM_UpdateStepSound`)
+- [x] Footstep timing as `PM_UpdateStepSound` (3D speed over 150; 300 ms, ladder 350, wading 600, +100 crouched or on a ladder; 400 ms wait after moving slowly)
 - [ ] ⚠ Ladder face direction from the ladder box (fine for stock ladders)
 
 ### Rendering
