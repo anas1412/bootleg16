@@ -88,9 +88,13 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Prediction error smoothing (corrections are applied instantly)
 
 ### Voice
-- [ ] Proximity voice chat (positional, fades with distance like game sounds). Open: everyone
-      nearby, or teammates only? (undecided)
+- [x] Voice chat, two push-to-talk keys (decided 2026-10-16): team voice (K) reaches your team
+      anywhere; proximity voice (X) reaches everyone alive nearby, enemies too, fading out by
+      `voice_range` and panned when you see the speaker. Opus 24 kbit/s, server relays.
+      Settings page: on/off, rebind keys (incl. mouse buttons), mic, mic volume, voice volume, mic test.
       **No radio commands/callouts**: decided 2026-10-15, voice replaces them.
+- [ ] Voice: mute individual players (scoreboard), noise gate / open-mic option, walls muffling proximity voice
+- [ ] Voice: only checked automatically (relay test, codec round trip); needs a real two-person test
 
 ### Sound
 - [x] Gunshots (silenced variants, random pitch), reload/draw/pin sounds from model events,
