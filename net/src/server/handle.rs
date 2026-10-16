@@ -39,6 +39,10 @@ impl Server {
                     let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
                     let mut r = Remote::new(id, name, self.tick);
                     r.money = self.round.cfg.start_money;
+                    // A deathmatch seat: keep its number (reports and aim flags name it).
+                    if self.seats.contains_key(&ticket) {
+                        r.ticket = ticket;
+                    }
                     if let Some((group, team, saved)) = seat {
                         r.ticket = ticket;
                         r.group = Some(group);

@@ -1,6 +1,7 @@
 //! The authoritative server: owns the world, runs every player's movement and
 //! weapons from their inputs, resolves shots with lag compensation, and sends snapshots.
 mod admin;
+mod aimcheck;
 mod bomb;
 mod breakables;
 mod hits;
@@ -84,6 +85,8 @@ struct GroundGun {
 const REPICK_TICKS: u32 = TICK_RATE / 2;
 
 struct Remote {
+    /// Their aim this match, for the aim checks.
+    aim: aimcheck::Aim,
     id: u8,
     name: String,
     team: Team,
@@ -177,6 +180,8 @@ pub struct Server {
     server_key: Option<crate::crypto::ServerKey>,
     /// When the last booking we took was sealed (older ones are replays).
     last_booking: u64,
+    /// Enemies in sight of whom, since when (for the aim checks).
+    sightings: aimcheck::Sightings,
     /// The match being recorded (see `recording`).
     recorder: Option<crate::demo::Recorder>,
     /// Deathmatch seats the lobby handed out: ticket -> (key, when). Unused ones expire.
@@ -227,6 +232,7 @@ impl Server {
             joining: None,
             seats: HashMap::new(),
             recorder: None,
+            sightings: Default::default(),
         })
     }
 
@@ -418,6 +424,7 @@ impl Remote {
     /// A newly connected player: spectating until they pick a side.
     fn new(id: u8, name: String, tick: u32) -> Remote {
         Remote {
+            aim: Default::default(),
             id,
             name,
             team: Team::Spectator,

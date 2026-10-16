@@ -13,14 +13,7 @@ impl Master {
             "{{\"time\":{time},\"reason\":\"{reason:?}\",\"reporter\":{{\"steam\":{},\"name\":{:?}}},\"reported\":{{\"steam\":{},\"name\":{:?}}},\"map\":{map:?},\"round\":{round},\"demo\":{demo:?},\"tick\":{tick}}}",
             by.0, by.1, of.0, of.1
         );
-        println!("report: {line}");
-        if let Some(path) = &self.reports {
-            use std::io::Write;
-            match std::fs::OpenOptions::new().create(true).append(true).open(path) {
-                Ok(mut f) => _ = writeln!(f, "{line}"),
-                Err(e) => println!("can't write reports to {}: {e}", path.display()),
-            }
-        }
+        self.write_report(&line);
     }
 }
 
@@ -50,8 +43,33 @@ impl Master {
                 self.servers.insert(from, GameServer { public, region, key, official: true, busy, seen: Instant::now(), sent, deathmatch, players, max, seated });
             }
             Some(LobbyMsg::Result { winners, losers, abandoned }) if self.role == Role::Active => self.match_result(&winners, &losers, &abandoned),
+            Some(LobbyMsg::Flag { ticket, reason, map, demo, tick }) if self.role == Role::Active => self.file_flag(ticket, &reason, &map, &demo, tick),
             Some(LobbyMsg::Report { reporter, target, reason, map, round, demo, tick }) if self.role == Role::Active => self.file_report(reporter, target, reason, &map, round, &demo, tick),
             _ => {}
+        }
+    }
+
+    /// The aim checks flagged someone: filed with the reports, from "anti-cheat".
+    pub(super) fn file_flag(&mut self, ticket: u64, reason: &str, map: &str, demo: &str, tick: u32) {
+        let Some(of) = self.seats.get(&ticket) else { return };
+        let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let reason: String = reason.chars().filter(|c| !c.is_control()).take(200).collect();
+        let line = format!(
+            "{{\"time\":{time},\"reason\":\"AimCheck\",\"detail\":{reason:?},\"reporter\":\"anti-cheat\",\"reported\":{{\"steam\":{},\"name\":{:?}}},\"map\":{map:?},\"demo\":{demo:?},\"tick\":{tick}}}",
+            of.0, of.1
+        );
+        self.write_report(&line);
+    }
+
+    /// Append a report line to the reports file (and the log).
+    fn write_report(&self, line: &str) {
+        println!("report: {line}");
+        if let Some(path) = &self.reports {
+            use std::io::Write;
+            match std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                Ok(mut f) => _ = writeln!(f, "{line}"),
+                Err(e) => println!("can't write reports to {}: {e}", path.display()),
+            }
         }
     }
 }

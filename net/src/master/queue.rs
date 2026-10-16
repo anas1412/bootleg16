@@ -96,6 +96,7 @@ impl Master {
         let _ = self.udp.send_to(&order, addr);
         if let Some(p) = self.players.values_mut().find(|p| p.id == player) {
             p.found = Some((public, ticket, key));
+            self.seats.insert(ticket, (p.steam, p.name.clone(), Instant::now()));
         }
         true
     }

@@ -20,6 +20,7 @@ impl Server {
                 c.used |= input.use_key && !c.use_held;
                 c.use_held = input.use_key;
                 c.view = (input.yaw, input.pitch);
+                c.aim.look(input.yaw, input.pitch);
                 c.last_run = seq;
                 if !c.vitals.alive() {
                     continue; // the dead don't move (their inputs are still acknowledged)

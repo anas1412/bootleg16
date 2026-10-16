@@ -32,6 +32,8 @@ pub enum LobbyMsg {
     /// who abandoned (gone for good before the end). Empty `winners`: a draw.
     Result { winners: Vec<u64>, losers: Vec<u64>, abandoned: Vec<u64> },
     /// Game server -> lobby: a player reported another (by their match tickets). Sealed.
+    /// Game server -> lobby: the aim checks flagged a player (see `server::aimcheck`). Sealed.
+    Flag { ticket: u64, reason: String, map: String, demo: String, tick: u32 },
     /// `demo`, `tick`: the match recording and the moment of the report (empty: not recorded).
     Report { reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: String, round: u32, demo: String, tick: u32 },
 }

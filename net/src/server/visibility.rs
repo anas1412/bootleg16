@@ -41,7 +41,7 @@ fn through_sphere(a: [f32; 3], b: [f32; 3], c: [f32; 3], r: f32) -> bool {
 
 impl Server {
     /// Is the line a-b hidden by a smoke cloud?
-    fn smoked(&self, a: [f32; 3], b: [f32; 3]) -> bool {
+    pub(super) fn smoked(&self, a: [f32; 3], b: [f32; 3]) -> bool {
         if dist(a, b) < SMOKE_SEE_NEAR {
             return false;
         }

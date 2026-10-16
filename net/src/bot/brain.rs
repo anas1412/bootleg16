@@ -142,7 +142,8 @@ impl Bot {
             .others()
             .into_iter()
             .filter(|o| o.alive && o.team != Team::Spectator && ((o.team != team) != (self.mode == Mode::Grief)))
-            .map(|o| (o.id, [o.origin[0], o.origin[1], o.origin[2] + if o.crouched { 12.0 } else { 26.0 }]))
+            // Aim at the head: about eye height (17 standing, 12 crouched), a little above.
+            .map(|o| (o.id, [o.origin[0], o.origin[1], o.origin[2] + if o.crouched { 14.0 } else { 20.0 }]))
             .filter(|(_, head)| self.client.world.trace_line(eye, *head).fraction > 0.98)
             .min_by(|a, b| dist(eye, a.1).total_cmp(&dist(eye, b.1)));
         let busy = self.planting() || self.defusing();
@@ -290,7 +291,8 @@ impl Bot {
             return input;
         }
         let tap = if range > 800.0 { 1 } else { 4 };
-        input.attack = self.mode == Mode::Spray || (reacted && t % 24 < tap);
+        // (An aimbot fires the moment it's on target and taps, keeping its shots on the head.)
+        input.attack = self.mode == Mode::Spray || (reacted && if aimbot { t % 12 == 0 } else { t % 24 < tap });
         input.reload = self.client.state.loadout.active_gun().is_some_and(|g| g.clip == 0);
         input.crouch = range > 800.0;
         if let Mode::Rush(p) = self.mode {

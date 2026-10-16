@@ -40,6 +40,7 @@ impl Server {
             self.record(&players, &events, &doors, &broken, &grenades, &smokes, &ground, &round);
             let viewers: Vec<u8> = self.clients.values().filter(|c| !c.bot).map(|c| c.id).collect();
             let sights: HashMap<u8, std::collections::HashSet<u8>> = viewers.iter().map(|id| (*id, self.visible_to(*id))).collect();
+            self.note_sightings(&sights);
             let sends: Vec<_> = self
                 .clients
                 .iter()

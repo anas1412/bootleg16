@@ -79,6 +79,7 @@ impl Server {
                 self.shoot_piece(i.model, shot.damage as f32);
             }
             self.events.push(GameEvent::Shot { shooter: p.shooter, weapon: shot.weapon, silenced: shot.silenced, from: p.eye, to: end, holes });
+            self.check_shot(p.shooter, p.eye, shot.angles);
             hits.extend(r.hits.into_iter().map(|h| (h.victim, h.damage, h.group, shot.weapon, Some(h.point))));
         }
         if let Some(swing) = p.fired.swing {
@@ -105,10 +106,14 @@ impl Server {
         let tick = self.tick;
         let shooter_team = self.clients.values().find(|c| c.id == p.shooter).map(|c| c.team);
         let ff = self.round.cfg.friendly_fire;
+        let mut aimed = Vec::new();
         for (victim, damage, group, weapon, at) in hits {
             let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { continue };
             if !c.vitals.alive() || (!ff && Some(c.team) == shooter_team) {
                 continue;
+            }
+            if weapon != Id::Knife && Some(c.team) != shooter_team {
+                aimed.push((victim, group == HitGroup::Head));
             }
             let (health, armor) = combat::bullet_damage(&c.vitals, damage, group, data::armor_factor(weapon), false);
             let stab = p.fired.swing.is_some_and(|s| s.stab);
@@ -133,6 +138,11 @@ impl Server {
                 c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
                 self.events.push(GameEvent::Kill { killer: p.shooter, victim, weapon: Some(weapon), headshot: group == HitGroup::Head });
             }
+        }
+        // (A shotgun's pellets hitting one player count once.)
+        aimed.dedup();
+        for (_, head) in aimed {
+            self.check_hit(p.shooter, head);
         }
         self.settle_deaths();
     }

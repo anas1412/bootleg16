@@ -58,11 +58,11 @@ fn booked(map: &Arc<BotMap>, cfg: impl Fn(SocketAddr) -> net::config::MatchConfi
 }
 
 /// Run (simulated time, as fast as the machine goes) until `done` or `secs` of game time.
-fn play(server: &mut Server, bots: &mut [Bot], secs: u32, events: &mut Vec<GameEvent>, done: impl Fn(&[Bot], &[GameEvent]) -> bool) -> f32 {
+fn play(what: &str, server: &mut Server, bots: &mut [Bot], secs: u32, events: &mut Vec<GameEvent>, done: impl Fn(&[Bot], &[GameEvent]) -> bool) -> f32 {
     let mut ticks = 0u32;
     while !done(bots, events) {
         ticks += 1;
-        assert!(ticks < secs * 128, "not done in {secs} game seconds (round {}, {} events)", bots[0].client.round.round, events.len());
+        assert!(ticks < secs * 128, "{what}: not done in {secs} game seconds (round {}, {} events, statuses {:?})", bots[0].client.round.round, events.len(), bots.iter().map(|b| format!("{:?}", b.client.status)).collect::<Vec<_>>());
         server.step();
         for b in bots.iter_mut() {
             b.tick();
@@ -84,7 +84,7 @@ fn ten_bots_play_a_whole_match() {
     let demos = std::env::temp_dir().join(format!("bootleg16-bot-demos-{}", std::process::id()));
     let (mut server, mut bots) = booked(&map, |l| net::config::MatchConfig { demos: demos.to_string_lossy().into(), ..short(l) });
     let mut events = Vec::new();
-    let secs = play(&mut server, &mut bots, 6 * 60, &mut events, |b, _| b.iter().all(|b| b.client.match_ended));
+    let secs = play("whole match", &mut server, &mut bots, 6 * 60, &mut events, |b, _| b.iter().all(|b| b.client.match_ended));
     let count = |f: fn(&GameEvent) -> bool| events.iter().filter(|e| f(e)).count();
     let (kills, rounds, plants) = (count(|e| matches!(e, GameEvent::Kill { .. })), count(|e| matches!(e, GameEvent::RoundEnd { .. })), count(|e| matches!(e, GameEvent::BombPlanted { .. })));
     println!("{rounds} rounds, {kills} kills, {plants} plants, {secs:.0} game seconds");
@@ -104,11 +104,11 @@ fn bomb_goes_to_a_and_gets_defused() {
     // Nobody shoots: the terrorists take the bomb to A, the counter-terrorists come to defuse.
     net::bot::command(&mut bots, "all peaceful; all plant a").unwrap();
     let mut events = Vec::new();
-    play(&mut server, &mut bots, 90, &mut events, |_, e| e.iter().any(|e| matches!(e, GameEvent::BombPlanted { .. })));
+    play("until planted", &mut server, &mut bots, 90, &mut events, |_, e| e.iter().any(|e| matches!(e, GameEvent::BombPlanted { .. })));
     let at = events.iter().find_map(|e| if let GameEvent::BombPlanted { at, .. } = e { Some(*at) } else { None }).unwrap();
     let a = map.sites[0];
     assert!(((at[0] - a[0]).powi(2) + (at[1] - a[1]).powi(2)).sqrt() < 600.0, "planted at {at:?}, A is {a:?}");
-    play(&mut server, &mut bots, 60, &mut events, |_, e| e.iter().any(|e| matches!(e, GameEvent::BombDefused { .. } | GameEvent::BombExploded { .. })));
+    play("until defused or exploded", &mut server, &mut bots, 60, &mut events, |_, e| e.iter().any(|e| matches!(e, GameEvent::BombDefused { .. } | GameEvent::BombExploded { .. })));
     assert!(events.iter().any(|e| matches!(e, GameEvent::BombDefused { .. })), "a counter-terrorist should make it in time from CT spawn to A");
 }
 
@@ -118,11 +118,11 @@ fn bots_leaving_pause_the_match_and_coming_back_resumes_it() {
     let map = BotMap::new(bsp);
     let (mut server, mut bots) = booked(&map, short);
     let mut events = Vec::new();
-    play(&mut server, &mut bots, 30, &mut events, |b, _| b[0].client.round.round >= 1 && b[0].client.round.phase == net::rounds::Phase::Live);
+    play("round 1 live", &mut server, &mut bots, 30, &mut events, |b, _| b[0].client.round.round >= 1 && b[0].client.round.phase == net::rounds::Phase::Live);
     let t = bots.iter().find(|b| b.client.team() == Team::T).unwrap().index;
     // (Generous limits: with every test suite running at once the machine is busy.)
     net::bot::command(&mut bots, "ct leave").unwrap();
-    play(&mut server, &mut bots, 30, &mut events, |b, _| b[t].client.round.paused);
+    play("paused after leaving", &mut server, &mut bots, 30, &mut events, |b, _| b[t].client.round.paused);
     net::bot::command(&mut bots, "ct rejoin").unwrap();
-    play(&mut server, &mut bots, 30, &mut events, |b, _| !b[t].client.round.paused);
+    play("resumed after rejoining", &mut server, &mut bots, 30, &mut events, |b, _| !b[t].client.round.paused);
 }
