@@ -1,7 +1,7 @@
 //! Tracing shots through the map and players: CS 1.6 `FireBullets3` (penetration,
 //! per-segment range falloff, surface materials) and the shotgun pellet volley.
 use super::{rand01, Shot};
-use crate::collision::World;
+use crate::collision::{Hull, World};
 use crate::combat::hitgroup_multiplier;
 use crate::hitbox::{HitGroup, Hitboxes};
 use crate::{add, length, scale, sub, Vec3};
@@ -206,25 +206,27 @@ pub fn fire_pellets(world: &World, hitboxes: &Hitboxes, eye: Vec3, shot: &Shot, 
     out
 }
 
-/// Knife reach test: a line along the view, then four rays offset by 8 units to
-/// approximate GoldSrc's fallback hull sweep. Returns the player hit, if any.
+/// Knife reach, as GoldSrc's `CKnife::Swing`: a line along the view (against hitboxes); if it
+/// meets nothing at all, the same move swept with a crouching-size box (`head_hull`), which
+/// meets the world or a player's bounding box (generic hit group: no part hit). Returns the
+/// player hit, if any. (`FindHullIntersection` only moves the impact point: not needed.)
 pub fn trace_melee(world: &World, hitboxes: &Hitboxes, src: Vec3, end: Vec3, shooter: u8, targets: &[Target]) -> Option<(u8, HitGroup)> {
-    let dir = sub(end, src);
-    let (_, right, up) = {
-        let l = length(dir).max(1e-6);
-        let d = scale(dir, 1.0 / l);
-        let yaw = d[1].atan2(d[0]).to_degrees();
-        let pitch = -d[2].asin().to_degrees();
-        view_vectors(pitch, yaw)
-    };
-    let offsets = [[0.0, 0.0], [8.0, 0.0], [-8.0, 0.0], [0.0, 8.0], [0.0, -8.0]];
-    offsets.iter().find_map(|o| {
-        let shift = add(scale(right, o[0]), scale(up, o[1]));
-        let (f, player, _) = nearest(world, hitboxes, add(src, shift), add(end, shift), targets, &[shooter]);
-        if f < 1.0 {
-            player
-        } else {
-            None
+    let (f, player, _) = nearest(world, hitboxes, src, end, targets, &[shooter]);
+    if f < 1.0 {
+        return player;
+    }
+    let seg = sub(end, src);
+    let len = length(seg);
+    let dir = scale(seg, 1.0 / len.max(1e-6));
+    let (lo, hi) = (Hull::Crouched.mins(), Hull::Crouched.maxs());
+    let mut best = (world.trace(Hull::Crouched, src, end).fraction * len, None);
+    for t in targets.iter().filter(|t| t.id != shooter) {
+        let h = if t.crouched { Hull::Crouched } else { Hull::Standing };
+        // The swept box meets their box: a line meets their box grown by ours.
+        let (mins, maxs) = (sub(add(t.origin, h.mins()), hi), sub(add(t.origin, h.maxs()), lo));
+        if let Some(d) = crate::hitbox::slab(src, dir, mins, maxs, best.0).filter(|d| *d < best.0) {
+            best = (d, Some((t.id, HitGroup::Generic)));
         }
-    })
+    }
+    best.1
 }

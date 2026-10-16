@@ -366,3 +366,34 @@ fn closed_doors_block_sight_open_ones_and_glass_dont() {
     });
     assert!(through_glass, "glass hides players");
 }
+
+#[test]
+fn knife_line_first_then_a_crouch_box_sweep() {
+    use sim::hitbox::{HitGroup, Hitboxes};
+    use sim::weapons::bullets::{trace_melee, Target};
+    use sim::weapons::Id;
+    let Some(bsp) = load("de_dust2") else { return };
+    let home = std::env::var("HOME").unwrap();
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
+    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")) else { return };
+    let hb = Hitboxes::from_model(&model, "carbine").unwrap();
+    let world = World::from_bsp(&bsp);
+    let s = bsp.entity_list().iter().find(|e| e.get("classname").map(String::as_str) == Some("info_player_deathmatch")).map(|e| vec3(&e["origin"])).unwrap();
+    let me = world.trace(Hull::Standing, s, [s[0], s[1], s[2] - 200.0]).end;
+    // An open direction: 100 units clear at eye height.
+    let eye = [me[0], me[1], me[2] + 17.0];
+    let yaw = (0..72).map(|i| i as f32 * 5.0).find(|y| {
+        let (s, c) = y.to_radians().sin_cos();
+        world.trace(Hull::Crouched, eye, [eye[0] + c * 100.0, eye[1] + s * 100.0, eye[2]]).fraction == 1.0
+    }).unwrap();
+    let (sn, cs) = yaw.to_radians().sin_cos();
+    let end = [eye[0] + cs * 48.0, eye[1] + sn * 48.0, eye[2]];
+    // Someone `side` units to the side of the swing, 40 ahead.
+    let at = |side: f32| Target { id: 1, origin: [me[0] + cs * 40.0 - sn * side, me[1] + sn * 40.0 + cs * side, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1 };
+    let hit = |side| trace_melee(&world, &hb, eye, end, 0, &[at(side)]);
+    assert!(matches!(hit(0.0), Some((1, g)) if g != HitGroup::Generic), "straight on: the line hits a body part");
+    // Off to the side: the line misses, the box (16 + their 16) still catches them.
+    assert_eq!(hit(28.0), Some((1, HitGroup::Generic)));
+    assert_eq!(hit(-28.0), Some((1, HitGroup::Generic)));
+    assert_eq!(hit(40.0), None, "out of reach");
+}

@@ -120,7 +120,7 @@ impl Hitboxes {
 }
 
 /// Ray vs axis-aligned box in the box's own space: entry distance, if within `max`.
-fn slab(o: Vec3, d: Vec3, mins: Vec3, maxs: Vec3, max: f32) -> Option<f32> {
+pub(crate) fn slab(o: Vec3, d: Vec3, mins: Vec3, maxs: Vec3, max: f32) -> Option<f32> {
     let (mut t0, mut t1) = (0.0f32, max);
     for i in 0..3 {
         if d[i].abs() < 1e-8 {

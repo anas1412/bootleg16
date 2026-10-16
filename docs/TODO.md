@@ -21,7 +21,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Flash "already flashed" combine rule (simplified to max); HE water rule; grenade bounce sounds
 - [ ] ⚠ Flash white-out and HE fireball not yet checked on screen (only the smoke was)
 - [x] Tagging: hits slow you (0.5, or 0.65 large flinch) and kick the view, as cs.so (`player::hit_by`)
-- [ ] Knife: GoldSrc hull sweep and 8-corner search (approximated by 5 rays now)
+- [x] Knife: GoldSrc line then crouch-box sweep (`trace_melee`); the 8-corner search only moves the impact point, skipped
 - [ ] Shield
 - [x] Breakables: shot/blast damage, dust2/train crates break with the bomb, restored each round
 - [ ] `func_button`; breakable gibs (only coloured debris now); bullets lose no damage through glass
@@ -78,7 +78,7 @@ land, and add new ones here instead of leaving them only in chat.
 
 ### Networking (`docs/NETWORKING.md`)
 - [x] Anti-wallhack: enemies out of line of sight aren't sent (net/src/server/visibility.rs): rays from your eyes to their grown box, 0.15 s look-ahead, 0.25 s grace; teammates/dead/spectators see all; footsteps and shots still sent within hearing range
-- [ ] Visibility ignores doors and glass (only the static world blocks sight): safe, but leaks players behind closed doors; smoke doesn't hide either
+- [x] Visibility: closed doors, crates and smoke hide players; glass and open doors don't
 - [x] Map check on join: the server sends its map file's hash (FNV-1a) in Welcome; a client with a different file goes back to the menu
 - [ ] Map change / map vote; downloading the server's map
 - [ ] Deathmatch is de_dust2 only for now (decided 2026-10-16); later: other maps, or a new map each time someone reaches the kill limit; show the server's map on the Practice page
