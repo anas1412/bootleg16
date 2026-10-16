@@ -30,6 +30,7 @@ mod impacts;
 mod killfeed;
 mod level;
 mod map;
+mod map_pick;
 mod map_sounds;
 mod match_flow;
 mod menu;
