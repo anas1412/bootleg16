@@ -14,6 +14,7 @@
 #            --test        a test lobby: lets in players without Steam (test bots, smoke tests)
 #            --official    back to an official lobby (Steam players only; the default)
 #            --peer IP     (main lobby) the standby lobby machine to stream state to
+#   ./host.sh firewall               kernel-level flood filtering for our ports (asks for sudo)
 #   ./host.sh token | status | logs | update | stop
 #
 # Settings are remembered in hosting/: after the first run, plain `./host.sh` brings the
@@ -36,6 +37,7 @@ case "${1:-}" in
   logs) compose logs -f --tail 50; exit ;;
   status) compose ps --format "table {{.Service}}\t{{.Status}}"; exit ;;
   token) cat hosting/tokens.txt; echo; exit ;;
+  firewall) FIREWALL=1; shift ;;
   pair-info)
     # Secret: the token and the lobby's private key. Give it only to your standby machine.
     echo "On the standby machine:  ./host.sh standby ${IP:-<this-ip>} $(cat hosting/tokens.txt) $(cat hosting/keys/lobby.key)"
@@ -83,6 +85,68 @@ if [ -z "$IP" ]; then
   [ -n "$IP" ] || { echo "Couldn't find this machine's public IP: run again with --ip <address>."; exit 1; }
 fi
 printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\nTEST=%q\nPEER=%q\n' "$LOBBY" "$SERVERS" "$IP" "$REGION" "$TEST" "$PEER" > hosting/settings
+
+# Kernel-level filtering (nftables), before any packet reaches the game: junk sizes and
+# fragments are dropped, every source address gets a packet budget, our UDP skips connection
+# tracking (a flood filling the kernel's table is a classic way to take a server down), and only
+# the standby lobby may reach the lobbies' link. Big floods that fill the line itself can only
+# be stopped upstream: pick a provider with DDoS filtering (see README "Hosting").
+firewall_rules() {
+  local last=$((27014 + SERVERS))
+  cat <<NFT
+table inet bootleg16
+delete table inet bootleg16
+table inet bootleg16 {
+  chain raw {
+    type filter hook prerouting priority raw; policy accept;
+    # Our UDP: never through connection tracking.
+    udp dport { 27010, 27015-$last } notrack
+    # Fragments are never ours (our packets fit in one), and are a favourite flood.
+    ip frag-off & 0x3fff != 0 meta l4proto udp drop
+    # Sizes our programs never send: empty, or bigger than 1400 bytes of payload.
+    udp dport { 27010, 27015-$last } udp length < 9 drop
+    udp dport { 27010, 27015-$last } udp length > 1408 drop
+    # Per source address: a player sends ~130 packets a second (a household of 6: ~800).
+    udp dport 27015-$last meter game4 size 65535 { ip saddr limit rate over 1500/second burst 500 packets } drop
+    udp dport 27015-$last meter game6 size 65535 { ip6 saddr and ffff:ffff:ffff:ffff:: limit rate over 1500/second burst 500 packets } drop
+    # The lobby: a poll a second per player, a household of them, sign-ins.
+    udp dport 27010 meter lobby4 size 65535 { ip saddr limit rate over 60/second burst 60 packets } drop
+    udp dport 27010 meter lobby6 size 65535 { ip6 saddr and ffff:ffff:ffff:ffff:: limit rate over 60/second burst 60 packets } drop
+  }
+  chain out {
+    type filter hook output priority raw; policy accept;
+    udp sport { 27010, 27015-$last } notrack
+  }
+  chain input {
+    type filter hook input priority filter; policy accept;
+    # The lobbies' state link: only from the other lobby.
+    tcp dport 27011 ${PEER:+ip saddr != $PEER} drop
+  }
+}
+NFT
+}
+
+if [ -n "${FIREWALL:-}" ]; then
+  command -v nft >/dev/null || { echo "Needs nftables (the nft command)."; exit 1; }
+  firewall_rules > hosting/firewall.nft
+  echo "Applying hosting/firewall.nft (needs root):"
+  sudo nft -f hosting/firewall.nft
+  # Load it again at every boot.
+  sudo tee /etc/systemd/system/bootleg16-firewall.service >/dev/null <<UNIT
+[Unit]
+Description=bootleg16 flood filtering
+After=network-pre.target
+[Service]
+Type=oneshot
+ExecStart=$(command -v nft) -f $PWD/hosting/firewall.nft
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+UNIT
+  sudo systemctl daemon-reload && sudo systemctl enable bootleg16-firewall.service >/dev/null
+  echo "Done; it loads again at boot. Undo: sudo nft delete table inet bootleg16 && sudo systemctl disable bootleg16-firewall"
+  exit
+fi
 
 # One config per game server (the shipped rules, pointed at the lobby), and the compose file.
 # Every lobby the game servers announce to (and take matches from).

@@ -52,6 +52,12 @@ Its game servers join the same pool. Run `./host.sh token` on the main machine i
 
 **Regions:** the game measures each player's ping to every region. The queue puts a party in a region where all of them ping under 60 ms, widening by 2 ms per second of waiting (up to 200 ms), so nobody waits forever in a quiet region. Custom games go to the party's best region.
 
+**Floods (DDoS):** two layers, and one you choose:
+
+- In the programs: per-address packet budgets, sign-in cookies before any expensive work, answers never bigger than requests (nobody can use us to flood others), and a cap on packets handled per tick.
+- On the machine: run `./host.sh firewall` once (it asks for sudo). Kernel rules drop junk sizes and fragments, limit every source address, keep our traffic out of connection tracking, and let only your standby lobby reach the lobbies' TCP port. It loads again at every boot.
+- Upstream: a flood that fills the machine's internet line can't be stopped on the machine. Rent servers from a provider that filters floods before they reach you (OVHcloud's game servers, Path.net and Gcore offer UDP/game filtering; most big clouds offer something). That part is a provider choice, not code.
+
 **Leavers and reports:** one player leaving changes nothing (their seat waits, they can come back). After 5 minutes away they count as abandoned, and their team can call a surrender vote in game (F3, then F1 yes / F2 no; a majority of the team still there). If a whole side is gone the match pauses, and forfeits after 5 minutes. Player reports land in `hosting/reports/reports.jsonl` on the lobby machine, one line per report with both players' Steam ids, the reason, map and round.
 
 **Match rules** (rounds, money, timers) live in `config/server.cfg`. Edit it, then run `./host.sh` again.

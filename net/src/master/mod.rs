@@ -317,7 +317,14 @@ impl Master {
     pub fn step(&mut self) {
         let mut buf = [0u8; 2048];
         let _ = self.udp.set_nonblocking(false);
+        // At most this many packets a step: under a flood the lobby still gets round to
+        // matchmaking, saving and its standby (the rest wait in, and overflow, the OS queue).
+        let mut room = 20_000;
         while let Ok((n, from)) = self.udp.recv_from(&mut buf) {
+            room -= 1;
+            if room == 0 {
+                break;
+            }
             let _ = self.udp.set_nonblocking(true);
             // Every IP has a budget: floods cost nothing past here.
             let now = self.started.elapsed().as_secs_f64();
