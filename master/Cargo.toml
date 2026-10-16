@@ -3,6 +3,11 @@ name = "master"
 version = "0.1.0"
 edition = "2021"
 
-# The master server: keeps the server list (see net/src/master.rs).
+# The lobby: parties, matchmaking, the game-server pool (see net/src/master.rs).
 [dependencies]
 net = { path = "../net" }
+steamworks = { version = "0.13", optional = true }
+
+[features]
+# Check players' Steam logins with Steam (needs Steam's steamclient.so on the machine).
+steam = ["dep:steamworks"]

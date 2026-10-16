@@ -30,14 +30,44 @@ pub enum LobbyMsg {
     /// Game server -> lobby: "I'm here", and whether it's running a match.
     /// `address`: where players connect (empty = where this came from).
     Heartbeat { name: String, map: String, players: u8, max: u8, region: String, token: String, busy: bool, address: String },
-    /// Player -> lobby: sign in (no accounts yet: a fresh session each time).
-    Hello { name: String, pad: Vec<u8> },
+    /// Player -> lobby: sign in. `steam`: a Steam login (the lobby checks it with Steam); None
+    /// = anonymous (tests, and builds without Steam).
+    Hello { name: String, steam: Option<SteamLogin>, pad: Vec<u8> },
     /// Player -> lobby: do something (or just `Poll`), proving who you are with your session.
     Command { session: u64, cmd: Command, pad: Vec<u8> },
     /// Lobby -> player: your session secret.
     Welcome { session: u64 },
     /// Lobby -> player: everything about you now.
     State(LobbyState),
+    /// Lobby -> player: unknown session (the lobby restarted, or you timed out): sign in again.
+    Expired,
+}
+
+/// Steam sign-in: who you say you are and Steam's ticket proving it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SteamLogin {
+    pub steam_id: u64,
+    pub ticket: Vec<u8>,
+}
+
+/// How the lobby treats Steam logins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SteamMode {
+    /// Take the claimed Steam id as is (tests and lobbies built without Steam; never official).
+    Trust,
+    /// Ask Steam: logins wait in `take_steam_checks` until `steam_checked` answers.
+    Verify,
+}
+
+/// A party member as everyone in the party sees them.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Member {
+    pub id: u32,
+    pub name: String,
+    /// Team in a custom game.
+    pub group: Group,
+    /// Their Steam id (for the avatar), 0 = not signed in with Steam.
+    pub steam: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -55,6 +85,23 @@ pub enum Command {
     Play,
     /// Leader: leave the queue.
     Cancel,
+    /// Invite a friend who is in the game (by Steam id) to your party.
+    Invite { steam: u64 },
+}
+
+/// How long an invite stays up.
+pub const INVITE_SECONDS: f32 = 30.0;
+
+/// An invite to someone's party.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Invite {
+    pub from: String,
+    /// The inviter's Steam id (for the avatar).
+    pub steam: u64,
+    /// Their party's code: accepting is joining it.
+    pub code: String,
+    /// Seconds before it goes away.
+    pub left: f32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,24 +119,29 @@ pub struct LobbyState {
     pub code: String,
     pub leader: u32,
     pub mode: Mode,
-    /// (id, name, team in a custom game).
-    pub members: Vec<(u32, String, Group)>,
+    pub members: Vec<Member>,
     /// Seconds in the casual queue, if queued.
     pub searching: Option<f32>,
     /// Match ready: the server and your ticket.
     pub found: Option<(SocketAddr, u64)>,
     /// Something to tell the player ("no server free", "party full"...).
     pub notice: String,
+    /// Invites to other parties, newest last.
+    pub invites: Vec<Invite>,
 }
 
 struct Player {
     id: u32,
     name: String,
+    /// Steam id once signed in with Steam (0 = anonymous).
+    steam: u64,
     addr: SocketAddr,
     party: u32,
     seen: Instant,
     found: Option<(SocketAddr, u64)>,
     notice: String,
+    /// Who invited us (player id) and when.
+    invites: Vec<(u32, Instant)>,
 }
 
 struct Party {
@@ -123,6 +175,9 @@ pub struct Master {
     pub match_size: usize,
     /// When the last status line was printed.
     reported: Instant,
+    pub steam_mode: SteamMode,
+    /// Steam logins waiting for Steam's answer: (session, Steam id, ticket).
+    steam_checks: Vec<(u64, u64, Vec<u8>)>,
 }
 
 impl Master {
@@ -130,7 +185,7 @@ impl Master {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7) ^ ((std::process::id() as u64) << 32);
-        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now() })
+        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, steam_checks: Vec::new() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -190,13 +245,26 @@ impl Master {
                     }
                     self.servers.insert(from, GameServer { public, token, official, busy, seen: Instant::now() });
                 }
-                Some(LobbyMsg::Hello { name, pad }) if pad.len() >= PAD => {
-                    let session = self.rand();
-                    let id = self.next_id;
-                    self.next_id += 1;
-                    let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
-                    let party = self.new_party(id);
-                    self.players.insert(session, Player { id, name, addr: from, party, seen: Instant::now(), found: None, notice: String::new() });
+                Some(LobbyMsg::Hello { name, steam, pad }) if pad.len() >= PAD => {
+                    // Signed in already (our Welcome got lost): the same session again.
+                    let session = match self.players.iter().find(|(_, p)| p.addr == from) {
+                        Some((s, _)) => *s,
+                        None => {
+                            let session = self.rand();
+                            let id = self.next_id;
+                            self.next_id += 1;
+                            let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
+                            let party = self.new_party(id);
+                            self.players.insert(session, Player { id, name, steam: 0, addr: from, party, seen: Instant::now(), found: None, notice: String::new(), invites: Vec::new() });
+                            if let Some(login) = steam {
+                                match self.steam_mode {
+                                    SteamMode::Trust => self.steam_checked(login.steam_id, Some(session)),
+                                    SteamMode::Verify => self.steam_checks.push((session, login.steam_id, login.ticket)),
+                                }
+                            }
+                            session
+                        }
+                    };
                     let _ = self.udp.send_to(&encode(&LobbyMsg::Welcome { session }), from);
                 }
                 Some(LobbyMsg::Command { session, cmd, pad }) if pad.len() >= PAD => {
@@ -205,6 +273,8 @@ impl Master {
                         if let Some(state) = self.state_of(session) {
                             let _ = self.udp.send_to(&encode(&LobbyMsg::State(state)), from);
                         }
+                    } else {
+                        let _ = self.udp.send_to(&encode(&LobbyMsg::Expired), from);
                     }
                 }
                 _ => {}
@@ -236,6 +306,30 @@ impl Master {
     pub fn run(&mut self) {
         loop {
             self.step();
+        }
+    }
+
+    /// Steam logins to check (`SteamMode::Verify`): (session, Steam id, ticket).
+    pub fn take_steam_checks(&mut self) -> Vec<(u64, u64, Vec<u8>)> {
+        std::mem::take(&mut self.steam_checks)
+    }
+
+    /// Steam's answer for a login: `session` is who passed (None = the ticket was bad).
+    /// Signing in somewhere else ends your older session.
+    pub fn steam_checked(&mut self, steam_id: u64, session: Option<u64>) {
+        let Some(session) = session.filter(|s| self.players.contains_key(s)) else { return };
+        let older: Vec<(u32, u32)> = self.players.iter().filter(|(s, p)| p.steam == steam_id && **s != session).map(|(_, p)| (p.id, p.party)).collect();
+        for (id, party) in older {
+            self.leave(id, party);
+            self.players.retain(|_, p| p.id != id);
+        }
+        self.players.get_mut(&session).unwrap().steam = steam_id;
+    }
+
+    /// A Steam login was refused: the player stays signed in without Steam, and is told.
+    pub fn steam_refused(&mut self, session: u64) {
+        if let Some(p) = self.players.get_mut(&session) {
+            p.notice = "Steam sign-in failed: playing without Steam.".into();
         }
     }
 
@@ -307,6 +401,14 @@ impl Master {
                 }
             }
             Command::Cancel if leader => self.parties.get_mut(&party).unwrap().queued = None,
+            Command::Invite { steam } => match self.players.values_mut().find(|p| p.steam == steam && steam != 0) {
+                Some(friend) => {
+                    friend.invites.retain(|(from, _)| *from != me);
+                    friend.invites.push((me, Instant::now()));
+                    friend.invites.truncate(8);
+                }
+                None => notice = "They're not in the game right now.".into(),
+            },
             _ => notice = "Only the party leader can do that.".into(),
         }
         if !notice.is_empty() {
@@ -363,18 +465,28 @@ impl Master {
     fn state_of(&mut self, session: u64) -> Option<LobbyState> {
         let p = self.players.get_mut(&session)?;
         let notice = std::mem::take(&mut p.notice);
+        p.invites.retain(|(_, at)| at.elapsed().as_secs_f32() < INVITE_SECONDS);
+        let invited = p.invites.clone();
         let (you, party_id, found) = (p.id, p.party, p.found.take());
         let party = self.parties.get(&party_id)?;
-        let name_of = |id: u32| self.players.values().find(|q| q.id == id).map(|q| q.name.clone()).unwrap_or_default();
+        let who = |id: u32| self.players.values().find(|q| q.id == id).map(|q| (q.name.clone(), q.steam)).unwrap_or_default();
         Some(LobbyState {
             you,
             code: party.code.clone(),
             leader: party.leader,
             mode: party.mode,
-            members: party.members.iter().map(|(m, g)| (*m, name_of(*m), *g)).collect(),
+            members: party.members.iter().map(|(m, g)| (*m, who(*m), *g)).map(|(id, (name, steam), group)| Member { id, name, group, steam }).collect(),
             searching: party.queued.map(|t| t.elapsed().as_secs_f32()),
             found,
             notice,
+            invites: invited
+                .iter()
+                .filter_map(|(from, at)| {
+                    let q = self.players.values().find(|q| q.id == *from)?;
+                    let code = self.parties.get(&q.party)?.code.clone();
+                    Some(Invite { from: q.name.clone(), steam: q.steam, code, left: INVITE_SECONDS - at.elapsed().as_secs_f32() })
+                })
+                .collect(),
         })
     }
 }
@@ -392,13 +504,17 @@ pub struct LobbyClient {
     pub found: Option<(SocketAddr, u64)>,
     /// Kept until taken: the lobby's last message for the player.
     pub notice: String,
+    /// Makes a Steam login for each sign-in (None = anonymous).
+    pub steam: Option<Box<dyn FnMut() -> Option<SteamLogin> + Send + Sync>>,
+    /// The login for the sign-in in progress (a Steam ticket is used once).
+    login: Option<SteamLogin>,
 }
 
 impl LobbyClient {
     pub fn new(lobby: SocketAddr, name: &str) -> std::io::Result<LobbyClient> {
         let udp = UdpSocket::bind(if lobby.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" })?;
         udp.set_nonblocking(true)?;
-        Ok(LobbyClient { udp, lobby, name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new() })
+        Ok(LobbyClient { udp, lobby, name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new(), steam: None, login: None })
     }
 
     /// Signed in and heard from the lobby.
@@ -423,7 +539,13 @@ impl LobbyClient {
             match decode::<LobbyMsg>(&buf[..n]) {
                 Some(LobbyMsg::Welcome { session }) if self.session.is_none() => {
                     self.session = Some(session);
+                    self.login = None;
                     self.send(Command::Poll);
+                }
+                Some(LobbyMsg::Expired) => {
+                    // Sign in again right away (a new Steam ticket too).
+                    self.session = None;
+                    self.last_sent = None;
                 }
                 Some(LobbyMsg::State(s)) => {
                     if s.found.is_some() {
@@ -441,7 +563,10 @@ impl LobbyClient {
             match self.session {
                 Some(_) => self.send(Command::Poll),
                 None => {
-                    let _ = self.udp.send_to(&encode(&LobbyMsg::Hello { name: self.name.clone(), pad: vec![0; PAD] }), self.lobby);
+                    if self.login.is_none() {
+                        self.login = self.steam.as_mut().and_then(|f| f());
+                    }
+                    let _ = self.udp.send_to(&encode(&LobbyMsg::Hello { name: self.name.clone(), steam: self.login.clone(), pad: vec![0; PAD] }), self.lobby);
                     self.last_sent = Some(Instant::now());
                 }
             }

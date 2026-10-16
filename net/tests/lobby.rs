@@ -91,3 +91,51 @@ fn casual_queue_matches_two_strangers() {
     let teams = play(&mut server, &bsp, [a.found.unwrap(), b.found.unwrap()]);
     assert!(teams.contains(&Team::T) && teams.contains(&Team::Ct), "{teams:?}");
 }
+
+#[test]
+fn steam_sign_in_and_lobby_restart() {
+    let Some(bsp) = dust2() else { return };
+    let (mut server, lobby) = world(&bsp, 2);
+    let login = |id: u64| -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> { Some(Box::new(move || Some(net::master::SteamLogin { steam_id: id, ticket: vec![1, 2, 3] }))) };
+    let mut a = LobbyClient::new(lobby, "a").unwrap();
+    a.steam = login(76561197960287930);
+    let mut b = LobbyClient::new(lobby, "b").unwrap();
+    until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
+    // B invites A (in the game, signed in with Steam); A accepts by joining that party.
+    b.send(Command::Invite { steam: 76561197960287930 });
+    until(&mut server, &mut [&mut a, &mut b], "invite", |c| !c[0].state.as_ref().unwrap().invites.is_empty());
+    let inv = a.state.as_ref().unwrap().invites[0].clone();
+    assert_eq!((inv.from.as_str(), inv.code.as_str()), ("b", b.state.as_ref().unwrap().code.as_str()));
+    a.send(Command::JoinParty { code: inv.code });
+    until(&mut server, &mut [&mut a, &mut b], "party", |c| c[1].state.as_ref().unwrap().members.len() == 2);
+    let m = &b.state.as_ref().unwrap().members;
+    assert_eq!((m[0].steam, m[1].steam), (0, 76561197960287930), "B sees A's Steam id (for the avatar)");
+    // A signs in again from somewhere else: the old session ends, B's party is down to B.
+    let mut a2 = LobbyClient::new(lobby, "a").unwrap();
+    a2.steam = login(76561197960287930);
+    until(&mut server, &mut [&mut a2, &mut b], "old session replaced", |c| c[0].online() && c[1].state.as_ref().unwrap().members.len() == 1);
+}
+
+#[test]
+fn signs_in_again_after_the_lobby_restarts() {
+    // A lobby that has never heard of our session answers Expired; the client signs in again.
+    let first = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
+    let addr = first.local_addr();
+    let mut c = LobbyClient::new(addr, "a").unwrap();
+    let mut m = first;
+    let start = Instant::now();
+    while !c.online() {
+        assert!(start.elapsed() < Duration::from_secs(5));
+        m.step();
+        c.tick();
+    }
+    let code = c.state.as_ref().unwrap().code.clone();
+    drop(m);
+    let mut m = Master::bind(addr, vec![]).unwrap();
+    while c.state.as_ref().unwrap().code == code {
+        assert!(start.elapsed() < Duration::from_secs(10), "never signed in again");
+        m.step();
+        c.tick();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}

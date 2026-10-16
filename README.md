@@ -65,10 +65,21 @@ Two test players party up, start a custom game and join the booked server. Add `
 Build the release with the lobby's address inside, so players just open the game:
 
 ```bash
-BOOTLEG16_LOBBY=203.0.113.7:27010 cargo build --release -p client --no-default-features
+BOOTLEG16_LOBBY=203.0.113.7:27010 cargo build --release -p client --no-default-features --features steam
 ```
 
+Ship `libsteam_api.so` (it lands next to the game in `target/release/`) with the game.
+
 Use a domain name instead of an IP if you have one (`play.example.com:27010`), so the lobby can move to a new machine without a new build. Players still need their own CS 1.6 install for now (maps and models come from it).
+
+## Steam
+
+Players sign in with Steam: their Steam name and avatar, their friends list on the Play screen, invites, and "Join game" from Steam's friends list. Until we have our own App ID the game uses App ID 480 (Valve's public test app, Spacewar), so Steam shows friends as playing "Spacewar".
+
+- The game needs Steam running; without it, it plays anonymously and party codes still work.
+- The lobby checks every Steam login with Steam (the Docker image includes Steam's client library for that). A lobby built without `--features steam` trusts what players say, for local testing only.
+- **Testing invites** needs two Steam accounts that are friends, each on its own machine (or a VM), both running the game against the same lobby.
+- **Our own App ID** (Steam Direct, $100): change `APP_ID` in `client/src/steam.rs` and pass `--steam-app <id>` to the lobby.
 
 ## Playing
 
