@@ -247,7 +247,7 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: 
                 if Some(shooter) != me {
                     w.tracers.push((from, to, 0.08));
                     w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from) });
-                    anims.write(PlayerAnim::Shot(shooter));
+                    anims.write(PlayerAnim::Shot(shooter, silenced));
                 }
             }
             GameEvent::Footstep { player, at } if Some(player) != me => {

@@ -29,7 +29,8 @@ impl Plugin for PlayersPlugin {
 /// Something that changes how a player is animated (sent by `effects::events`).
 #[derive(Message)]
 pub enum PlayerAnim {
-    Shot(u8),
+    /// They fired (silenced: no muzzle flash).
+    Shot(u8, bool),
     Hurt(u8, HitGroup),
     Died(u8),
 }
@@ -85,6 +86,9 @@ struct OtherPlayer {
     crouched: bool,
     /// A one-off upper body animation (shooting, flinching): sequence and start time.
     action: Option<(usize, f32)>,
+    /// Muzzle flash quad (a child) and until when it shows.
+    flash: Entity,
+    flash_until: f32,
 }
 
 /// A dead player playing their death animation (then lying still).
@@ -112,11 +116,16 @@ fn anim_events(
     let now = time.elapsed_secs();
     for m in msgs.read() {
         match *m {
-            PlayerAnim::Shot(id) | PlayerAnim::Hurt(id, _) => {
+            PlayerAnim::Shot(id, _) | PlayerAnim::Hurt(id, _) => {
                 if let PlayerAnim::Hurt(_, g) = *m {
                     look.last_hit.insert(id, g);
                 }
                 let Some((_, mut p)) = live.iter_mut().find(|(_, p)| p.id == id) else { continue };
+                if let PlayerAnim::Shot(_, silenced) = *m {
+                    if crate::muzzle::flashes(p.weapon, silenced) {
+                        p.flash_until = now + crate::muzzle::FLASH_SECONDS;
+                    }
+                }
                 let model = &look.looks[p.look].model;
                 let name = match *m {
                     PlayerAnim::Hurt(_, HitGroup::Head) => "head_flinch".to_string(),
@@ -134,6 +143,7 @@ fn anim_events(
                 if let Some((_, g)) = &p.gun {
                     g.despawn(&mut commands);
                 }
+                commands.entity(p.flash).despawn();
                 let model = &look.looks[p.look].model;
                 let name = match look.last_hit.get(&id) {
                     _ if p.crouched => "crouch_die",
@@ -173,6 +183,7 @@ fn draw_others(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut bindposes: ResMut<Assets<SkinnedMeshInverseBindposes>>,
+    flash_look: Res<crate::muzzle::FlashLook>,
     drawn: Query<(Entity, &OtherPlayer)>,
 ) {
     let all = w.client.others();
@@ -195,7 +206,9 @@ fn draw_others(
             let s = wm.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes);
             (wm, s)
         });
-        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, gait_frame: 0.0, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None });
+        let flash = crate::muzzle::spawn(&mut commands, &flash_look);
+        commands.entity(parent).add_child(flash);
+        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, gait_frame: 0.0, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None, flash, flash_until: 0.0 });
     }
 }
 
@@ -207,7 +220,10 @@ fn animate(
     mut live: Query<(&mut OtherPlayer, &mut Transform), (Without<Corpse>, Without<ChildOf>)>,
     mut corpses: Query<&mut Corpse>,
     mut bones: Query<&mut Transform, With<ChildOf>>,
+    mut vis: Query<&mut Visibility>,
+    cam: Single<&GlobalTransform, With<crate::game::FlyCam>>,
 ) {
+    let cam_rot = cam.compute_transform().rotation;
     let (now, dt) = (time.elapsed_secs(), time.delta_secs().max(1e-4));
     let others = w.client.others();
     for (mut p, mut tf) in &mut live {
@@ -249,8 +265,21 @@ fn animate(
         let blend = 0.5 + o.pitch.clamp(-90.0, 90.0) / 180.0;
         let pose = model.player_pose((gait, p.gait_frame), upper, blend);
         models::set_pose(&p.body, &pose, &mut bones);
+        let lit = now < p.flash_until;
         if let Some((wm, g)) = &p.gun {
-            models::set_pose(&g.joints, &wm.model.borrow_pose(model, &pose), &mut bones);
+            let gun_pose = wm.model.borrow_pose(model, &pose);
+            models::set_pose(&g.joints, &gun_pose, &mut bones);
+            // Muzzle flash at the p_ model's muzzle, facing the camera.
+            if let (true, Some(at)) = (lit, wm.model.attachment(0, &gun_pose)) {
+                if let Ok(mut t) = bones.get_mut(p.flash) {
+                    t.translation = Vec3::from(map::to_y_up(at));
+                    t.rotation = tf.rotation.inverse() * cam_rot * Quat::from_rotation_z((now * 7919.0).fract() * std::f32::consts::TAU);
+                    t.scale = Vec3::splat(14.0);
+                }
+            }
+        }
+        if let Ok(mut v) = vis.get_mut(p.flash) {
+            v.set_if_neq(if lit { Visibility::Inherited } else { Visibility::Hidden });
         }
     }
     for mut c in &mut corpses {

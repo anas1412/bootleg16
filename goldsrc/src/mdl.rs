@@ -43,6 +43,8 @@ pub struct Model {
     pub bones: Vec<Bone>,
     pub hitboxes: Vec<Hitbox>,
     pub sequences: Vec<Sequence>,
+    /// Attachment points (bone, offset in the bone's space): a weapon's first is its muzzle.
+    pub attachments: Vec<(usize, Vec3)>,
 }
 
 /// A bone's pose in model space: rotation matrix rows and translation.
@@ -137,7 +139,15 @@ impl Model {
                 anim_index: i32_at(o + 124)? as usize,
             });
         }
-        Ok(Model { data, bones, hitboxes, sequences })
+        // Attachments (88 bytes each: name[32], type, bone, origin, vectors[3]).
+        let (num_att, att_index) = (i32_at(212)?.max(0) as usize, i32_at(216)?.max(0) as usize);
+        let attachments = (0..num_att)
+            .filter_map(|i| {
+                let o = att_index + i * 88;
+                Some((i32_at(o + 36).ok()?.max(0) as usize, [f32_at(o + 40).ok()?, f32_at(o + 44).ok()?, f32_at(o + 48).ok()?]))
+            })
+            .collect();
+        Ok(Model { data, bones, hitboxes, sequences, attachments })
     }
 
     pub fn sequence(&self, name: &str) -> Option<usize> {
@@ -326,6 +336,14 @@ pub struct ModelTexture {
     pub width: u32,
     pub height: u32,
     pub rgba: Vec<u8>,
+}
+
+impl Model {
+    /// Where attachment `i` is for this pose (model space); a weapon's first is its muzzle.
+    pub fn attachment(&self, i: usize, pose: &[BoneTransform]) -> Option<Vec3> {
+        let (bone, org) = *self.attachments.get(i)?;
+        Some(pose.get(bone)?.apply(org))
+    }
 }
 
 impl Model {
