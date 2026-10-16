@@ -7,12 +7,16 @@
 //! Over UDP, kept simple: players send commands and poll their state every second; every
 //! answer is the full state, so a lost packet never leaves anyone out of date. Requests are
 //! padded so answers are never bigger than requests (nobody can use this to flood others).
-use crate::protocol::{decode, encode, ClientMsg};
-use crate::server::{Group, MatchSetup};
+use crate::protocol::{decode, encode};
+use crate::server::Group;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{SocketAddr, UdpSocket};
 use std::time::{Duration, Instant};
+
+mod client;
+mod queue;
+pub use client::LobbyClient;
 
 pub const MASTER_PORT: u16 = 27010;
 /// Game servers announce this often and are forgotten after missing a few.
@@ -87,6 +91,8 @@ pub enum Command {
     Cancel,
     /// Invite a friend who is in the game (by Steam id) to your party.
     Invite { steam: u64 },
+    /// Your ping (ms) to each region (from `LobbyState::regions`); the queue uses it.
+    Pings(Vec<(String, u16)>),
 }
 
 /// How long an invite stays up.
@@ -128,6 +134,8 @@ pub struct LobbyState {
     pub notice: String,
     /// Invites to other parties, newest last.
     pub invites: Vec<Invite>,
+    /// One server per region to measure your ping to (answer with `Command::Pings`).
+    pub regions: Vec<(String, SocketAddr)>,
 }
 
 struct Player {
@@ -142,6 +150,8 @@ struct Player {
     notice: String,
     /// Who invited us (player id) and when.
     invites: Vec<(u32, Instant)>,
+    /// Ping per region, as the player measured it.
+    pings: HashMap<String, u16>,
 }
 
 struct Party {
@@ -156,6 +166,7 @@ struct Party {
 struct GameServer {
     /// Where players connect (the heartbeat's source unless the server says otherwise).
     public: SocketAddr,
+    region: String,
     token: String,
     official: bool,
     busy: bool,
@@ -237,13 +248,14 @@ impl Master {
         while let Ok((n, from)) = self.udp.recv_from(&mut buf) {
             let _ = self.udp.set_nonblocking(true);
             match decode::<LobbyMsg>(&buf[..n]) {
-                Some(LobbyMsg::Heartbeat { token, busy, address, .. }) => {
+                Some(LobbyMsg::Heartbeat { token, busy, address, region, .. }) => {
+                    let region: String = region.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(16).collect();
                     let public = address.parse().unwrap_or(from);
                     let official = !token.is_empty() && self.tokens.contains(&token);
                     if !self.servers.contains_key(&from) {
-                        println!("server {public} joined the pool{}", if official { "" } else { " (wrong token: never gets matches)" });
+                        println!("server {public} ({region}) joined the pool{}", if official { "" } else { " (wrong token: never gets matches)" });
                     }
-                    self.servers.insert(from, GameServer { public, token, official, busy, seen: Instant::now() });
+                    self.servers.insert(from, GameServer { public, region, token, official, busy, seen: Instant::now() });
                 }
                 Some(LobbyMsg::Hello { name, steam, pad }) if pad.len() >= PAD => {
                     // Signed in already (our Welcome got lost): the same session again.
@@ -255,7 +267,7 @@ impl Master {
                             self.next_id += 1;
                             let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
                             let party = self.new_party(id);
-                            self.players.insert(session, Player { id, name, steam: 0, addr: from, party, seen: Instant::now(), found: None, notice: String::new(), invites: Vec::new() });
+                            self.players.insert(session, Player { id, name, steam: 0, addr: from, party, seen: Instant::now(), found: None, notice: String::new(), invites: Vec::new(), pings: HashMap::new() });
                             if let Some(login) = steam {
                                 match self.steam_mode {
                                     SteamMode::Trust => self.steam_checked(login.steam_id, Some(session)),
@@ -394,13 +406,18 @@ impl Master {
                         let members = self.parties[&party].members.clone();
                         if members.len() < 2 {
                             notice = "Invite at least one friend first.".into();
-                        } else if !self.start_match(members, true) {
+                        } else if !self.start_custom(members) {
                             notice = "No server free right now. Try again in a moment.".into();
                         }
                     }
                 }
             }
             Command::Cancel if leader => self.parties.get_mut(&party).unwrap().queued = None,
+            Command::Pings(pings) => {
+                if let Some(p) = self.players.get_mut(&session) {
+                    p.pings = pings.into_iter().take(32).map(|(r, ms)| (r.chars().take(16).collect(), ms)).collect();
+                }
+            }
             Command::Invite { steam } => match self.players.values_mut().find(|p| p.steam == steam && steam != 0) {
                 Some(friend) => {
                     friend.invites.retain(|(from, _)| *from != me);
@@ -414,50 +431,6 @@ impl Master {
         if !notice.is_empty() {
             if let Some(p) = self.players.get_mut(&session) {
                 p.notice = notice;
-            }
-        }
-    }
-
-    /// Reserve a free official server for these players and hand out tickets. False if none.
-    fn start_match(&mut self, players: Vec<(u32, Group)>, knife_round: bool) -> bool {
-        let Some((addr, public, token)) = self.servers.iter().find(|(_, s)| s.official && !s.busy).map(|(a, s)| (*a, s.public, s.token.clone())) else { return false };
-        let tickets: Vec<(u32, u64, Group)> = players.iter().map(|(id, g)| (*id, self.rand() | 1, *g)).collect();
-        let setup = MatchSetup { players: tickets.iter().map(|(_, t, g)| (*t, *g)).collect(), knife_round };
-        // The server checks the token: only we can reserve official servers.
-        let _ = self.udp.send_to(&encode(&ClientMsg::Reserve { token, setup }), addr);
-        self.servers.get_mut(&addr).unwrap().busy = true;
-        println!("match booked on {public}: {} players{}", players.len(), if knife_round { ", custom" } else { "" });
-        for (id, ticket, _) in tickets {
-            if let Some(p) = self.players.values_mut().find(|p| p.id == id) {
-                p.found = Some((public, ticket));
-            }
-            if let Some(party) = self.parties.values_mut().find(|q| q.members.iter().any(|(m, _)| *m == id)) {
-                party.queued = None;
-            }
-        }
-        true
-    }
-
-    /// Casual: fill two teams from queued parties (each party stays on one team), oldest first.
-    fn matchmake(&mut self) {
-        let side = self.match_size / 2;
-        let mut queued: Vec<(Instant, Vec<u32>)> = self.parties.values().filter_map(|p| Some((p.queued?, p.members.iter().map(|(m, _)| *m).collect()))).collect();
-        queued.sort_by_key(|q| q.0);
-        let (mut a, mut b): (Vec<u32>, Vec<u32>) = (Vec::new(), Vec::new());
-        for (_, members) in &queued {
-            if a.len() + members.len() <= side {
-                a.extend(members);
-            } else if b.len() + members.len() <= side {
-                b.extend(members);
-            }
-            if a.len() == side && b.len() == side {
-                let players: Vec<(u32, Group)> = a.iter().map(|m| (*m, Group::A)).chain(b.iter().map(|m| (*m, Group::B))).collect();
-                if !self.start_match(players, false) {
-                    for p in self.players.values_mut().filter(|p| a.contains(&p.id) || b.contains(&p.id)) {
-                        p.notice = "Match found, waiting for a free server...".into();
-                    }
-                }
-                return; // ponytail: one match per step; plenty at our scale
             }
         }
     }
@@ -479,6 +452,7 @@ impl Master {
             searching: party.queued.map(|t| t.elapsed().as_secs_f32()),
             found,
             notice,
+            regions: self.ping_targets(),
             invites: invited
                 .iter()
                 .filter_map(|(from, at)| {
@@ -488,88 +462,5 @@ impl Master {
                 })
                 .collect(),
         })
-    }
-}
-
-/// The game's side of the lobby: call `tick` every frame; it signs in, sends commands, polls
-/// every second, and keeps the latest state. Never blocks.
-pub struct LobbyClient {
-    udp: UdpSocket,
-    lobby: SocketAddr,
-    name: String,
-    session: Option<u64>,
-    last_sent: Option<Instant>,
-    pub state: Option<LobbyState>,
-    /// Kept until taken: the match to join (server, ticket).
-    pub found: Option<(SocketAddr, u64)>,
-    /// Kept until taken: the lobby's last message for the player.
-    pub notice: String,
-    /// Makes a Steam login for each sign-in (None = anonymous).
-    pub steam: Option<Box<dyn FnMut() -> Option<SteamLogin> + Send + Sync>>,
-    /// The login for the sign-in in progress (a Steam ticket is used once).
-    login: Option<SteamLogin>,
-}
-
-impl LobbyClient {
-    pub fn new(lobby: SocketAddr, name: &str) -> std::io::Result<LobbyClient> {
-        let udp = UdpSocket::bind(if lobby.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" })?;
-        udp.set_nonblocking(true)?;
-        Ok(LobbyClient { udp, lobby, name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new(), steam: None, login: None })
-    }
-
-    /// Signed in and heard from the lobby.
-    pub fn online(&self) -> bool {
-        self.state.is_some()
-    }
-
-    /// Send a command now (the answer is the new state).
-    pub fn send(&mut self, cmd: Command) {
-        if let Some(session) = self.session {
-            let _ = self.udp.send_to(&encode(&LobbyMsg::Command { session, cmd, pad: vec![0; PAD] }), self.lobby);
-            self.last_sent = Some(Instant::now());
-        }
-    }
-
-    pub fn tick(&mut self) {
-        let mut buf = [0u8; 2048];
-        while let Ok((n, from)) = self.udp.recv_from(&mut buf) {
-            if from != self.lobby {
-                continue;
-            }
-            match decode::<LobbyMsg>(&buf[..n]) {
-                Some(LobbyMsg::Welcome { session }) if self.session.is_none() => {
-                    self.session = Some(session);
-                    self.login = None;
-                    self.send(Command::Poll);
-                }
-                Some(LobbyMsg::Expired) => {
-                    // Sign in again right away (a new Steam ticket too).
-                    self.session = None;
-                    self.last_sent = None;
-                }
-                Some(LobbyMsg::State(s)) => {
-                    if s.found.is_some() {
-                        self.found = s.found;
-                    }
-                    if !s.notice.is_empty() {
-                        self.notice = s.notice.clone();
-                    }
-                    self.state = Some(s);
-                }
-                _ => {}
-            }
-        }
-        if self.last_sent.is_none_or(|t| t.elapsed() > Duration::from_secs(1)) {
-            match self.session {
-                Some(_) => self.send(Command::Poll),
-                None => {
-                    if self.login.is_none() {
-                        self.login = self.steam.as_mut().and_then(|f| f());
-                    }
-                    let _ = self.udp.send_to(&encode(&LobbyMsg::Hello { name: self.name.clone(), steam: self.login.clone(), pad: vec![0; PAD] }), self.lobby);
-                    self.last_sent = Some(Instant::now());
-                }
-            }
-        }
     }
 }

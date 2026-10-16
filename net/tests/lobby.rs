@@ -139,3 +139,32 @@ fn signs_in_again_after_the_lobby_restarts() {
         std::thread::sleep(Duration::from_millis(5));
     }
 }
+
+#[test]
+fn queue_books_the_region_players_ping_best() {
+    let Some(bsp) = dust2() else { return };
+    let (mut eu, lobby) = world(&bsp, 2);
+    let mut na = Server::new(SocketAddr::from(LOCAL), "test", &bsp, assets()).unwrap();
+    na.set_config(net::config::MatchConfig { master: lobby.to_string(), official_token: "tok".into(), region: "na".into(), ..Default::default() });
+    let (mut a, mut b) = (LobbyClient::new(lobby, "a").unwrap(), LobbyClient::new(lobby, "b").unwrap());
+    let both = |eu: &mut Server, na: &mut Server, cs: &mut [&mut LobbyClient], what: &str, done: &dyn Fn(&[&mut LobbyClient]) -> bool| {
+        let start = Instant::now();
+        while !done(cs) {
+            assert!(start.elapsed() < Duration::from_secs(5), "timed out: {what}");
+            eu.step();
+            na.step();
+            cs.iter_mut().for_each(|c| c.tick());
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    };
+    both(&mut eu, &mut na, &mut [&mut a, &mut b], "both regions listed", &|c| c.iter().all(|c| c.state.as_ref().is_some_and(|s| s.regions.len() == 2)));
+    // Let the automatic pings (both ~0 ms on localhost) go out, then say we're far from eu.
+    let t = Instant::now();
+    both(&mut eu, &mut na, &mut [&mut a, &mut b], "pings", &|_| t.elapsed() > Duration::from_millis(300));
+    for c in [&mut a, &mut b] {
+        c.send(Command::Pings(vec![("eu".into(), 150), ("na".into(), 25)]));
+        c.send(Command::Play);
+    }
+    both(&mut eu, &mut na, &mut [&mut a, &mut b], "match found", &|c| c.iter().all(|c| c.found.is_some()));
+    assert_eq!(a.found.unwrap().0, na.local_addr(), "booked in na, where both ping 25 ms");
+}

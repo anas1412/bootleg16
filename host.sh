@@ -5,6 +5,7 @@
 #   ./host.sh join <lobby-ip> <token> this machine: game servers for an existing lobby
 #   options: --servers N   game servers here (each runs one match at a time)
 #            --ip X        the public IP players connect to (found automatically otherwise)
+#            --region R    where this machine is, e.g. eu, na, sa, asia (players get the closest)
 #   ./host.sh token | status | logs | update | stop
 #
 # Settings are remembered in hosting/: after the first run, plain `./host.sh` brings the
@@ -15,7 +16,7 @@ mkdir -p hosting
 compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
 
 [ -f hosting/settings ] && . hosting/settings
-LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}"
+LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}"
 
 case "${1:-}" in
   stop) compose down; exit ;;
@@ -31,6 +32,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --servers) SERVERS="$2"; shift 2 ;;
     --ip) IP="$2"; shift 2 ;;
+    --region) REGION="$2"; shift 2 ;;
     *) echo "Unknown option $1 (see the top of host.sh)"; exit 1 ;;
   esac
 done
@@ -56,7 +58,7 @@ if [ -z "$IP" ]; then
   IP=$(curl -4fsS --max-time 5 https://api.ipify.org || true)
   [ -n "$IP" ] || { echo "Couldn't find this machine's public IP: run again with --ip <address>."; exit 1; }
 fi
-printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\n' "$LOBBY" "$SERVERS" "$IP" > hosting/settings
+printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\n' "$LOBBY" "$SERVERS" "$IP" "$REGION" > hosting/settings
 
 # One config per game server (the shipped rules, pointed at the lobby), and the compose file.
 lobby_addr=$([ "$LOBBY" = here ] && echo 127.0.0.1:27010 || echo "$LOBBY:27010")
@@ -73,6 +75,7 @@ rm -f hosting/server*.cfg
         -e "s|^official_token = \"\"|official_token = \"$token\"|" \
         -e "s|^public_address = \"\"|public_address = \"$IP:$port\"|" \
         -e "s|^name = .*|name = \"$(hostname)-$i\"|" \
+        -e "s|^region = .*|region = \"$REGION\"|" \
         config/server.cfg > "hosting/server$i.cfg"
     echo "  server$i: {image: bootleg16, network_mode: host, restart: unless-stopped, command: server de_dust2 $port --config /bootleg16/server.cfg, volumes: [./server$i.cfg:/bootleg16/server.cfg:ro, ./game:/game:ro]}"
   done

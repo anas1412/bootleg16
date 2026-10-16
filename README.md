@@ -48,7 +48,9 @@ Its game servers join the same pool. Run `./host.sh token` on the main machine i
 
 `update` pulls the latest code and restarts everything (matches in progress end, so do it when it's quiet). `logs` shows servers joining the pool, matches being booked, and a status line every minute (players online, queue, free and busy servers).
 
-**Options:** `--servers N` sets how many game servers run on this machine. `--ip X` sets the address players connect to, if the one found is wrong.
+**Options:** `--servers N` sets how many game servers run on this machine. `--ip X` sets the address players connect to, if the one found is wrong. `--region R` says where the machine is (`eu`, `na`, `sa`, `asia`...).
+
+**Regions:** the game measures each player's ping to every region. The queue puts a party in a region where all of them ping under 60 ms, widening by 2 ms per second of waiting (up to 200 ms), so nobody waits forever in a quiet region. Custom games go to the party's best region.
 
 **Match rules** (rounds, money, timers) live in `config/server.cfg`. Edit it, then run `./host.sh` again.
 
