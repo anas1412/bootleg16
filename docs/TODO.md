@@ -128,8 +128,25 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Decals, sprites, particles, muzzle flashes
 - [ ] Static props/models placed in maps (`env_model`, `cycler_sprite` …)
 
+### UI (Interference: docs/UI.md, design/mockups/ui is the spec)
+- [ ] Scoreboard: the server's `Score` only has name, kills, deaths, alive, team, bot.
+      Add per player: assists, ping, MVPs, teammates' money (own team only), headshot %,
+      ADR (average damage per round). Then show them as columns.
+- [ ] Scoreboard: round history is rebuilt from events seen since you joined; the server
+      should send the full list so late joiners and reconnects see it too
+- [ ] Rewrite docs/UI.md for Interference (tokens, components, motion; the mockup is the spec)
+- [ ] ⚠ Not yet seen on screen in a real match: hit wash/heartbeat, reload line, money
+      delta, timer ticks, vote panel, voted out / surrendered / kill limit announcements
+      (the uplink, voice rows, status icons, match found and Practice were checked)
+- [ ] AI assistant: generated lines through OpenCode, free models first (plan in design notes)
+- [ ] Main menu character card + character select (waits for the new models)
+- [ ] Map pool screen (waits for the new maps)
+
 ## Later (after milestone 1)
 
+- [ ] (low priority) Callouts: place names per map area (GoldSrc maps have none: our own zone data per
+      map), shown under the radar ("A LONG"), on teammates' voice rows and in the assistant's
+      relay lines; bomb site A/B letters and dead teammates' last position on the radar
 - [ ] Custom player/weapon skins shared through the server (hash-cached, size
       limits, strict parsing, fixed hitboxes, server and client on/off)
 - [ ] In-game map editor (Forge-style: place, test instantly, share)

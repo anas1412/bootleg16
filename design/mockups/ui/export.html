@@ -1,0 +1,12 @@
+<meta charset="utf-8"><title>face sheet export</title>
+<style>html,body{margin:0;background:transparent} .g{display:grid;grid-template-columns:repeat(11,256px);grid-auto-rows:256px}</style>
+<div class="g" id="o"></div>
+<script src="faces.js"></script>
+<script>
+// One sheet per face for the game: columns are the rig layers, rows the nine moods, 256 px
+// cells cropped like the portrait tiles (TILE_VIEW in ui.js).
+const LAYERS = ['back', 'body', 'head', 'extra', 'eyes', 'shut', 'brows', 'mouth', 'talk', 'fx', 'front'];
+const C = { claudette: '#E8875F', childgbt: '#6FE3C1', sister: '#A98BFF', brother: '#A98BFF', grumpk: '#D4FF3A' };
+const w = new URLSearchParams(location.search).get('w');
+document.getElementById('o').innerHTML = MOODS9.map(m => LAYERS.map(l => `<div>${faceSvg(w, C[w], m, false, '44 42 112 112', l)}</div>`).join('')).join('');
+</script>

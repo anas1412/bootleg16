@@ -11,11 +11,21 @@ bevy = { version = "0.20", features = ["wav"] }
 # Voice chat: microphone / output streams (same cpal Bevy's audio uses) and the Opus codec.
 cpal = "0.17"
 opus = "0.3"
+# AI assistant: shuffling its line decks.
+fastrand = "2"
+# Steam: sign-in, friends, invites (feature `steam`).
+steamworks = { version = "0.13", optional = true }
+
+[build-dependencies]
+# Built first so build.rs can put Steam's libsteam_api.so next to the game.
+steamworks-sys = { version = "0.13", optional = true }
 
 [features]
 # Development builds link Bevy as a shared library (rebuilds only link our code).
-# Release / shipping: `cargo build --release -p client --no-default-features`.
-default = ["dev"]
+# Release / shipping: `cargo build --release -p client --no-default-features --features steam`.
+default = ["dev", "steam"]
 dev = ["bevy/dynamic_linking"]
+# Steam sign-in, friends and invites (plays anonymously when Steam isn't running).
+steam = ["dep:steamworks", "dep:steamworks-sys"]
 # Per-system timings: `cargo build -p client --features profile`, run, open trace-*.json in ui.perfetto.dev.
 profile = ["bevy/trace_chrome"]

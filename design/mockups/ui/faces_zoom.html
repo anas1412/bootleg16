@@ -1,0 +1,4 @@
+<meta charset="utf-8"><style>body{margin:0;background:#07080B;display:flex;gap:8px;padding:8px} .c{width:470px;height:470px;background:#151A21}</style>
+<div id="o" style="display:flex;gap:8px"></div><script src="faces.js"></script>
+<script>const q=new URLSearchParams(location.search);const w=(q.get('w')||'claudette,childgbt,sister,brother').split(',');const C={claudette:'#E8875F',childgbt:'#6FE3C1',sister:'#A98BFF',brother:'#A98BFF',grumpk:'#D4FF3A'};
+document.getElementById('o').innerHTML=w.map(x=>`<div class="c">${faceSvg(x,C[x],q.get('m')||'neutral',q.has('t'))}</div>`).join('');</script>

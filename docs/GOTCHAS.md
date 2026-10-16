@@ -143,6 +143,13 @@ something surprises you.
 - Head height: in the CS models the head centre is ~+19 over the origin, i.e. at eye level (+17), and leans
   forward of the origin by 1-12 units depending on the weapon pose. Shooting someone's back at eye level can
   hit the upper chest first. Hitboxes are posed per weapon (`Target::weapon`).
+- Dev builds link Bevy dynamically, and the rpath is `$ORIGIN/`, but `libbevy_dylib-*.so` sits in
+  `target/debug/deps/`. Running `target/debug/client` directly fails ("cannot open shared object file");
+  use `cargo run` or `LD_LIBRARY_PATH=target/debug/deps:$(rustc --print sysroot)/lib`.
+- After a protocol bump, rebuild the server too: an old `target/debug/server` refuses a new client
+  ("server runs protocol N, you have N+1").
+- Bevy `FromWorld` is blanket-implemented for `Default` types: don't derive `Default` on a resource that
+  has its own `impl FromWorld`.
 
 ## Polish batch (2026-10-16)
 - GoldSrc sky faces (gl_warp.c): rt +X, lf -X, bk +Y, ft -Y, up +Z, dn -Z; sides have s to the right, t up
@@ -153,3 +160,32 @@ something surprises you.
   ~100 fps, so `player::tagging` scales it to 1/100 s steps.
 - Helper binaries (net/examples/*) go stale silently after a protocol bump: rebuild them or they're rejected.
 - dust2's bomb-site crates are `func_breakable` with spawnflag 1 (only trigger), fired by the site's `target`.
+- Bevy UI draws an `ImageNode` inside the node's padding (content box only). For a shaped
+  background (the notched amber button), put the image on a box without padding and the
+  padded content in a child.
+- `add_plugins((...))` takes at most 15 plugins per tuple; nest a second tuple for more.
+- A tight `LineHeight` (e.g. 0.8) clips tall display glyphs at the top; give the box some
+  vertical padding instead of relying on the line box.
+
+## Security (2026-10-16 review)
+- Never make secrets (tickets, sessions, codes, cookies) with a seeded PRNG: xorshift64* output
+  reveals its state, so one ticket gives away everyone's. Use `net::secure::random()` (OS).
+- Every reply to an unauthenticated packet must be no bigger than the request (padding);
+  `answers_never_outgrow_requests` checks the lobby's worst case. Cap lists in answers.
+- Rate-limit tables must not let made-up addresses crowd out real players: players and
+  strangers have separate tables, and the lobby's bookings bypass the stranger budget.
+- Official servers take booked players only; an unreserved official server is not open.
+- Tests run every bot/player from 127.0.0.1: per-IP limits must scale per player (or exempt
+  loopback), or the tests fail in ways that look like game bugs.
+- Never build a "keyed hash" from an invertible mixer (splitmix, xorshift): one output gives
+  the key back. MACs and cookies use BLAKE3 keyed hashing (`net::secure::Cookies`).
+- Timing-sensitive network tests can flake when every suite runs at once (CPU starved): give
+  them generous game-time limits, and re-run alone before treating a failure as a bug.
+- Bevy UI: a bundle can't hold the same component twice. `Icons::node` and `kit_text` already
+  bring their `Node` / text parts: tweak them after spawning (`.entry::<Node>().and_modify`),
+  don't add a second `Node` in the tuple (it panics at spawn, not at compile time).
+- A Bevy system takes at most 16 parameters: split a big animation into systems that share
+  their state through a component (the uplink: `animate` works out the timeline, `light` and
+  `reveal` draw from it), instead of tuples of queries.
+- A part that animates its own colour (a burst, a roll) fights any system that also sets that
+  colour every frame: the setter skips while an `Anim` is on it (`Has<Anim>`).

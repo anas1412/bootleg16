@@ -1,0 +1,91 @@
+<meta charset="utf-8">
+<title>bootleg16 UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@700&family=Noto+Sans+JP:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<link rel="stylesheet" href="motion.css">
+<style>
+/* Viewer: screens at 1920x1080, scaled to the window width. Single dark look, like the game. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg0); color: var(--tx1); font-family: var(--f-text); padding: 16px max(16px, 2vw) 32px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+header .brand { display: flex; align-items: baseline; gap: 12px; }
+header .brand b { font: 800 34px/1 var(--f-display); text-transform: uppercase; }
+header .brand b i { font-style: normal; background: var(--amber); color: var(--amber-ink); padding: 0 6px; margin-left: 4px; }
+nav { display: flex; flex-wrap: wrap; gap: 4px; }
+nav button, .tools button { font: 600 12px var(--f-text); letter-spacing: .14em; text-transform: uppercase; color: var(--tx2); background: var(--bg1); border: 0; padding: 10px 14px; cursor: pointer; box-shadow: inset 0 -2px 0 transparent; transition: background var(--t-hover), color var(--t-hover), box-shadow var(--t-hover); }
+nav button:hover, .tools button:hover { background: var(--hover); color: var(--tx1); }
+nav button[aria-current="true"] { background: var(--bg3); color: var(--amber); box-shadow: inset 0 -2px 0 var(--amber); }
+button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 16px 0 10px; }
+.bar p { flex: 1 1 320px; min-width: 0; font: 600 14px/1.4 var(--f-text); color: var(--tx2); }
+.tools { display: flex; gap: 4px; }
+.frame { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--bg0); outline: 1px solid var(--line); }
+.stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: var(--bg0); }
+.stage .abs { position: absolute; }
+body.still *, body.still *::before, body.still *::after { animation: none !important; transition: none !important; }
+/* ?bare: only the stage, for 1:1 screenshots */
+body.bare { padding: 0; } .bare header, .bare .bar { display: none; } .bare .frame { outline: 0; }
+.world img { width: 100%; height: 100%; object-fit: cover; max-width: none; }
+</style>
+
+<header>
+  <div class="brand"><b>Bootleg<i>16</i></b><span class="label">UI · Interference</span></div>
+  <nav id="tabs" aria-label="Screens"></nav>
+</header>
+<div class="bar"><p id="note"></p><div class="tools"><button id="toggle" type="button" hidden>Close menu</button><button id="replay" type="button">Replay motion</button></div></div>
+<div class="frame" id="frame"><div class="stage" id="stage"></div></div>
+
+<script src="faces.js"></script>
+<script src="ui.js"></script>
+<script src="screens.js"></script>
+<script src="interact.js"></script>
+<script src="rig.js"></script>
+<script src="ai.js"></script>
+<script src="hud.js"></script>
+<script>
+const stage = document.getElementById('stage'), frame = document.getElementById('frame');
+const tabs = document.getElementById('tabs'), note = document.getElementById('note'), toggle = document.getElementById('toggle');
+if (location.search.includes('bare')) document.body.classList.add('bare');
+// ?still: the settled frame, for screenshots (a headless clock never advances).
+if (location.search.includes('still')) document.body.classList.add('still');
+const keys = Object.keys(SCREENS);
+let current = keys.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'practice';
+
+tabs.innerHTML = keys.map(k => `<button type="button" data-k="${k}">${SCREENS[k].name}</button>`).join('');
+tabs.onclick = e => { const k = e.target.dataset.k; if (k) go(k); };
+
+function show(k, opening) {
+  current = k;
+  const s = SCREENS[k];
+  for (const b of tabs.children) b.setAttribute('aria-current', b.dataset.k === k);
+  note.textContent = s.note;
+  const world = s.game ? `<div class="world"><img src="${shot(s.game)}" alt=""></div>` : '';
+  stage.innerHTML = world + (s.game ? `<div class="hudlayer abs" style="inset:0">${s.html()}</div>` : s.html());
+  if (s.game) {
+    // The scrim sits between the HUD and the menu, like Z_SCRIM in the game.
+    const over = stage.querySelector('.over');
+    const scrim = Object.assign(document.createElement('div'), { className: 'scrim' });
+    const sweep = Object.assign(document.createElement('div'), { className: 'sweep' });
+    if (over) over.before(scrim, sweep); else stage.querySelector('.hudlayer').append(scrim, sweep);
+  }
+  if (opening) { stage.classList.remove('covered'); void stage.offsetWidth; }
+  stage.classList.toggle('covered', !!s.covered);
+  stage.classList.toggle('keepai', k === 'buy');
+  toggle.hidden = !s.covered;
+  toggle.textContent = 'Close menu';
+  decorate(stage);
+  speakAll(stage);
+  hudLive(stage);
+}
+// Opening re-renders so the menu tunes in again; closing tunes it out.
+toggle.onclick = () => {
+  if (stage.classList.contains('covered')) { stage.classList.remove('covered'); toggle.textContent = 'Open menu'; return; }
+  stage.classList.remove('covered'); show(current, true);
+};
+document.getElementById('replay').onclick = () => show(current);
+
+new ResizeObserver(() => { stage.style.transform = `scale(${frame.clientWidth / 1920})`; }).observe(frame);
+show(current);
+</script>

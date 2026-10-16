@@ -1,0 +1,128 @@
+/* Motion (client/src/ui/motion.rs). Calm at rest; every change tunes in.
+   - .tune: enters split into its two channels and settles clean (320 ms, ease-out, a small
+     overshoot in x). --i staggers a group by 40 ms. Only the opening frames carry the split,
+     so text is never hard to read.
+   - hover on anything pressable: a 240 ms burst (split + 2 px jitter) that settles fully
+     clean. Nothing ever stays split at rest.
+   - .over: a menu over the game. The game blurs, the shared scrim dims it, the HUD tunes out,
+     a scanline sweeps once and the menu tunes in. Closing runs it back in 180 ms.
+   - .out: leaving tunes out (180 ms). Menu pages swap inside a frame that stays.
+   - .ind: one selection per list or chip group; it slides (280 ms) to the new choice.
+   - .pop / .roll-up / .roll-down: a choice made; a value stepped.
+   - .breathe: live markers. */
+@property --split { syntax: '<length>'; inherits: true; initial-value: 0px; }
+
+.tune { animation: tune-in var(--t-tune) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * var(--stagger)); }
+@keyframes tune-in {
+  0%   { opacity: 0; transform: translateX(-10px); --split: var(--split-in); filter: drop-shadow(-6px 0 rgba(73,198,255,.75)) drop-shadow(6px 0 rgba(255,79,139,.75)); }
+  35%  { opacity: 1; transform: translateX(3px); --split: 3px; filter: drop-shadow(-3px 0 rgba(73,198,255,.5)) drop-shadow(3px 0 rgba(255,79,139,.5)); }
+  65%  { transform: translateX(-1px); --split: 1px; filter: drop-shadow(-1px 0 rgba(73,198,255,.25)) drop-shadow(1px 0 rgba(255,79,139,.25)); }
+  100% { opacity: 1; transform: none; --split: 0px; filter: drop-shadow(0 0 transparent) drop-shadow(0 0 transparent); }
+}
+
+/* leaving: the reverse of tuning in, faster */
+.out .tune, .tune.out, .out-self { animation: tune-out var(--t-out) ease-in forwards !important; }
+.stage.out > :not(.tune):not(.world) { transition: opacity var(--t-out) ease-in; opacity: 0; }
+@keyframes tune-out {
+  0%   { opacity: 1; transform: none; --split: 0px; }
+  40%  { transform: translateX(2px); --split: 3px; filter: drop-shadow(-2px 0 rgba(73,198,255,.5)) drop-shadow(2px 0 rgba(255,79,139,.5)); }
+  100% { opacity: 0; transform: translateX(10px); --split: 6px; filter: drop-shadow(-5px 0 rgba(73,198,255,.7)) drop-shadow(5px 0 rgba(255,79,139,.7)); }
+}
+/* the uplink, all of it symmetric around the centre (ai.js runs the steps; without JS it rests open):
+   open:  the edge light draws out from the centre, the panel unfolds down from it, the icon
+          tunes in on the edge (Grumpk slams in);
+   line:  it resolves from the centre outward, two scan edges running to the ends;
+   talk:  the waveforms run out from the icon to both sides;
+   close: the text fades, the panel folds up into the edge, the icon tunes out, the light
+          retracts to the centre. */
+.uplink.opening .ul-edge { animation: ul-draw 340ms var(--ease-out) backwards; }
+.uplink.opening .ul-sweep { animation: ul-sweep 420ms var(--ease-out) 140ms backwards; }
+.uplink.opening .ul-lock { animation: ul-lock 640ms var(--ease-out) 180ms backwards; }
+.uplink.holding .ul-timer { animation: ul-hold 4000ms linear forwards; }
+@keyframes ul-sweep { 0% { top: 0; opacity: 1; } 100% { top: 100%; opacity: 0; } }
+@keyframes ul-lock { 0% { inset: -22px; opacity: 0; } 30% { opacity: 1; } 55% { inset: -8px; opacity: 1; } 100% { inset: -8px; opacity: 0; } }
+@keyframes ul-hold { 0% { opacity: 1; transform: scaleX(1); } 100% { opacity: 1; transform: scaleX(0); } }
+.uplink.opening .ul-band { animation: ul-unfold 360ms var(--ease-out) 100ms backwards; }
+.uplink.opening .ul-face { animation: tune-in var(--t-tune) var(--ease-out) 160ms backwards; }
+.uplink.opening .ul-name, .uplink.opening .ul-wave { animation: ul-fade 260ms var(--ease-out) 300ms backwards; }
+@keyframes ul-draw { 0% { transform: scaleX(0); filter: drop-shadow(-6px 0 rgba(73,198,255,.9)) drop-shadow(6px 0 rgba(255,79,139,.9)); } 60% { filter: drop-shadow(-2px 0 rgba(73,198,255,.5)) drop-shadow(2px 0 rgba(255,79,139,.5)); } 100% { transform: none; filter: none; } }
+@keyframes ul-unfold { from { clip-path: inset(0 0 100% 0 round var(--radius)); } to { clip-path: inset(0 0 0 0 round var(--radius)); } }
+@keyframes ul-fade { from { opacity: 0; } }
+.ul-row.waiting .ul-line { clip-path: inset(0 50% 0 50%); }
+.ul-row.reveal .ul-line { animation: ul-wipe 560ms cubic-bezier(.4, 0, .2, 1) backwards; }
+.ul-row.reveal .ul-scan.l { animation: ul-scan-l 560ms cubic-bezier(.4, 0, .2, 1); }
+.ul-row.reveal .ul-scan.r { animation: ul-scan-r 560ms cubic-bezier(.4, 0, .2, 1); }
+@keyframes ul-wipe { from { clip-path: inset(0 50% 0 50%); filter: blur(2px); } 70% { filter: none; } to { clip-path: inset(0 0 0 0); } }
+@keyframes ul-scan-l { 0% { left: 50%; opacity: 1; } 85% { opacity: 1; } 100% { left: 0; opacity: 0; } }
+@keyframes ul-scan-r { 0% { left: 50%; opacity: 1; } 85% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+/* a second row (Twins) grows the panel down smoothly */
+.ul-row.two { transition: grid-template-rows 320ms var(--ease-out); }
+.ul-row.two.closed { grid-template-rows: 0fr; }
+/* talking: ai.js drives the bars from the voice (still shots freeze them at --h) */
+.uplink.talking .ul-wave i { height: var(--h); }
+.ul-wave i { transition: background 200ms; }
+.uplink.closing .ul-in, .uplink.closing .ul-name, .uplink.closing .ul-wave { transition: opacity 160ms; opacity: 0; }
+.uplink.closing .ul-band { animation: ul-fold 260ms cubic-bezier(.4, 0, 1, 1) 120ms forwards; }
+.uplink.closing .ul-face { animation: tune-out var(--t-out) ease-in 220ms forwards; }
+.uplink.closing .ul-edge { animation: ul-retract 240ms ease-in 300ms forwards; }
+@keyframes ul-fold { to { clip-path: inset(0 0 100% 0 round var(--radius)); } }
+@keyframes ul-retract { to { transform: scaleX(0); opacity: 0; } }
+
+/* match found: the accept button breathes, the timer runs down, filled slots pop */
+.mf-accept { animation: breathe-glow 1.4s ease-in-out infinite; }
+@keyframes breathe-glow { 50% { box-shadow: inset 0 0 0 2px var(--amber), inset 6px 0 0 var(--amber), 0 0 28px rgba(255, 160, 0, .45); } }
+.mf-slot.on { animation: burst 240ms var(--ease-out) backwards; animation-delay: calc(var(--i) * 60ms); }
+
+/* Grumpk's entrance: a harder, longer burst */
+.slam { animation: slam 520ms var(--ease-out); }
+@keyframes slam {
+  0%   { transform: translateX(-14px); --split: 12px; filter: drop-shadow(-10px 0 rgba(73,198,255,.8)) drop-shadow(10px 0 rgba(255,79,139,.8)); }
+  15%  { transform: translateX(8px); --split: -8px; }
+  30%  { transform: translateX(-5px); --split: 6px; filter: drop-shadow(-4px 0 rgba(73,198,255,.6)) drop-shadow(4px 0 rgba(255,79,139,.6)); }
+  50%  { transform: translateX(3px); --split: -3px; }
+  100% { transform: none; --split: 0px; filter: drop-shadow(0 0 transparent) drop-shadow(0 0 transparent); }
+}
+.ul-line { text-shadow: calc(-1 * var(--split)) 0 rgba(73, 198, 255, .9), var(--split) 0 rgba(255, 79, 139, .9); }
+/* a choice was made: the chosen thing bursts once */
+.pop { animation: burst 240ms var(--ease-out); }
+/* a value changed: the new number rolls in from the side it moved toward */
+.roll-up { animation: roll-up 220ms var(--ease-out); } .roll-down { animation: roll-down 220ms var(--ease-out); }
+@keyframes roll-up { 0% { transform: translateY(14px); opacity: 0; --split: 4px; } 100% { transform: none; opacity: 1; --split: 0px; } }
+@keyframes roll-down { 0% { transform: translateY(-14px); opacity: 0; --split: 4px; } 100% { transform: none; opacity: 1; --split: 0px; } }
+.stepper .v > span { text-shadow: calc(-1 * var(--split)) 0 rgba(73, 198, 255, .9), var(--split) 0 rgba(255, 79, 139, .9); }
+
+/* pressable things: a burst when hover starts, then clean */
+.chip, .primary, .nav > .item, .card { transition: background var(--t-hover), box-shadow var(--t-hover), color var(--t-hover); }
+.chip:hover, .primary:not(.off):hover, .nav > .item:hover, .card:hover { animation: burst 240ms var(--ease-out); }
+@keyframes burst {
+  0%   { --split: 5px; transform: translateX(2px); }
+  25%  { --split: -3px; transform: translateX(-2px); }
+  50%  { --split: 2px; transform: translateX(1px); }
+  100% { --split: 0px; transform: none; }
+}
+
+/* menus over the game */
+.world { position: absolute; inset: 0; transition: filter var(--t-blur) var(--ease-out); }
+.scrim { position: absolute; inset: 0; background: var(--backdrop); opacity: 0; pointer-events: none; transition: opacity var(--t-blur) var(--ease-out); }
+.sweep { position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: 0; pointer-events: none;
+  background: rgba(234, 242, 248, .35); box-shadow: 0 -2px 0 rgba(73,198,255,.35), 0 2px 0 rgba(255,79,139,.35); }
+.stage.covered .sweep { animation: sweep 420ms var(--ease-out); }
+@keyframes sweep { 0% { top: 0; opacity: 1; } 100% { top: 100%; opacity: 0; } }
+.over { position: absolute; inset: 0; z-index: 2; transition: opacity var(--t-out), transform var(--t-out), --split var(--t-out); }
+.keep { z-index: 1; }
+.hudlayer > :not(.over) { transition: opacity var(--t-blur) var(--ease-out); }
+.stage.covered .hudlayer > :not(.over):not(.scrim):not(.sweep) { opacity: 0; }
+.stage.covered.keepai .hudlayer > .keep { opacity: 1; }
+.stage.covered .world { filter: blur(12px) saturate(.75); }
+.stage.covered .scrim { opacity: 1; }
+.stage:not(.covered) .over { opacity: 0; transform: translateX(6px); --split: 4px; pointer-events: none; }
+
+.breathe { animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .35; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tune, .breathe, .face.live::after, .stage.covered .sweep, .pop, .slam, .roll-up, .roll-down, .out .tune, .tune.out, .out-self { animation: none !important; }
+  .nav > .ind, .chips > .ind { transition: none; }
+  .chip:hover, .primary:hover, .nav > .item:hover, .card:hover { animation: none; --split: 0px; }
+  .world, .scrim, .over, .hudlayer > * { transition: none; }
+}

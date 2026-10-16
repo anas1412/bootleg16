@@ -1,0 +1,181 @@
+//! In-game overlays: the Esc menu and team selection, drawn over the game. They tune in over
+//! the blurred game and tune out when closed.
+use crate::game::Walker;
+use crate::menu::AppState;
+use crate::ui::{card, chip, clickable_keep_border, kit_text, nav, page_title, vh, Anim, Blurs, Kit, NavItem, UiAction, UiActions, BAR, CT_COLOR, TX1, TX2, TX3, T_COLOR};
+use bevy::prelude::*;
+use bevy::window::{CursorGrabMode, CursorOptions};
+use net::protocol::Team;
+
+/// In-game overlays (Esc menu, team select) as one optional panel.
+#[derive(Resource, Default, PartialEq, Clone, Copy)]
+pub enum Overlay {
+    #[default]
+    None,
+    Pause,
+    Teams,
+}
+
+#[derive(Component)]
+pub(crate) struct OverlayRoot;
+
+/// Esc toggles the pause menu; M opens team selection (also shown when you join).
+pub(crate) fn pause_menu(
+    mut commands: Commands,
+    kit: Res<Kit>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut overlay: ResMut<Overlay>,
+    mut shown: Local<Option<Overlay>>,
+    w: Res<Walker>,
+    mut asked: Local<bool>,
+    mut cursor: Single<&mut CursorOptions>,
+    roots: Query<Entity, With<OverlayRoot>>,
+) {
+    let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
+    if !auto {
+        if keys.just_pressed(KeyCode::Escape) {
+            *overlay = if *overlay == Overlay::None { Overlay::Pause } else { Overlay::None };
+        }
+        if keys.just_pressed(KeyCode::KeyM) {
+            *overlay = if *overlay == Overlay::Teams { Overlay::None } else { Overlay::Teams };
+        }
+        // First time in: pick a side, like CS.
+        if !*asked && w.client.id().is_some() && !w.client.scores.is_empty() && w.client.team() == Team::Spectator {
+            *asked = true;
+            *overlay = Overlay::Teams;
+        }
+    } else if !*asked && w.client.id().is_some() {
+        // Screenshot runs pick automatically (BOOTLEG16_TEAM=t|ct|spec, default auto).
+        *asked = true;
+        commands.queue(|world: &mut World| {
+            let team = match std::env::var("BOOTLEG16_TEAM").as_deref() {
+                Ok("t") => Some(Team::T),
+                Ok("ct") => Some(Team::Ct),
+                Ok("spec") => Some(Team::Spectator),
+                _ => None,
+            };
+            if let Some(mut w) = world.get_resource_mut::<Walker>() {
+                w.client.join_team(team);
+            }
+        });
+    }
+    // Screenshot runs can show an overlay (BOOTLEG16_OVERLAY=pause|teams).
+    if auto {
+        match std::env::var("BOOTLEG16_OVERLAY").as_deref() {
+            Ok("pause") => *overlay = Overlay::Pause,
+            Ok("teams") => *overlay = Overlay::Teams,
+            _ => {}
+        }
+    }
+    if *shown == Some(*overlay) {
+        return;
+    }
+    *shown = Some(*overlay);
+    // the open overlay tunes out; the blur and scrim fade with it
+    for e in &roots {
+        commands.entity(e).remove::<(OverlayRoot, Blurs)>().insert(Anim::tune_out());
+    }
+    if *overlay != Overlay::None {
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
+    }
+    let me_team = w.client.team();
+    let practice = w.client.practice;
+    match *overlay {
+        Overlay::None => {}
+        Overlay::Pause => {
+            // a teammate left: you may call a surrender vote
+            let abandoned = w.client.round.abandoned[(me_team == Team::Ct) as usize] && me_team != Team::Spectator;
+            commands.spawn((OverlayRoot, DespawnOnExit(AppState::InGame), full_dim())).with_children(|root| {
+                root.spawn((Node { width: vh(560.0), flex_direction: FlexDirection::Column, ..default() }, Anim::stagger(0))).with_children(|col| {
+                    col.spawn(Node { margin: UiRect::bottom(vh(24.0)), flex_direction: FlexDirection::Column, ..default() }).with_children(|t| {
+                        page_title(t, &kit, if practice { "Practice" } else { "Match" }, "Paused", "一時停止");
+                    });
+                    let item = |num, label, jp, action, selected| NavItem { num, label, jp, action, selected };
+                    let mut items = vec![item("01", "Resume", "再開", UiAction::Resume, true), item("02", "Choose team", "チーム", UiAction::ShowTeams, false)];
+                    if abandoned {
+                        items.push(item("03", "Call a surrender vote", "降伏", UiAction::Surrender, false));
+                    }
+                    items.push(item(if abandoned { "04" } else { "03" }, "Leave match", "退出", UiAction::Leave, false));
+                    nav(col, &kit, "pause.nav", items, false);
+                    col.spawn((kit_text("ESC · BACK TO THE GAME", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), padding: UiRect::left(vh(16.0)), ..default() }));
+                });
+            });
+        }
+        Overlay::Teams => {
+            commands.spawn((OverlayRoot, DespawnOnExit(AppState::InGame), full_dim())).with_children(|root| {
+                root.spawn((Node { flex_direction: FlexDirection::Column, ..default() }, Anim::stagger(0))).with_children(|col| {
+                    col.spawn(Node { flex_direction: FlexDirection::Column, margin: UiRect::bottom(vh(32.0)), ..default() }).with_children(|t| {
+                        page_title(t, &kit, "Pick a side", "Choose your team", "チーム選択");
+                    });
+                    col.spawn(Node { column_gap: vh(16.0), ..default() }).with_children(|row| {
+                        team_card(row, &kit, 1, "1", "Strays", "ストレイズ", "Attack · plant the bomb", T_COLOR, UiAction::ChooseTeam(Some(Team::T)), me_team == Team::T);
+                        team_card(row, &kit, 2, "2", "Bureau", "ビューロー", "Defend · defuse the bomb", CT_COLOR, UiAction::ChooseTeam(Some(Team::Ct)), me_team == Team::Ct);
+                    });
+                    col.spawn((Node { column_gap: vh(8.0), margin: UiRect::top(vh(16.0)), ..default() }, Anim::stagger(3))).with_children(|row| {
+                        chip(row, &kit, "5 · Auto-select", UiAction::ChooseTeam(None), false);
+                        chip(row, &kit, "6 · Spectate", UiAction::ChooseTeam(Some(Team::Spectator)), me_team == Team::Spectator);
+                    });
+                });
+            });
+        }
+    }
+}
+
+fn full_dim() -> impl Bundle {
+    (
+        Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), align_items: AlignItems::Center, justify_content: JustifyContent::Center, ..default() },
+        Blurs(0.93),
+        GlobalZIndex(20),
+    )
+}
+
+/// One side: key, big name, Japanese name, what you do; the side's colour as a bar on top.
+#[allow(clippy::too_many_arguments)]
+fn team_card(row: &mut ChildSpawnerCommands, kit: &Kit, i: usize, key: &str, name: &str, jp: &str, role: &str, color: Color, action: UiAction, current: bool) {
+    let node = Node { width: vh(420.0), height: vh(280.0), flex_direction: FlexDirection::Column, padding: UiRect::all(vh(28.0)), ..default() };
+    let mut e = row.spawn((card(node, current), Anim::stagger(i)));
+    let base = if current { crate::ui::BG1.mix(&crate::ui::AMBER, 0.08) } else { crate::ui::BG1 };
+    e.with_children(|c| {
+        c.spawn((Node { position_type: PositionType::Absolute, left: px(0), right: px(0), top: px(0), height: vh(BAR), ..default() }, BackgroundColor(color), Pickable::IGNORE));
+        c.spawn((kit_text(key, 13.0, TX2, &kit.text), Pickable::IGNORE));
+        c.spawn((Node { flex_grow: 1.0, ..default() }, Pickable::IGNORE));
+        c.spawn((kit_text(name.to_uppercase(), 52.0, color, &kit.display), Pickable::IGNORE));
+        c.spawn((kit_text(jp, 13.0, TX3, &kit.jp), Node { margin: UiRect::top(vh(6.0)), ..default() }, Pickable::IGNORE));
+        c.spawn((kit_text(role.to_uppercase(), 13.0, if current { TX1 } else { TX2 }, &kit.text), Node { margin: UiRect::top(vh(16.0)), ..default() }, Pickable::IGNORE));
+    });
+    clickable_keep_border(&mut e, action, base);
+}
+
+pub fn in_game_actions(mut actions: ResMut<UiActions>, mut overlay: ResMut<Overlay>, mut w: ResMut<Walker>, mut next: ResMut<NextState<AppState>>, keys: Res<ButtonInput<KeyCode>>) {
+    // CS team menu keys.
+    if *overlay == Overlay::Teams {
+        for (k, team) in [(KeyCode::Digit1, Some(Team::T)), (KeyCode::Digit2, Some(Team::Ct)), (KeyCode::Digit5, None), (KeyCode::Digit6, Some(Team::Spectator))] {
+            if keys.just_pressed(k) {
+                actions.0.push(UiAction::ChooseTeam(team));
+            }
+        }
+    }
+    let mut keep = Vec::new();
+    for a in std::mem::take(&mut actions.0) {
+        match a {
+            UiAction::Resume => *overlay = Overlay::None,
+            UiAction::ShowTeams => *overlay = Overlay::Teams,
+            UiAction::Leave => next.set(AppState::Menu),
+            UiAction::Surrender => {
+                w.client.call_surrender();
+                *overlay = Overlay::None;
+            }
+            UiAction::ChooseTeam(team) => {
+                w.client.join_team(team);
+                *overlay = Overlay::None;
+            }
+            other => keep.push(other), // buy menu actions are handled by the HUD
+        }
+    }
+    actions.0 = keep;
+}
+
+pub fn overlay_open(overlay: Option<Res<Overlay>>) -> bool {
+    overlay.is_some_and(|o| *o != Overlay::None)
+}

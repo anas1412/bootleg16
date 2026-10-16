@@ -1,5 +1,5 @@
 // Shows one 1920x1080 screen (?s=menu|hud|buy|score), scaled to fit the window.
-const screens = ['menu', 'maps', 'char', 'hud', 'buy', 'score', 'system'].filter(x => document.getElementById(x));
+const screens = ['menu', 'play', 'invite', 'maps', 'char', 'settings', 'moods', 'hud', 'buy', 'score', 'system', 'system2'].filter(x => document.getElementById(x));
 const dir = location.pathname.split('/').pop().replace('.html', '');
 const s = new URLSearchParams(location.search).get('s') || 'menu';
 document.getElementById(s).classList.add('on');

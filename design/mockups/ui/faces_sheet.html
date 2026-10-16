@@ -1,0 +1,9 @@
+<meta charset="utf-8">
+<title>faces</title>
+<style>body{margin:0;background:#07080B;width:1920px;font:12px sans-serif;color:#8E9BA8} .row{display:flex;gap:6px;padding:6px} .c{width:200px;height:200px;background:#151A21}</style>
+<div id="o"></div>
+<script src="faces.js"></script>
+<script>
+const who = [['claudette', '#E8875F'], ['childgbt', '#6FE3C1'], ['sister', '#A98BFF'], ['brother', '#A98BFF'], ['grumpk', '#D4FF3A']];
+document.getElementById('o').innerHTML = who.map(([w, c]) => `<div class="row">${MOODS9.map(m => `<div class="c">${faceSvg(w, c, m)}</div>`).join('')}</div>`).join('');
+</script>

@@ -3,14 +3,15 @@
 //! you are. Opus over the game's UDP connection; the server relays (net/src/server/voice.rs).
 mod audio;
 mod page;
+mod rows;
 
 pub use page::{apply, page, VoiceAction};
 
 use crate::game::{FlyCam, Frame, Walker};
+use rows::Talking;
 use crate::menu::{overlay_open, AppState, Overlay};
-use crate::ui::{text, CT_COLOR, TEXT, T_COLOR};
 use bevy::prelude::*;
-use net::protocol::{Team, VoiceChannel, VOICE_FRAME, VOICE_RATE};
+use net::protocol::{VoiceChannel, VOICE_FRAME, VOICE_RATE};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -22,9 +23,10 @@ impl Plugin for VoicePlugin {
             .insert_resource(Devices(audio::input_devices()))
             .init_resource::<MicLevel>()
             .add_systems(Startup, open_audio)
-            .add_systems(OnEnter(AppState::InGame), spawn_talkers)
+            .add_systems(OnEnter(AppState::InGame), rows::spawn)
             .add_systems(Update, (page::rebind, page::mic_test).run_if(in_state(AppState::Menu)))
-            .add_systems(Update, (talk, listen, talkers).chain().in_set(Frame::Sound));
+            .add_systems(Update, (talk, listen).chain().in_set(Frame::Sound))
+            .add_systems(Update, rows::rows.in_set(Frame::Ui));
     }
 }
 
@@ -234,10 +236,6 @@ fn talk(
     }
 }
 
-/// Who is talking now (for the list on screen): channel and when we last heard them.
-#[derive(Resource, Default)]
-struct Talking(HashMap<u8, (VoiceChannel, f32)>);
-
 /// Play what others say: team voice in both ears; proximity voice at the server's loudness,
 /// panned towards the speaker when you can see them.
 fn listen(
@@ -256,10 +254,11 @@ fn listen(
     let ear = cam.translation();
     let others = w.client.others();
     for (from, channel, gain, data) in frames {
-        talking.0.insert(from, (channel, time.elapsed_secs()));
         let dec = audio.decoders.entry(from).or_insert_with(|| opus::Decoder::new(VOICE_RATE, opus::Channels::Mono).expect("opus decoder"));
         let mut pcm = vec![0.0f32; VOICE_FRAME * 6];
         let Ok(n) = dec.decode_float(&data, &mut pcm, false) else { continue };
+        let peak = pcm[..n].iter().fold(0.0f32, |m, x| m.max(x.abs()));
+        talking.0.insert(from, (channel, time.elapsed_secs(), peak));
         let vol = settings.volume * gain as f32 / 255.0;
         // Pan: -1 left .. 1 right, only for proximity voice from someone in view.
         let pan = match (channel, others.iter().find(|o| o.id == from)) {
@@ -273,65 +272,6 @@ fn listen(
             sp.push(from, &pcm[..n], vol * (1.0 - pan.max(0.0)), vol * (1.0 + pan.min(0.0)));
         }
     }
-}
-
-#[derive(Component)]
-struct TalkersList;
-
-fn spawn_talkers(mut commands: Commands) {
-    commands.insert_resource(Talking::default());
-    commands.spawn((
-        TalkersList,
-        Node { position_type: PositionType::Absolute, left: px(12), top: px(120), flex_direction: FlexDirection::Column, row_gap: px(2), ..default() },
-        DespawnOnExit(AppState::InGame),
-    ));
-}
-
-/// Names of who's talking, left side (like CS), and yourself while you hold a key.
-#[allow(clippy::too_many_arguments)]
-fn talkers(
-    mut commands: Commands,
-    w: Res<Walker>,
-    settings: Res<VoiceSettings>,
-    keys: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    talking: Res<Talking>,
-    time: Res<Time>,
-    root: Single<(Entity, Option<&Children>), With<TalkersList>>,
-    mut shown: Local<Vec<String>>,
-) {
-    let now = time.elapsed_secs();
-    let name = |id: u8| w.client.scores.iter().find(|s| s.id == id).map(|s| (s.name.clone(), s.team));
-    let mut lines: Vec<(String, Color)> = talking
-        .0
-        .iter()
-        .filter(|(_, (_, at))| now - at < 0.3)
-        .filter_map(|(id, (ch, _))| {
-            let (n, t) = name(*id)?;
-            let c = if t == Team::Ct { CT_COLOR } else { T_COLOR };
-            Some((format!("{n}  ({})", if *ch == VoiceChannel::Team { "team" } else { "near" }), c))
-        })
-        .collect();
-    if settings.on && settings.team_key.held(&keys, &mouse) {
-        lines.insert(0, ("You  (team)".into(), TEXT));
-    } else if settings.on && settings.near_key.held(&keys, &mouse) {
-        lines.insert(0, ("You  (near)".into(), TEXT));
-    }
-    lines.sort_by(|a, b| a.0.cmp(&b.0));
-    let key: Vec<String> = lines.iter().map(|l| l.0.clone()).collect();
-    if *shown == key {
-        return;
-    }
-    *shown = key;
-    let (root, children) = *root;
-    for &c in children.into_iter().flatten() {
-        commands.entity(c).despawn();
-    }
-    commands.entity(root).with_children(|col| {
-        for (l, c) in lines {
-            col.spawn(text(format!("[voice] {l}"), 15.0, c));
-        }
-    });
 }
 
 #[cfg(test)]

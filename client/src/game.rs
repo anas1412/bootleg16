@@ -51,8 +51,6 @@ pub struct Walker {
     wheel: f32,
     /// Bullet tracers: from, to, seconds left.
     pub tracers: Vec<([f32; 3], [f32; 3], f32)>,
-    /// Kill feed lines and seconds left.
-    pub feed: Vec<(String, f32)>,
     /// Events for `effects::grenade_effects` (explosions, flashes).
     pub pending_fx: Vec<net::protocol::GameEvent>,
     /// Sounds to play this frame.
@@ -65,10 +63,11 @@ pub struct Walker {
 const SMOOTH_SECONDS: f32 = 0.05;
 const SNAP_DISTANCE: f32 = 64.0;
 
+/// The player's camera (other modules read where it looks).
 #[derive(Component)]
 pub struct FlyCam {
-    yaw: f32,
-    pitch: f32,
+    pub(crate) yaw: f32,
+    pub(crate) pitch: f32,
 }
 
 /// Take over the connection, swap in the real map collision, add the camera.
@@ -98,7 +97,6 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res
         drop_held: false,
         wheel: 0.0,
         tracers: Vec::new(),
-        feed: Vec::new(),
         pending_fx: Vec::new(),
         cues: Vec::new(),
         smooth: Vec3::ZERO,
@@ -266,18 +264,19 @@ fn move_camera(
     fixed: Res<Time<Fixed>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut w: ResMut<Walker>,
+    watch: Res<crate::spectate::Watch>,
     mut tf: Single<&mut Transform, With<FlyCam>>,
 ) {
     if keys.just_pressed(KeyCode::KeyV) {
         w.noclip = !w.noclip;
     }
-    // Dead, spectating (or forced with BOOTLEG16_SPECTATE): watch another player.
-    let spectate = !w.client.vitals.alive() || std::env::var_os("BOOTLEG16_SPECTATE").is_some();
-    if spectate && !w.noclip {
-        // Watch a teammate if one is alive (as in CS), else anyone.
-        let others = w.client.others();
-        let mine = w.client.team();
-        if let Some(o) = others.iter().find(|o| o.alive && o.team == mine).or_else(|| others.iter().find(|o| o.alive)).cloned() {
+    // Dead, spectating (or forced with BOOTLEG16_SPECTATE): watch a living teammate only. With
+    // none left the camera stays put behind the black "team is out" screen (spectate.rs).
+    if crate::spectate::spectating(&w) && !w.noclip {
+        if watch.out {
+            return;
+        }
+        if let Some(o) = crate::spectate::target(&w, &watch) {
             let eye = [o.origin[0], o.origin[1], o.origin[2] + 20.0];
             let (s, c) = o.yaw.to_radians().sin_cos();
             // Chase view from behind (like CS); in front if there's no room (or
@@ -330,9 +329,9 @@ fn move_camera(
 }
 
 /// Click to capture the mouse (not while a menu or the buy menu is open). Esc is the pause menu.
-fn grab_cursor(mut cursor: Single<&mut CursorOptions>, mouse: Res<ButtonInput<MouseButton>>, overlay: Option<Res<Overlay>>, buy: Res<BuyMenu>) {
+fn grab_cursor(mut cursor: Single<&mut CursorOptions>, mouse: Res<ButtonInput<MouseButton>>, overlay: Option<Res<Overlay>>, buy: Res<BuyMenu>, scores: Res<crate::scoreboard::ScoreMouse>) {
     // Automated screenshot runs never take the user's mouse.
-    if mouse.just_pressed(MouseButton::Left) && std::env::var_os("BOOTLEG16_SCREENSHOT").is_none() && !overlay_open(overlay) && !buy.is_open() {
+    if mouse.just_pressed(MouseButton::Left) && std::env::var_os("BOOTLEG16_SCREENSHOT").is_none() && !overlay_open(overlay) && !buy.is_open() && !scores.on {
         cursor.grab_mode = CursorGrabMode::Locked;
         cursor.visible = false;
     }

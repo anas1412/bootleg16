@@ -8,28 +8,47 @@
 //! `BOOTLEG16_SCREENSHOT=path.png` saves one frame (after `BOOTLEG16_SCREENSHOT_AT` seconds,
 //! default 2) and exits; such runs ignore mouse and keyboard (used for automated checks).
 //! `BOOTLEG16_TEAM=t|ct|spec` picks the team in such runs (default auto).
+//! `BOOTLEG16_MENU_PAGE=practice|join|settings|voice` opens that menu page in such runs.
+//! `BOOTLEG16_OVERLAY=pause|teams` shows that in-game overlay; `BOOTLEG16_MENU=1` the buy menu.
+//! `BOOTLEG16_SCORES=1` holds the scoreboard open.
+//! `BOOTLEG16_ASSISTANT=0..3` picks the AI assistant for the run (not saved).
+//! `BOOTLEG16_VOICE=1` shows you and a teammate on the voice list.
+//! `BOOTLEG16_FOUND=1` shows a match found and the Reconnect card on the menu.
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead);
 //! `BOOTLEG16_SPECTATE=front` watches them from the front.
 mod bomb;
+mod assistant;
 mod buy;
 mod effects;
 mod framerate;
 mod game;
+mod found;
 mod hud;
 mod impacts;
+mod killfeed;
 mod level;
 mod map;
+mod match_flow;
 mod menu;
+mod menu_pages;
 mod models;
 mod muzzle;
+mod overlay;
+mod play;
+mod play_page;
 mod players;
+mod radar;
 mod round_hud;
+mod scoreboard;
+mod spectate;
 mod sky;
 mod smoke;
 mod sound;
+mod steam;
 mod teammates;
 mod ui;
 mod viewmodel;
+mod vote;
 mod voice;
 
 use bevy::{
@@ -74,10 +93,11 @@ fn main() {
             sound::SoundPlugin,
             buy::BuyPlugin,
             hud::HudPlugin,
+            killfeed::KillFeedPlugin,
             round_hud::RoundHudPlugin,
             bomb::BombPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin),
+            (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin),
         ))
         .add_systems(Update, screenshot)
         .run();

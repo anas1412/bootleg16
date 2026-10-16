@@ -1,7 +1,7 @@
 //! The voice settings page (menu -> Voice): on/off, both push-to-talk keys (rebind by
 //! pressing one), microphone, volumes, and a live mic meter to test with.
 use super::{Audio, Bind, Devices, MicLevel, VoiceSettings, KEYS, MICE};
-use crate::ui::{button, text, UiAction, MUTED, TEXT};
+use crate::ui::{chips, Choice, UiMemory, chip, page_title, setting_row, stepper, t, vh, Kit, Type, UiAction, BG1, OK, TX2};
 use bevy::prelude::*;
 use net::protocol::VoiceChannel;
 
@@ -67,20 +67,25 @@ pub(super) fn mic_test(mut audio: NonSendMut<Audio>, settings: Res<VoiceSettings
 }
 
 /// The voice settings page (menu → Voice).
-pub fn page(p: &mut ChildSpawnerCommands, s: &VoiceSettings) {
-    p.spawn(text("Voice", 30.0, TEXT));
-    p.spawn((text("Team voice: your team hears you anywhere. Proximity voice: everyone near you hears you, enemies too.", 16.0, MUTED), Node { margin: UiRect::vertical(px(8)), ..default() }));
+pub fn page(p: &mut ChildSpawnerCommands, kit: &Kit, memory: &mut UiMemory, s: &VoiceSettings, tune: Option<f32>) {
+    page_title(p, kit, "Team hears you anywhere, proximity reaches anyone near", "Voice", "音声");
     let a = |v: VoiceAction| UiAction::Voice(v);
-    button(p, if s.on { "Voice chat: on" } else { "Voice chat: off" }, a(VoiceAction::Toggle), s.on);
-    let key = |ch: VoiceChannel, b: Bind| if s.capture == Some(ch) { "press a key or mouse button... (Esc cancels)".to_string() } else { b.label() };
-    button(p, &format!("Team voice key: {}", key(VoiceChannel::Team, s.team_key)), a(VoiceAction::Rebind(VoiceChannel::Team)), s.capture == Some(VoiceChannel::Team));
-    button(p, &format!("Proximity voice key: {}", key(VoiceChannel::Proximity, s.near_key)), a(VoiceAction::Rebind(VoiceChannel::Proximity)), s.capture == Some(VoiceChannel::Proximity));
-    let mic = if s.mic.is_empty() { "system default" } else { s.mic.as_str() };
-    button(p, &format!("Microphone: {mic}"), a(VoiceAction::NextMic), false);
-    crate::menu::setting_row(p, &format!("Mic volume: {:.0}%", s.mic_volume * 100.0), a(VoiceAction::MicVolume(-0.1)), a(VoiceAction::MicVolume(0.1)));
-    crate::menu::setting_row(p, &format!("Voice volume: {:.0}%", s.volume * 100.0), a(VoiceAction::Volume(-0.1)), a(VoiceAction::Volume(0.1)));
-    p.spawn((text("Mic test (talk now):", 16.0, MUTED), Node { margin: UiRect::top(px(10)), ..default() }));
-    p.spawn((Node { width: px(320), height: px(10), border_radius: BorderRadius::all(px(5)), ..default() }, BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.5)))).with_children(|b| {
-        b.spawn((MicMeter, Node { width: percent(0), height: percent(100), border_radius: BorderRadius::all(px(5)), ..default() }, BackgroundColor(Color::srgb(0.45, 0.95, 0.45))));
+    let key = |ch: VoiceChannel, b: Bind| if s.capture == Some(ch) { "Press a key (Esc cancels)".to_string() } else { b.label() };
+    let mic = if s.mic.is_empty() { "System default" } else { s.mic.as_str() };
+    crate::menu_pages::rows(p, tune, |rows| {
+        vec![
+            setting_row(rows, kit, "Voice chat", |r| chips(r, kit, "voice.on", vec![Choice::new("On", a(VoiceAction::Toggle), s.on), Choice::new("Off", a(VoiceAction::Toggle), !s.on)])),
+            setting_row(rows, kit, "Team voice key", |r| chip(r, kit, &key(VoiceChannel::Team, s.team_key), a(VoiceAction::Rebind(VoiceChannel::Team)), s.capture == Some(VoiceChannel::Team))),
+            setting_row(rows, kit, "Proximity voice key", |r| chip(r, kit, &key(VoiceChannel::Proximity, s.near_key), a(VoiceAction::Rebind(VoiceChannel::Proximity)), s.capture == Some(VoiceChannel::Proximity))),
+            setting_row(rows, kit, "Microphone", |r| chip(r, kit, mic, a(VoiceAction::NextMic), false)),
+            setting_row(rows, kit, "Mic volume", |r| stepper(r, kit, memory, "voice.mic", &format!("{:.0}%", s.mic_volume * 100.0), a(VoiceAction::MicVolume(-0.1)), a(VoiceAction::MicVolume(0.1)))),
+            setting_row(rows, kit, "Voice volume", |r| stepper(r, kit, memory, "voice.vol", &format!("{:.0}%", s.volume * 100.0), a(VoiceAction::Volume(-0.1)), a(VoiceAction::Volume(0.1)))),
+            setting_row(rows, kit, "Mic test", |r| {
+                r.spawn((Node { width: vh(320.0), height: vh(8.0), ..default() }, BackgroundColor(BG1))).with_children(|b| {
+                    b.spawn((MicMeter, Node { width: percent(0), height: percent(100), ..default() }, BackgroundColor(OK)));
+                });
+                r.spawn(t(kit, Type::Label, "Talk now", TX2));
+            }),
+        ]
     });
 }

@@ -4,6 +4,7 @@ use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::menu::AppState;
 use crate::impacts::Hit;
+use crate::killfeed::{Kill, KillFeed};
 use crate::round_hud::RoundNews;
 use crate::models::Parts;
 use crate::players::PlayerAnim;
@@ -14,13 +15,14 @@ use bevy::{
     prelude::*,
     render::render_resource::TextureFormat,
 };
-use net::protocol::GameEvent;
+use net::protocol::{GameEvent, Team};
 
 pub struct EffectsPlugin;
 
 impl Plugin for EffectsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Flash>()
+            .add_message::<GameNews>()
             .add_systems(Startup, load)
             .add_systems(OnEnter(AppState::InGame), spawn_overlay)
             .add_systems(Update, events.in_set(Frame::Events))
@@ -229,7 +231,12 @@ fn grenade_effects(
 
 /// Server events: tracers, sounds, the kill feed, bullet holes and blood (`impacts`), player
 /// animations (`players`); explosions and flashes go on to `grenade_effects`.
-fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>) {
+/// Every game event, for systems that only need to watch (the AI assistant).
+#[derive(Message)]
+pub struct GameNews(pub GameEvent);
+
+#[allow(clippy::too_many_arguments)]
+fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut gizmos: Gizmos, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>) {
     let me = w.client.id();
     // Where a player is now (for sounds and the direction blood flies).
     let eye_of = |w: &Walker, id: u8| -> Option<[f32; 3]> {
@@ -239,6 +246,7 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: 
         w.client.others().iter().find(|o| o.id == id).map(|o| [o.origin[0], o.origin[1], o.origin[2] + 17.0])
     };
     for e in w.client.take_events() {
+        news.write(GameNews(e.clone()));
         match e {
             GameEvent::Shot { shooter, weapon, silenced, from, to, holes } => {
                 for (at, normal) in holes {
@@ -270,21 +278,16 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: 
                 let at = if Some(victim) == me { None } else { w.client.others().iter().find(|o| o.id == victim).map(|o| o.origin) };
                 w.cues.push(sound::Cue::Death { at });
                 anims.write(PlayerAnim::Died(victim));
-                let name = |id: u8| {
-                    if Some(id) == me {
-                        return "you".to_string();
-                    }
+                // Name and team as the feed shows them ("the bomb" for the world).
+                let who = |id: u8| -> (String, Team) {
                     if id == net::protocol::WORLD {
-                        return "the bomb".to_string();
+                        return ("the bomb".to_string(), Team::Spectator);
                     }
-                    w.client.scores.iter().find(|s| s.id == id).map(|s| s.name.clone()).unwrap_or_else(|| format!("player {id}"))
+                    w.client.scores.iter().find(|s| s.id == id).map(|s| (s.name.clone(), s.team)).unwrap_or_else(|| (format!("player {id}"), Team::Spectator))
                 };
-                let line = match weapon {
-                    None => format!("{} fell", name(victim)),
-                    Some(sim::weapons::Id::C4) => format!("the bomb got {}", name(victim)),
-                    Some(wp) => format!("{} [{}{}] {}", name(killer), sim::weapons::def(wp).name, if headshot { " HS" } else { "" }, name(victim)),
-                };
-                w.feed.push((line, 6.0));
+                let mine = me.is_some_and(|m| m == killer || m == victim);
+                let by = (weapon.is_some() && killer != victim).then(|| who(killer));
+                feed.push(Kill { killer: by, victim: who(victim), weapon, headshot, mine });
             }
             GameEvent::Explosion { at } => {
                 w.cues.push(sound::Cue::Explosion { at });
@@ -327,7 +330,7 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: 
                 w.cues.push(sound::Cue::At { file, at, far: false });
                 hits.write(Hit::Debris { at, material });
             }
-            GameEvent::RoundStart { .. } | GameEvent::RoundEnd { .. } | GameEvent::SidesSwapped | GameEvent::MatchOver { .. } => {
+            GameEvent::RoundStart { .. } | GameEvent::RoundEnd { .. } | GameEvent::SidesSwapped | GameEvent::MatchOver { .. } | GameEvent::Surrendered { .. } | GameEvent::VotedOut { .. } | GameEvent::KillLimit { .. } => {
                 round.write(RoundNews(e));
             }
             _ => {}
@@ -339,12 +342,4 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: 
         *left -= dt;
     }
     w.tracers.retain(|t| t.2 > 0.0);
-    for (_, left) in &mut w.feed {
-        *left -= dt;
-    }
-    w.feed.retain(|f| f.1 > 0.0);
-    let n = w.feed.len();
-    if n > 5 {
-        w.feed.drain(..n - 5);
-    }
 }

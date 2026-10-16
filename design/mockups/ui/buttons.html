@@ -1,0 +1,91 @@
+<meta charset="utf-8">
+<title>bootleg16 buttons</title>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@700&family=Noto+Sans+JP:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg0); color: var(--tx1); font-family: var(--f-text); width: 1920px; height: 1080px; padding: 72px 96px; }
+.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 64px; margin-top: 48px; }
+.col h3 { margin-bottom: 8px; }
+.col .label { margin-bottom: 32px; display: block; }
+.stack { display: flex; flex-direction: column; gap: 20px; align-items: flex-start; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cap { font: 600 11px var(--f-text); letter-spacing: .18em; color: var(--tx3); text-transform: uppercase; margin-top: 24px; }
+
+/* A · Readout: a cut right end, a key cap, chevrons; choices are glass with a tick that fills */
+.a-p { --h: 64px; height: var(--h); width: 460px; display: flex; align-items: center; gap: 16px; padding: 0 28px 0 24px; background: var(--amber); color: var(--amber-ink);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 0 100%); position: relative; overflow: hidden; }
+.a-p b { font: 700 20px var(--f-text); letter-spacing: .14em; text-transform: uppercase; }
+.a-p .chev { margin-left: auto; font: 700 18px var(--f-num); letter-spacing: -2px; }
+.a-p .key { font: 700 11px var(--f-num); border: 1.5px solid currentColor; padding: 3px 6px; }
+.a-p.hover::after { content: ''; position: absolute; top: 0; bottom: 0; left: 40%; width: 80px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent); transform: skewX(-20deg); }
+.a-p.off { background: var(--bg2); color: var(--tx3); }
+.a-p.off .chev { color: var(--bad); font: 600 13px var(--f-text); letter-spacing: .18em; }
+.a-c { height: 44px; padding: 0 18px 0 20px; display: inline-flex; align-items: center; font: 600 13px var(--f-text); letter-spacing: .18em; text-transform: uppercase; color: var(--tx2);
+  background: rgba(21, 26, 33, .7); box-shadow: inset 0 0 0 1px var(--line); position: relative;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+.a-c::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--line-2); }
+.a-c.hover { color: var(--tx1); background: linear-gradient(90deg, rgba(255,160,0,.16) 60%, rgba(21,26,33,.7) 60%); }
+.a-c.hover::before { background: var(--amber); }
+.a-c.on { color: var(--amber); background: linear-gradient(90deg, rgba(255,160,0,.14), rgba(255,160,0,.04)); }
+.a-c.on::before { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+
+/* B · Hologram: outline-only light shapes, a glowing edge and corner ticks, an amber glow when chosen */
+.b-p { height: 64px; width: 460px; display: flex; align-items: center; gap: 16px; padding: 0 24px; position: relative; color: var(--amber);
+  background: linear-gradient(180deg, rgba(255,160,0,.18), rgba(255,160,0,.06)); box-shadow: inset 0 0 0 1px rgba(255,160,0,.7), 0 0 24px rgba(255,160,0,.25); }
+.b-p b { font: 700 20px var(--f-text); letter-spacing: .14em; text-transform: uppercase; }
+.b-p .key { margin-left: auto; font: 700 11px var(--f-num); letter-spacing: .1em; opacity: .8; }
+.b-p::before, .b-p::after, .b-c.on::before, .b-c.on::after { content: ''; position: absolute; width: 10px; height: 10px; border: 2px solid var(--amber); }
+.b-p::before, .b-c.on::before { left: -4px; top: -4px; border-right: 0; border-bottom: 0; }
+.b-p::after, .b-c.on::after { right: -4px; bottom: -4px; border-left: 0; border-top: 0; }
+.b-p.hover { background: linear-gradient(180deg, rgba(255,160,0,.32), rgba(255,160,0,.12)); box-shadow: inset 0 0 0 1px var(--amber), 0 0 36px rgba(255,160,0,.4); }
+.b-p.off { color: var(--tx3); background: none; box-shadow: inset 0 0 0 1px var(--line-2); }
+.b-p.off::before, .b-p.off::after { border-color: var(--line-2); }
+.b-p.off .key { color: var(--bad); }
+.b-c { height: 44px; padding: 0 18px; display: inline-flex; align-items: center; position: relative; font: 600 13px var(--f-text); letter-spacing: .18em; text-transform: uppercase; color: var(--tx2);
+  box-shadow: inset 0 0 0 1px var(--line); background: rgba(200,230,255,.03); }
+.b-c.hover { color: var(--tx1); box-shadow: inset 0 0 0 1px var(--line-2); background: rgba(200,230,255,.07); }
+.b-c.on { color: var(--amber); box-shadow: inset 0 0 0 1px rgba(255,160,0,.6), 0 0 16px rgba(255,160,0,.18); background: rgba(255,160,0,.08); }
+
+/* C · Bracket tab: two-tone slab, a number tab on the left, label right; selection is a bright underline bar */
+.c-p { height: 64px; width: 460px; display: flex; align-items: stretch; color: var(--amber-ink); }
+.c-p .n { width: 64px; display: grid; place-items: center; background: var(--amber-ink); color: var(--amber); font: 700 14px var(--f-num); box-shadow: inset 0 0 0 1px var(--amber); }
+.c-p .m { flex: 1; display: flex; align-items: center; padding: 0 24px; gap: 16px; background: var(--amber); }
+.c-p b { font: 700 20px var(--f-text); letter-spacing: .14em; text-transform: uppercase; }
+.c-p .key { margin-left: auto; font: 700 11px var(--f-num); opacity: .7; }
+.c-p.hover .m { background: #ffb21f; }
+.c-p.off .n { background: none; color: var(--tx3); box-shadow: inset 0 0 0 1px var(--line-2); }
+.c-p.off .m { background: var(--bg2); color: var(--tx3); }
+.c-p.off .key { color: var(--bad); opacity: 1; }
+.c-c { height: 44px; padding: 0 18px; display: inline-flex; align-items: center; font: 600 13px var(--f-text); letter-spacing: .18em; text-transform: uppercase; color: var(--tx2); background: var(--bg1); border-bottom: 2px solid var(--line-2); }
+.c-c.hover { color: var(--tx1); background: var(--bg2); }
+.c-c.on { color: var(--tx1); background: var(--bg3); border-bottom-color: var(--amber); }
+</style>
+<div class="label">bootleg16 · button directions</div>
+<div class="h2" style="margin-top:8px">Buttons</div>
+<div class="cols">
+  <div class="col"><div class="h3">A · Readout</div><span class="label">Cut end, key cap, chevrons, light sweep on hover</span>
+    <div class="stack">
+      <div class="a-p"><b>Find match</b><span class="key">ENTER</span><span class="chev">›››</span></div>
+      <div class="a-p hover"><b>Find match</b><span class="key">ENTER</span><span class="chev">›››</span></div>
+      <div class="a-p off"><b>Buy · $4750</b><span class="chev">Need $1500</span></div>
+      <div class="cap">Choices: rest, hover, selected</div>
+      <div class="row"><span class="a-c">Quiet</span><span class="a-c hover">Normal</span><span class="a-c on">Chatty</span></div>
+    </div></div>
+  <div class="col"><div class="h3">B · Hologram</div><span class="label">Light, outline, glow, corner ticks</span>
+    <div class="stack">
+      <div class="b-p"><b>Find match</b><span class="key">ENTER</span></div>
+      <div class="b-p hover"><b>Find match</b><span class="key">ENTER</span></div>
+      <div class="b-p off"><b>Buy · $4750</b><span class="key">NEED $1500</span></div>
+      <div class="cap">Choices: rest, hover, selected</div>
+      <div class="row"><span class="b-c">Quiet</span><span class="b-c hover">Normal</span><span class="b-c on">Chatty</span></div>
+    </div></div>
+  <div class="col"><div class="h3">C · Tab slab</div><span class="label">Number tab plus amber slab</span>
+    <div class="stack">
+      <div class="c-p"><span class="n">01</span><span class="m"><b>Find match</b><span class="key">ENTER</span></span></div>
+      <div class="c-p hover"><span class="n">01</span><span class="m"><b>Find match</b><span class="key">ENTER</span></span></div>
+      <div class="c-p off"><span class="n">01</span><span class="m"><b>Buy · $4750</b><span class="key">NEED $1500</span></span></div>
+      <div class="cap">Choices: rest, hover, selected</div>
+      <div class="row"><span class="c-c">Quiet</span><span class="c-c hover">Normal</span><span class="c-c on">Chatty</span></div>
+    </div></div>
+</div>
