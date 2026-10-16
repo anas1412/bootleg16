@@ -4,7 +4,6 @@
 //! when it comes up. Reports: while holding Tab, right-click frees the mouse; click a player,
 //! pick a reason. The server takes one report per player and five per match and says nothing
 //! back, so the client remembers who it reported.
-use crate::effects::GameNews;
 use crate::game::{Frame, Walker};
 use crate::hud::Icons;
 use crate::menu::AppState;
@@ -13,22 +12,18 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 use net::protocol::ReportReason;
 use std::collections::HashSet;
 use bevy::prelude::*;
-use net::protocol::{GameEvent, Score, Team};
+use net::protocol::{Score, Team};
 use net::rounds::EndReason;
 
 pub struct ScoreboardPlugin;
 
 impl Plugin for ScoreboardPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<History>()
-            .init_resource::<ScoreMouse>()
+        app.init_resource::<ScoreMouse>()
             .init_resource::<Reported>()
             .init_resource::<Kicked>()
-            .add_systems(OnEnter(AppState::InGame), |mut h: ResMut<History>, mut r: ResMut<Reported>| {
-                h.0.clear();
-                r.0.clear();
-            })
-            .add_systems(Update, (record, mouse, report_actions, scoreboard).chain().in_set(Frame::Ui).run_if(resource_exists::<Walker>));
+            .add_systems(OnEnter(AppState::InGame), |mut r: ResMut<Reported>| r.0.clear())
+            .add_systems(Update, (mouse, report_actions, scoreboard).chain().in_set(Frame::Ui).run_if(resource_exists::<Walker>));
     }
 }
 
@@ -64,8 +59,18 @@ fn mouse(keys: Res<ButtonInput<KeyCode>>, buttons: Res<ButtonInput<MouseButton>>
     }
 }
 
-fn report_actions(mut actions: ResMut<UiActions>, mut m: ResMut<ScoreMouse>, mut reported: ResMut<Reported>, mut kicked: ResMut<Kicked>, mut w: ResMut<Walker>) {
+fn report_actions(mut actions: ResMut<UiActions>, mut m: ResMut<ScoreMouse>, mut reported: ResMut<Reported>, mut kicked: ResMut<Kicked>, mut w: ResMut<Walker>, mut voice: ResMut<crate::voice::VoiceSettings>) {
     actions.0.retain(|a| match a {
+        UiAction::Mute(name) => {
+            let g = voice.player_gain(name);
+            voice.set_player_gain(name, if g == 0.0 { 1.0 } else { 0.0 });
+            false
+        }
+        UiAction::PlayerVolume(name, d) => {
+            let g = voice.player_gain(name);
+            voice.set_player_gain(name, g + d);
+            false
+        }
         UiAction::Kick(id) => {
             w.client.call_kick(*id);
             kicked.0 = Some(w.client.round.round);
@@ -86,33 +91,21 @@ fn report_actions(mut actions: ResMut<UiActions>, mut m: ResMut<ScoreMouse>, mut
     });
 }
 
-/// Every finished round: who won and how.
-#[derive(Resource, Default)]
-struct History(Vec<(Team, EndReason)>);
-
 /// Slots in the strip: a full regulation match (first to 13).
 const SLOTS: usize = 24;
 
-fn record(mut news: MessageReader<GameNews>, mut h: ResMut<History>) {
-    for GameNews(e) in news.read() {
-        match e {
-            GameEvent::RoundEnd { winner, reason } => h.0.push((*winner, *reason)),
-            GameEvent::RoundStart { round: 1 } => h.0.clear(),
-            _ => {}
-        }
-    }
-}
-
-/// Column widths at 1080p: name grows, then K and D.
-const COL: f32 = 96.0;
+/// The stat columns after the name (which grows): label and width at 1080p. Money is only
+/// known for your own team (blank for the other).
+const COLS: [(&str, f32); 8] = [("K", 56.0), ("D", 56.0), ("A", 56.0), ("ADR", 72.0), ("HS%", 72.0), ("MVP", 64.0), ("$", 96.0), ("PING", 72.0)];
 
 type Shown = (Vec<Score>, [u32; 2], usize, bool, Option<u8>, usize);
 
 #[allow(clippy::too_many_arguments)]
-fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<crate::binds::Binds>), w: Res<Walker>, kit: Res<Kit>, icons: Res<Icons>, history: Res<History>, m: Res<ScoreMouse>, (reported, kicked): (Res<Reported>, Res<Kicked>), roots: Query<Entity, With<ScoresRoot>>, mut shown: Local<Option<Shown>>) {
+fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<crate::binds::Binds>), w: Res<Walker>, kit: Res<Kit>, icons: Res<Icons>, m: Res<ScoreMouse>, (reported, kicked, voice): (Res<Reported>, Res<Kicked>, Res<crate::voice::VoiceSettings>), roots: Query<Entity, With<ScoresRoot>>, mut shown: Local<Option<Shown>>) {
     let auto_show = std::env::var_os("BOOTLEG16_SCORES").is_some();
-    let want = (binds.held(crate::binds::Action::Scores, &keys, &buttons) || auto_show).then(|| (w.client.scores.clone(), w.client.round.score, history.0.len(), m.on, m.open, reported.0.len()));
-    if *shown == want {
+    let want = (binds.held(crate::binds::Action::Scores, &keys, &buttons) || auto_show).then(|| (w.client.scores.clone(), w.client.round.score, w.client.round_history.len(), m.on, m.open, reported.0.len()));
+    // a voice volume changed: redraw too
+    if *shown == want && !voice.is_changed() {
         return;
     }
     let opening = shown.is_none();
@@ -130,7 +123,7 @@ fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<K
     let line = if w.client.practice { "PRACTICE".to_string() } else { format!("ROUND {}", r.round.max(1)) };
     // kicking: teammates, reserved matches, one call per round, not while a vote runs
     let can_kick = m.on && w.client.ticket != 0 && kicked.0 != Some(r.round) && r.vote.is_none();
-    let ctx = Ctx { me, my_team: w.client.team(), carrier: match w.client.bomb { net::protocol::BombNet::Carried(id) => Some(id), _ => None }, my_kit: w.client.me_info.defuse_kit, can_report: m.on && !w.client.practice, can_kick, open: m.open, reported: &reported.0 };
+    let ctx = Ctx { me, my_team: w.client.team(), carrier: match w.client.bomb { net::protocol::BombNet::Carried(id) => Some(id), _ => None }, my_kit: w.client.me_info.defuse_kit, can_report: m.on && !w.client.practice, can_report_or_mouse: m.on, can_kick, open: m.open, reported: &reported.0, voice: &voice };
     let tune = |i: usize| opening.then(|| Anim::stagger(i));
     commands
         .spawn((
@@ -149,7 +142,7 @@ fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<K
                 head.with_children(|h| {
                     h.spawn((kit_text(format!("SCOREBOARD · {line}"), 13.0, TX2, &kit.text), Node { flex_grow: 1.0, ..default() }));
                     if !w.client.practice {
-                        h.spawn(kit_text(if m.on { "CLICK A PLAYER TO REPORT · RIGHT-CLICK TO LOCK THE MOUSE" } else { "RIGHT-CLICK TO USE THE MOUSE" }, 13.0, TX3, &kit.text));
+                        h.spawn(kit_text(if m.on { "CLICK A PLAYER: VOICE, REPORT · RIGHT-CLICK TO LOCK THE MOUSE" } else { "RIGHT-CLICK TO USE THE MOUSE" }, 13.0, TX3, &kit.text));
                     }
                 });
                 if !w.client.practice {
@@ -157,7 +150,7 @@ fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<K
                     if let Some(a) = tune(1) {
                         s.insert(a);
                     }
-                    s.with_children(|s| strip(s, &icons, &history.0));
+                    s.with_children(|s| strip(s, &icons, &w.client.round_history));
                 }
                 // Rounds won: [terrorists, counter-terrorists].
                 for (i, (team, name, jp, color, rounds)) in [(Team::Ct, "Bureau", "ビューロー", CT_COLOR, won[1]), (Team::T, "Strays", "ストレイズ", T_COLOR, won[0])].into_iter().enumerate() {
@@ -183,9 +176,12 @@ struct Ctx<'a> {
     carrier: Option<u8>,
     my_kit: bool,
     can_report: bool,
+    /// The mouse is free (the row menu can open).
+    can_report_or_mouse: bool,
     can_kick: bool,
     open: Option<u8>,
     reported: &'a HashSet<u8>,
+    voice: &'a crate::voice::VoiceSettings,
 }
 
 /// One team: header bar (side colour, name, rounds won), column labels, then the players.
@@ -216,8 +212,8 @@ fn header(col: &mut ChildSpawnerCommands, kit: &Kit) {
     col.spawn(Node { height: vh(36.0), align_items: AlignItems::Center, padding: UiRect::horizontal(vh(24.0)), ..default() }).with_children(|r| {
         r.spawn(Node { width: vh(96.0), ..default() });
         r.spawn((kit_text("PLAYER", 13.0, TX2, &kit.text), Node { flex_grow: 1.0, ..default() }));
-        for c in ["K", "D"] {
-            r.spawn((kit_text(c, 13.0, TX2, &kit.text), Node { width: vh(COL), justify_content: JustifyContent::FlexEnd, ..default() }));
+        for (c, w) in COLS {
+            r.spawn((kit_text(c, 13.0, TX2, &kit.text), Node { width: vh(w), justify_content: JustifyContent::FlexEnd, ..default() }));
         }
     });
 }
@@ -240,6 +236,7 @@ fn player_row(col: &mut ChildSpawnerCommands, kit: &Kit, s: &Score, ctx: &Ctx) {
         ("", TX3)
     };
     let reported = ctx.reported.contains(&s.id);
+    let gain = ctx.voice.player_gain(&s.name);
     let base = if mine { BG1.mix(&AMBER, 0.08) } else { Color::NONE };
     // your bar sits inside the padding, so every row's content lines up
     let node = Node { height: vh(48.0), align_items: AlignItems::Center, padding: UiRect { left: vh(if mine { 24.0 - BAR } else { 24.0 }), right: vh(24.0), ..default() }, border: UiRect { left: vh(if mine { BAR } else { 0.0 }), top: px(1), ..default() }, ..default() };
@@ -251,20 +248,44 @@ fn player_row(col: &mut ChildSpawnerCommands, kit: &Kit, s: &Score, ctx: &Ctx) {
             }
         });
         r.spawn((kit_text(&s.name, 19.0, c, &kit.text), Node { flex_grow: 1.0, ..default() }, Pickable::IGNORE));
-        if reported {
-            r.spawn((kit_text("REPORTED", 13.0, TX3, &kit.text), Node { margin: UiRect::right(vh(24.0)), ..default() }, Pickable::IGNORE));
+        if gain == 0.0 {
+            r.spawn((kit_text("MUTED", 13.0, TX3, &kit.text), Node { margin: UiRect::right(vh(16.0)), ..default() }, Pickable::IGNORE));
         }
-        for v in [s.kills.to_string(), s.deaths.to_string()] {
-            r.spawn((kit_text(v, 18.0, c, &kit.num), Node { width: vh(COL), justify_content: JustifyContent::FlexEnd, ..default() }, Pickable::IGNORE));
+        if reported {
+            r.spawn((kit_text("REPORTED", 13.0, TX3, &kit.text), Node { margin: UiRect::right(vh(16.0)), ..default() }, Pickable::IGNORE));
+        }
+        let pct = |n: u32, of: i32| if of > 0 { format!("{}", n * 100 / of as u32) } else { "0".into() };
+        let values = [
+            s.kills.to_string(),
+            s.deaths.to_string(),
+            s.assists.to_string(),
+            (s.damage / s.rounds.max(1)).to_string(),
+            pct(s.headshots, s.kills),
+            s.mvps.to_string(),
+            s.money.map(|m| format!("${m}")).unwrap_or_default(),
+            if s.bot { String::new() } else { s.ping.to_string() },
+        ];
+        for (v, (_, w)) in values.into_iter().zip(COLS) {
+            r.spawn((kit_text(v, 18.0, c, &kit.num), Node { width: vh(w), justify_content: JustifyContent::FlexEnd, ..default() }, Pickable::IGNORE));
         }
     });
     let report = ctx.can_report && !mine && !s.bot && !reported;
     let kick = ctx.can_kick && !mine && !s.bot && s.team == ctx.my_team;
-    if report || kick {
+    // their voice: mute or set how loud (people only)
+    let voice = ctx.can_report_or_mouse && !mine && !s.bot;
+    if report || kick || voice {
         clickable(&mut e, UiAction::ReportMenu(s.id), base, false);
     }
     if ctx.open == Some(s.id) {
         col.spawn((Node { height: vh(56.0), align_items: AlignItems::Center, column_gap: vh(8.0), padding: UiRect::left(vh(120.0)), ..default() }, Anim::tune_in(0.0))).with_children(|m| {
+            if voice {
+                m.spawn((kit_text("VOICE", 13.0, TX2, &kit.text), Node { margin: UiRect::right(vh(8.0)), ..default() }));
+                chip(m, kit, if gain == 0.0 { "Unmute" } else { "Mute" }, UiAction::Mute(s.name.clone()), gain == 0.0);
+                chip(m, kit, "−", UiAction::PlayerVolume(s.name.clone(), -0.25), false);
+                m.spawn((kit_text(format!("{:.0}%", gain * 100.0), 16.0, TX1, &kit.num), Node { width: vh(56.0), justify_content: JustifyContent::Center, ..default() }));
+                chip(m, kit, "+", UiAction::PlayerVolume(s.name.clone(), 0.25), false);
+                m.spawn((Node { width: px(1), height: vh(28.0), margin: UiRect::horizontal(vh(8.0)), ..default() }, BackgroundColor(LINE)));
+            }
             if report {
                 m.spawn((kit_text(format!("REPORT {} FOR", s.name.to_uppercase()), 13.0, TX2, &kit.text), Node { margin: UiRect::right(vh(8.0)), ..default() }));
                 for (label, reason) in [("Cheating", ReportReason::Cheating), ("Griefing", ReportReason::Griefing), ("Abuse", ReportReason::Abuse)] {

@@ -66,6 +66,9 @@ pub enum UiAction {
     Report(u8, net::protocol::ReportReason),
     /// Ask your team to vote this teammate out (reserved matches).
     Kick(u8),
+    /// A player's voice, by name: mute / unmute, louder or quieter.
+    Mute(String),
+    PlayerVolume(String, f32),
     ChooseTeam(Option<net::protocol::Team>),
     ShowTeams,
     Buy(net::protocol::BuyItem),
