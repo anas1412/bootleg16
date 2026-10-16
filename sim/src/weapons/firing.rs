@@ -9,8 +9,7 @@ pub(super) fn fire(g: &mut GunState, gd: &data::Gun, c: &Context, out: &mut Fire
             return;
         }
         // Semi-auto: one shot per click (shots_fired resets when the button is released).
-        let semi = gd.semi_auto && mode.burst.is_none();
-        if semi {
+        if gd.semi_auto {
             g.shots_fired += 1;
             if g.shots_fired > 1 {
                 return;
@@ -30,7 +29,7 @@ pub(super) fn fire(g: &mut GunState, gd: &data::Gun, c: &Context, out: &mut Fire
         let spread = spread(&mode.spread, acc_before, c, g.zoom > 0);
 
         // Accuracy for the next shot.
-        if !semi {
+        if !gd.semi_auto {
             g.delay_fire = true;
             g.shots_fired += 1;
         }
@@ -73,9 +72,6 @@ pub(super) fn fire(g: &mut GunState, gd: &data::Gun, c: &Context, out: &mut Fire
         });
         let cycle = if g.zoom > 0 { gd.zoomed_cycle.unwrap_or(mode.cycle) } else { mode.cycle };
         g.next_primary = c.now + cycle as f64;
-        if let Some(b) = mode.burst {
-            g.burst = Some((2, c.now + b.delays[0] as f64, spread));
-        }
         if gd.unscope_on_fire && g.zoom > 0 {
             g.resume_zoom = g.zoom;
             g.zoom = 0;
@@ -188,7 +184,7 @@ pub(super) fn spread(s: &Spread, acc: f32, c: &Context, zoomed: bool) -> f32 {
     }
 }
 
-/// Recoil of one main shot (burst follow-ups don't kick).
+/// Recoil of one shot.
 pub(super) fn kick(punch: &mut [f32; 3], g: &mut GunState, gd: &data::Gun, c: &Context) {
     match gd.recoil {
         Recoil::Kick { smg_order, sets } => {

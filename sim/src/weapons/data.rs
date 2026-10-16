@@ -111,25 +111,13 @@ pub enum Recoil {
     None,
 }
 
-/// Follow-up bullets of a burst (Glock, FAMAS).
-#[derive(Clone, Copy, Debug)]
-pub struct Burst {
-    pub damage: i32,
-    pub range_mod: f32,
-    /// Fixed spread; None = reuse the first bullet's spread.
-    pub spread: Option<f32>,
-    /// Delay before the 2nd and 3rd bullet (0 = next tick).
-    pub delays: [f32; 2],
-}
-
-/// One firing mode (silenced/unsilenced, semi/burst).
+/// One firing mode (silenced or not).
 #[derive(Clone, Copy, Debug)]
 pub struct Mode {
     pub damage: i32,
     pub range_mod: f32,
     pub cycle: f32,
     pub spread: Spread,
-    pub burst: Option<Burst>,
 }
 
 /// What the secondary button does.
@@ -223,7 +211,7 @@ const fn rifle(air: (f32, f32), fast: (f32, f32), still: (f32, f32)) -> Spread {
     Spread::Rifle { air, fast_speed: RIFLE_SPEED, fast, still }
 }
 const fn one(damage: i32, range_mod: f32, cycle: f32, spread: Spread) -> Mode {
-    Mode { damage, range_mod, cycle, spread, burst: None }
+    Mode { damage, range_mod, cycle, spread }
 }
 
 /// Base gun with the fields most guns share; each entry overrides what differs.
@@ -262,15 +250,8 @@ pub static WEAPONS: &[Def] = &[
             armor_factor: 1.05,
             modes: &[
                 one(25, 0.75, 0.15, pistol_spread(1.0, 0.165, 0.075, 0.1)),
-                Mode {
-                    damage: 25,
-                    range_mod: 0.75,
-                    cycle: 0.5,
-                    spread: pistol_spread(1.2, 0.185, 0.095, 0.3),
-                    burst: Some(Burst { damage: 18, range_mod: 0.9, spread: Some(0.05), delays: [0.0, 0.0] }),
-                },
             ],
-            secondary: Secondary::Toggle(0.3),
+            // No burst mode (decided 2026-10-16): right click does nothing.
             accuracy: pistol_acc(0.325, 0.275, 0.6, 0.9),
             semi_auto: true,
             ..BASE
@@ -560,15 +541,8 @@ pub static WEAPONS: &[Def] = &[
             modes: &[
                 // Auto adds 0.01 to every spread term.
                 one(34, 0.96, 0.0825, rifle((0.04, 0.3), (0.04, 0.07), (0.01, 0.02))),
-                Mode {
-                    damage: 34,
-                    range_mod: 0.96,
-                    cycle: 0.55,
-                    spread: rifle((0.03, 0.3), (0.03, 0.07), (0.0, 0.02)),
-                    burst: Some(Burst { damage: 30, range_mod: 0.96, spread: None, delays: [0.05, 0.1] }),
-                },
             ],
-            secondary: Secondary::Toggle(0.3),
+            // No burst mode (decided 2026-10-16): right click does nothing.
             accuracy: auto(3, 215, 0.3, 1.0, 0.2, 0.0),
             recoil: Recoil::Kick { smg_order: false, sets: FAMAS_KICK },
             ..BASE

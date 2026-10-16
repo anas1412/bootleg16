@@ -161,7 +161,7 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
                     mode: e.get("rendermode").and_then(|v| v.parse().ok()).unwrap_or(0),
                     amt: e.get("renderamt").and_then(|v| v.parse::<f32>().ok()).unwrap_or(255.0) / 255.0,
                 };
-                if matches!(class, "func_door" | "func_door_rotating") {
+                if matches!(class, "func_door" | "func_door_rotating" | "func_button" | "func_rot_button") {
                     mover_models.push(i);
                     models.push((i, [0.0; 3], mover_models.len()));
                 } else if class == "func_breakable" || matches!(render.mode, 1 | 2 | 3 | 5) {

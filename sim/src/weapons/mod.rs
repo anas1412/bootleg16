@@ -36,7 +36,7 @@ pub struct GunState {
     pub id: Id,
     pub clip: u32,
     pub reserve: u32,
-    /// Index into the gun's modes (silencer on, burst on).
+    /// Index into the gun's modes (silencer on).
     pub mode: u8,
     /// Zoom step: 0 = none, n = `Secondary::Zoom` entry n-1.
     pub zoom: u8,
@@ -56,8 +56,6 @@ pub struct GunState {
     /// Shotguns: 0 idle, 1 between shells, 2 inserting.
     shell_state: u8,
     shell_at: f64,
-    /// Pending burst follow-ups: (bullets left, time of next, spread).
-    burst: Option<(u8, f64, f32)>,
 }
 
 impl GunState {
@@ -81,7 +79,6 @@ impl GunState {
             reloading: false,
             shell_state: 0,
             shell_at: 0.0,
-            burst: None,
         }
     }
 
@@ -279,7 +276,6 @@ impl Loadout {
         }?;
         let mut g = gun;
         g.reloading = false;
-        g.burst = None;
         g.zoom = 0;
         g.resume_zoom = 0;
         g.shell_state = 0;
@@ -373,7 +369,7 @@ impl Loadout {
         }
     }
 
-    /// Holster the current weapon (cancels a reload or burst) and deploy another.
+    /// Holster the current weapon (cancels a reload) and deploy another.
     pub fn switch_to(&mut self, slot: Slot, now: f64) {
         if !self.has(slot) {
             return;
@@ -381,7 +377,6 @@ impl Loadout {
         if let Some(g) = self.active_gun_mut() {
             g.reloading = false;
             g.shell_state = 0;
-            g.burst = None;
             g.zoom = 0;
             g.resume_zoom = 0;
         }

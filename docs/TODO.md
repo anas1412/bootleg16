@@ -23,9 +23,9 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] ⚠ Flash white-out and HE fireball not yet checked on screen (only the smoke was)
 - [x] Tagging: hits slow you (0.5, or 0.65 large flinch) and kick the view, as cs.so (`player::hit_by`)
 - [x] Knife: GoldSrc line then crouch-box sweep (`trace_melee`); the 8-corner search only moves the impact point, skipped
-- [ ] Shield
 - [x] Breakables: shot/blast damage, dust2/train crates break with the bomb, restored each round
-- [ ] `func_button`; breakable gibs (only coloured debris now)
+- [x] `func_button` / `func_rot_button` (E or touch, fires its target: sim/src/doors.rs)
+- [ ] Breakable gibs (only coloured debris now)
 - [x] CS 1.6 keys: B buy menu (CS layout per side, 0 cancel), Q last weapon, wheel, G drop,
       `,`/`.` ammo, Tab scoreboard; drop/pickup on the ground; gun drops on death
 - [ ] hud_fastswitch 0 (CS default: number keys show a selection, mouse1 confirms); only fastswitch 1 now
@@ -35,7 +35,6 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Bullet holes + dust for every bullet/pellet (server sends wall hits), blood spray (bigger on headshots), blood on the wall behind
 - [ ] Own bullet holes predicted locally (now they come back from the server, one ping late); CS decal textures from decals.wad; sparks on metal
 - [x] Kill feed, round and bomb news reliable (numbered, resent until acked); team join resent until confirmed
-- [ ] ⚠ Shotgun ground-recoil ranges (source-only); FAMAS/Glock follow-up timings per spec
 
 ### Rounds and economy (`docs/RULES.md`)
 - [x] Teams (T/CT spawns), round flow: warmup, freeze time, buy time, round time, round end (net/src/rounds.rs, server/round.rs)
@@ -53,7 +52,6 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Defuse times 10 s / 5 s with kit (ReGameDLL `DefuseBombStart`)
 - [x] Living Ts get no money when time runs out (after `#Target_Saved`)
 - [x] Team buy restrictions match `CanBuyWeaponByMaptype` (de_ maps)
-- [ ] ⚠ Hostage money formulas (only for cs_ maps, not milestone 1)
 
 ### Players and bots
 - [x] ~~Bots~~: decided 2026-10-16: no bots, ever. Only standing dummies in practice.
@@ -72,7 +70,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] FPS + ping counter (top left); Max FPS and VSync settings
 - [x] CS2 "Show Team ID Through Walls": pip + name over teammates through walls (client/src/teammates.rs; Settings: off / pips / pips + names). Safe: hidden enemies are never sent
 - [ ] Team IDs: health/equipment like CS2's option 2; fade with distance
-- [ ] Settings: key binds (crosshair style done; FOV stays fixed at 90° at 4:3 for fairness, as in CS)
+- [x] Settings: key binds (crosshair style done; FOV stays fixed at 90° at 4:3 for fairness, as in CS)
 - [x] Viewmodel GPU-skinned (mirrored bones through a reflection transform)
 - [ ] Try drawing the viewmodel without a second camera (depth range trick)
 - [x] Spawn view angle from the spawn point
@@ -124,10 +122,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Muzzle flash at the model's muzzle attachment (own view model and other players)
 
 ### Movement leftovers (`docs/MOVEMENT.md`)
-- [ ] Water jump-out onto ledges (`PM_CheckWaterJump`, needs hull 2): no pool map has water, so only with a water map
-- [ ] Doors pushing players; door sounds
+- [ ] Door sounds
 - [x] Footstep timing as `PM_UpdateStepSound` (3D speed over 150; 300 ms, ladder 350, wading 600, +100 crouched or on a ladder; 400 ms wait after moving slowly)
-- [ ] ⚠ Ladder face direction from the ladder box (fine for stock ladders)
 
 ### Rendering
 - [x] Sky: the map's skybox (TGA faces resampled into a cubemap)

@@ -157,17 +157,6 @@ fn deploy_time_blocks_shooting() {
 }
 
 #[test]
-fn glock_burst_fires_three_with_weaker_follow_ups() {
-    let mut s = Sim::with(Id::Glock);
-    s.step(|c| c.attack2 = true); // burst mode
-    s.idle(0.5);
-    let shots = s.hold(0.1, attack);
-    let dmg: Vec<i32> = shots.iter().map(|sh| sh.damage).collect();
-    assert_eq!(dmg, vec![25, 18, 18]);
-    assert_eq!(s.gun().clip, 17);
-}
-
-#[test]
 fn m4_silencer_takes_two_seconds_and_changes_damage() {
     let mut s = Sim::with(Id::M4a1);
     assert_eq!(s.step(attack).shots[0].damage, 32);

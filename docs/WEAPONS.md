@@ -5,6 +5,9 @@ the knife in bootleg16. It describes the **original** CS 1.6 server behaviour.
 Prices, ammo prices and the round economy live in `RULES.md` and are not
 repeated here.
 
+**Not in bootleg16 (decided 2026-10-16):** the Glock and FAMAS burst modes (right click does
+nothing on them), the tactical shield, and the shotguns. Their specs below stay for reference.
+
 ## 0. Sources, legend, license
 
 Inputs:

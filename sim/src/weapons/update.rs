@@ -65,37 +65,12 @@ impl Loadout {
         let gd = gun(g.id).unwrap();
         let mut next_attack = None;
 
-        // 1. Burst follow-up bullets.
-        if let Some((left, at, spread)) = g.burst {
-            let burst = gd.modes[g.mode as usize].burst.unwrap();
-            if c.now >= at && g.clip > 0 {
-                g.clip -= 1;
-                out.shots.push(Shot {
-                    weapon: g.id,
-                    damage: burst.damage,
-                    range_mod: burst.range_mod,
-                    penetration: gd.penetration,
-                    distance: 8192.0,
-                    bullet: gd.bullet,
-                    spread: burst.spread.unwrap_or(spread),
-                    angles: [c.pitch + punch[0], c.yaw + punch[1]],
-                    side_offset: 0.0,
-                    seed: c.seed,
-                    pellets: None,
-                    silenced: false,
-                });
-                let idx = 3 - left as usize; // which delay comes next
-                g.burst = if left > 1 { Some((left - 1, c.now + burst.delays.get(idx).copied().unwrap_or(0.0) as f64, spread)) } else { None };
-            } else if g.clip == 0 {
-                g.burst = None;
-            }
-        }
-        // 2. AWP/Scout zoom comes back once the bolt is done.
+        // 1. AWP/Scout zoom comes back once the bolt is done.
         if g.resume_zoom > 0 && c.now >= g.next_primary {
             g.zoom = g.resume_zoom;
             g.resume_zoom = 0;
         }
-        // 3. Reload finishes: ammo moves only now, so cancelling loses nothing.
+        // 2. Reload finishes: ammo moves only now, so cancelling loses nothing.
         if g.reloading && gd.pellets.is_none() {
             let moved = (gd.clip - g.clip).min(g.reserve);
             g.clip += moved;
@@ -103,7 +78,7 @@ impl Loadout {
             g.reloading = false;
         }
 
-        // 4. Exactly one of: secondary, primary, reload, idle.
+        // 3. Exactly one of: secondary, primary, reload, idle.
         if c.attack2 && gd.secondary != Secondary::None && c.now >= g.next_secondary {
             match gd.secondary {
                 Secondary::Toggle(t) => {
@@ -119,7 +94,7 @@ impl Loadout {
                 }
                 Secondary::None => {}
             }
-        } else if c.attack && c.now >= g.next_primary && c.can_shoot && g.burst.is_none() {
+        } else if c.attack && c.now >= g.next_primary && c.can_shoot {
             if gd.pellets.is_some() && g.shell_state != 0 {
                 g.shell_state = 0; // firing interrupts a shotgun reload
             }
@@ -127,7 +102,7 @@ impl Loadout {
             if gd.pellets.is_some() && g.clip == 0 && out.dry_fire {
                 g.next_primary = c.now + 0.15;
             }
-        } else if c.reload && !c.attack && !g.reloading && g.burst.is_none() {
+        } else if c.reload && !c.attack && !g.reloading {
             next_attack = start_reload(&mut g, gd, c.now);
         } else if !c.attack && !c.attack2 {
             // Idle: shots-fired decay, semi-auto release, auto reload.

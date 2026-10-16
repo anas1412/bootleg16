@@ -1,8 +1,11 @@
-//! Doors (`func_door`, `func_door_rotating`) and the touch zones that open them
-//! (`trigger_multiple`). Behaviour follows GoldSrc's door rules: named doors only
-//! open when triggered, unnamed ones open on touch, use-only doors open with +use,
-//! rotating doors swing away from whoever opened them, and a closing door that
-//! hits a player goes back up.
+//! Doors (`func_door`, `func_door_rotating`), buttons (`func_button`, `func_rot_button`) and
+//! the touch zones that open them (`trigger_multiple`). Behaviour follows GoldSrc's door
+//! rules: named doors only open when triggered, unnamed ones open on touch, use-only doors
+//! open with +use, rotating doors swing away from whoever opened them, and a closing door
+//! that hits a player goes back up. A button moves in when used (or touched, if it's
+//! touch-only), fires its target once it's in, and comes back out after `wait`.
+//! +use picks as CS 1.6's `PlayerUse` does: the usable thing most in front of you, within
+//! 64 units of your centre and 45 degrees of your view.
 use crate::{add, dot, length, scale, sub, Vec3};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -17,8 +20,13 @@ const SF_ONE_WAY: u32 = 16;
 const SF_ROTATE_X: u32 = 64;
 const SF_ROTATE_Y: u32 = 128;
 
-/// How far +use reaches.
+// Button spawnflags (toggle is the same bit as the doors' `SF_TOGGLE`).
+const SF_BUTTON_DONTMOVE: u32 = 1;
+const SF_BUTTON_TOUCH_ONLY: u32 = 256;
+
+/// `PlayerUse`: `MAX_PLAYER_USE_RADIUS` (your centre to the thing's) and `VIEW_FIELD_NARROW`.
 const USE_RANGE: f32 = 64.0;
+const USE_CONE: f32 = 0.7;
 
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum DoorState {
@@ -48,6 +56,8 @@ pub struct Door {
     flags: u32,
     /// 0 = closed .. 1 = open.
     progress: f32,
+    /// A button: what it fires when pressed in.
+    button: Option<Button>,
     /// Rotating doors: +1 or -1, picked so the door swings away from the opener.
     sign: f32,
     pub state: DoorState,
@@ -91,6 +101,15 @@ impl Door {
     }
 
     fn activate(&mut self, opener: Option<Vec3>) {
+        if self.button.is_some() {
+            // `ButtonUse`: not while moving; pressed in, only a toggle button comes back out.
+            match self.state {
+                DoorState::Closed => self.state = DoorState::Opening,
+                DoorState::Open(t) if self.flags & SF_TOGGLE != 0 && t.is_infinite() && self.wait >= 0.0 => self.state = DoorState::Closing,
+                _ => {}
+            }
+            return;
+        }
         match self.state {
             DoorState::Open(_) if self.flags & SF_TOGGLE != 0 || self.wait < 0.0 => self.state = DoorState::Closing,
             DoorState::Open(_) | DoorState::Opening => {}
@@ -102,6 +121,22 @@ impl Door {
                 }
                 self.state = DoorState::Opening;
             }
+        }
+    }
+
+    /// Opened with +use: use-only doors, and buttons that aren't touch-only.
+    fn usable(&self) -> bool {
+        match self.button {
+            Some(_) => self.flags & SF_BUTTON_TOUCH_ONLY == 0,
+            None => self.flags & SF_USE_ONLY != 0,
+        }
+    }
+
+    /// Opened by walking into it: unnamed doors that aren't use-only, touch-only buttons.
+    fn touch_opens(&self) -> bool {
+        match self.button {
+            Some(_) => self.flags & SF_BUTTON_TOUCH_ONLY != 0,
+            None => self.name.is_none() && self.flags & SF_USE_ONLY == 0,
         }
     }
 
@@ -126,6 +161,13 @@ pub struct DoorNet {
     pub progress: f32,
     pub sign: f32,
     pub state: DoorState,
+}
+
+/// What a button fires (by name: doors open), after `delay`.
+#[derive(Clone, Debug)]
+struct Button {
+    target: String,
+    delay: f32,
 }
 
 /// A `trigger_multiple`: touching it fires its target (after `delay`), then rests `wait` seconds.
@@ -206,26 +248,6 @@ fn overlaps(amin: Vec3, amax: Vec3, bmin: Vec3, bmax: Vec3) -> bool {
     (0..3).all(|i| amin[i] <= bmax[i] && amax[i] >= bmin[i])
 }
 
-/// Ray vs box: distance along `dir` to the box, if within `range`.
-fn ray_box(origin: Vec3, dir: Vec3, mins: Vec3, maxs: Vec3, range: f32) -> Option<f32> {
-    let (mut t0, mut t1) = (0.0f32, range);
-    for i in 0..3 {
-        if dir[i].abs() < 1e-6 {
-            if origin[i] < mins[i] || origin[i] > maxs[i] {
-                return None;
-            }
-            continue;
-        }
-        let (a, b) = ((mins[i] - origin[i]) / dir[i], (maxs[i] - origin[i]) / dir[i]);
-        t0 = t0.max(a.min(b));
-        t1 = t1.min(a.max(b));
-        if t0 > t1 {
-            return None;
-        }
-    }
-    Some(t0)
-}
-
 impl Doors {
     pub fn from_bsp(bsp: &goldsrc::bsp::Bsp) -> Doors {
         let mut out = Doors::default();
@@ -243,8 +265,12 @@ impl Doors {
                     delay: num(&e, "delay", 0.0),
                     ready_at: 0.0,
                 }),
-                "func_door" | "func_door_rotating" => {
-                    let rotating = class == "func_door_rotating";
+                "func_door" | "func_door_rotating" | "func_button" | "func_rot_button" => {
+                    let rotating = matches!(class, "func_door_rotating" | "func_rot_button");
+                    let button = matches!(class, "func_button" | "func_rot_button");
+                    // Buttons: `lip` 4, speed 40 and wait 1 when not set (0); `wait` -1 stays in.
+                    let or = |v: f32, d: f32| if v == 0.0 { d } else { v };
+                    let lip = if button { or(num(&e, "lip", 0.0), 4.0) } else { num(&e, "lip", 0.0) };
                     let open_delta = if rotating {
                         let dist = num(&e, "distance", 90.0);
                         if flags & SF_ROTATE_X != 0 {
@@ -259,7 +285,11 @@ impl Doors {
                         let dir = move_dir(&e);
                         let size = sub(m.maxs, m.mins);
                         let span = (dir[0] * (size[0] - 2.0)).abs() + (dir[1] * (size[1] - 2.0)).abs() + (dir[2] * (size[2] - 2.0)).abs();
-                        scale(dir, span - num(&e, "lip", 0.0))
+                        if button && (span - lip < 1.0 || flags & SF_BUTTON_DONTMOVE != 0) {
+                            [0.0; 3]
+                        } else {
+                            scale(dir, span - lip)
+                        }
                     };
                     let mut door = Door {
                         model,
@@ -269,14 +299,16 @@ impl Doors {
                         maxs: m.maxs,
                         rotating,
                         open_delta,
-                        speed: num(&e, "speed", 100.0).max(1.0),
-                        wait: num(&e, "wait", 3.0),
-                        flags,
+                        speed: if button { or(num(&e, "speed", 0.0), 40.0) } else { num(&e, "speed", 100.0) }.max(1.0),
+                        wait: if button { or(num(&e, "wait", 0.0), 1.0) } else { num(&e, "wait", 3.0) },
+                        // A button's flags only share the toggle and rotation bits with doors'.
+                        flags: if button { flags & (SF_TOGGLE | SF_REVERSE | SF_ROTATE_X | SF_ROTATE_Y | SF_BUTTON_TOUCH_ONLY) } else { flags },
                         progress: 0.0,
+                        button: button.then(|| Button { target: e.get("target").cloned().unwrap_or_default(), delay: num(&e, "delay", 0.0) }),
                         sign: if rotating && flags & SF_REVERSE != 0 { -1.0 } else { 1.0 },
                         state: DoorState::Closed,
                     };
-                    if flags & SF_START_OPEN != 0 {
+                    if !button && flags & SF_START_OPEN != 0 {
                         door.progress = 1.0;
                         door.state = DoorState::Open(f32::INFINITY);
                     }
@@ -328,25 +360,29 @@ impl Doors {
             }
         }
 
-        // Players touching or using doors.
+        // Players touching or using doors and buttons.
         for a in actors {
             let centre = scale(add(a.mins, a.maxs), 0.5);
             if a.using {
+                // `PlayerUse`: the usable thing whose centre is most in front of you, in reach.
                 let hit = self
                     .doors
                     .iter()
                     .enumerate()
-                    .filter(|(_, d)| d.flags & SF_USE_ONLY != 0)
+                    .filter(|(_, d)| d.usable())
                     .filter_map(|(i, d)| {
                         let (lo, hi) = d.bounds();
-                        ray_box(a.eye, a.forward, lo, hi, USE_RANGE).map(|t| (i, t))
+                        let mid = scale(add(lo, hi), 0.5);
+                        let to = sub(mid, a.eye);
+                        let facing = dot(to, a.forward) / length(to).max(1e-3);
+                        (length(sub(mid, centre)) <= USE_RANGE && facing > USE_CONE).then_some((i, facing))
                     })
-                    .min_by(|x, y| x.1.total_cmp(&y.1));
+                    .max_by(|x, y| x.1.total_cmp(&y.1));
                 if let Some((i, _)) = hit {
                     self.doors[i].activate(Some(centre));
                 }
             }
-            for d in self.doors.iter_mut().filter(|d| d.name.is_none() && d.flags & SF_USE_ONLY == 0) {
+            for d in self.doors.iter_mut().filter(|d| d.touch_opens()) {
                 let (lo, hi) = d.bounds();
                 let grow = |v: Vec3, s: f32| add(v, [s; 3]);
                 if matches!(d.state, DoorState::Closed | DoorState::Closing) && overlaps(a.mins, a.maxs, grow(lo, -1.0), grow(hi, 1.0)) {
@@ -363,6 +399,10 @@ impl Doors {
                     d.progress = (d.progress + step).min(1.0);
                     if d.progress >= 1.0 {
                         d.state = DoorState::Open(if d.wait < 0.0 || d.flags & SF_TOGGLE != 0 { f32::INFINITY } else { d.wait });
+                        // `TriggerAndWait`: a button pressed all the way in fires its target.
+                        if let Some(b) = &d.button {
+                            self.pending.push((now + b.delay, b.target.clone()));
+                        }
                     }
                 }
                 DoorState::Open(t) => {
@@ -374,16 +414,79 @@ impl Doors {
                 DoorState::Closing => {
                     let before = d.progress;
                     d.progress = (d.progress - step).max(0.0);
-                    if actors.iter().any(|a| blocked(d, a)) {
+                    if d.button.is_none() && actors.iter().any(|a| blocked(d, a)) {
                         // Hit a player: go back up instead of crushing them.
                         d.progress = before;
                         d.state = DoorState::Opening;
                     } else if d.progress <= 0.0 {
                         d.state = DoorState::Closed;
+                        // `ButtonBackHome`: a toggle button fires again when it comes back out.
+                        if let Some(b) = d.button.as_ref().filter(|_| d.flags & SF_TOGGLE != 0) {
+                            self.pending.push((now + b.delay, b.target.clone()));
+                        }
                     }
                 }
                 DoorState::Closed => {}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn panel(model: usize, name: Option<&str>, button: Option<&str>, at: Vec3, open_delta: Vec3) -> Door {
+        Door {
+            model,
+            name: name.map(String::from),
+            pivot: at,
+            mins: [-2.0, -8.0, -8.0],
+            maxs: [2.0, 8.0, 8.0],
+            rotating: false,
+            open_delta,
+            speed: 40.0,
+            wait: 1.0,
+            flags: 0,
+            progress: 0.0,
+            sign: 1.0,
+            state: DoorState::Closed,
+            button: button.map(|t| Button { target: t.into(), delay: 0.0 }),
+        }
+    }
+
+    /// Someone standing `back` units in front of the button (at x = 0), looking along `forward`.
+    fn actor(back: f32, forward: Vec3, using: bool) -> Actor {
+        let o = [-back, 0.0, 36.0];
+        Actor { mins: add(o, [-16.0, -16.0, -36.0]), maxs: add(o, [16.0, 16.0, 36.0]), eye: add(o, [0.0, 0.0, 17.0]), forward, using }
+    }
+
+    #[test]
+    fn a_button_pressed_with_use_opens_its_door_then_pops_back_out() {
+        let mut d = Doors { doors: vec![panel(1, None, Some("gate"), [0.0, 0.0, 50.0], [4.0, 0.0, 0.0]), panel(2, Some("gate"), None, [300.0, 0.0, 50.0], [0.0, 0.0, 100.0])], ..Default::default() };
+        let tick = |d: &mut Doors, a: Actor| d.update(0.01, &[a], |_, _| false);
+        // Looking away, or too far: nothing.
+        tick(&mut d, actor(40.0, [-1.0, 0.0, 0.0], true));
+        tick(&mut d, actor(90.0, [1.0, 0.0, 0.0], true));
+        assert_eq!(d.doors[0].state, DoorState::Closed);
+        // Facing it, close enough: it goes in (4 units at 40/s), fires, and the gate opens.
+        tick(&mut d, actor(40.0, [1.0, 0.0, 0.0], true));
+        assert_eq!(d.doors[0].state, DoorState::Opening);
+        for _ in 0..12 {
+            tick(&mut d, actor(40.0, [1.0, 0.0, 0.0], false));
+        }
+        assert!(matches!(d.doors[0].state, DoorState::Open(_)), "{:?}", d.doors[0].state);
+        assert_eq!(d.doors[1].state, DoorState::Opening, "the button fired its target");
+        // Pressing again while it's in does nothing; after `wait` (1 s) it comes back out.
+        tick(&mut d, actor(40.0, [1.0, 0.0, 0.0], true));
+        for _ in 0..120 {
+            tick(&mut d, actor(40.0, [1.0, 0.0, 0.0], false));
+        }
+        assert_eq!(d.doors[0].state, DoorState::Closed);
+        // Touching a use-button does nothing.
+        let mut touch = actor(0.0, [1.0, 0.0, 0.0], false);
+        touch.mins[0] = -2.0;
+        tick(&mut d, touch);
+        assert_eq!(d.doors[0].state, DoorState::Closed);
     }
 }
