@@ -1,7 +1,7 @@
 //! CS2's "Show Team ID Through Walls": a team-coloured pip, and optionally the name, over
 //! each teammate's head, seen through walls, so you know where your team is without a radar.
 //! Settings: off / pips / names and health (`Settings::team_ids`). Markers fade with distance.
-//! With names on, a mic and a live level sit before the name while that teammate talks
+//! With names on, a mic shows above the name while that teammate talks
 //! (design/mockups/ui `mateTag`).
 //!
 //! Safe against "make everyone a teammate" memory hacks: the server decides who your team is
@@ -26,9 +26,7 @@ impl Plugin for TeammatesPlugin {
 #[derive(Component)]
 struct TeamId {
     id: u8,
-    talk: Entity,
     mic: Entity,
-    bars: [Entity; 4],
     name: Entity,
     track: Entity,
     fill: Entity,
@@ -42,6 +40,9 @@ const FAR: f32 = 2600.0;
 const FAINTEST: f32 = 0.4;
 /// The marker's width; it's centred over the head.
 const WIDTH: f32 = 200.0;
+/// The top of a standing player model's head over their origin (the hull's middle; the model
+/// stands a little under the 72-unit hull).
+const HEAD: f32 = 26.0;
 
 #[allow(clippy::too_many_arguments)]
 fn team_ids(
@@ -70,18 +71,20 @@ fn team_ids(
             commands.entity(e).despawn();
             continue;
         };
-        let head = Vec3::from(map::to_y_up([o.origin[0], o.origin[1], o.origin[2] + 44.0]));
+        let head = Vec3::from(map::to_y_up([o.origin[0], o.origin[1], o.origin[2] + HEAD]));
         // near teammates read clearly, far ones step back so they don't crowd the screen
         let fade = (1.0 - (cam.1.translation().distance(head) - NEAR) / (FAR - NEAR)).clamp(FAINTEST, 1.0);
         let c = color.with_alpha(fade);
+        let talks = fake || talking.as_ref().is_some_and(|tk| tk.level(t.id, now).is_some());
         match cam.0.world_to_viewport(cam.1, head) {
             Ok(p) => {
                 if let Ok(mut n) = nodes.get_mut(e) {
-                    // the pip's tip sits just over the head
-                    let (left, top) = (px(p.x - WIDTH / 2.0), px(p.y - if names_on { 52.0 } else { 18.0 }));
-                    if n.left != left || n.top != top {
+                    // hangs from the head and grows upward: the pip's tip just over it
+                    let h = cam.0.logical_viewport_size().map_or(0.0, |s| s.y);
+                    let (left, bottom) = (px(p.x - WIDTH / 2.0), px(h - p.y + 4.0));
+                    if n.left != left || n.bottom != bottom {
                         n.left = left;
-                        n.top = top;
+                        n.bottom = bottom;
                     }
                 }
                 v.set_if_neq(Visibility::Inherited);
@@ -91,10 +94,9 @@ fn team_ids(
                 continue;
             }
         }
-        let level = if fake { Some(0.5 + 0.4 * (now * 7.0).sin().abs()) } else { talking.as_ref().and_then(|tk| tk.level(t.id, now)) };
         // health (the server sends it for teammates): red when low
         let hp = o.mate.map(|m| (m.health as f32 / 100.0).clamp(0.0, 1.0));
-        for (part, d) in [(t.name, names_on), (t.talk, names_on && level.is_some()), (t.track, names_on && hp.is_some())] {
+        for (part, d) in [(t.name, names_on), (t.mic, names_on && talks), (t.track, names_on && hp.is_some())] {
             if let Ok(mut n) = nodes.get_mut(part) {
                 if n.display != show(d) {
                     n.display = show(d);
@@ -107,17 +109,6 @@ fn team_ids(
         if let Ok(mut img) = images.get_mut(t.mic) {
             if img.color != c {
                 img.color = c;
-            }
-        }
-        for (i, b) in t.bars.iter().enumerate() {
-            let h = px(2.0 + (level.unwrap_or(0.0).min(1.0) - i as f32 * 0.15).max(0.0) * 12.0);
-            if let Ok(mut n) = nodes.get_mut(*b) {
-                if n.height != h {
-                    n.height = h;
-                }
-            }
-            if let Ok(mut bg) = colors.get_mut(*b) {
-                bg.set_if_neq(BackgroundColor(c));
             }
         }
         if let Some(hp) = hp {
@@ -143,12 +134,8 @@ fn team_ids(
         // dark shadows so every part reads on any wall
         let shadow = TextShadow { offset: Vec2::splat(1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.9) };
         let dark = Color::srgba(0.0, 0.0, 0.0, 0.6);
-        let mic_e = commands.spawn((ImageNode { image: mic.0.clone(), color, ..default() }, Node { width: px(16), height: px(16), ..default() })).id();
-        let bars: [Entity; 4] = std::array::from_fn(|_| commands.spawn((Node { width: px(3), height: px(2), border_radius: BorderRadius::all(px(1)), ..default() }, BackgroundColor(color))).id());
-        let level = commands.spawn(Node { height: px(14), align_items: AlignItems::Center, column_gap: px(2), ..default() }).add_children(&bars).id();
-        let talk = commands.spawn(Node { display: Display::None, align_items: AlignItems::Center, column_gap: px(4), ..default() }).add_children(&[mic_e, level]).id();
+        let mic_e = commands.spawn((ImageNode { image: mic.0.clone(), color, ..default() }, Node { display: Display::None, width: px(18), height: px(18), margin: UiRect::bottom(px(4)), ..default() })).id();
         let name_e = commands.spawn((kit_text(name, 18.0, color, &kit.text), shadow)).id();
-        let row = commands.spawn(Node { align_items: AlignItems::Center, column_gap: px(6), ..default() }).add_children(&[talk, name_e]).id();
         let fill = commands.spawn((Node { width: percent(100), height: percent(100), ..default() }, BackgroundColor(color))).id();
         let track = commands
             .spawn((Node { display: Display::None, width: px(64), height: px(5), margin: UiRect::top(px(4)), border_radius: BorderRadius::all(px(2)), overflow: Overflow::clip(), ..default() }, BackgroundColor(dark)))
@@ -165,11 +152,11 @@ fn team_ids(
             .id();
         commands
             .spawn((
-                TeamId { id: o.id, talk, mic: mic_e, bars, name: name_e, track, fill, pip },
+                TeamId { id: o.id, mic: mic_e, name: name_e, track, fill, pip },
                 Node { position_type: PositionType::Absolute, width: px(WIDTH), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, ..default() },
                 Visibility::Hidden,
                 DespawnOnExit(AppState::InGame),
             ))
-            .add_children(&[row, track, pip]);
+            .add_children(&[mic_e, name_e, track, pip]);
     }
 }

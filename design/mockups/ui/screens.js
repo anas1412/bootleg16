@@ -220,16 +220,16 @@ const voiceRow = (name, color, ch, you) => `<div class="vc panel hud tune${you ?
 // A teammate's tag over their head: name (mic and live level when they talk), health under it,
 // the pip pointing down at them. Far teammates fade (game: teammates.rs).
 const mateTag = (x, y, name, hp, talking, fade = 1) => `<div class="abs mtag" style="left:${x}px;top:${y}px;opacity:${fade}">
-  <div class="mt-name">${talking ? `<i class="spr" style="--s:${MIC};width:14px;height:14px;color:var(--ct-color)"></i><span class="mt-lv">${[5, 10, 7].map(h => `<i style="height:${h}px"></i>`).join('')}</span>` : ''}<span>${name}</span></div>
+  ${talking ? `<i class="spr" style="--s:${MIC};width:18px;height:18px;color:var(--ct-color);margin-bottom:2px"></i>` : ''}<div class="mt-name"><span>${name}</span></div>
   <div class="mt-hp"><i style="width:${hp}%;${hp <= 25 ? 'background:var(--bad)' : ''}"></i></div><i class="mt-pip"></i></div>`;
 
 // Spectating (game: spectate.rs + hud): the same corners as playing, showing who you watch, and
 // one plate at the bottom: who it is, their game this match, how to switch.
 function spectate() {
   const corners = hud().replace(/<div class="abs keep"[\s\S]*?<\/div><\/div>\s*<\/div>/, '');
-  // not yours or not sent while watching: your money, the crosshair, their ammo
-  return `<style>.stage #money, .stage .xhair, .stage #ammo > :not(.wpn):not(.edge) { display: none !important; }</style>${corners}
-  ${mateTag(1180, 380, 'kova', 64, true)}${mateTag(1490, 410, 'vera', 18, false, .55)}
+  // not sent while watching: the crosshair, their ammo
+  return `<style>.stage .xhair, .stage #ammo > :not(.wpn):not(.edge) { display: none !important; }</style>${corners}
+  ${mateTag(1180, 358, 'kova', 64, true)}${mateTag(1490, 410, 'vera', 18, false, .55)}
   <div class="abs spec tune" style="left:50%;bottom:var(--safe);transform:translateX(-50%)">
     <div class="label" style="color:var(--tx2)">Watching</div>
     <div class="sp-row"><span class="h3" style="color:var(--ct-color);text-transform:none">Ghost</span>
