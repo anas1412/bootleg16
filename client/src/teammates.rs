@@ -1,13 +1,13 @@
 //! CS2's "Show Team ID Through Walls": a team-coloured pip, and optionally the name, over
 //! each teammate's head, seen through walls, so you know where your team is without a radar.
-//! Settings: off / pips / names (`Settings::team_ids`).
+//! Settings: off / pips / names (`Settings::team_ids`). Markers fade with distance.
 //!
 //! Safe against "make everyone a teammate" memory hacks: the server decides who your team is
 //! and never sends enemies you can't see (server/visibility.rs), so there's nothing hidden to mark.
 use crate::game::{FlyCam, Frame, Walker};
 use crate::map;
 use crate::menu::{AppState, Settings};
-use crate::ui::{text, CT_COLOR, T_COLOR};
+use crate::ui::{kit_text, CT_COLOR, T_COLOR};
 use bevy::prelude::*;
 use net::protocol::Team;
 
@@ -25,6 +25,14 @@ struct TeamId(u8);
 
 #[derive(Component)]
 struct TeamName;
+#[derive(Component)]
+struct Pip;
+
+/// Distance (game units) where markers start to fade, where they reach their faintest, and how
+/// faint that is.
+const NEAR: f32 = 600.0;
+const FAR: f32 = 2600.0;
+const FAINTEST: f32 = 0.4;
 
 #[allow(clippy::type_complexity)]
 fn team_ids(
@@ -33,9 +41,12 @@ fn team_ids(
     settings: Res<Settings>,
     cam: Single<(&Camera, &GlobalTransform), With<FlyCam>>,
     mut ids: Query<(Entity, &TeamId, &mut Node, &mut Visibility, &Children)>,
-    mut names: Query<&mut Visibility, (With<TeamName>, Without<TeamId>)>,
+    mut names: Query<(&mut Visibility, &mut TextColor), (With<TeamName>, Without<TeamId>)>,
+    mut pips: Query<&mut BackgroundColor, With<Pip>>,
+    kit: Res<crate::ui::Kit>,
 ) {
     let mine = w.client.team();
+    let color = if mine == Team::Ct { CT_COLOR } else { T_COLOR };
     let on = settings.team_ids > 0 && mine != Team::Spectator;
     let mates: Vec<_> = if on { w.client.others().into_iter().filter(|o| o.alive && o.team == mine).collect() } else { Vec::new() };
     for (e, id, mut node, mut v, children) in &mut ids {
@@ -44,6 +55,8 @@ fn team_ids(
             continue;
         };
         let head = Vec3::from(map::to_y_up([o.origin[0], o.origin[1], o.origin[2] + 44.0]));
+        // near teammates read clearly, far ones step back so they don't crowd the screen
+        let fade = (1.0 - (cam.1.translation().distance(head) - NEAR) / (FAR - NEAR)).clamp(FAINTEST, 1.0);
         match cam.0.world_to_viewport(cam.1, head) {
             Ok(p) => {
                 node.left = px(p.x - 50.0);
@@ -55,12 +68,15 @@ fn team_ids(
             }
         }
         for c in children {
-            if let Ok(mut nv) = names.get_mut(*c) {
+            if let Ok((mut nv, mut tc)) = names.get_mut(*c) {
                 nv.set_if_neq(if settings.team_ids >= 2 { Visibility::Inherited } else { Visibility::Hidden });
+                tc.set_if_neq(TextColor(color.with_alpha(fade)));
+            }
+            if let Ok(mut bg) = pips.get_mut(*c) {
+                bg.set_if_neq(BackgroundColor(color.with_alpha(fade)));
             }
         }
     }
-    let color = if mine == Team::Ct { CT_COLOR } else { T_COLOR };
     for o in &mates {
         if ids.iter().any(|(_, t, ..)| t.0 == o.id) {
             continue;
@@ -75,9 +91,10 @@ fn team_ids(
             ))
             .with_children(|c| {
                 // Dark shadow (from `text`) and outline so they read on any wall.
-                c.spawn((TeamName, text(name, 15.0, color)));
+                c.spawn((TeamName, kit_text(name, 15.0, color, &kit.text), TextShadow { offset: Vec2::splat(1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.9) }));
                 // The pip: a small diamond pointing down at them.
                 c.spawn((
+                    Pip,
                     Node { width: px(10), height: px(10), margin: UiRect::top(px(3)), border: UiRect::all(px(2)), ..default() },
                     BackgroundColor(color),
                     BorderColor::all(Color::srgba(0.0, 0.0, 0.0, 0.9)),
