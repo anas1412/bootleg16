@@ -52,6 +52,9 @@ impl Server {
                         dropper_wait_until: tick + REPICK_TICKS,
                     });
                 }
+                if !fired.shots.is_empty() || fired.swing.is_some() {
+                    c.anim.shot(tick as f32 * TICK);
+                }
                 if !fired.shots.is_empty() || fired.swing.is_some() || fired.throw.is_some() {
                     pending.push(Pending { shooter: c.id, eye: c.state.movement.eye(), yaw: input.yaw, velocity: c.state.movement.velocity, fired, view_tick });
                 }
@@ -84,6 +87,13 @@ impl Server {
             }
         }
         self.world.update(TICK, &actors);
+        // Animate everyone as clients draw them (their hitboxes follow it).
+        let now = tick as f32 * TICK;
+        let model = self.assets.hitboxes.model().clone();
+        for c in self.clients.values_mut().filter(|c| c.vitals.alive()) {
+            let d = c.drive();
+            c.anim.step(&model, &d, now, TICK);
+        }
         for name in self.world.doors.take_fired() {
             self.events.push(GameEvent::Fired { name });
         }

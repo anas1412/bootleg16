@@ -53,6 +53,10 @@ pub struct Hitboxes {
     poses: std::collections::HashMap<&'static str, Poses>,
     /// For weapons whose pose the model doesn't have.
     fallback: &'static str,
+    /// The model's boxes (bone, group, bounds in the bone's space), for any pose (`trace_posed`).
+    boxes: Vec<(usize, HitGroup, Vec3, Vec3)>,
+    /// The model itself, to pose animated players (`trace_animated`).
+    model: std::sync::Arc<Model>,
 }
 
 /// Every weapon pose name (`sim::weapons::data::anim_ext`).
@@ -90,7 +94,8 @@ impl Hitboxes {
         };
         let poses: std::collections::HashMap<_, _> = EXTS.iter().filter_map(|e| Some((*e, set(e)?))).collect();
         let fallback = *EXTS.iter().find(|e| **e == fallback && poses.contains_key(*e))?;
-        Some(Hitboxes { poses, fallback })
+        let boxes = model.hitboxes.iter().filter(|h| h.group != 8).map(|h| (h.bone, HitGroup::from_mdl(h.group), h.mins, h.maxs)).collect();
+        Some(Hitboxes { poses, fallback, boxes, model: std::sync::Arc::new(model.clone()) })
     }
 
     /// First hitbox the ray `start + dir * t` (dir normalised, t <= `max`) enters, for a
@@ -112,6 +117,41 @@ impl Hitboxes {
             if let Some(t) = slab(o, d, b.mins, b.maxs, max) {
                 if best.is_none_or(|h| t < h.distance) {
                     best = Some(Hit { group: b.group, distance: t });
+                }
+            }
+        }
+        best
+    }
+}
+
+impl Hitboxes {
+    /// The player model the boxes come from.
+    pub fn model(&self) -> &std::sync::Arc<Model> {
+        &self.model
+    }
+
+    /// Like `trace`, posing the player as they're drawn first, but only when the ray comes near
+    /// them (their box, grown for arms and gun): posing costs more than a box test.
+    pub fn trace_animated(&self, anim: &(crate::anim::Anim, crate::anim::Drive, f32), origin: Vec3, crouched: bool, start: Vec3, dir: Vec3, max: f32) -> Option<Hit> {
+        let (lo, hi) = if crouched { ([-40.0, -40.0, -24.0], [40.0, 40.0, 40.0]) } else { ([-40.0, -40.0, -40.0], [40.0, 40.0, 48.0]) };
+        slab(crate::sub(start, origin), dir, lo, hi, max)?;
+        let (mut a, d, now) = anim.clone();
+        let posed = a.pose(&self.model, &d, now);
+        self.trace_posed(&posed, origin, start, dir, max)
+    }
+
+    /// Like `trace`, for a player posed as they're drawn (`anim::Anim::pose`: whatever they're
+    /// doing, legs and all), at `origin`, the model facing `posed.yaw`.
+    pub fn trace_posed(&self, posed: &crate::anim::Posed, origin: Vec3, start: Vec3, dir: Vec3, max: f32) -> Option<Hit> {
+        let (s, c) = (-posed.yaw).to_radians().sin_cos();
+        let rot = |v: Vec3| [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]];
+        let (ms, md) = (rot(crate::sub(start, origin)), rot(dir));
+        let mut best: Option<Hit> = None;
+        for &(bone, group, mins, maxs) in &self.boxes {
+            let Some(b) = posed.bones.get(bone) else { continue };
+            if let Some(t) = slab(b.inverse_apply(ms), b.inverse_rotate(md), mins, maxs, max) {
+                if best.is_none_or(|h| t < h.distance) {
+                    best = Some(Hit { group, distance: t });
                 }
             }
         }

@@ -144,6 +144,7 @@ impl Server {
             };
             let roll = ((tick.wrapping_mul(2_654_435_761) ^ victim as u32) % 2001) as f32 / 1000.0 - 1.0;
             player::hit_by(&mut c.state, weapon, group, damage, unarmored, roll);
+            c.anim.hurt(group, tick as f32 * TICK);
             if Some(c.team) != shooter_team {
                 dealt.push((p.shooter, health.min(c.vitals.health)));
                 c.stats.hurt_by.push((p.shooter, health.min(c.vitals.health)));

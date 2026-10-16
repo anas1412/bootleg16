@@ -268,7 +268,7 @@ fn walk(
     // penetration and players in the way); other players' come from server events.
     use sim::weapons::bullets::{fire_bullet, fire_pellets, view_vectors, Target};
     let me_id = w.client.id().unwrap_or(u8::MAX);
-    let targets: Vec<Target> = w.client.others().iter().filter(|o| o.alive).map(|o| Target { id: o.id, origin: o.origin, yaw: o.yaw, pitch: o.pitch, crouched: o.crouched, weapon: o.weapon }).collect();
+    let targets: Vec<Target> = w.client.others().iter().filter(|o| o.alive).map(|o| Target { id: o.id, origin: o.origin, yaw: o.yaw, pitch: o.pitch, crouched: o.crouched, weapon: o.weapon, anim: None }).collect();
     for shot in fired.shots {
         let eye = w.client.me().eye();
         let (f, _, _) = view_vectors(shot.angles[0], shot.angles[1]);

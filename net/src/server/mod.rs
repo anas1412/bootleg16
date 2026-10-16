@@ -114,6 +114,8 @@ struct Remote {
     deaths: u32,
     /// Scoreboard stats (see `Score`).
     stats: Stats,
+    /// How their model is animated (as clients draw it): hitboxes follow it.
+    anim: sim::anim::Anim,
     money: i32,
     defuse_kit: bool,
     /// Reserved matches: this player's ticket (0 = none) and team group.
@@ -381,8 +383,8 @@ impl Server {
         b.players
             .iter()
             .map(|pb| match a.players.iter().find(|p| p.id == pb.id) {
-                Some(pa) => Target { origin: std::array::from_fn(|i| pa.origin[i] + (pb.origin[i] - pa.origin[i]) * f), ..*pb },
-                None => *pb,
+                Some(pa) => Target { origin: std::array::from_fn(|i| pa.origin[i] + (pb.origin[i] - pa.origin[i]) * f), ..pb.clone() },
+                None => pb.clone(),
             })
             .collect()
     }
@@ -432,7 +434,11 @@ impl Server {
                 .clients
                 .values()
                 .filter(|c| c.vitals.alive())
-                .map(|c| Target { id: c.id, origin: c.state.movement.origin.map(|v| (v * 8.0).round() / 8.0), yaw: c.view.0, pitch: c.view.1, crouched: c.state.movement.crouched, weapon: c.state.loadout.active_id() })
+                .map(|c| {
+                    let origin = c.state.movement.origin.map(|v| (v * 8.0).round() / 8.0);
+                    let anim = Some((c.anim.clone(), c.drive(), self.tick as f32 * TICK));
+                    Target { id: c.id, origin, yaw: c.view.0, pitch: c.view.1, crouched: c.state.movement.crouched, weapon: c.state.loadout.active_id(), anim }
+                })
                 .collect(),
         });
         while self.history.len() > TICK_RATE as usize {
@@ -455,6 +461,20 @@ impl Server {
 }
 
 impl Remote {
+    /// What drives their animation now.
+    fn drive(&self) -> sim::anim::Drive {
+        let m = &self.state.movement;
+        sim::anim::Drive {
+            origin: m.origin,
+            yaw: self.view.0,
+            pitch: self.view.1,
+            crouched: m.crouched,
+            airborne: !m.on_ground && !m.on_ladder,
+            reloading: self.state.loadout.active_gun().is_some_and(|g| g.reloading),
+            weapon: self.state.loadout.active_id(),
+        }
+    }
+
     /// Their scoreboard line (money included: `send_updates` hides it from the other team).
     fn score(&self) -> Score {
         let s = &self.stats;
@@ -487,6 +507,7 @@ impl Remote {
             kills: 0,
             deaths: 0,
             stats: Stats::default(),
+            anim: sim::anim::Anim::new(0.0),
             money: 0,
             defuse_kit: false,
             ticket: 0,

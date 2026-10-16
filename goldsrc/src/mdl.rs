@@ -38,6 +38,7 @@ pub struct Sequence {
     pub events: Vec<(usize, i32, String)>,
 }
 
+#[derive(Clone)]
 pub struct Model {
     data: Vec<u8>,
     pub bones: Vec<Bone>,

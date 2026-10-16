@@ -8,7 +8,7 @@ use crate::{add, length, scale, sub, Vec3};
 use goldsrc::materials::Materials;
 
 /// Another player a bullet can hit (positions already rewound for lag compensation).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Target {
     pub id: u8,
     pub origin: Vec3,
@@ -17,6 +17,9 @@ pub struct Target {
     pub crouched: bool,
     /// What they hold (their hitboxes follow that weapon's pose).
     pub weapon: crate::weapons::Id,
+    /// Their animation as drawn (`anim`: state, what drives it, the time), when known:
+    /// hitboxes follow it (else the plain aim pose).
+    pub anim: Option<(crate::anim::Anim, crate::anim::Drive, f32)>,
 }
 
 /// Damage reaching a player, after the hit group multiplier (armor comes later).
@@ -66,7 +69,11 @@ fn nearest(world: &World, hitboxes: &Hitboxes, src: Vec3, end: Vec3, targets: &[
     let dir = scale(seg, 1.0 / len.max(1e-6));
     let mut best = (wt.fraction, None);
     for t in targets.iter().filter(|t| !skip.contains(&t.id)) {
-        if let Some(h) = hitboxes.trace(t.origin, t.yaw, t.pitch, t.crouched, t.weapon, src, dir, len * best.0) {
+        let hit = match &t.anim {
+            Some(a) => hitboxes.trace_animated(a, t.origin, t.crouched, src, dir, len * best.0),
+            None => hitboxes.trace(t.origin, t.yaw, t.pitch, t.crouched, t.weapon, src, dir, len * best.0),
+        };
+        if let Some(h) = hit {
             best = (h.distance / len, Some((t.id, h.group)));
         }
     }

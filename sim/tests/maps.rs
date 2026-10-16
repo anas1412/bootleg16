@@ -283,7 +283,7 @@ mod shooting {
         let Some((world, hb, mats, me)) = setup() else { return };
         let yaw = open_direction(&world, me, 700.0);
         let (s, c) = yaw.to_radians().sin_cos();
-        let target = Target { id: 1, origin: [me[0] + c * 500.0, me[1] + s * 500.0, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1 };
+        let target = Target { id: 1, origin: [me[0] + c * 500.0, me[1] + s * 500.0, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1, anim: None };
         let eye = [me[0], me[1], me[2] + 17.0];
         // Aim level at chest height (target origin + 9).
         let pitch = -((target.origin[2] + 9.0 - eye[2]) / 500.0).atan().to_degrees();
@@ -299,7 +299,7 @@ mod shooting {
         let Some((world, hb, mats, me)) = setup() else { return };
         let yaw = open_direction(&world, me, 700.0);
         let (s, c) = yaw.to_radians().sin_cos();
-        let at = |d: f32, id| Target { id, origin: [me[0] + c * d, me[1] + s * d, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1 };
+        let at = |d: f32, id| Target { id, origin: [me[0] + c * d, me[1] + s * d, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1, anim: None };
         let eye = [me[0], me[1], me[2] + 17.0];
         let pitch = -((me[2] + 9.0 - eye[2]) / 300.0).atan().to_degrees();
         let r = fire_bullet(&world, &mats, &hb, eye, &ak_shot(pitch, yaw), 0, &[at(200.0, 1), at(300.0, 2)]);
@@ -312,7 +312,7 @@ mod shooting {
     fn a_thick_wall_stops_the_bullet() {
         let Some((world, hb, mats, me)) = setup() else { return };
         // Shoot straight down: the bullet hits the floor and the target "under" it is safe.
-        let below = Target { id: 1, origin: [me[0], me[1], me[2] - 300.0], yaw: 0.0, pitch: 0.0, crouched: false, weapon: Id::M4a1 };
+        let below = Target { id: 1, origin: [me[0], me[1], me[2] - 300.0], yaw: 0.0, pitch: 0.0, crouched: false, weapon: Id::M4a1, anim: None };
         let eye = [me[0], me[1], me[2] + 17.0];
         let r = fire_bullet(&world, &mats, &hb, eye, &ak_shot(89.0, 0.0), 0, &[below]);
         assert!(r.hits.is_empty(), "{r:?}");
@@ -395,7 +395,7 @@ fn knife_line_first_then_a_crouch_box_sweep() {
     let (sn, cs) = yaw.to_radians().sin_cos();
     let end = [eye[0] + cs * 48.0, eye[1] + sn * 48.0, eye[2]];
     // Someone `side` units to the side of the swing, 40 ahead.
-    let at = |side: f32| Target { id: 1, origin: [me[0] + cs * 40.0 - sn * side, me[1] + sn * 40.0 + cs * side, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1 };
+    let at = |side: f32| Target { id: 1, origin: [me[0] + cs * 40.0 - sn * side, me[1] + sn * 40.0 + cs * side, me[2]], yaw: yaw + 180.0, pitch: 0.0, crouched: false, weapon: Id::M4a1, anim: None };
     let hit = |side| trace_melee(&world, &hb, eye, end, 0, &[at(side)]);
     assert!(matches!(hit(0.0), Some((1, g)) if g != HitGroup::Generic), "straight on: the line hits a body part");
     // Off to the side: the line misses, the box (16 + their 16) still catches them.
@@ -431,4 +431,49 @@ fn bullets_read_the_texture_of_the_glass_they_hit() {
         .expect("a line that meets the glass");
     let tex = world.texture_of(d.model, a, b).expect("the glass's texture");
     assert_eq!(mats.kind(tex), 'Y', "{tex} isn't glass");
+}
+
+#[test]
+fn animated_hitboxes_follow_the_model() {
+    use sim::anim::{Anim, Drive};
+    use sim::hitbox::{HitGroup, Hitboxes};
+    use sim::weapons::Id;
+    let Some(home) = std::env::var("HOME").ok() else { return };
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
+    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")) else { return };
+    let hb = Hitboxes::from_model(&model, "carbine").unwrap();
+    // Standing at the origin, looking at the shooter (who stands 200 units east, looking west).
+    let drive = |origin: [f32; 3]| Drive { origin, yaw: 0.0, pitch: 0.0, crouched: false, airborne: false, reloading: false, weapon: Id::M4a1 };
+    let mut a = Anim::new(0.0);
+    for i in 0..128 {
+        a.step(&model, &drive([0.0; 3]), i as f32 / 128.0, 1.0 / 128.0);
+    }
+    let posed = a.pose(&model, &drive([0.0; 3]), 1.0);
+    let shot = |p: &sim::anim::Posed, z: f32| hb.trace_posed(p, [0.0; 3], [200.0, 0.0, z], [-1.0, 0.0, 0.0], 400.0).map(|h| h.group);
+    // Same as the plain aim pose for someone standing still.
+    // The head is up top and the body below it, as the model stands.
+    let groups: Vec<_> = (0..40).filter_map(|i| shot(&posed, -36.0 + i as f32 * 1.8)).collect();
+    assert!(groups.contains(&HitGroup::Head) && groups.iter().any(|g| matches!(g, HitGroup::LeftLeg | HitGroup::RightLeg)), "{groups:?}");
+    // Strafing north while still looking at the shooter: legs turn, the chest still faces them.
+    let mut s = Anim::new(0.0);
+    for i in 0..128 {
+        s.step(&model, &drive([0.0, i as f32 * 2.0, 0.0]), i as f32 / 128.0, 1.0 / 128.0);
+    }
+    assert!((s.gait_yaw - 90.0).abs() < 1.0, "legs face {}", s.gait_yaw);
+    let at = [0.0, 254.0, 0.0];
+    let p = s.pose(&model, &drive(at), 1.0);
+    // The upper body turns back to the view: the chest faces the same way in the world as
+    // standing still (the model itself faces the legs' way, 90 degrees round).
+    let bone = |n: &str| model.bones.iter().position(|b| b.name == n).unwrap();
+    let (l, r) = (bone("Bip01 L UpperArm"), bone("Bip01 R UpperArm"));
+    // Where the chest faces (degrees, world): square to the shoulder line.
+    let facing = |p: &sim::anim::Posed| {
+        let (a, b) = (p.bones[l].pos, p.bones[r].pos);
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]); // left shoulder -> right shoulder
+        // Facing is the shoulder line turned 90 degrees anticlockwise (right is to its right).
+        dx.atan2(-dy).to_degrees() + p.yaw
+    };
+    let wrap = |a: f32| (a + 540.0).rem_euclid(360.0) - 180.0;
+    let (f0, f1) = (wrap(facing(&posed)), wrap(facing(&p)));
+    assert!(wrap(f1 - f0).abs() < 25.0, "chest faces {f1} strafing vs {f0} standing");
 }
