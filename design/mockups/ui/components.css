@@ -287,3 +287,11 @@
 .mt-name { display: flex; align-items: center; gap: 6px; font: 700 18px var(--f-text); color: var(--ct-color); text-shadow: 0 1px 0 rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.7); }
 .mt-hp { width: 64px; height: 5px; border-radius: 2px; background: rgba(0,0,0,.6); box-shadow: 0 0 0 1px rgba(0,0,0,.5); overflow: hidden; } .mt-hp i { display: block; height: 100%; background: var(--ct-color); }
 .mt-pip { width: 9px; height: 9px; background: var(--ct-color); rotate: 45deg; box-shadow: 0 0 0 2px rgba(0,0,0,.85); margin-top: 2px; }
+
+/* Buy menu: teammates' money (CS2), so the team can plan a buy or a drop. Red = not enough for a rifle. */
+.bteam { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.bteam .row { display: flex; gap: 24px; }
+.bt { display: flex; align-items: baseline; gap: 8px; font: 600 16px var(--f-text); color: var(--tx2); }
+.bt b { font: 700 20px var(--f-num); color: var(--tx1); }
+.bt.low b { color: var(--bad); }
+.bt.dead { opacity: .45; }

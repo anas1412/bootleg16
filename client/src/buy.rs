@@ -11,6 +11,9 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 use net::protocol::{BuyItem, Team};
 use net::server::buy::price;
 
+/// Teammates with less than this show red in the buy menu: they can't buy a rifle (an AK-47).
+const RIFLE: i32 = 2700;
+
 pub struct BuyPlugin;
 
 impl Plugin for BuyPlugin {
@@ -78,7 +81,7 @@ fn buy_menu(
     mut actions: ResMut<UiActions>,
     mut w: ResMut<Walker>,
     mut menu: ResMut<BuyMenu>,
-    mut shown: Local<Option<(Option<Option<usize>>, usize, Team, i32)>>,
+    mut shown: Local<Option<(Option<Option<usize>>, usize, Team, i32, Vec<(String, i32, bool)>)>>,
     mut cursor: Single<&mut CursorOptions>,
     roots: Query<Entity, With<BuyRoot>>,
     mut hints: MessageWriter<crate::hud::Hint>,
@@ -164,16 +167,18 @@ fn buy_menu(
     }
 
     let money = w.client.me_info.money;
-    if *shown == Some((menu.0, menu.1, team, money)) {
+    // teammates' money (CS2): who can buy, who needs a drop. The server only sends your team's.
+    let mates: Vec<(String, i32, bool)> = w.client.scores.iter().filter(|s| Some(s.id) != w.client.id()).filter_map(|s| s.money.map(|m| (s.name.clone(), m, s.alive))).collect();
+    if *shown == Some((menu.0, menu.1, team, money, mates.clone())) {
         return;
     }
     // What changed decides what moves: opening tunes everything in; a new category tunes the
     // cards in (staggered) and the details; a new card just the details; closing tunes out.
-    let prev = shown.replace((menu.0, menu.1, team, money));
-    let was = prev.and_then(|p| p.0);
+    let prev = shown.replace((menu.0, menu.1, team, money, mates.clone()));
+    let was = prev.as_ref().and_then(|p| p.0);
     let opening = was.is_none();
-    let new_cat = opening || was != Some(menu.0.unwrap_or(None)) || prev.map(|p| p.2) != Some(team);
-    let new_item = new_cat || prev.map(|p| p.1) != Some(menu.1);
+    let new_cat = opening || was != Some(menu.0.unwrap_or(None)) || prev.as_ref().map(|p| p.2) != Some(team);
+    let new_item = new_cat || prev.as_ref().map(|p| p.1) != Some(menu.1);
     for e in &roots {
         if menu.0.is_none() {
             commands.entity(e).remove::<(BuyRoot, crate::ui::Blurs)>().insert(Anim::tune_out());
@@ -220,7 +225,22 @@ fn buy_menu(
                             r.spawn(kit_text("武器庫", 13.0, TX3, &kit.jp));
                         });
                     });
-                    h.spawn(Node { margin: UiRect::left(Val::Auto), flex_direction: FlexDirection::Column, align_items: AlignItems::FlexEnd, row_gap: vh(8.0), ..default() }).with_children(|f| {
+                    if !free && !mates.is_empty() {
+                        h.spawn(Node { margin: UiRect::left(Val::Auto), flex_direction: FlexDirection::Column, align_items: AlignItems::FlexEnd, row_gap: vh(8.0), ..default() }).with_children(|t| {
+                            t.spawn(kit_text("TEAM", 13.0, TX2, &kit.text));
+                            t.spawn(Node { column_gap: vh(24.0), ..default() }).with_children(|r| {
+                                for (name, m, alive) in &mates {
+                                    let dim = if *alive { 1.0 } else { 0.45 };
+                                    r.spawn(Node { align_items: AlignItems::Baseline, column_gap: vh(8.0), ..default() }).with_children(|b| {
+                                        b.spawn(kit_text(name.clone(), 16.0, TX2.with_alpha(dim), &kit.text));
+                                        b.spawn(kit_text(format!("${m}"), 20.0, if *m < RIFLE { BAD } else { TX1 }.with_alpha(dim), &kit.num));
+                                    });
+                                }
+                            });
+                        });
+                    }
+                    let lead = if !free && !mates.is_empty() { vh(48.0) } else { Val::Auto };
+                    h.spawn(Node { margin: UiRect::left(lead), flex_direction: FlexDirection::Column, align_items: AlignItems::FlexEnd, row_gap: vh(8.0), ..default() }).with_children(|f| {
                         f.spawn(kit_text("FUNDS", 13.0, TX2, &kit.text));
                         f.spawn(Node { align_items: AlignItems::Baseline, column_gap: vh(4.0), ..default() }).with_children(|r| {
                             if free {

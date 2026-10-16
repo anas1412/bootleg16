@@ -45,7 +45,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Round HUD: score, clock, freeze/bomb states, money +/-, announcements, plant/defuse bars; bomb models, beeps, sounds
 - [x] Shop trimmed to the chosen list (docs/RULES.md 4); ammo not sold, refilled each round
 - [x] Defuse reach as CS `PlayerUse`: 64 from your centre to the bomb's, within 45 degrees of your view (no wall check in CS either)
-- [ ] Buy menu: CS2-style team money on the scoreboard (data: `Score::money`, UI session)
+- [x] Team money (CS2): `$` column on the scoreboard, teammates' money in the buy menu header (red under a rifle)
 - [x] Hitboxes follow each weapon's aim pose (head moved up to ~7 units between poses; the old test simply aimed 9 units over the head)
 - [x] Hitboxes follow the drawn animation (sim::anim, shared by client and server: gait, spine twist, jump, shoot/reload/flinch), rewound with lag compensation like positions
 - [x] Defuse times 10 s / 5 s with kit (ReGameDLL `DefuseBombStart`)
@@ -67,7 +67,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Main menu: practice (map, standing dummies), join server, settings (name, sensitivity, volume); Esc menu
 - [x] FPS + ping counter (top left); Max FPS and VSync settings
 - [x] CS2 "Show Team ID Through Walls": pip + name over teammates through walls (client/src/teammates.rs; Settings: off / pips / pips + names). Safe: hidden enemies are never sent
-- [ ] Team IDs: health/equipment like CS2's option 2 (data: `Remote::mate`; UI session)
+- [x] Team IDs: health bar under the name (red at 25 and under), mic above it while they talk
 - [x] Settings: key binds (crosshair style done; FOV stays fixed at 90° at 4:3 for fairness, as in CS)
 - [x] Viewmodel GPU-skinned (mirrored bones through a reflection transform)
 - [ ] Try drawing the viewmodel without a second camera (depth range trick)
@@ -106,7 +106,7 @@ land, and add new ones here instead of leaving them only in chat.
       Settings page: on/off, rebind keys (incl. mouse buttons), mic, mic volume, voice volume, mic test.
       **No radio commands/callouts**: decided 2026-10-15, voice replaces them.
 - [x] Voice backend: per-player volume and mute (`VoiceSettings::set_player_gain`), open mic + noise gate, proximity voice through walls muffled
-- [ ] Voice UI (UI session): per-player mute/volume on the scoreboard, open mic and gate on the Voice page
+- [x] Voice UI: per-player mute/volume on the scoreboard, open mic and gate on the Voice page
 - [ ] Voice: only checked automatically (relay test, codec round trip); needs a real two-person test
 
 ### Sound
@@ -132,7 +132,7 @@ land, and add new ones here instead of leaving them only in chat.
 ### UI (Interference: docs/UI.md, design/mockups/ui is the spec)
 - [x] Scoreboard data: `Score` has assists, MVPs, headshots, damage and rounds (ADR), server-measured
       ping, money (own team only)
-- [ ] Scoreboard columns for them (UI session)
+- [x] Scoreboard columns for them (K D A ADR HS% MVP $ PING)
 - [x] Round history from the server (`ServerMsg::History`, `Client::round_history`); the scoreboard
       should switch to it (UI session)
 - [ ] ⚠ Not yet seen on screen in a real match: low-health heartbeat, reload line, money
