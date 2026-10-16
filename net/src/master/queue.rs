@@ -54,7 +54,9 @@ impl Master {
         let tickets: Vec<(u32, u64, Group)> = players.iter().map(|(id, g)| (*id, self.rand() | 1, *g)).collect();
         let setup = MatchSetup { players: tickets.iter().map(|(_, t, g)| (*t, *g)).collect(), knife_round };
         // The server checks the token: only we can reserve official servers.
-        let _ = self.udp.send_to(&encode(&ClientMsg::Reserve { token, setup }), addr);
+        let msg = encode(&ClientMsg::Reserve { token, setup });
+        let _ = self.udp.send_to(&msg, addr);
+        self.booking.insert(addr, (msg, Instant::now(), Instant::now()));
         self.servers.get_mut(&addr).unwrap().busy = true;
         println!("match booked on {public} ({region}): {} players{}", players.len(), if knife_round { ", custom" } else { "" });
         for (id, ticket, _) in tickets {

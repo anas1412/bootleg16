@@ -194,6 +194,8 @@ pub struct Server {
     reserved: Option<reserve::Reserved>,
     /// Shutting down: no new matches (the lobby sees us busy), stop once the match is over.
     draining: Option<u32>,
+    /// The lobby's address (`master` in the config, looked up again at every heartbeat).
+    lobby: Option<SocketAddr>,
     /// Size of the last snapshot sent (bandwidth checks).
     snapshot_bytes: usize,
     /// Anti-wallhack: when each (viewer, target) pair last had line of sight.
@@ -240,12 +242,19 @@ impl Server {
             guard: guard::Guard::new(),
             reserved: None,
             draining: None,
+            lobby: None,
         })
     }
 
     /// Match settings (server config file). Restarts the match.
     pub fn set_config(&mut self, cfg: MatchConfig) {
+        self.lobby = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next());
         self.round = Match::new(cfg, TICK_RATE);
+    }
+
+    /// An official server (it has the lobby's token): only booked players may join.
+    fn official(&self) -> bool {
+        !self.round.cfg.official_token.is_empty()
     }
 
     /// Weapons every player gets on (re)spawn, on top of the starting pistol.
@@ -337,7 +346,9 @@ impl Server {
         if cfg.master.is_empty() {
             return;
         }
-        let Some(master) = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next()) else { return };
+        self.lobby = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next()).or(self.lobby);
+        let Some(master) = self.lobby else { return };
+        let cfg = &self.round.cfg;
         let players = self.clients.values().filter(|c| !c.bot).count() as u8;
         let busy = self.reserved.is_some() || self.draining.is_some();
         let msg = crate::master::LobbyMsg::Heartbeat {
@@ -457,6 +468,13 @@ impl Server {
         self.socket.tick();
         let tick = self.tick;
         for (from, bytes) in self.socket.recv_all() {
+            // The lobby has its own way in: its bookings must never be crowded out by strangers.
+            if Some(from) == self.lobby && bytes.len() <= guard::MAX_PACKET {
+                if let Some(msg) = decode::<ClientMsg>(&bytes) {
+                    self.handle(from, msg);
+                }
+                continue;
+            }
             // Budget first: floods and junk cost nothing past this line.
             let players = if self.clients.contains_key(&from) { self.clients.keys().filter(|a| a.ip() == from.ip()).count() } else { 0 };
             if !self.guard.allow(from, bytes.len(), players, tick) {
@@ -946,9 +964,9 @@ impl Server {
             }
             ClientMsg::Reserve { token, setup } => {
                 let cfg = &self.round.cfg;
-                let lobby = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next());
-                if !cfg.official_token.is_empty() && token == cfg.official_token && lobby == Some(from) && self.reserved.is_none() {
+                if !cfg.official_token.is_empty() && token == cfg.official_token && self.lobby == Some(from) && self.reserved.is_none() {
                     self.reserve(setup);
+                    self.heartbeat(); // tell the lobby right away that we took it
                 }
             }
             ClientMsg::Bye => {

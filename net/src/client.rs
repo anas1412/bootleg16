@@ -417,6 +417,11 @@ impl Client {
         self.socket.send(self.server, encode(&ClientMsg::Vote { yes }));
     }
 
+    /// The server this client talks to.
+    pub fn server(&self) -> SocketAddr {
+        self.server
+    }
+
     pub fn disconnect(&mut self) {
         self.socket.send(self.server, encode(&ClientMsg::Bye));
     }

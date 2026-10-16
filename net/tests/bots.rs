@@ -1,46 +1,35 @@
-//! A whole match with test bots, the way players get one: 10 bots queue for casual on the
-//! lobby, get booked onto the official server, play a short match to the end (buying,
-//! fighting, rounds, halftime) and are sent home; the server is free again afterwards.
+//! Matches with test bots, the way players get one: 10 bots queue for casual on the lobby
+//! and get booked onto the official server. Then: a whole short match to the end; a round
+//! where the bomb is taken to A, planted and defused (on orders); bots leaving pause the
+//! match and coming back resumes it.
 mod common;
 use common::*;
-use net::bot::Bot;
+use net::bot::{Bot, BotMap, Difficulty, Profile};
 use net::master::{Command, LobbyClient, Master};
-use net::protocol::GameEvent;
+use net::protocol::{GameEvent, Team};
 use net::server::Server;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
-#[test]
-fn ten_bots_play_a_whole_match() {
-    let Some(bsp) = dust2() else { return };
+/// A short match: 4 rounds (sides swap after 2), quick timers.
+fn short(lobby: SocketAddr) -> net::config::MatchConfig {
+    net::config::MatchConfig { master: lobby.to_string(), official_token: "tok".into(), max_rounds: 4, overtime_rounds: 0, freeze_time: 1.0, buy_time: 10.0, round_time: 40.0, round_end_delay: 1.0, ..Default::default() }
+}
+
+/// A lobby, an official server and 10 bots booked onto it.
+fn booked(map: &Arc<BotMap>, cfg: impl Fn(SocketAddr) -> net::config::MatchConfig) -> (Server, Vec<Bot>) {
     let mut m = Master::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
-    let mut server = Server::new(SocketAddr::from(LOCAL), "test", &bsp, assets()).unwrap();
-    // A short match: 4 rounds (sides swap after 2), quick timers.
-    server.set_config(net::config::MatchConfig {
-        master: lobby.to_string(),
-        official_token: "tok".into(),
-        max_rounds: 4,
-        overtime_rounds: 0,
-        freeze_time: 1.0,
-        buy_time: 10.0,
-        round_time: 25.0,
-        round_end_delay: 1.0,
-        ..Default::default()
-    });
-    let spawns = net::bot::spawns_of(&bsp);
-    let built = Instant::now();
-    let nav = std::sync::Arc::new(net::bot::Nav::of_map(&bsp, &sim::collision::World::from_bsp(&bsp)));
-    println!("nav: {} points in {:.1} s", nav.points.len(), built.elapsed().as_secs_f32());
+    let mut server = Server::new(SocketAddr::from(LOCAL), "test", &map.bsp, assets()).unwrap();
+    server.set_config(cfg(lobby));
     let mut queue: Vec<LobbyClient> = (0..10).map(|i| LobbyClient::new(lobby, &format!("bot{i}")).unwrap()).collect();
     let mut bots: Vec<Bot> = Vec::new();
-    let mut events = Vec::new();
+    let mut asked = [false; 10];
     let start = Instant::now();
-    let mut asked = vec![false; 10];
-    // Queue up and get booked.
     while bots.len() < 10 {
         assert!(start.elapsed() < Duration::from_secs(20), "not all bots got a match");
         server.step();
@@ -51,39 +40,76 @@ fn ten_bots_play_a_whole_match() {
                 c.send(Command::Play);
             }
             if let Some((addr, ticket)) = c.found.take() {
-                let mut client = net::Client::connect(addr, &format!("bot{i}"), sim::collision::World::from_bsp(&bsp)).unwrap();
+                let mut client = net::Client::connect(addr, &format!("bot{i}"), map.world()).unwrap();
                 client.ticket = ticket;
-                bots.push(Bot::new(client, nav.clone(), spawns, i as u64 + 1));
+                bots.push(Bot::new(client, map.clone(), i, Profile::of(Difficulty::Normal)));
             }
         }
         std::thread::sleep(Duration::from_millis(2));
     }
-    // Play it out (simulated time: as fast as the machine goes).
+    (server, bots)
+}
+
+/// Run (simulated time, as fast as the machine goes) until `done` or `secs` of game time.
+fn play(server: &mut Server, bots: &mut [Bot], secs: u32, events: &mut Vec<GameEvent>, done: impl Fn(&[Bot], &[GameEvent]) -> bool) -> f32 {
     let mut ticks = 0u32;
-    while !bots.iter().all(|b| b.client.match_ended) {
+    while !done(bots, events) {
         ticks += 1;
-        assert!(ticks < 128 * 60 * 6, "the match didn't end in 6 game minutes ({} rounds, {} events, status {:?} {:?}, team {:?})", bots[0].client.round.round, events.len(), bots[0].client.status, bots[0].client.reject_reason, bots[0].client.team());
+        assert!(ticks < secs * 128, "not done in {secs} game seconds (round {}, {} events)", bots[0].client.round.round, events.len());
         server.step();
         for b in bots.iter_mut() {
             b.tick();
         }
-        if std::env::var_os("BOTS_DEBUG").is_some() && ticks % (128 * 10) == 0 {
-            let teams: Vec<_> = bots.iter().map(|b| format!("{:?}", b.client.team())).collect();
-            println!("t={}s phase {:?} stage {:?} round {} players {} teams {teams:?}", ticks / 128, server.round_phase(), bots[0].client.round.stage, bots[0].client.round.round, server.player_count());
-            let at: Vec<_> = bots.iter().map(|b| { let o = b.client.me().origin; format!("({:.0},{:.0})", o[0], o[1]) }).collect();
-            println!("  at {at:?} sees {:?}", bots.iter().map(|b| b.client.others().len()).collect::<Vec<_>>());
-        }
-        events.extend(bots[0].client.take_events());
-        bots[1..].iter_mut().for_each(|b| _ = b.client.take_events());
+        events.extend(bots[0].take_events());
+        bots[1..].iter_mut().for_each(|b| _ = b.take_events());
         if ticks % 8 == 0 {
             std::thread::sleep(Duration::from_micros(200));
         }
     }
-    let kills = events.iter().filter(|e| matches!(e, GameEvent::Kill { .. })).count();
-    let rounds = events.iter().filter(|e| matches!(e, GameEvent::RoundEnd { .. })).count();
-    println!("{rounds} rounds, {kills} kills, {:.0} game seconds", ticks as f32 / 128.0);
+    ticks as f32 / 128.0
+}
+
+#[test]
+fn ten_bots_play_a_whole_match() {
+    let Some(bsp) = dust2() else { return };
+    let map = BotMap::new(bsp);
+    let (mut server, mut bots) = booked(&map, short);
+    let mut events = Vec::new();
+    let secs = play(&mut server, &mut bots, 6 * 60, &mut events, |b, _| b.iter().all(|b| b.client.match_ended));
+    let count = |f: fn(&GameEvent) -> bool| events.iter().filter(|e| f(e)).count();
+    let (kills, rounds, plants) = (count(|e| matches!(e, GameEvent::Kill { .. })), count(|e| matches!(e, GameEvent::RoundEnd { .. })), count(|e| matches!(e, GameEvent::BombPlanted { .. })));
+    println!("{rounds} rounds, {kills} kills, {plants} plants, {secs:.0} game seconds");
     assert!(events.iter().any(|e| matches!(e, GameEvent::MatchOver { .. })));
-    assert!(rounds >= 3, "{rounds} rounds");
-    assert!(kills > 0, "bots should fight");
+    assert!(rounds >= 3 && kills > 0, "{rounds} rounds, {kills} kills");
     assert!(!server.is_reserved(), "server free for the next match");
+}
+
+#[test]
+fn bomb_goes_to_a_and_gets_defused() {
+    let Some(bsp) = dust2() else { return };
+    let map = BotMap::new(bsp);
+    let (mut server, mut bots) = booked(&map, short);
+    // Nobody shoots: the terrorists take the bomb to A, the counter-terrorists come to defuse.
+    net::bot::command(&mut bots, "all peaceful; all plant a").unwrap();
+    let mut events = Vec::new();
+    play(&mut server, &mut bots, 90, &mut events, |_, e| e.iter().any(|e| matches!(e, GameEvent::BombPlanted { .. })));
+    let at = events.iter().find_map(|e| if let GameEvent::BombPlanted { at, .. } = e { Some(*at) } else { None }).unwrap();
+    let a = map.sites[0];
+    assert!(((at[0] - a[0]).powi(2) + (at[1] - a[1]).powi(2)).sqrt() < 600.0, "planted at {at:?}, A is {a:?}");
+    play(&mut server, &mut bots, 60, &mut events, |_, e| e.iter().any(|e| matches!(e, GameEvent::BombDefused { .. } | GameEvent::BombExploded { .. })));
+    assert!(events.iter().any(|e| matches!(e, GameEvent::BombDefused { .. })), "a counter-terrorist should make it in time from CT spawn to A");
+}
+
+#[test]
+fn bots_leaving_pause_the_match_and_coming_back_resumes_it() {
+    let Some(bsp) = dust2() else { return };
+    let map = BotMap::new(bsp);
+    let (mut server, mut bots) = booked(&map, short);
+    let mut events = Vec::new();
+    play(&mut server, &mut bots, 30, &mut events, |b, _| b[0].client.round.round >= 1 && b[0].client.round.phase == net::rounds::Phase::Live);
+    let t = bots.iter().find(|b| b.client.team() == Team::T).unwrap().index;
+    net::bot::command(&mut bots, "ct leave").unwrap();
+    play(&mut server, &mut bots, 10, &mut events, |b, _| b[t].client.round.paused);
+    net::bot::command(&mut bots, "ct rejoin").unwrap();
+    play(&mut server, &mut bots, 10, &mut events, |b, _| !b[t].client.round.paused);
 }

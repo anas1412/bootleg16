@@ -79,7 +79,15 @@ Bots are for testing only: they never play in real matches, because an official 
 cargo run -p net --example bots -- <lobby-ip>:27010 10
 ```
 
-Add `--local` when running the bots on the hosting machine itself. `./host.sh --official` turns the lobby back into an official one.
+Add `--local` when running the bots on the hosting machine itself, and `--difficulty easy|normal|hard|expert`. `./host.sh --official` turns the lobby back into an official one.
+
+**Controlling them:** type orders into the bots' terminal, or from another one on the same machine:
+
+```bash
+cargo run -p net --example bots -- --order "t plant b; ct hold; 3 bhop"
+```
+
+An order is `<who> <order>`: who is `all`, `t`, `ct` or a bot number. Orders: `normal`, `afk`, `hold`, `goto a|b|tspawn|ctspawn|x y z`, `rush ...`, `plant a|b|any`, `peaceful`, `spray`, `aimbot`, `grief`, `bhop`, `knife`, `leave`, `rejoin`, `difficulty ...`, `buy <weapon>`. They play like CS 1.6's own bots (whose code CS 1.6 ships without its data files): buy, take the bomb to a site and plant it, pick it up when it's dropped, guard sites, defuse (or run when there's no time), check gunfire they hear, and notice enemies after a reaction time, with aim that improves the longer they track.
 
 ## Shipping the game
 

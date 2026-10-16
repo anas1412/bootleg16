@@ -18,7 +18,7 @@ impl Server {
         }
         r.reports.push((reporter, target));
         let cfg = &self.round.cfg;
-        let Some(lobby) = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next()) else { return };
+        let Some(lobby) = self.lobby else { return };
         let msg = crate::master::LobbyMsg::Report { token: cfg.official_token.clone(), reporter, target, reason, map: self.map.clone(), round: self.round.round };
         self.socket.send(lobby, encode(&msg));
     }

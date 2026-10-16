@@ -200,6 +200,9 @@ pub struct Master {
     pub(super) seats: HashMap<u64, (u64, String, Instant)>,
     /// Where reports are written (one JSON object per line); None = only printed.
     pub reports: Option<std::path::PathBuf>,
+    /// Bookings the server hasn't confirmed yet (a busy heartbeat): the message, when it was
+    /// first and last sent. Resent until confirmed, so a lost packet can't lose a match.
+    pub(super) booking: HashMap<SocketAddr, (Vec<u8>, Instant, Instant)>,
 }
 
 impl Master {
@@ -207,7 +210,7 @@ impl Master {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7) ^ ((std::process::id() as u64) << 32);
-        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None })
+        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -266,6 +269,11 @@ impl Master {
                     if !self.servers.contains_key(&from) {
                         println!("server {public} ({region}) joined the pool{}", if official { "" } else { " (wrong token: never gets matches)" });
                     }
+                    if busy {
+                        self.booking.remove(&from); // took the match
+                    }
+                    // Booked, not confirmed yet: still busy as far as we're concerned.
+                    let busy = busy || self.booking.contains_key(&from);
                     self.servers.insert(from, GameServer { public, region, token, official, busy, seen: Instant::now() });
                 }
                 Some(LobbyMsg::Report { token, reporter, target, reason, map, round }) if self.tokens.contains(&token) => self.file_report(reporter, target, reason, &map, round),
@@ -309,6 +317,16 @@ impl Master {
         }
         let now = Instant::now();
         self.seats.retain(|_, (_, _, at)| at.elapsed() < Duration::from_secs(6 * 3600));
+        for (addr, (msg, first, last)) in &mut self.booking {
+            if last.elapsed() > Duration::from_millis(500) {
+                let _ = self.udp.send_to(msg, addr);
+                *last = Instant::now();
+            }
+            if first.elapsed() > Duration::from_secs(5) {
+                println!("server {addr} didn't take its match");
+            }
+        }
+        self.booking.retain(|_, (_, first, _)| first.elapsed() <= Duration::from_secs(5));
         self.servers.retain(|_, s| {
             let alive = now - s.seen < SERVER_TIMEOUT;
             if !alive {

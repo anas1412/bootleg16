@@ -237,3 +237,17 @@ fn official_lobbies_turn_away_players_without_steam() {
     assert_eq!(anon.notice, "Start Steam to play online.");
     assert!(!anon.online());
 }
+
+#[test]
+fn official_servers_only_take_booked_players() {
+    let Some(bsp) = dust2() else { return };
+    let (mut server, _lobby) = world(&bsp, 2);
+    let mut c = net::Client::connect(server.local_addr(), "walk-in", sim::collision::World::from_bsp(&bsp)).unwrap();
+    for _ in 0..256 {
+        server.step();
+        c.tick(Input::default());
+        std::thread::sleep(Duration::from_micros(150));
+    }
+    assert_eq!(c.status, net::client::Status::Rejected);
+    assert!(c.reject_reason.unwrap().contains("lobby"));
+}
