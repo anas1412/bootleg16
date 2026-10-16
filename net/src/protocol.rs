@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 24;
+pub const PROTOCOL_VERSION: u32 = 25;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -33,7 +33,8 @@ pub enum ClientMsg {
     Info { pad: Vec<u8> },
     /// Inputs numbered `first_seq`, `first_seq + 1`, ...
     /// `events`: the last reliable event number received (the server resends newer ones).
-    Inputs { first_seq: u32, inputs: Vec<TimedInput>, events: u32 },
+    /// `snap`: the newest snapshot received (the server sends the next ones as changes to it).
+    Inputs { first_seq: u32, inputs: Vec<TimedInput>, events: u32, snap: u32 },
     /// Buy something (checked against money, buy time, buy zone and team).
     Buy { item: BuyItem },
     /// Pick a side; None = auto (the smaller team).
@@ -354,6 +355,8 @@ pub enum ServerMsg {
         bomb: BombNet,
         me: Me,
     },
+    /// A snapshot as what changed since snapshot `base` (one you confirmed): see `delta`.
+    Delta { base: u32, patch: Vec<u8> },
 }
 
 pub fn encode<T: Serialize>(m: &T) -> Vec<u8> {

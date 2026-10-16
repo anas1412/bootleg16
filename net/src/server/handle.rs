@@ -64,9 +64,10 @@ impl Server {
                 let id = self.clients[&from].id;
                 self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), map_hash: self.map_hash, tick_rate: TICK_RATE, practice: self.rules.free_play() }));
             }
-            ClientMsg::Inputs { first_seq, inputs, events } => {
+            ClientMsg::Inputs { first_seq, inputs, events, snap } => {
                 let Some(c) = self.clients.get_mut(&from) else { return };
                 c.last_heard = self.tick;
+                c.snap_ack = c.snap_ack.max(snap);
                 while c.outbox.front().is_some_and(|(n, _)| *n <= events) {
                     c.outbox.pop_front();
                 }

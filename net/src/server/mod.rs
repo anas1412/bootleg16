@@ -103,6 +103,10 @@ struct Remote {
     /// Reliable events not yet acknowledged, numbered (resent in every snapshot).
     outbox: VecDeque<(u32, GameEvent)>,
     next_reliable: u32,
+    /// Snapshots sent lately (tick, bytes) and the newest one the client confirmed: the next
+    /// go out as changes to that one.
+    sent: VecDeque<(u32, Vec<u8>)>,
+    snap_ack: u32,
     state: PlayerState,
     vitals: Vitals,
     /// Tick to respawn at while dead.
@@ -443,6 +447,8 @@ impl Remote {
             group: None,
             outbox: VecDeque::new(),
             next_reliable: 0,
+            sent: VecDeque::new(),
+            snap_ack: 0,
             state: PlayerState { movement: Player::new([0.0; 3]), loadout: Loadout::knife_only() },
             vitals: Vitals { health: 0.0, ..Vitals::default() },
             respawn_at: None,

@@ -9,6 +9,7 @@ pub mod bot;
 pub mod client;
 pub mod config;
 pub mod crypto;
+pub mod delta;
 pub mod demo;
 pub mod lobby;
 pub mod protocol;

@@ -2,6 +2,10 @@
 //! player's snapshot (only what they may see: see `visibility`), with reliable events.
 use super::*;
 
+/// Snapshots kept per client as baselines (half a second: confirmations older than that, from
+/// a bad connection, get full snapshots).
+const SENT_KEPT: usize = (TICK_RATE / SNAPSHOT_EVERY / 2) as usize;
+
 impl Server {
     pub(super) fn send_updates(&mut self) {
         let tick = self.tick;
@@ -84,8 +88,18 @@ impl Server {
                     me,
                 };
                 let bytes = encode(&msg);
-                self.snapshot_bytes = bytes.len();
-                self.socket.send(addr, bytes);
+                let c = self.clients.get_mut(&addr).unwrap();
+                let wire = match c.sent.iter().find(|(t, _)| *t == c.snap_ack) {
+                    Some((base, old)) => Some(encode(&ServerMsg::Delta { base: *base, patch: crate::delta::diff(old, &bytes) })).filter(|d| d.len() < bytes.len()),
+                    None => None,
+                };
+                c.sent.push_back((tick, bytes.clone()));
+                if c.sent.len() > SENT_KEPT {
+                    c.sent.pop_front();
+                }
+                let wire = wire.unwrap_or(bytes);
+                self.snapshot_bytes = wire.len();
+                self.socket.send(addr, wire);
             }
         }
     }

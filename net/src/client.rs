@@ -56,6 +56,8 @@ pub struct Client {
     seq: u32,
     history: VecDeque<(u32, TimedInput)>,
     snaps: VecDeque<Snap>,
+    /// Recent snapshots as received (tick, bytes): the baselines deltas apply to.
+    snap_bytes: VecDeque<(u32, Vec<u8>)>,
     latest_tick: u32,
     /// Server time we are drawing other players at.
     render_tick: f32,
@@ -119,6 +121,7 @@ impl Client {
             seq: 0,
             history: VecDeque::new(),
             snaps: VecDeque::new(),
+            snap_bytes: VecDeque::new(),
             latest_tick: 0,
             render_tick: 0.0,
             ticks: 0,
@@ -184,8 +187,24 @@ impl Client {
             } else {
                 bytes
             };
-            if let Some(msg) = decode::<ServerMsg>(&plain) {
-                self.handle(msg);
+            let plain = match decode::<ServerMsg>(&plain) {
+                Some(ServerMsg::Delta { base, patch }) => {
+                    let Some((_, old)) = self.snap_bytes.iter().find(|(t, _)| *t == base) else { continue };
+                    let Some(full) = crate::delta::apply(old, &patch) else { continue };
+                    full
+                }
+                _ => plain,
+            };
+            match decode::<ServerMsg>(&plain) {
+                Some(msg @ ServerMsg::Snapshot { tick, .. }) => {
+                    self.snap_bytes.push_back((tick, plain.to_vec()));
+                    if self.snap_bytes.len() > 64 {
+                        self.snap_bytes.pop_front();
+                    }
+                    self.handle(msg);
+                }
+                Some(msg) => self.handle(msg),
+                None => {}
             }
         }
 
@@ -210,7 +229,7 @@ impl Client {
 
         let recent: Vec<_> = self.history.iter().rev().take(INPUT_REDUNDANCY).rev().collect();
         let first_seq = recent.first().map(|(s, _)| *s).unwrap_or(self.seq);
-        let msg = ClientMsg::Inputs { first_seq, inputs: recent.iter().map(|(_, i)| *i).collect(), events: self.reliable_seen };
+        let msg = ClientMsg::Inputs { first_seq, inputs: recent.iter().map(|(_, i)| *i).collect(), events: self.reliable_seen, snap: self.latest_tick };
         self.socket.send(self.server, encode(&msg));
 
         // Advance the clock others are drawn at, staying INTERP_TICKS behind the newest snapshot.
@@ -237,6 +256,7 @@ impl Client {
             ServerMsg::Scores(s) => self.scores = s,
             ServerMsg::Info { .. } => {} // for the server browser, not a connection
             ServerMsg::MatchEnded => self.match_ended = true,
+            ServerMsg::Delta { .. } => {} // patched into a snapshot on arrival
             ServerMsg::Challenge { cookie } => {
                 // Prove our address: say hello again with the server's cookie, right away.
                 if self.status == Status::Connecting && self.cookie != cookie {

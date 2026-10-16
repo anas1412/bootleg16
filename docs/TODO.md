@@ -88,7 +88,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] A review tool for reports: `server --reports reports.jsonl`, `server --review reports.jsonl <n>` (from 10 s before)
 - [ ] de_mirage (community map, BubkeZ): on hold (2026-10-16); loads, plays and has its A/B table; add to MAP_POOL when wanted
 - [ ] de_train: check in game which bomb site is A (its map file doesn't name them; sim::zones::sites_a_first guesses east)
-- [ ] Delta-compressed snapshots (bandwidth ≈ 40 KB/s per client at 10 players)
+- [x] Delta-compressed snapshots (net/src/delta.rs): 10 players moving, 16.5 to 5.3 KB/s per client
 - [x] Official servers only (decided 2026-10-16), no community servers, no server list:
       casual queue (solo or party of 2-5, party on one team, no mid-match joins, reconnect to your match),
       custom games (invite up to 10, Team A/B lobby, knife round then winners pick side); invite codes until accounts
