@@ -47,7 +47,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Defuse reach as CS `PlayerUse`: 64 from your centre to the bomb's, within 45 degrees of your view (no wall check in CS either)
 - [ ] Buy menu: CS2-style team money on the scoreboard (data: `Score::money`, UI session)
 - [x] Hitboxes follow each weapon's aim pose (head moved up to ~7 units between poses; the old test simply aimed 9 units over the head)
-- [ ] Hitboxes don't follow shoot/reload/flinch upper-body animations or gait (aim pose frame 0 only)
+- [x] Hitboxes follow the drawn animation (sim::anim, shared by client and server: gait, spine twist, jump, shoot/reload/flinch); ponytail: the pose is the shooter's moment's, not rewound with lag compensation (positions are)
 - [x] Defuse times 10 s / 5 s with kit (ReGameDLL `DefuseBombStart`)
 - [x] Living Ts get no money when time runs out (after `#Target_Saved`)
 - [x] Team buy restrictions match `CanBuyWeaponByMaptype` (de_ maps)
