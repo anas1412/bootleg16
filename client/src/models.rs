@@ -137,20 +137,21 @@ fn bone_transform(b: &BoneTransform) -> Transform {
 /// Models loaded on first use and kept (missing files are remembered as missing).
 #[derive(Resource)]
 pub struct ModelCache {
-    dir: PathBuf,
+    /// The mod's models, then Half-Life's (like GoldSrc: gibs live there).
+    dirs: [PathBuf; 2],
     models: HashMap<String, Option<Arc<Loaded>>>,
 }
 
 impl ModelCache {
     pub fn new(game_dir: PathBuf) -> ModelCache {
-        ModelCache { dir: game_dir.join("cstrike/models"), models: HashMap::new() }
+        ModelCache { dirs: [game_dir.join("cstrike/models"), game_dir.join("valve/models")], models: HashMap::new() }
     }
 
     pub fn get(&mut self, file: &str, images: &mut Assets<Image>, materials: &mut Assets<StudioMaterial>) -> Option<Arc<Loaded>> {
         if let Some(m) = self.models.get(file) {
             return m.clone();
         }
-        let loaded = Model::load(self.dir.join(file)).ok().map(|model| {
+        let loaded = self.dirs.iter().find_map(|d| Model::load(d.join(file)).ok()).map(|model| {
             let mats = model
                 .textures()
                 .into_iter()

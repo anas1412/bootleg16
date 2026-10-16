@@ -28,6 +28,9 @@ pub enum Cue {
     Flash { at: [f32; 3] },
     Smoke { at: [f32; 3] },
     Bounce { kind: Kind, at: [f32; 3] },
+    /// A breakable broke (`CBreakable::Die`: one of two sounds, pitch 95-124 (97-103 = 100),
+    /// volume 0.85-1).
+    Break { material: sim::breakables::Material, at: [f32; 3] },
     /// A bullet hit the map here: its material's sound, and half the time a ricochet.
     Impact { at: [f32; 3], normal: [f32; 3] },
     DryFire { pistol: bool },
@@ -202,6 +205,22 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
             Cue::Bounce { kind, at } => {
                 let file = if kind == Kind::He { "weapons/he_bounce-1.wav".into() } else { sounds.pick(&["weapons/grenade_hit1.wav", "weapons/grenade_hit2.wav", "weapons/grenade_hit3.wav"]) };
                 plays.push(Play { file, at: Some(at), volume: 0.5, attn: ATTN_NORM, pitch: 1.0 });
+            }
+            Cue::Break { material, at } => {
+                use sim::breakables::Material::*;
+                let options: &[&str] = match material {
+                    Glass | UnbreakableGlass => &["debris/bustglass1.wav", "debris/bustglass2.wav"],
+                    Wood => &["debris/bustcrate1.wav", "debris/bustcrate2.wav"],
+                    Metal | Computer => &["debris/bustmetal1.wav", "debris/bustmetal2.wav"],
+                    Flesh => &["debris/bustflesh1.wav", "debris/bustflesh2.wav"],
+                    Concrete | Rocks => &["debris/bustconcrete1.wav", "debris/bustconcrete2.wav"],
+                    CeilingTile => &["debris/bustceiling.wav"],
+                };
+                let file = sounds.pick(options);
+                let pitch = 95 + (sounds.rand() * 30.0) as u32;
+                let pitch = if pitch > 97 && pitch < 103 { 100 } else { pitch };
+                let volume = 0.85 + sounds.rand() * 0.15;
+                plays.push(Play { file, at: Some(at), volume, attn: ATTN_NORM, pitch: pitch as f32 / 100.0 });
             }
             Cue::Impact { at, normal } => {
                 // `EV_HLDM_PlayTextureSound`: the surface's sound (pitch 96-111%), ATTN_NORM.

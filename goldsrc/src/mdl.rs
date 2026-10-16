@@ -397,6 +397,18 @@ impl Model {
 
     /// Triangles of the first sub-model of every body part, posed (model space).
     pub fn posed_mesh(&self, pose: &[BoneTransform]) -> Vec<MeshPart> {
+        self.posed_body(pose, 0)
+    }
+
+    /// How many bodies there are (every combination of sub-models).
+    pub fn body_count(&self) -> usize {
+        let (num_parts, part_index) = (self.header_i32(204), self.header_i32(208));
+        (0..num_parts).map(|p| self.header_i32(part_index + p * 76 + 64).max(1)).product::<usize>().max(1)
+    }
+
+    /// Like `posed_mesh` for `body`, GoldSrc's sub-model choice (each part's sub-model is
+    /// `body / base % count`): gib models keep a different shard in each.
+    pub fn posed_body(&self, pose: &[BoneTransform], body: usize) -> Vec<MeshPart> {
         let i16_at = |o: usize| self.data.get(o..o + 2).map(|b| i16::from_le_bytes([b[0], b[1]])).unwrap_or(0);
         let f32_at = |o: usize| self.data.get(o..o + 4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).unwrap_or(0.0);
         // Only the sizes are needed (UVs are in texels); decoding the pixels here cost a lot per frame.
@@ -407,7 +419,8 @@ impl Model {
         let (num_parts, part_index) = (self.header_i32(204), self.header_i32(208));
         let mut out: Vec<MeshPart> = Vec::new();
         for p in 0..num_parts {
-            let model = self.header_i32(part_index + p * 76 + 72); // first sub-model of this body part
+            let (count, base) = (self.header_i32(part_index + p * 76 + 64).max(1), self.header_i32(part_index + p * 76 + 68).max(1));
+            let model = self.header_i32(part_index + p * 76 + 72) + (body / base % count) * 112; // this body's sub-model of the part
             let (num_mesh, mesh_index) = (self.header_i32(model + 72), self.header_i32(model + 76));
             let (num_verts, vert_info, vert_index) = (self.header_i32(model + 80), self.header_i32(model + 84), self.header_i32(model + 88));
             let vert_bone = |v: usize| self.data.get(vert_info + v).copied().unwrap_or(0) as u16;
