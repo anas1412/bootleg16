@@ -9,6 +9,10 @@
 
 ## Builds
 - Always: `systemd-run --user --scope -q -p MemoryMax=3G -- cargo build -p <crate> -j 2`.
+- Dev builds: mold linker + rpath (.cargo/config.toml), line-tables-only debug info, Bevy `dynamic_linking`
+  (client default feature `dev`). Release: `cargo build --release -p client --no-default-features`.
+  Don't toggle these casually: changing features/profiles rebuilds Bevy (~30-45 min at -j 2).
+- Tests: run only the tests for what changed.
 
 ## Docs
 - Open items go in docs/TODO.md, lessons in docs/GOTCHAS.md.

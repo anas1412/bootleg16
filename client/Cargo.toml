@@ -10,5 +10,9 @@ net = { path = "../net" }
 bevy = { version = "0.20", features = ["wav"] }
 
 [features]
+# Development builds link Bevy as a shared library (rebuilds only link our code).
+# Release / shipping: `cargo build --release -p client --no-default-features`.
+default = ["dev"]
+dev = ["bevy/dynamic_linking"]
 # Per-system timings: `cargo build -p client --features profile`, run, open trace-*.json in ui.perfetto.dev.
 profile = ["bevy/trace_chrome"]

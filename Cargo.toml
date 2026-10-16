@@ -5,5 +5,8 @@ resolver = "2"
 # Bevy is unusably slow unoptimized; keep our own code fast to rebuild.
 [profile.dev]
 opt-level = 3
+# Line numbers only (crash reports still point at the line): full debug info made a 2 GB binary.
+debug = "line-tables-only"
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
