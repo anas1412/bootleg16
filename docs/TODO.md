@@ -45,13 +45,13 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] All rule values in a server config file (config/server.cfg, `server --config`)
 - [x] Round HUD: score, clock, freeze/bomb states, money +/-, announcements, plant/defuse bars; bomb models, beeps, sounds
 - [x] Shop trimmed to the chosen list (docs/RULES.md 4); ammo not sold, refilled each round
-- [ ] Defuse needs only reach + looking roughly at it; CS traces +use to the bomb entity
+- [x] Defuse reach as CS `PlayerUse`: 64 from your centre to the bomb's, within 45 degrees of your view (no wall check in CS either)
 - [ ] Buy menu: CS2-style team money on the scoreboard (B where you can't buy now says why)
 - [x] Hitboxes follow each weapon's aim pose (head moved up to ~7 units between poses; the old test simply aimed 9 units over the head)
 - [ ] Hitboxes don't follow shoot/reload/flinch upper-body animations or gait (aim pose frame 0 only)
-- [ ] ⚠ Defuse times (10 s / 5 s with kit)
-- [ ] ⚠ Living Ts get no money when time runs out (`MarkLivingPlayersOnTeamAsNotReceivingMoneyNextRound` call sites)
-- [ ] ⚠ Team buy restrictions (`CanBuyWeaponByMaptype`)
+- [x] Defuse times 10 s / 5 s with kit (ReGameDLL `DefuseBombStart`)
+- [x] Living Ts get no money when time runs out (after `#Target_Saved`)
+- [x] Team buy restrictions match `CanBuyWeaponByMaptype` (de_ maps)
 - [ ] ⚠ Hostage money formulas (only for cs_ maps, not milestone 1)
 
 ### Players and bots

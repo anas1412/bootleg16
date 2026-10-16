@@ -19,10 +19,12 @@ pub(super) enum Bomb {
     Gone,
 }
 
-/// How close (eyes to bomb) a counter-terrorist must be to defuse, and how squarely they
-/// must look at it (cosine of the angle).
-const DEFUSE_REACH: f32 = 72.0;
-const DEFUSE_LOOK: f32 = 0.6;
+/// CS 1.6 `PlayerUse`: things within `MAX_PLAYER_USE_RADIUS` (player centre to the bomb's
+/// box centre, 4 units over where it lies) and in front (`VIEW_FIELD_NARROW`, the cosine from
+/// the eyes; no wall check) can be used.
+const DEFUSE_REACH: f32 = 64.0;
+const DEFUSE_LOOK: f32 = 0.7;
+const BOMB_CENTRE: f32 = 4.0;
 
 impl Server {
     pub(super) fn defuser(&self) -> Option<u8> {
@@ -112,12 +114,14 @@ impl Server {
                 }
                 // The defuser must keep holding use, alive, close and looking at it.
                 let still = |c: &Remote| {
-                    let eye = c.state.movement.eye();
-                    let d = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
+                    let (o, eye) = (c.state.movement.origin, c.state.movement.eye());
+                    let centre = [at[0], at[1], at[2] + BOMB_CENTRE];
+                    let near = (0..3).map(|i| (centre[i] - o[i]).powi(2)).sum::<f32>().sqrt() <= DEFUSE_REACH;
+                    let d = [centre[0] - eye[0], centre[1] - eye[1], centre[2] - eye[2]];
                     let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
                     let (f, _, _) = bullets::view_vectors(c.view.1, c.view.0);
                     let look = if len > 1.0 { (d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / len } else { 1.0 };
-                    c.team == Team::Ct && c.vitals.alive() && c.use_held && len <= DEFUSE_REACH && look >= DEFUSE_LOOK
+                    c.team == Team::Ct && c.vitals.alive() && c.use_held && near && look > DEFUSE_LOOK
                 };
                 match defuse {
                     Some((id, done)) => {

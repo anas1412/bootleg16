@@ -103,6 +103,11 @@ impl Server {
         let pay = self.round.end_round(self.tick, winner, reason);
         let max = self.round.cfg.max_money;
         for c in self.clients.values_mut().filter(|c| c.team != Team::Spectator) {
+            // Time ran out: Ts still alive (who didn't plant) get nothing (CS 1.6
+            // `MarkLivingPlayersOnTeamAsNotReceivingMoneyNextRound` after `#Target_Saved`).
+            if reason == EndReason::TimeUp && c.team == Team::T && c.vitals.alive() {
+                continue;
+            }
             c.money = (c.money + pay[side(c.team)]).min(max);
         }
         self.events.push(GameEvent::RoundEnd { winner, reason });

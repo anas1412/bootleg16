@@ -139,3 +139,21 @@ fn bomb_explodes_wins_the_round_and_kills_nearby() {
     wait(&mut g, 2.0, Input::default(), Input::default(), &mut ev);
     assert!(g.a.broken.is_empty(), "crates not restored: {:?}", g.a.broken);
 }
+
+#[test]
+fn time_running_out_pays_living_terrorists_nothing() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, MatchConfig { round_time: 2.0, ..quick() });
+    g.connect_as(Some(Team::T), Some(Team::Ct));
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
+    let mut ev = Vec::new();
+    while g.a.round.phase != Phase::Live {
+        wait(&mut g, 0.05, Input::default(), Input::default(), &mut ev);
+    }
+    let (t, ct) = (g.server.money(a).unwrap(), g.server.money(b).unwrap());
+    ev.clear();
+    wait(&mut g, 2.5, Input::default(), Input::default(), &mut ev);
+    assert!(ev.iter().any(|e| *e == GameEvent::RoundEnd { winner: Team::Ct, reason: EndReason::TimeUp }), "{ev:?}");
+    assert_eq!(g.server.money(a), Some(t), "the living T gets no loss bonus");
+    assert_eq!(g.server.money(b), Some(ct + 3250));
+}

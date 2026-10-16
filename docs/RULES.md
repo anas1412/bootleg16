@@ -47,7 +47,7 @@ before step 3 (weapons/rounds).
 | Buy time | 20 s | starts when freeze time ends |
 | Round time | 1:55 | CS2 `mp_roundtime_defuse 1.92` |
 | Bomb timer | 40 s | CS2 value (CS 1.6 default was 45 s) |
-| Defuse time | 10 s, 5 s with kit | ⚠ same in both games by reputation; verify in `cs.so` |
+| Defuse time | 10 s, 5 s with kit | ReGameDLL `CGrenade::DefuseBombStart` (original path) |
 | Tick rate | 128 (64 option) | see the project plan |
 
 For comparison, CS 1.6's own defaults (`cvar`): `mp_freezetime 6`,
@@ -138,9 +138,9 @@ config option for purists.
 Unlike CS2, 1.6 pays a flat $300 per kill for every weapon. There are no SMG,
 shotgun or AWP kill-reward differences.
 
-⚠ The rule that living T players get no money when time runs out on a bomb map
-(`MarkLivingPlayersOnTeamAsNotReceivingMoneyNextRound`) exists in the binary,
-but its call sites were inlined and are not traced yet.
+When time runs out on a bomb map (`#Target_Saved`), the T players still alive get no money
+next round (`MarkLivingPlayersOnTeamAsNotReceivingMoneyNextRound(TERRORIST)`, ReGameDLL
+original path; the dead Ts get their loss bonus).
 
 ---
 
@@ -163,8 +163,8 @@ reserves. The full 1.6 tables stay here for reference.
 | Five-SeveN (CT) | 750 | P90 | 2,350 | SG552 (T) | 3,500 | | | | |
 | Dual Elites (T) | 800 | | | AUG (CT) | 3,500 | | | | |
 
-Tactical shield (CT): $2,200. ⚠ Team restrictions in the table follow the
-well-known 1.6 buy menus; verify against `CanBuyWeaponByMaptype`.
+Tactical shield (CT): $2,200. Team restrictions in the table match
+`CanBuyWeaponByMaptype` (ReGameDLL, bomb maps).
 
 ### Equipment (`ItemCostType`)
 
