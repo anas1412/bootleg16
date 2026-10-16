@@ -64,6 +64,23 @@ cargo run -p net --example smoke -- <lobby-ip>:27010
 
 Two test players party up, start a custom game and join the booked server. Add `--local` when testing on the hosting machine itself behind a home router (it can't reach its own public IP).
 
+## Test bots
+
+Bots are for testing only: they never play in real matches, because an official lobby only lets in players signed in with Steam. They're real network players (they sign in, queue, get a ticket, connect) with a simple brain: buy a rifle, find their way across the map (a walkable-points graph built from the map itself), and shoot enemies they can see, with a reaction time and aim error. They only know what the server shows them.
+
+- **Whole-match test:** `cargo test -p net --test bots` runs 10 bots through the lobby queue and a short match to the end, in a few seconds.
+- **On a deployment:** start the lobby as a test lobby, then fill it with bots (they keep queueing for new matches):
+
+```bash
+./host.sh --test
+```
+
+```bash
+cargo run -p net --example bots -- <lobby-ip>:27010 10
+```
+
+Add `--local` when running the bots on the hosting machine itself. `./host.sh --official` turns the lobby back into an official one.
+
 ## Shipping the game
 
 Build the release with the lobby's address inside, so players just open the game:

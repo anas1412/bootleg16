@@ -45,6 +45,8 @@ pub enum LobbyMsg {
     State(LobbyState),
     /// Lobby -> player: unknown session (the lobby restarted, or you timed out): sign in again.
     Expired,
+    /// Lobby -> player: not let in (this lobby needs a Steam login).
+    Refused { reason: String },
     /// Game server -> lobby: a player reported another (by their match tickets).
     Report { token: String, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: String, round: u32 },
 }
@@ -189,6 +191,9 @@ pub struct Master {
     /// When the last status line was printed.
     reported: Instant,
     pub steam_mode: SteamMode,
+    /// Only players signed in with Steam (official lobbies: keeps test bots and anonymous
+    /// clients out of real matches).
+    pub require_steam: bool,
     /// Steam logins waiting for Steam's answer: (session, Steam id, ticket).
     steam_checks: Vec<(u64, u64, Vec<u8>)>,
     /// Who holds each match ticket (Steam id, name), for reports; kept a few hours.
@@ -202,7 +207,7 @@ impl Master {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7) ^ ((std::process::id() as u64) << 32);
-        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, steam_checks: Vec::new(), seats: HashMap::new(), reports: None })
+        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, rng: seed | 1, match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -264,6 +269,9 @@ impl Master {
                     self.servers.insert(from, GameServer { public, region, token, official, busy, seen: Instant::now() });
                 }
                 Some(LobbyMsg::Report { token, reporter, target, reason, map, round }) if self.tokens.contains(&token) => self.file_report(reporter, target, reason, &map, round),
+                Some(LobbyMsg::Hello { steam: None, pad, .. }) if pad.len() >= PAD && self.require_steam => {
+                    let _ = self.udp.send_to(&encode(&LobbyMsg::Refused { reason: "Start Steam to play online.".into() }), from);
+                }
                 Some(LobbyMsg::Hello { name, steam, pad }) if pad.len() >= PAD => {
                     // Signed in already (our Welcome got lost): the same session again.
                     let session = match self.players.iter().find(|(_, p)| p.addr == from) {
@@ -348,7 +356,11 @@ impl Master {
 
     /// A Steam login was refused: the player stays signed in without Steam, and is told.
     pub fn steam_refused(&mut self, session: u64) {
-        if let Some(p) = self.players.get_mut(&session) {
+        if self.require_steam {
+            let Some(p) = self.players.remove(&session) else { return };
+            self.leave(p.id, p.party);
+            let _ = self.udp.send_to(&encode(&LobbyMsg::Refused { reason: "Steam couldn't confirm your sign-in. Restart Steam and try again.".into() }), p.addr);
+        } else if let Some(p) = self.players.get_mut(&session) {
             p.notice = "Steam sign-in failed: playing without Steam.".into();
         }
     }

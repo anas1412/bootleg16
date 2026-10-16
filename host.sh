@@ -6,6 +6,8 @@
 #   options: --servers N   game servers here (each runs one match at a time)
 #            --ip X        the public IP players connect to (found automatically otherwise)
 #            --region R    where this machine is, e.g. eu, na, sa, asia (players get the closest)
+#            --test        a test lobby: lets in players without Steam (test bots, smoke tests)
+#            --official    back to an official lobby (Steam players only; the default)
 #   ./host.sh token | status | logs | update | stop
 #
 # Settings are remembered in hosting/: after the first run, plain `./host.sh` brings the
@@ -16,7 +18,7 @@ mkdir -p hosting hosting/reports
 compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
 
 [ -f hosting/settings ] && . hosting/settings
-LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}"
+LOBBY="${LOBBY:-here}" SERVERS="${SERVERS:-}" IP="${IP:-}" REGION="${REGION:-eu}" TEST="${TEST:-}"
 
 case "${1:-}" in
   stop) compose down -t 5; exit ;;   # now: running matches end
@@ -33,6 +35,8 @@ while [ $# -gt 0 ]; do
     --servers) SERVERS="$2"; shift 2 ;;
     --ip) IP="$2"; shift 2 ;;
     --region) REGION="$2"; shift 2 ;;
+    --test) TEST=1; shift ;;
+    --official) TEST=""; shift ;;
     *) echo "Unknown option $1 (see the top of host.sh)"; exit 1 ;;
   esac
 done
@@ -58,7 +62,7 @@ if [ -z "$IP" ]; then
   IP=$(curl -4fsS --max-time 5 https://api.ipify.org || true)
   [ -n "$IP" ] || { echo "Couldn't find this machine's public IP: run again with --ip <address>."; exit 1; }
 fi
-printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\n' "$LOBBY" "$SERVERS" "$IP" "$REGION" > hosting/settings
+printf 'LOBBY=%q\nSERVERS=%q\nIP=%q\nREGION=%q\nTEST=%q\n' "$LOBBY" "$SERVERS" "$IP" "$REGION" "$TEST" > hosting/settings
 
 # One config per game server (the shipped rules, pointed at the lobby), and the compose file.
 lobby_addr=$([ "$LOBBY" = here ] && echo 127.0.0.1:27010 || echo "$LOBBY:27010")
@@ -67,7 +71,7 @@ rm -f hosting/server*.cfg
   echo "# Made by host.sh: edit config/server.cfg instead, then run ./host.sh"
   echo "services:"
   if [ "$LOBBY" = here ]; then
-    echo "  lobby: {image: bootleg16, network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports]}"
+    echo "  lobby: {image: bootleg16, network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports]}"
   fi
   for i in $(seq 1 "$SERVERS"); do
     port=$((27014 + i))

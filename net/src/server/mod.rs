@@ -458,7 +458,8 @@ impl Server {
         let tick = self.tick;
         for (from, bytes) in self.socket.recv_all() {
             // Budget first: floods and junk cost nothing past this line.
-            if !self.guard.allow(from, bytes.len(), self.clients.contains_key(&from), tick) {
+            let players = if self.clients.contains_key(&from) { self.clients.keys().filter(|a| a.ip() == from.ip()).count() } else { 0 };
+            if !self.guard.allow(from, bytes.len(), players, tick) {
                 continue;
             }
             if let Some(msg) = decode::<ClientMsg>(&bytes) {
@@ -853,7 +854,7 @@ impl Server {
                         self.socket.send(from, encode(&ServerMsg::Challenge { cookie }));
                         return;
                     }
-                    if self.clients.keys().filter(|a| a.ip() == from.ip()).count() >= guard::MAX_PER_IP {
+                    if !from.ip().is_loopback() && self.clients.keys().filter(|a| a.ip() == from.ip()).count() >= guard::MAX_PER_IP {
                         self.socket.send(from, encode(&ServerMsg::Reject { reason: "too many players from your address".into() }));
                         return;
                     }

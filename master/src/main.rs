@@ -2,7 +2,8 @@
 //! `--tokens`: one secret per line; only game servers announcing with one get matches.
 //! `--reports file`: where player reports are appended (one JSON object per line).
 //! Built with `--features steam`, it checks Steam logins with Steam (`--steam-app <id>`,
-//! default 480, Valve's test app until we have our own).
+//! default 480, Valve's test app until we have our own), and only lets in players signed in
+//! with Steam unless started with `--allow-anonymous` (test lobbies: smoke tests, bots).
 use std::net::SocketAddr;
 
 #[cfg(feature = "steam")]
@@ -23,6 +24,10 @@ fn main() {
         let app: u32 = flag("--steam-app").and_then(|a| a.parse().ok()).unwrap_or(480);
         let mut steam = steam::Checker::start(app);
         m.steam_mode = net::master::SteamMode::Verify;
+        m.require_steam = !args.iter().any(|a| a == "--allow-anonymous");
+        if !m.require_steam {
+            println!("test lobby: players without Steam (bots, smoke tests) are let in");
+        }
         loop {
             m.step();
             steam.run(&mut m);

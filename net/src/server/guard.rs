@@ -7,18 +7,22 @@ use std::net::IpAddr;
 
 /// Bigger datagrams are never ours (a snapshot-sized input packet is a few hundred bytes).
 pub(super) const MAX_PACKET: usize = 1400;
-/// Packets per second per IP: players (inputs at 128/s, voice, a little spare) / everyone else.
+/// Packets per second: per player (inputs at 128/s, voice, a little spare; an IP with
+/// several players gets that much per player) / per IP for everyone else.
 const PLAYER_RATE: f32 = 600.0;
 const STRANGER_RATE: f32 = 20.0;
 /// Players from one IP (a LAN party behind one router is fine, a flood of slots isn't).
+/// Loopback is exempt: it can't be spoofed from outside, and tests run many players from it.
 pub(super) const MAX_PER_IP: usize = 6;
 /// IPs remembered at once; past this, strangers are ignored until the table drains.
 const MAX_TRACKED: usize = 8192;
 
 pub(super) struct Guard {
     secret: u64,
-    /// IP -> (budget left, last tick it was topped up).
-    buckets: HashMap<IpAddr, (f32, u32)>,
+    /// (IP, from a player?) -> (budget left, last tick it was topped up). Players and
+    /// strangers on one IP have separate budgets, so players can't starve joins and the
+    /// other way round.
+    buckets: HashMap<(IpAddr, bool), (f32, u32)>,
 }
 
 impl Guard {
@@ -28,16 +32,19 @@ impl Guard {
         Guard { secret: mix(t ^ ((std::process::id() as u64) << 32)), buckets: HashMap::new() }
     }
 
-    /// May this packet be looked at? `player`: the address is already in the game.
-    pub(super) fn allow(&mut self, from: SocketAddr, len: usize, player: bool, tick: u32) -> bool {
+    /// May this packet be looked at? `players`: how many players are in the game from this
+    /// IP (0 = a stranger's packet: the address isn't in the game).
+    pub(super) fn allow(&mut self, from: SocketAddr, len: usize, players: usize, tick: u32) -> bool {
         if len > MAX_PACKET {
             return false;
         }
-        let rate = if player { PLAYER_RATE } else { STRANGER_RATE };
-        if !player && self.buckets.len() >= MAX_TRACKED && !self.buckets.contains_key(&from.ip()) {
+        let player = players > 0;
+        let rate = if player { PLAYER_RATE * players as f32 } else { STRANGER_RATE };
+        let key = (from.ip(), player);
+        if !player && self.buckets.len() >= MAX_TRACKED && !self.buckets.contains_key(&key) {
             return false;
         }
-        let (budget, last) = self.buckets.entry(from.ip()).or_insert((rate, tick));
+        let (budget, last) = self.buckets.entry(key).or_insert((rate, tick));
         *budget = (*budget + (tick - *last) as f32 * rate / TICK_RATE as f32).min(rate);
         *last = tick;
         if *budget < 1.0 {
@@ -72,4 +79,27 @@ fn mix(mut z: u64) -> u64 {
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
     z ^ (z >> 31)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn players_behind_one_ip_each_get_a_budget_and_joins_still_get_through() {
+        let mut g = Guard::new();
+        let ip = |port| SocketAddr::from(([10, 0, 0, 1], port));
+        // Five players behind one router, 128 inputs a second each, for a second.
+        let mut dropped = 0;
+        for tick in 0..TICK_RATE {
+            for p in 0..5 {
+                if !g.allow(ip(1000 + p), 100, 5, tick) {
+                    dropped += 1;
+                }
+            }
+        }
+        assert_eq!(dropped, 0);
+        // A friend joining from the same router isn't starved by them.
+        assert!(g.allow(ip(2000), 100, 0, TICK_RATE));
+    }
 }

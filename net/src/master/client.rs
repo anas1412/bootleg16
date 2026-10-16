@@ -69,6 +69,13 @@ impl LobbyClient {
                     self.login = None;
                     self.send(Command::Poll);
                 }
+                Some(LobbyMsg::Refused { reason }) => {
+                    // Try again in a while (Steam may have been started meanwhile).
+                    self.notice = reason;
+                    self.session = None;
+                    self.login = None;
+                    self.last_sent = Some(Instant::now() + Duration::from_secs(9));
+                }
                 Some(LobbyMsg::Expired) => {
                     // Sign in again right away (a new Steam ticket too).
                     self.session = None;

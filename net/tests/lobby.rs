@@ -219,3 +219,21 @@ fn reports_are_filed_with_steam_ids() {
     }
     let _ = std::fs::remove_file(&path);
 }
+
+#[test]
+fn official_lobbies_turn_away_players_without_steam() {
+    let mut m = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
+    m.require_steam = true;
+    let mut anon = LobbyClient::new(m.local_addr(), "bot").unwrap();
+    let mut steam = LobbyClient::new(m.local_addr(), "player").unwrap();
+    steam.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 7, ticket: vec![] })));
+    let start = Instant::now();
+    while anon.notice.is_empty() || !steam.online() {
+        assert!(start.elapsed() < Duration::from_secs(5));
+        m.step();
+        anon.tick();
+        steam.tick();
+    }
+    assert_eq!(anon.notice, "Start Steam to play online.");
+    assert!(!anon.online());
+}
