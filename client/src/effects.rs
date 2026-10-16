@@ -346,6 +346,19 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut gizmos: Gizmos, mut hits: 
                 w.pending_fx.push(e.clone());
                 round.write(RoundNews(e));
             }
+            GameEvent::Broke { material, at, .. } => {
+                use sim::breakables::Material::*;
+                let file = match material {
+                    Glass | UnbreakableGlass => "debris/bustglass1.wav",
+                    Wood => "debris/bustcrate1.wav",
+                    Metal | Computer => "debris/bustmetal1.wav",
+                    Flesh => "debris/bustflesh1.wav",
+                    CeilingTile => "debris/bustceiling.wav",
+                    Concrete | Rocks => "debris/bustconcrete1.wav",
+                };
+                w.cues.push(sound::Cue::At { file, at, far: false });
+                hits.write(Hit::Debris { at, material });
+            }
             GameEvent::RoundStart { .. } | GameEvent::RoundEnd { .. } | GameEvent::SidesSwapped | GameEvent::MatchOver { .. } => {
                 round.write(RoundNews(e));
             }

@@ -26,6 +26,8 @@ pub enum Hit {
     Wall { at: [f32; 3], normal: [f32; 3] },
     /// `dir`: which way the bullet was going.
     Player { at: [f32; 3], dir: [f32; 3], head: bool },
+    /// A breakable broke here: a burst of bits in its material's colour.
+    Debris { at: [f32; 3], material: sim::breakables::Material },
 }
 
 /// Most decals kept at once (oldest go first, like GoldSrc's decal limit).
@@ -42,6 +44,8 @@ struct Looks {
     splat: Handle<StandardMaterial>,
     dust: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
+    /// Breakable debris: glass, wood, metal.
+    shards: [Handle<StandardMaterial>; 3],
 }
 
 /// A round soft-edged spot: `rgb` with alpha falling off from the middle (`hard` 0..1 keeps
@@ -79,6 +83,11 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
         splat: materials.add(decal(images.add(spot(64, [110, 6, 4], 0.3, 0.45)))),
         dust: materials.add(solid(Color::srgb(0.55, 0.5, 0.42))),
         blood: materials.add(solid(Color::srgb(0.55, 0.02, 0.01))),
+        shards: [
+            materials.add(StandardMaterial { base_color: Color::srgba(0.8, 0.9, 1.0, 0.6), unlit: true, alpha_mode: AlphaMode::Blend, ..default() }),
+            materials.add(solid(Color::srgb(0.45, 0.3, 0.15))),
+            materials.add(solid(Color::srgb(0.5, 0.52, 0.55))),
+        ],
     });
 }
 
@@ -140,6 +149,15 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
                 let (p, n) = (y_up(at), y_up(normal).normalize_or(Vec3::Y));
                 decal(&mut commands, p, n, 4.0, &looks.hole, spin);
                 burst(&mut commands, p + n, n, 5, 90.0, 0.9, 0.35, &looks.dust, true);
+            }
+            Hit::Debris { at, material } => {
+                use sim::breakables::Material::*;
+                let m = match material {
+                    Glass | UnbreakableGlass => &looks.shards[0],
+                    Wood => &looks.shards[1],
+                    _ => &looks.shards[2],
+                };
+                burst(&mut commands, y_up(at), Vec3::Y, 24, 180.0, 1.6, 1.2, m, true);
             }
             Hit::Player { at, dir, head } => {
                 let (p, d) = (y_up(at), y_up(dir).normalize_or(Vec3::Y));

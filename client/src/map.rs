@@ -31,11 +31,22 @@ pub struct Batch {
     pub indices: Vec<u32>,
 }
 
+/// GoldSrc `rendermode` / `renderamt` of a brush entity.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Render {
+    /// 0 normal, 1 color, 2 texture (see-through by `amt`), 3 glow, 4 solid (masked), 5 additive.
+    pub mode: u8,
+    /// 0..1 opacity for modes 1, 2 and 5.
+    pub amt: f32,
+}
+
 pub struct MapGeometry {
     /// The world and everything that never moves.
     pub batches: Vec<Batch>,
     /// Doors: (brush model index, batches in the model's own space). The sim says where they are.
     pub movers: Vec<(usize, Vec<Batch>)>,
+    /// Brush entities drawn on their own: breakables (hidden once broken) and see-through ones.
+    pub pieces: Vec<(usize, Render, Vec<Batch>)>,
     /// Decoded textures, indexed by `Batch::texture`. Missing ones are a checkerboard.
     pub textures: Vec<Texture>,
     pub lightmap_size: (usize, usize),
@@ -126,6 +137,7 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
     // (model, offset, group): group 0 is static; each door gets its own group.
     let mut models: Vec<(usize, [f32; 3], usize)> = vec![(0, [0.0; 3], 0)];
     let mut mover_models = Vec::new();
+    let mut piece_models: Vec<(usize, Render)> = Vec::new();
     let mut spawns = Vec::new();
     for e in bsp.entity_list() {
         let class = e.get("classname").map(String::as_str).unwrap_or("");
@@ -145,9 +157,17 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
         }
         if let Some(i) = e.get("model").and_then(|m| m.strip_prefix('*')?.parse::<usize>().ok()) {
             if i < bsp.models.len() {
+                let render = Render {
+                    mode: e.get("rendermode").and_then(|v| v.parse().ok()).unwrap_or(0),
+                    amt: e.get("renderamt").and_then(|v| v.parse::<f32>().ok()).unwrap_or(255.0) / 255.0,
+                };
                 if matches!(class, "func_door" | "func_door_rotating") {
                     mover_models.push(i);
                     models.push((i, [0.0; 3], mover_models.len()));
+                } else if class == "func_breakable" || matches!(render.mode, 1 | 2 | 3 | 5) {
+                    // Groups after the doors' (renumbered below, once all doors are known).
+                    piece_models.push((i, render));
+                    models.push((i, origin, usize::MAX - (piece_models.len() - 1)));
                 } else {
                     models.push((i, origin, 0));
                 }
@@ -159,7 +179,14 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
     // Fully-lit 2x2 block for faces without lightmap data.
     let fullbright = atlas.insert(2, 2, &[255; 12]);
     let new_group = || -> Vec<Batch> { (0..textures.len()).map(|t| Batch { texture: t, ..Default::default() }).collect() };
-    let mut groups: Vec<Vec<Batch>> = (0..=mover_models.len()).map(|_| new_group()).collect();
+    // Pieces' groups come after the doors'.
+    let doors = mover_models.len();
+    for m in &mut models {
+        if m.2 > usize::MAX / 2 {
+            m.2 = doors + 1 + (usize::MAX - m.2);
+        }
+    }
+    let mut groups: Vec<Vec<Batch>> = (0..=doors + piece_models.len()).map(|_| new_group()).collect();
     let mut lm_rects = Vec::new(); // (group, batch, first vertex, atlas pos, smin, tmin)
 
     for (model, offset, group) in models {
@@ -238,7 +265,8 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
     }
     let mut groups = groups.into_iter();
     let batches = groups.next().unwrap_or_default();
-    let movers = mover_models.into_iter().zip(groups).collect();
+    let movers = mover_models.into_iter().zip(groups.by_ref().take(doors)).collect();
+    let pieces = piece_models.into_iter().zip(groups).map(|((m, r), g)| (m, r, g)).collect();
 
-    Ok(MapGeometry { batches, movers, textures, lightmap_size: (ATLAS_W, ah), lightmap_rgba: atlas.rgba, spawns })
+    Ok(MapGeometry { batches, movers, pieces, textures, lightmap_size: (ATLAS_W, ah), lightmap_rgba: atlas.rgba, spawns })
 }

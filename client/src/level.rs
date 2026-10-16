@@ -19,7 +19,7 @@ pub struct LevelPlugin;
 
 impl Plugin for LevelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(AppState::InGame), spawn_level).add_systems(Update, move_doors.in_set(Frame::World));
+        app.add_systems(OnEnter(AppState::InGame), spawn_level).add_systems(Update, (move_doors, hide_broken).in_set(Frame::World));
     }
 }
 
@@ -64,7 +64,7 @@ fn spawn_level(
     let lightmap = images.add(rgba_image(lw as u32, lh as u32, geo.lightmap_rgba, false, TextureFormat::Rgba8Unorm));
     let mut tex_handles = vec![None; geo.textures.len()];
 
-    let mut spawn_batch = |b: map::Batch, commands: &mut Commands| -> Entity {
+    let mut spawn_batch = |b: map::Batch, render: Option<map::Render>, commands: &mut Commands| -> Entity {
         let t = &geo.textures[b.texture];
         let image = tex_handles[b.texture]
             .get_or_insert_with(|| images.add(rgba_image(t.width, t.height, t.rgba.clone(), true, TextureFormat::Rgba8UnormSrgb)))
@@ -74,7 +74,14 @@ fn spawn_level(
             perceptual_roughness: 1.0,
             reflectance: 0.0,
             lightmap_exposure: LIGHTMAP_SCALE,
-            alpha_mode: if t.name.starts_with('{') { AlphaMode::Mask(0.5) } else { AlphaMode::Opaque },
+            // See-through brushes: `texture` mode fades by renderamt, `additive` glows (nuke's glass).
+            base_color: Color::WHITE.with_alpha(render.filter(|r| matches!(r.mode, 1 | 2 | 3 | 5)).map(|r| r.amt).unwrap_or(1.0)),
+            alpha_mode: match render.map(|r| r.mode) {
+                Some(5) | Some(3) => AlphaMode::Add,
+                Some(1) | Some(2) => AlphaMode::Blend,
+                _ if t.name.starts_with('{') => AlphaMode::Mask(0.5),
+                _ => AlphaMode::Opaque,
+            },
             ..default()
         });
         // Keep the mesh on the CPU side too: Bevy needs it to compute the bounding box for
@@ -95,15 +102,34 @@ fn spawn_level(
             .id()
     };
     for b in geo.batches {
-        spawn_batch(b, &mut commands);
+        spawn_batch(b, None, &mut commands);
+    }
+    // Breakables and see-through brushes: one parent each (breakables vanish when broken).
+    for (model, render, batches) in geo.pieces {
+        let parent = commands.spawn((BrushPiece(model), Transform::default(), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
+        for b in batches {
+            let child = spawn_batch(b, Some(render), &mut commands);
+            commands.entity(parent).add_child(child);
+        }
     }
     // Doors: one parent per door, moved every frame to where the sim says it is.
     for (model, batches) in geo.movers {
         let parent = commands.spawn((DoorMesh(model), Transform::default(), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
         for b in batches {
-            let child = spawn_batch(b, &mut commands);
+            let child = spawn_batch(b, None, &mut commands);
             commands.entity(parent).add_child(child);
         }
+    }
+}
+
+/// A breakable or see-through brush entity's render parent; the value is its brush model.
+#[derive(Component)]
+struct BrushPiece(usize);
+
+/// Broken pieces disappear (and come back when the server restores them).
+fn hide_broken(w: Res<Walker>, mut pieces: Query<(&BrushPiece, &mut Visibility)>) {
+    for (BrushPiece(m), mut v) in &mut pieces {
+        v.set_if_neq(if w.client.broken.contains(&(*m as u16)) { Visibility::Hidden } else { Visibility::Inherited });
     }
 }
 
