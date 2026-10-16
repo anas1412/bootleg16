@@ -99,6 +99,8 @@ pub enum Command {
     Decline,
     /// A seat on a deathmatch server (comes back as `found`).
     Deathmatch,
+    /// The pool maps this player's game has (others can't be played with them).
+    Maps(Vec<String>),
     /// Leader, custom games: play this map (None: a random one).
     SetMap(Option<String>),
     /// Leader, custom games: the captains ban maps in turn until one is left.

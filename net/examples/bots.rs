@@ -60,6 +60,7 @@ fn main() {
         .map(|i| {
             let mut c = LobbyClient::new(lobby, &format!("bot{i}")).unwrap();
             c.auto_accept = true; // bots accept every match they're found
+            c.maps = net::config::pool_maps_in(std::path::Path::new(&dir));
             c
         })
         .collect();

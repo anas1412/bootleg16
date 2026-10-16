@@ -6,7 +6,7 @@ impl Server {
     /// Where the server finds maps (`cstrike/maps/<name>.bsp` under this folder). Without it,
     /// it stays on the map it started with.
     pub fn set_game_dir(&mut self, dir: std::path::PathBuf) {
-        self.maps = crate::config::MAP_POOL.iter().filter(|m| dir.join(format!("cstrike/maps/{m}.bsp")).exists()).map(|m| m.to_string()).collect();
+        self.maps = crate::config::pool_maps_in(&dir);
         if !self.maps.contains(&self.map) {
             self.maps.push(self.map.clone());
         }

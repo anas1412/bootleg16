@@ -129,9 +129,10 @@ impl Master {
                 }
             }
             Command::SetMap(map) if leader => {
+                let have = self.common_maps(&self.parties[&party].members.iter().map(|(m, _)| *m).collect::<Vec<_>>());
                 let p = self.parties.get_mut(&party).unwrap();
                 match map {
-                    Some(m) if !crate::config::MAP_POOL.contains(&m.as_str()) => notice = "That map isn't in the pool.".into(),
+                    Some(m) if !have.contains(&m) => notice = "Not everyone in the party has that map.".into(),
                     m => {
                         p.map = m;
                         p.veto = None;
@@ -144,7 +145,9 @@ impl Master {
                     notice = "A veto needs a custom game with someone on each team.".into();
                 } else {
                     p.map = None;
-                    p.veto = Some(Veto { left: crate::config::MAP_POOL.iter().map(|m| m.to_string()).collect(), turn: Group::A });
+                    let members: Vec<u32> = p.members.iter().map(|(m, _)| *m).collect();
+                    let left = self.common_maps(&members);
+                    self.parties.get_mut(&party).unwrap().veto = Some(Veto { left, turn: Group::A });
                 }
             }
             Command::Ban(map) => {
@@ -167,6 +170,11 @@ impl Master {
             Command::Cancel if leader => {
                 self.parties.get_mut(&party).unwrap().queued = None;
                 self.decline(me);
+            }
+            Command::Maps(maps) => {
+                if let Some(p) = self.players.get_mut(&session) {
+                    p.maps = Some(maps.into_iter().filter(|m| crate::config::MAP_POOL.contains(&m.as_str())).collect());
+                }
             }
             Command::Pings(pings) => {
                 if let Some(p) = self.players.get_mut(&session) {

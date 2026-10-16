@@ -18,6 +18,7 @@ struct PlayerSnap {
     /// (inviter, seconds since)
     invites: Vec<(u32, f32)>,
     pings: Vec<(String, u16)>,
+    maps: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -68,6 +69,7 @@ impl Master {
                     found: p.found,
                     invites: p.invites.iter().map(|(from, at)| (*from, at.elapsed().as_secs_f32())).collect(),
                     pings: p.pings.iter().map(|(r, ms)| (r.clone(), *ms)).collect(),
+                    maps: p.maps.clone(),
                 })
                 .collect(),
             parties: self.parties.iter().map(|(id, p)| PartySnap { id: *id, code: p.code.clone(), leader: p.leader, mode: p.mode, members: p.members.clone(), queued: p.queued.map(|t| t.elapsed().as_secs_f32()), map: p.map.clone(), veto: p.veto.clone() }).collect(),
@@ -99,6 +101,7 @@ impl Master {
                     notice: String::new(),
                     invites: p.invites.into_iter().map(|(from, secs)| (from, ago(secs))).collect(),
                     pings: p.pings.into_iter().collect(),
+                    maps: p.maps,
                 };
                 (p.session, player)
             })

@@ -157,7 +157,15 @@ impl MatchConfig {
 }
 
 /// The maps matches are played on (each server has the ones it finds in its game files).
-pub const MAP_POOL: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"];
+pub const MAP_POOL: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train", "de_mirage"];
+/// The pool maps every CS 1.6 install has; others (de_mirage: a community map) only some
+/// players have, so a match only gets a map all its players reported having.
+pub const STOCK_MAPS: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"];
+
+/// The pool maps in a game folder (`cstrike/maps/<name>.bsp`).
+pub fn pool_maps_in(game_dir: &std::path::Path) -> Vec<String> {
+    MAP_POOL.iter().filter(|m| game_dir.join(format!("cstrike/maps/{m}.bsp")).exists()).map(|m| m.to_string()).collect()
+}
 
 /// The addresses in a comma-separated list ("host:port, host:port"). `look_up`: names too
 /// (blocking: a DNS lookup each; off the game loop!), else only literal addresses.

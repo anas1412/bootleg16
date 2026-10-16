@@ -87,6 +87,8 @@ fn start(mut commands: Commands, settings: Res<Settings>, steam: Option<Res<Stea
         // The lobby's public key, built into release builds: only the real lobby can answer.
         c.lobby_key = lobby_key();
         c.builtin_key = c.lobby_key.is_some();
+        // The pool maps this game has (a match only gets a map everyone has).
+        c.maps = net::config::pool_maps_in(&crate::game_dir());
         c
     });
     let args: Vec<String> = std::env::args().collect();

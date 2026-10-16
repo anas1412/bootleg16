@@ -46,14 +46,40 @@ impl Master {
 
     /// Reserve a free official server in `region` (any region: None) for these players and
     /// hand out tickets. False if none.
-    /// `map`: this one (a custom game's pick or veto), or None: a random one from the pool.
+    /// The pool maps one player can play (what their game reported; not told: the stock ones).
+    fn maps_of(&self, player: u32) -> Vec<String> {
+        match self.players.values().find(|p| p.id == player).and_then(|p| p.maps.clone()) {
+            Some(m) => m,
+            None => crate::config::STOCK_MAPS.iter().map(|m| m.to_string()).collect(),
+        }
+    }
+
+    /// The pool maps all these players have.
+    pub(super) fn common_maps(&self, players: &[u32]) -> Vec<String> {
+        let mut maps: Vec<String> = crate::config::MAP_POOL.iter().map(|m| m.to_string()).collect();
+        for p in players {
+            let theirs = self.maps_of(*p);
+            maps.retain(|m| theirs.contains(m));
+        }
+        maps
+    }
+
+    /// `map`: this one (a custom game's pick or veto), or None: a random one from the pool,
+    /// always one every player and the server have.
     pub(super) fn start_match(&mut self, players: Vec<(u32, Group)>, knife_round: bool, region: Option<&str>, map: Option<&str>) -> bool {
-        let free = self.servers.iter().find(|(_, s)| s.official && !s.busy && !s.deathmatch && region.is_none_or(|r| s.region == r) && map.is_none_or(|m| s.maps.iter().any(|x| x == m)));
+        let ids: Vec<u32> = players.iter().map(|(p, _)| *p).collect();
+        let common = self.common_maps(&ids);
+        let fits = |s: &GameServer| match map {
+            Some(m) => s.maps.iter().any(|x| x == m) || s.maps.is_empty(),
+            None => s.maps.is_empty() || s.maps.iter().any(|x| common.contains(x)),
+        };
+        let free = self.servers.iter().find(|(_, s)| s.official && !s.busy && !s.deathmatch && region.is_none_or(|r| s.region == r) && fits(s));
         let Some((addr, public, key, region, maps)) = free.map(|(a, s)| (*a, s.public, s.key, s.region.clone(), s.maps.clone())) else { return false };
+        let playable: Vec<String> = maps.into_iter().filter(|m| common.contains(m)).collect();
         let map = match map {
             Some(m) => m.to_string(),
-            None if maps.is_empty() => String::new(),
-            None => maps[(self.rand() % maps.len() as u64) as usize].clone(),
+            None if playable.is_empty() => String::new(),
+            None => playable[(self.rand() % playable.len() as u64) as usize].clone(),
         };
         // A seat number and a fresh key per player: the server learns the keys from this
         // (sealed) booking, the player from the lobby (encrypted); they never travel in clear.

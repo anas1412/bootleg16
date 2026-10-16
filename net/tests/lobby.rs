@@ -466,3 +466,26 @@ fn a_custom_game_vetoes_maps_down_to_one_and_plays_it() {
     }
     assert_eq!(p.map.as_deref(), Some("de_train"));
 }
+
+#[test]
+fn only_maps_everyone_has_are_offered() {
+    let Some(bsp) = dust2() else { return };
+    let (mut server, lobby) = world(&bsp, 2);
+    let (mut a, mut b) = (LobbyClient::new(lobby, "a").unwrap(), LobbyClient::new(lobby, "b").unwrap());
+    // A has the community map de_mirage too; B only the stock maps.
+    a.maps = net::config::MAP_POOL.iter().map(|m| m.to_string()).collect();
+    b.maps = net::config::STOCK_MAPS.iter().map(|m| m.to_string()).collect();
+    until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
+    b.send(Command::JoinParty { code: a.state.as_ref().unwrap().code.clone() });
+    until(&mut server, &mut [&mut a, &mut b], "party", |c| c[0].state.as_ref().unwrap().members.len() == 2);
+    a.send(Command::SetMode(Mode::Custom));
+    let bid = b.state.as_ref().unwrap().you;
+    a.send(Command::Move { member: bid, group: Group::B });
+    a.send(Command::SetMap(Some("de_mirage".into())));
+    until(&mut server, &mut [&mut a, &mut b], "refused", |c| !c[0].notice.is_empty());
+    assert_eq!(a.notice, "Not everyone in the party has that map.");
+    a.send(Command::StartVeto);
+    until(&mut server, &mut [&mut a, &mut b], "veto", |c| c[0].state.as_ref().unwrap().veto.is_some());
+    let left = a.state.as_ref().unwrap().veto.clone().unwrap().left;
+    assert!(!left.contains(&"de_mirage".to_string()) && left.len() == 4, "{left:?}");
+}

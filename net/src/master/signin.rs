@@ -38,7 +38,7 @@ impl Master {
         self.next_id += 1;
         let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
         let party = self.new_party(id);
-        self.players.insert(session, Player { channel, id, name, steam: 0, addr: from, party, seen: Instant::now(), found: None, notice: String::new(), invites: Vec::new(), pings: HashMap::new() });
+        self.players.insert(session, Player { channel, id, name, steam: 0, addr: from, party, seen: Instant::now(), found: None, notice: String::new(), invites: Vec::new(), pings: HashMap::new(), maps: None });
         if let Some(login) = steam {
             match self.steam_mode {
                 // Unchecked: never let a claim push anyone else out.

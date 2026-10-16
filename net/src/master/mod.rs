@@ -66,6 +66,8 @@ struct Player {
     invites: Vec<(u32, Instant)>,
     /// Ping per region, as the player measured it.
     pings: HashMap<String, u16>,
+    /// The pool maps their game has (None: not told: the stock ones).
+    maps: Option<Vec<String>>,
 }
 
 struct Party {

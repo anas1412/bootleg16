@@ -36,8 +36,11 @@ fn tick(w: &mut World, p: &mut Player, input: &Input) {
 
 #[test]
 fn spawns_land_and_players_can_run() {
-    for map in ["de_dust2", "de_inferno", "de_nuke", "de_train"] {
-        let Some(bsp) = load(map) else { return eprintln!("{map} not installed, skipping") };
+    for map in ["de_dust2", "de_inferno", "de_nuke", "de_train", "de_mirage"] {
+        let Some(bsp) = load(map) else {
+            eprintln!("{map} not installed, skipping");
+            continue;
+        };
         let mut world = World::from_bsp(&bsp);
         let spawns: Vec<[f32; 3]> = bsp
             .entity_list()
@@ -315,7 +318,7 @@ mod shooting {
 fn bomb_site_a_is_the_right_one_on_each_map() {
     // (map, A site centre, B site centre), from the maps themselves (de_dust2 names them) and
     // what's known of each layout. de_train isn't in the list: not verified yet.
-    let expected = [("de_dust2", [1152.0, 2464.0], [-1536.0, 2688.0]), ("de_inferno", [1984.0, 456.0], [288.0, 2784.0]), ("de_nuke", [680.0, -776.0], [648.0, -904.0])];
+    let expected = [("de_dust2", [1152.0, 2464.0], [-1536.0, 2688.0]), ("de_inferno", [1984.0, 456.0], [288.0, 2784.0]), ("de_nuke", [680.0, -776.0], [648.0, -904.0]), ("de_mirage", [-688.0, -1168.0], [-2312.0, 1288.0])];
     for (map, a, b) in expected {
         let Some(bsp) = load(map) else { continue };
         let sites = sim::zones::Zones::from_bsp(&bsp).sites_a_first(map);

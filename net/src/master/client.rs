@@ -20,6 +20,8 @@ pub struct LobbyClient {
     pub notice: String,
     /// Accept found matches without asking (test players, bots).
     pub auto_accept: bool,
+    /// The pool maps this game has (told to the lobby on signing in; empty: not told).
+    pub maps: Vec<String>,
     /// Makes a Steam login for each sign-in (None = anonymous).
     pub steam: Option<Box<dyn FnMut() -> Option<SteamLogin> + Send + Sync>>,
     /// The login for the sign-in in progress (a Steam ticket is used once).
@@ -63,7 +65,7 @@ impl LobbyClient {
         let lobby = *lobbies.first().ok_or(std::io::Error::other("no lobby address"))?;
         let udp = UdpSocket::bind(if lobby.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" })?;
         udp.set_nonblocking(true)?;
-        Ok(LobbyClient { udp, lobbies, lobby, heard: Instant::now(), name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new(), auto_accept: false, steam: None, login: None, lobby_key: None, builtin_key: false, hello: None, cookie: 0, channel: None, unanswered: None, unheard: 0, pinged: None, pinging: Vec::new(), pings: Vec::new() })
+        Ok(LobbyClient { udp, lobbies, lobby, heard: Instant::now(), name: name.into(), session: None, last_sent: None, state: None, found: None, notice: String::new(), auto_accept: false, maps: Vec::new(), steam: None, login: None, lobby_key: None, builtin_key: false, hello: None, cookie: 0, channel: None, unanswered: None, unheard: 0, pinged: None, pinging: Vec::new(), pings: Vec::new() })
     }
 
     /// Signed in and heard from the lobby.
@@ -163,7 +165,11 @@ impl LobbyClient {
                     self.session = Some(session);
                     self.hello = None;
                     self.login = None;
-                    self.send(Command::Poll);
+                    if self.maps.is_empty() {
+                        self.send(Command::Poll);
+                    } else {
+                        self.send(Command::Maps(self.maps.clone()));
+                    }
                 }
                 Some(LobbyMsg::Refused { reason }) if self.session.is_none() => {
                     // Try again in a while (Steam may have been started meanwhile).
