@@ -14,6 +14,12 @@ const LOOKAHEAD: f32 = 0.15;
 /// GoldSrc sound falloff: silent at 1000 / attenuation units (ATTN_NORM 0.8, quiet 1.6).
 const HEAR_NORMAL: f32 = 1000.0 / 0.8;
 const HEAR_QUIET: f32 = 1000.0 / 1.6;
+/// A smoke cloud hides what's behind it once it has bloomed (1 s) until it thins out (last 2 s):
+/// a sphere this big around a point this high over where it popped.
+const SMOKE_RADIUS: f32 = 140.0;
+const SMOKE_LIFT: f32 = 40.0;
+/// Close enough to see through the haze anyway (both in the same cloud).
+const SMOKE_SEE_NEAR: f32 = 64.0;
 
 fn ahead(p: [f32; 3], v: [f32; 3]) -> [f32; 3] {
     std::array::from_fn(|i| p[i] + v[i] * LOOKAHEAD)
@@ -23,7 +29,29 @@ fn dist(a: [f32; 3], b: [f32; 3]) -> f32 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
 }
 
+/// Does the segment a-b pass through the sphere (c, r)?
+fn through_sphere(a: [f32; 3], b: [f32; 3], c: [f32; 3], r: f32) -> bool {
+    let d: [f32; 3] = std::array::from_fn(|i| b[i] - a[i]);
+    let f: [f32; 3] = std::array::from_fn(|i| a[i] - c[i]);
+    let dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    let t = (-(f[0] * d[0] + f[1] * d[1] + f[2] * d[2]) / dd.max(1e-6)).clamp(0.0, 1.0);
+    let p: [f32; 3] = std::array::from_fn(|i| f[i] + d[i] * t);
+    p[0] * p[0] + p[1] * p[1] + p[2] * p[2] < r * r
+}
+
 impl Server {
+    /// Is the line a-b hidden by a smoke cloud?
+    fn smoked(&self, a: [f32; 3], b: [f32; 3]) -> bool {
+        if dist(a, b) < SMOKE_SEE_NEAR {
+            return false;
+        }
+        let now = self.tick as f64 * TICK as f64;
+        self.smokes.iter().any(|(at, until)| {
+            let age = sim::grenades::SMOKE_SECONDS - (until - now);
+            age > 1.0 && until - now > 2.0 && through_sphere(a, b, [at[0], at[1], at[2] + SMOKE_LIFT], SMOKE_RADIUS)
+        })
+    }
+
     /// Could `viewer` see any part of `target` (now or a moment from now)?
     fn in_sight(&self, viewer: &Remote, target: &Remote) -> bool {
         let (vm, tm) = (&viewer.state.movement, &target.state.movement);
@@ -39,7 +67,7 @@ impl Server {
                     }
                 }
             }
-            if eyes.iter().any(|e| points.iter().any(|p| !self.world.sight_blocked(*e, *p))) {
+            if eyes.iter().any(|e| points.iter().any(|p| !self.world.sight_blocked(*e, *p) && !self.smoked(*e, *p))) {
                 return true;
             }
         }
@@ -83,5 +111,16 @@ impl Server {
             })
             .cloned()
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn segment_through_sphere() {
+        let c = [0.0, 0.0, 0.0];
+        assert!(super::through_sphere([-200.0, 0.0, 0.0], [200.0, 0.0, 0.0], c, 50.0));
+        assert!(!super::through_sphere([-200.0, 100.0, 0.0], [200.0, 100.0, 0.0], c, 50.0));
+        assert!(!super::through_sphere([100.0, 0.0, 0.0], [200.0, 0.0, 0.0], c, 50.0), "sphere behind the start");
     }
 }

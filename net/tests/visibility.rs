@@ -36,3 +36,24 @@ fn enemies_behind_walls_are_not_sent_but_in_the_open_they_are() {
     // It works both ways.
     assert!(g.b.others().iter().any(|o| o.id == a));
 }
+
+#[test]
+fn smoke_hides_enemies_from_the_server_too() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 0, 0.0);
+    g.connect_as(Some(Team::T), Some(Team::Ct));
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
+    let o = g.server.player(a).unwrap().origin;
+    g.server.teleport(b, [o[0] + 400.0, o[1], o[2]]);
+    for _ in 0..64 {
+        g.tick(Input::default(), Input::default());
+    }
+    assert!(g.a.others().iter().any(|p| p.id == b), "in plain view first");
+    // A smoke between them: thrown straight ahead (smokes pop when they stop rolling).
+    g.server.add_smoke([o[0] + 200.0, o[1], o[2] - 30.0]);
+    for _ in 0..(128 * 3) {
+        g.server.teleport(b, [o[0] + 400.0, o[1], o[2]]);
+        g.tick(Input::default(), Input::default());
+    }
+    assert!(!g.a.others().iter().any(|p| p.id == b), "seen through the smoke");
+}

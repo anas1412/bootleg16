@@ -316,6 +316,12 @@ impl Server {
         self.round.phase
     }
 
+    /// Pop a smoke cloud here (tests, admin).
+    pub fn add_smoke(&mut self, at: [f32; 3]) {
+        let now = self.tick as f64 * TICK as f64;
+        self.smokes.push((at, now + sim::grenades::SMOKE_SECONDS));
+    }
+
     /// Money of a player (tests, admin).
     pub fn money(&self, id: u8) -> Option<i32> {
         self.clients.values().find(|c| c.id == id).map(|c| c.money)
