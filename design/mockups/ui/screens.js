@@ -6,7 +6,7 @@ const shot = n => `${A}shots/${n}`;
 const MENU_ITEMS = [['01', 'Play', 'プレイ', 'play'], ['02', 'Practice', '練習', 'practice'], ['03', 'Settings', '設定', 'settings'], ['04', 'Voice', '音声', 'voice'], ['05', 'Quit', '終了', '']];
 function menuFrame(page, content, extra = '') {
   // depth: the space and the far 16 sit back, the list and the page float in front (parallax)
-  return `${backdrop()}<div class="space" data-tilt="none" data-depth="-0.6"></div><div class="far16" data-tilt="none" data-depth="-3">16</div>
+  return `<div class="space" data-tilt="none" data-depth="-0.6"></div><div class="far16" data-tilt="none" data-depth="-3">16</div>
   <div class="abs scan" style="inset:0"></div>
   <div class="abs tune" style="left:80px;top:200px;width:560px" data-tilt="y 16" data-hinge="left center" data-depth="0.3">${ui.nav(MENU_ITEMS.map(([n, l, j, k]) => [n, l, j, l === page, k]))}</div>
   <div class="abs jp tune" style="left:92px;bottom:262px;font-size:16px;color:var(--tx2);--i:3" data-tilt="y 12" data-hinge="left center">ブートレグ・シックスティーン</div>
@@ -15,12 +15,6 @@ function menuFrame(page, content, extra = '') {
   <div id="page" class="abs tune plate${content ? '' : ' empty'}" style="left:680px;width:fit-content;min-width:640px;max-width:1180px;top:160px;--i:2" data-tilt="y -10" data-hinge="right center" data-depth="0.2">${content}</div><div id="extra" data-tilt="none">${extra}</div>`;
 }
 
-// The world behind the menus: near future, grounded (docs/MAPS.md). Stand-in shots of our maps
-// (CS shots for now; the game ships stills of its own maps), graded overcast and cool, drifting
-// slowly toward you and cross-fading from map to map (menu.js runs it). Grain and a vignette.
-// Nothing else: the menu stays simple.
-const BACKDROPS = ['spec_de_dust2_front.jpg', 'de_inferno_t.jpg', 'de_dust_ct.jpg'];
-const backdrop = () => `<div class="backdrop" data-tilt="none">${BACKDROPS.map((n, i) => `<img src="${shot(n)}" alt="" class="${i ? '' : 'on'}">`).join('')}<i class="grade"></i><i class="grain"></i></div>`;
 const SCREENS = {
   main: {
     name: 'Main menu', note: 'Straight and calm, no page. Pick an item: its page comes in and the menu swings into 3D. Esc swings it back flat.',
@@ -114,6 +108,10 @@ const SCREENS = {
     name: 'Vote', game: 'de_dust_ct.jpg', note: 'A kick or surrender vote: top centre under the score. Your team only; F1 yes, F2 no.',
     html: () => hud() + `<div class="abs" style="left:50%;top:150px;transform:translateX(-50%)">${ui.vote('Kick Rook', 2, 1, 3, 4, '0:18')}</div>
       <div class="abs" style="left:0;right:0;top:300px;display:grid;place-items:center">${ui.announce('Rook was voted out', 'Bureau plays on with 4', 'var(--ct-color)')}</div>`,
+  },
+  spectate: {
+    name: 'Spectating', game: 'spec_de_dust2_front.jpg', note: 'Dead: you watch a living teammate. The corners show their health, armor and weapon; the plate at the bottom says who it is, their game, and how to switch.',
+    html: () => spectate(),
   },
   hud: {
     name: 'In game', game: 'de_dust_ct.jpg', note: 'Live: hits drain health with a trail, shots roll the clip, reloads fill from the centre, money counts with its change, voice rows show who talks, the timer pulses in its last 10 s.',
@@ -219,6 +217,27 @@ const voiceRow = (name, color, ch, you) => `<div class="vc panel hud tune${you ?
   <i class="spr vc-mic" style="--s:${MIC};width:18px;height:18px;color:${you ? 'var(--amber)' : color}"></i>
   <span class="vc-lv">${[6, 12, 9, 4].map(h => `<i style="--h:${h}px"></i>`).join('')}</span>
   <span class="vc-name" style="color:${you ? 'var(--tx1)' : color}">${name}</span><span class="label vc-ch">${ch}</span></div>`;
+// A teammate's tag over their head: name (mic and live level when they talk), health under it,
+// the pip pointing down at them. Far teammates fade (game: teammates.rs).
+const mateTag = (x, y, name, hp, talking, fade = 1) => `<div class="abs mtag" style="left:${x}px;top:${y}px;opacity:${fade}">
+  <div class="mt-name">${talking ? `<i class="spr" style="--s:${MIC};width:14px;height:14px;color:var(--ct-color)"></i><span class="mt-lv">${[5, 10, 7].map(h => `<i style="height:${h}px"></i>`).join('')}</span>` : ''}<span>${name}</span></div>
+  <div class="mt-hp"><i style="width:${hp}%;${hp <= 25 ? 'background:var(--bad)' : ''}"></i></div><i class="mt-pip"></i></div>`;
+
+// Spectating (game: spectate.rs + hud): the same corners as playing, showing who you watch, and
+// one plate at the bottom: who it is, their game this match, how to switch.
+function spectate() {
+  const corners = hud().replace(/<div class="abs keep"[\s\S]*?<\/div><\/div>\s*<\/div>/, '');
+  // not yours or not sent while watching: your money, the crosshair, their ammo
+  return `<style>.stage #money, .stage .xhair, .stage #ammo > :not(.wpn):not(.edge) { display: none !important; }</style>${corners}
+  ${mateTag(1180, 380, 'kova', 64, true)}${mateTag(1490, 410, 'vera', 18, false, .55)}
+  <div class="abs spec tune" style="left:50%;bottom:var(--safe);transform:translateX(-50%)">
+    <div class="label" style="color:var(--tx2)">Watching</div>
+    <div class="sp-row"><span class="h3" style="color:var(--ct-color);text-transform:none">Ghost</span>
+      <span class="sp-stat"><b>14</b> K</span><span class="sp-stat"><b>9</b> D</span><span class="sp-stat"><b>92</b> ADR</span></div>
+    <div class="sp-keys"><span class="label"><b class="key">Mouse 1</b> Next</span><span class="label"><b class="key">Mouse 2</b> Previous</span></div>
+  </div>`;
+}
+
 function hud() {
   const ticks = (c, n) => `<div style="display:flex;gap:4px">${[0, 1, 2, 3, 4].map(i => `<i style="width:28px;height:4px;border-radius:2px;background:${i < n ? c : 'var(--line-2)'}"></i>`).join('')}</div>`;
   return `<div class="abs panel hud scan" style="left:var(--safe);top:var(--safe);width:256px;height:256px;overflow:hidden"><i class="edge"></i>
@@ -243,7 +262,7 @@ function hud() {
     <div class="kf"><span style="color:var(--t-color)">Viper</span>${ui.ico('d_ak47', 84, 28)}<span style="color:var(--ct-color)">Hawk</span></div>
     <div class="kf you bar-r"><span style="color:var(--ct-color)">anas</span>${ui.ico('d_awp', 84, 28)}${ui.ico('d_headshot', 63, 28)}<span style="color:var(--t-color)">Rook</span></div>
     <div class="kf"><span style="color:var(--ct-color)">Ghost</span>${ui.ico('d_m4a1', 84, 28)}<span style="color:var(--t-color)">Blitz</span></div></div>
-  <div class="abs" style="left:960px;top:540px">${[[-1, -20, 2, 12], [-1, 8, 2, 12], [-20, -1, 12, 2], [8, -1, 12, 2]].map(([x, y, w, h]) => `<i class="abs" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:#4CFF6A;box-shadow:0 0 0 1px #0008"></i>`).join('')}</div>
+  <div class="abs xhair" style="left:960px;top:540px">${[[-1, -20, 2, 12], [-1, 8, 2, 12], [-20, -1, 12, 2], [8, -1, 12, 2]].map(([x, y, w, h]) => `<i class="abs" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:#4CFF6A;box-shadow:0 0 0 1px #0008"></i>`).join('')}</div>
   <div class="abs keep" style="left:50%;bottom:var(--safe);transform:translateX(-50%)">${ui.uplink('claudette', 'worried', 'Bomb\'s down on A. Forty seconds. Hold your angle, don\'t peek.')}</div>
   <div class="abs panel hud" id="vitals" style="left:var(--safe);bottom:var(--safe);display:flex"><i class="edge"></i><i class="wash"></i>
     <div style="padding:16px var(--pad);display:flex;align-items:center;gap:var(--gap)">${ui.ico('cross', 36, 36)}<div><div class="num-l" id="hp">100</div><div class="meter" style="width:132px;margin-top:10px"><b id="hp-ghost" style="width:100%"></b><i id="hp-bar" style="width:100%"></i></div></div></div>

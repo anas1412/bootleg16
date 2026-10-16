@@ -189,7 +189,6 @@ fn status(
         v.armor = m.armor as f32;
     }
     let weapon = watched.as_ref().map(|t| t.weapon).unwrap_or(l.active_id());
-    let watched_name = watched.as_ref().and_then(|t| w.client.scores.iter().find(|s| s.id == t.id)).map(|s| s.name.clone());
     let alive = (w.client.vitals.alive() && w.client.id().is_some() && w.client.team() != Team::Spectator) || watched.is_some();
     for mut vis in &mut alive_only {
         vis.set_if_neq(if alive && !covered.0 { Visibility::Inherited } else { Visibility::Hidden });
@@ -220,7 +219,7 @@ fn status(
             Field::Grenades => [("HE", he), ("FLASH", fl), ("SMOKE", sm)].iter().filter(|(_, n)| *n > 0).map(|(name, n)| if *n > 1 { format!("{name} x{n}") } else { name.to_string() }).collect::<Vec<_>>().join("   "),
             Field::Notice => match w.client.team() {
                 _ if w.client.id().is_none() => "Connecting...".into(),
-                _ if watched_name.is_some() => format!("Watching {}", watched_name.clone().unwrap_or_default()),
+                _ if watched.is_some() => String::new(), // the spectate plate says who
                 Team::Spectator => "Spectating  ·  press M to choose a team".into(),
                 _ if !v.alive() => if w.client.practice { "Respawning..." } else { "You are dead" }.into(),
                 _ => String::new(),

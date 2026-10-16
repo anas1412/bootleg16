@@ -64,7 +64,7 @@ pub(super) fn money(
     let alive = w.client.vitals.alive() && w.client.id().is_some();
     let now = time.elapsed_secs();
     let money = w.client.me_info.money;
-    panel.set_if_neq(if w.client.practice { Visibility::Hidden } else { Visibility::Inherited });
+    panel.set_if_neq(if w.client.practice || crate::spectate::spectating(&w) { Visibility::Hidden } else { Visibility::Inherited });
     count.target = money as f32;
     match *last {
         Some((before, _, _)) if before != money => {

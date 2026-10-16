@@ -5,7 +5,7 @@
 //! team that's out sees no enemies at all. Players on the spectator team may watch anyone.
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
-use crate::ui::{kit_text, vh, Anim, Kit, BG0, TX2, TX3};
+use crate::ui::{hud_panel, kit_text, vh, Anim, HudLayer, Kit, BG0, CT_COLOR, LINE_3, SAFE, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use net::protocol::Team;
@@ -14,7 +14,9 @@ pub struct SpectatePlugin;
 
 impl Plugin for SpectatePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Watch>().add_systems(Update, (note_downs, cycle, team_out).chain().in_set(Frame::Ui).run_if(resource_exists::<Walker>));
+        app.init_resource::<Watch>()
+            .add_systems(OnEnter(AppState::InGame), spawn_plate)
+            .add_systems(Update, (note_downs, cycle, team_out, plate).chain().in_set(Frame::Ui).run_if(resource_exists::<Walker>));
     }
 }
 
@@ -86,6 +88,73 @@ fn cycle(mouse: Res<ButtonInput<MouseButton>>, cursor: Single<&CursorOptions>, w
 
 #[derive(Component)]
 struct OutScreen;
+
+/// Bottom centre while you watch someone (design/mockups/ui `spectate`): who, how their
+/// match is going, and the keys to switch.
+#[derive(Component)]
+struct Plate;
+#[derive(Component)]
+enum PlateText {
+    Name,
+    Kills,
+    Deaths,
+    Adr,
+}
+
+fn spawn_plate(mut commands: Commands, kit: Res<Kit>) {
+    let stat = |r: &mut ChildSpawnerCommands, which: PlateText, unit: &str| {
+        r.spawn(Node { align_items: AlignItems::Baseline, column_gap: vh(4.0), ..default() }).with_children(|s| {
+            s.spawn((which, kit_text("0", 20.0, TX1, &kit.num)));
+            s.spawn(kit_text(unit, 13.0, TX2, &kit.text));
+        });
+    };
+    let key = |r: &mut ChildSpawnerCommands, cap: &str, what: &str| {
+        r.spawn(Node { align_items: AlignItems::Center, column_gap: vh(8.0), ..default() }).with_children(|k| {
+            k.spawn((Node { padding: UiRect::axes(vh(6.0), vh(1.0)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(2)), ..default() }, BorderColor::all(LINE_3)))
+                .with_children(|c| {
+                    c.spawn(kit_text(cap, 11.0, TX1, &kit.num));
+                });
+            k.spawn(kit_text(what, 13.0, TX2, &kit.text));
+        });
+    };
+    commands
+        .spawn((Plate, HudLayer, Visibility::Hidden, DespawnOnExit(AppState::InGame), Node { position_type: PositionType::Absolute, width: percent(100), bottom: vh(SAFE), justify_content: JustifyContent::Center, ..default() }))
+        .with_children(|row| {
+            row.spawn(hud_panel(Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: vh(8.0), padding: UiRect::axes(vh(32.0), vh(14.0)), ..default() })).with_children(|p| {
+                p.spawn(kit_text("WATCHING", 13.0, TX2, &kit.text));
+                p.spawn(Node { align_items: AlignItems::Baseline, column_gap: vh(20.0), ..default() }).with_children(|r| {
+                    r.spawn((PlateText::Name, kit_text("", 26.0, TX1, &kit.text)));
+                    stat(r, PlateText::Kills, "K");
+                    stat(r, PlateText::Deaths, "D");
+                    stat(r, PlateText::Adr, "ADR");
+                });
+                p.spawn(Node { column_gap: vh(28.0), ..default() }).with_children(|r| {
+                    key(r, "MOUSE 1", "NEXT");
+                    key(r, "MOUSE 2", "PREVIOUS");
+                });
+            });
+        });
+}
+
+fn plate(w: Res<Walker>, watch: Res<Watch>, covered: Res<crate::ui::Covered>, mut root: Single<&mut Visibility, With<Plate>>, mut texts: Query<(&PlateText, &mut Text, &mut TextColor)>) {
+    let who = spectating(&w).then(|| target(&w, &watch)).flatten().and_then(|t| w.client.scores.iter().find(|s| s.id == t.id));
+    root.set_if_neq(if who.is_some() && !covered.0 { Visibility::Inherited } else { Visibility::Hidden });
+    let Some(s) = who else { return };
+    for (which, mut t, mut c) in &mut texts {
+        let v = match which {
+            PlateText::Name => {
+                c.set_if_neq(TextColor(if s.team == Team::T { T_COLOR } else { CT_COLOR }));
+                s.name.clone()
+            }
+            PlateText::Kills => s.kills.to_string(),
+            PlateText::Deaths => s.deaths.to_string(),
+            PlateText::Adr => (s.damage / s.rounds.max(1)).to_string(),
+        };
+        if t.0 != v {
+            t.0 = v;
+        }
+    }
+}
 
 /// No living teammate while you are dead: black over the world, under the HUD.
 fn team_out(mut commands: Commands, w: Res<Walker>, kit: Res<Kit>, mut watch: ResMut<Watch>, screens: Query<Entity, With<OutScreen>>) {

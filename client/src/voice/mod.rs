@@ -9,7 +9,7 @@ pub use page::{apply, page, VoiceAction};
 
 use crate::binds::{Action, Binds};
 use crate::game::{FlyCam, Frame, Walker};
-use rows::Talking;
+pub use rows::{MicIcon, Talking};
 use crate::menu::{overlay_open, AppState, Overlay};
 use bevy::prelude::*;
 use net::protocol::{VoiceChannel, VOICE_FRAME, VOICE_RATE};

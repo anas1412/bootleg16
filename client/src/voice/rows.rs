@@ -13,7 +13,14 @@ use std::collections::HashMap;
 
 /// Who we heard: channel, when, and how loud the last frame was.
 #[derive(Resource, Default)]
-pub(super) struct Talking(pub(super) HashMap<u8, (VoiceChannel, f32, f32)>);
+pub struct Talking(pub(super) HashMap<u8, (VoiceChannel, f32, f32)>);
+
+impl Talking {
+    /// How loud a player is talking right now (None: not talking).
+    pub fn level(&self, id: u8, now: f32) -> Option<f32> {
+        self.0.get(&id).filter(|(_, at, _)| now - at < LINGER).map(|(_, _, l)| *l)
+    }
+}
 
 /// Someone stays on the list this long after their last frame.
 const LINGER: f32 = 0.3;
@@ -27,7 +34,7 @@ pub(super) struct Row(Option<u8>, f32);
 pub(super) struct Level(usize);
 
 #[derive(Resource)]
-pub(super) struct MicIcon(Handle<Image>);
+pub struct MicIcon(pub Handle<Image>);
 
 pub(super) fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.insert_resource(Talking::default());
