@@ -2,7 +2,7 @@
 //! checks, and the session packets that follow.
 use super::*;
 
-impl Master {
+impl LobbyServer {
     /// Our public key (build it into the game: `BOOTLEG16_LOBBY_KEY`).
     pub fn public_key(&self) -> [u8; 32] {
         self.key.public()
@@ -26,7 +26,7 @@ impl Master {
         if pad.len() < PAD {
             return;
         }
-        let refuse = |m: &Master, reason: &str| _ = m.udp.send_to(&encode(&LobbyMsg::Refused { reason: reason.into() }), from);
+        let refuse = |m: &LobbyServer, reason: &str| _ = m.udp.send_to(&encode(&LobbyMsg::Refused { reason: reason.into() }), from);
         if steam.is_none() && self.require_steam {
             return refuse(self, "Start Steam to play online.");
         }

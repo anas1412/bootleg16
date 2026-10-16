@@ -1,9 +1,9 @@
 [package]
-name = "master"
+name = "lobby"
 version = "0.1.0"
 edition = "2021"
 
-# The lobby: parties, matchmaking, the game-server pool (see net/src/master.rs).
+# The lobby: parties, matchmaking, the game-server pool (see net/src/lobby/).
 [dependencies]
 net = { path = "../net" }
 steamworks = { version = "0.13", optional = true }

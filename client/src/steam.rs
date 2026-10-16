@@ -89,7 +89,7 @@ pub fn party_code<S: AsRef<str>>(args: &[S]) -> Option<String> {
 
 impl Steam {
     /// A fresh Steam login for the lobby (a ticket is used once).
-    pub fn login(&self) -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> {
+    pub fn login(&self) -> Option<Box<dyn FnMut() -> Option<net::lobby::SteamLogin> + Send + Sync>> {
         #[cfg(feature = "steam")]
         if let Some(sdk) = &self.sdk {
             let client = sdk.client.clone();
@@ -97,7 +97,7 @@ impl Steam {
             return Some(Box::new(move || {
                 // ponytail: tickets are never cancelled; Steam drops them when the game exits.
                 let (_ticket, ticket) = client.user().authentication_session_ticket(steamworks::networking_types::NetworkingIdentity::new());
-                Some(net::master::SteamLogin { steam_id, ticket })
+                Some(net::lobby::SteamLogin { steam_id, ticket })
             }));
         }
         None

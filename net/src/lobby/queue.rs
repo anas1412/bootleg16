@@ -9,7 +9,7 @@ const PING_START: f32 = 60.0;
 const PING_WIDEN_PER_SECOND: f32 = 2.0;
 const PING_MAX: f32 = 200.0;
 
-impl Master {
+impl LobbyServer {
     /// The ping a party accepts after waiting this long.
     pub(super) fn ping_limit(waited: Duration) -> f32 {
         (PING_START + waited.as_secs_f32() * PING_WIDEN_PER_SECOND).min(PING_MAX)
@@ -159,8 +159,8 @@ mod tests {
 
     #[test]
     fn ping_limit_widens_with_waiting() {
-        assert_eq!(Master::ping_limit(Duration::ZERO), 60.0);
-        assert_eq!(Master::ping_limit(Duration::from_secs(30)), 120.0);
-        assert_eq!(Master::ping_limit(Duration::from_secs(600)), 200.0);
+        assert_eq!(LobbyServer::ping_limit(Duration::ZERO), 60.0);
+        assert_eq!(LobbyServer::ping_limit(Duration::from_secs(30)), 120.0);
+        assert_eq!(LobbyServer::ping_limit(Duration::from_secs(600)), 200.0);
     }
 }

@@ -18,7 +18,7 @@ mod report;
 mod sealed;
 
 /// Ticks between heartbeats to the lobby.
-const HEARTBEAT_EVERY: u32 = crate::master::HEARTBEAT_SECONDS as u32 * TICK_RATE;
+const HEARTBEAT_EVERY: u32 = crate::lobby::HEARTBEAT_SECONDS as u32 * TICK_RATE;
 mod round;
 mod recording;
 mod running;
@@ -244,7 +244,7 @@ impl Server {
 
     /// Match settings (server config file). Restarts the match.
     pub fn set_config(&mut self, cfg: MatchConfig) {
-        self.lobbies = crate::config::addresses(&cfg.master, false);
+        self.lobbies = crate::config::addresses(&cfg.lobby, false);
         self.server_key = (!cfg.official_token.is_empty()).then(|| crate::crypto::ServerKey::from_token(&cfg.official_token));
         if cfg.deathmatch {
             self.rules = Rules::deathmatch();

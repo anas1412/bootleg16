@@ -5,7 +5,7 @@
 use crate::menu::{AppState, GameConfig, MenuDirty, MenuState, Page, ServerChoice, Settings};
 use crate::steam::Steam;
 use bevy::prelude::*;
-use net::master::{Command, LobbyClient, LobbyState, Mode};
+use net::lobby::{Command, LobbyClient, LobbyState, Mode};
 use net::server::Group;
 use std::collections::HashMap;
 
@@ -23,7 +23,7 @@ impl Plugin for PlayPlugin {
 /// see README "Shipping the game"), so players just open the game. Setting `BOOTLEG16_LOBBY`
 /// when starting the game overrides it (testing another lobby).
 fn lobby_address() -> String {
-    let built_in = option_env!("BOOTLEG16_LOBBY").map(String::from).unwrap_or_else(|| format!("127.0.0.1:{}", net::master::MASTER_PORT));
+    let built_in = option_env!("BOOTLEG16_LOBBY").map(String::from).unwrap_or_else(|| format!("127.0.0.1:{}", net::lobby::LOBBY_PORT));
     std::env::var("BOOTLEG16_LOBBY").unwrap_or(built_in)
 }
 
@@ -158,7 +158,7 @@ fn poll(mut commands: Commands, mut lobby: ResMut<Lobby>, mut dirty: ResMut<Menu
     let before = lobby.invited.len();
     lobby.invited.retain(|_, t| {
         *t += time.delta_secs();
-        *t < net::master::INVITE_SECONDS
+        *t < net::lobby::INVITE_SECONDS
     });
     dirty.0 |= lobby.invited.len() != before;
     if *state.get() == AppState::Menu {
@@ -181,7 +181,7 @@ fn steam_glue(steam: Option<ResMut<Steam>>, mut lobby: ResMut<Lobby>, state: Res
     let status = match (*state.get(), s.searching) {
         (AppState::InGame | AppState::Connecting, _) => "In a match".to_string(),
         (_, Some(_)) => "Looking for a match".to_string(),
-        _ if s.members.len() > 1 => format!("In a party ({} of {})", s.members.len(), if s.mode == Mode::Custom { net::master::MAX_CUSTOM } else { net::master::MAX_PARTY }),
+        _ if s.members.len() > 1 => format!("In a party ({} of {})", s.members.len(), if s.mode == Mode::Custom { net::lobby::MAX_CUSTOM } else { net::lobby::MAX_PARTY }),
         _ => "In menus".to_string(),
     };
     steam.set_presence(&s.code, &status);

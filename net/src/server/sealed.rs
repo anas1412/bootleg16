@@ -10,9 +10,9 @@ impl Server {
     pub(super) fn booking(&mut self, packet: &[u8]) {
         let Some(key) = &self.server_key else { return };
         let Some((sent, body)) = key.open(packet) else { return };
-        let setup = match decode::<crate::master::LobbyOrder>(&body) {
-            Some(crate::master::LobbyOrder::Book(setup)) => setup,
-            Some(crate::master::LobbyOrder::Seat { ticket, key }) if self.rules.deathmatch => {
+        let setup = match decode::<crate::lobby::LobbyOrder>(&body) {
+            Some(crate::lobby::LobbyOrder::Book(setup)) => setup,
+            Some(crate::lobby::LobbyOrder::Seat { ticket, key }) if self.rules.deathmatch => {
                 // ponytail: a few dozen seats at most (20 players, seats expire); a map is plenty.
                 self.seats.insert(ticket, (key, self.tick));
                 return;

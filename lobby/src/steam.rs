@@ -25,7 +25,7 @@ impl Checker {
     }
 
     /// Start checks for new logins and hand Steam's answers to the lobby.
-    pub fn run(&mut self, m: &mut net::master::Master) {
+    pub fn run(&mut self, m: &mut net::lobby::LobbyServer) {
         for (session, id, ticket) in m.take_steam_checks() {
             let user = SteamId::from_raw(id);
             // A fresh login replaces an older one of the same account.

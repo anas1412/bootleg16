@@ -4,19 +4,19 @@ use super::*;
 impl Server {
     /// Start looking up the lobbies' names (no-op when they're all addresses: parsed directly).
     pub(super) fn look_up_lobby(&mut self) {
-        let master = self.round.cfg.master.clone();
-        if master.split(',').all(|a| a.trim().is_empty() || a.trim().parse::<SocketAddr>().is_ok()) {
+        let list = self.round.cfg.lobby.clone();
+        if list.split(',').all(|a| a.trim().is_empty() || a.trim().parse::<SocketAddr>().is_ok()) {
             return;
         }
         let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || _ = tx.send(crate::config::addresses(&master, true)));
+        std::thread::spawn(move || _ = tx.send(crate::config::addresses(&list, true)));
         self.lookup = Some(rx);
     }
 
     /// Announce this server to the lobby (if one is set), so it can be given matches.
     pub(super) fn heartbeat(&mut self) {
         let cfg = &self.round.cfg;
-        if cfg.master.is_empty() {
+        if cfg.lobby.is_empty() {
             return;
         }
         // A name (not an address): look it up again now and then, in the background.
@@ -32,7 +32,7 @@ impl Server {
         let cfg = &self.round.cfg;
         let players = self.clients.values().filter(|c| !c.bot).count() as u8;
         let busy = self.reserved.is_some() || self.draining.is_some();
-        let msg = crate::master::LobbyMsg::Heartbeat {
+        let msg = crate::lobby::LobbyMsg::Heartbeat {
             name: cfg.name.clone(),
             map: self.map.clone(),
             players,

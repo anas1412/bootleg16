@@ -241,7 +241,7 @@ impl Server {
         // (Voted out isn't abandoning: no cooldown for them.)
         let abandoned: Vec<u64> = r.left_at.keys().filter(|t| !r.kicked.contains(t)).copied().collect();
         if let Some(key) = &self.server_key {
-            let sealed = key.seal(&encode(&crate::master::LobbyMsg::Result { winners, losers, abandoned }));
+            let sealed = key.seal(&encode(&crate::lobby::LobbyMsg::Result { winners, losers, abandoned }));
             for lobby in self.lobbies.clone() {
                 self.socket.send(lobby, sealed.clone());
             }

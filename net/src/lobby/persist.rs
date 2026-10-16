@@ -51,7 +51,7 @@ fn ago(secs: f32) -> Instant {
     Instant::now().checked_sub(Duration::from_secs_f32(secs.max(0.0))).unwrap_or_else(Instant::now)
 }
 
-impl Master {
+impl LobbyServer {
     pub fn snapshot(&self) -> Vec<u8> {
         let snap = Snapshot {
             next_id: self.next_id,

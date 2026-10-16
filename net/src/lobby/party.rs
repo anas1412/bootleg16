@@ -1,7 +1,7 @@
 //! Parties (codes, leaders, members, invites), what players ask for, and the state they get back.
 use super::*;
 
-impl Master {
+impl LobbyServer {
     /// A party code nobody else has.
     pub(super) fn new_code(&mut self) -> String {
         loop {

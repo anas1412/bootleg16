@@ -2,13 +2,13 @@
 //! it was (sessions, parties), and a standby lobby on another machine takes over when the
 //! active one dies; players' games switch over by themselves and carry on, still encrypted.
 use net::crypto::LobbyKey;
-use net::master::{Command, LobbyClient, Master, Role};
+use net::lobby::{Command, LobbyClient, LobbyServer, Role};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
-fn run(ms: &mut [&mut Master], cs: &mut [&mut LobbyClient], secs: u64, what: &str, done: impl Fn(&[&mut Master], &[&mut LobbyClient]) -> bool) {
+fn run(ms: &mut [&mut LobbyServer], cs: &mut [&mut LobbyClient], secs: u64, what: &str, done: impl Fn(&[&mut LobbyServer], &[&mut LobbyClient]) -> bool) {
     let start = Instant::now();
     while !done(ms, cs) {
         assert!(start.elapsed() < Duration::from_secs(secs), "timed out: {what}");
@@ -30,7 +30,7 @@ fn a_restarted_lobby_carries_on() {
     let file = std::env::temp_dir().join(format!("bootleg16-lobby-{}.state", std::process::id()));
     let _ = std::fs::remove_file(&file);
     let key = LobbyKey::generate().to_hex();
-    let mut m = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
+    let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
     let addr = m.local_addr();
     m.set_key(LobbyKey::from_hex(&key).unwrap());
     m.state_file = Some(file.clone());
@@ -43,7 +43,7 @@ fn a_restarted_lobby_carries_on() {
     run(&mut [&mut m], &mut [&mut a, &mut b], 5, "saved", |_, _| wait.elapsed() > Duration::from_millis(2500));
     // The lobby dies and comes back (same key and saved state, same address).
     drop(m);
-    let mut m = Master::bind(addr, vec![]).unwrap();
+    let mut m = LobbyServer::bind(addr, vec![]).unwrap();
     m.set_key(LobbyKey::from_hex(&key).unwrap());
     assert!(m.load(&file));
     // Same party, nobody signed in again (a new sign-in would mean a new party code).
@@ -58,7 +58,7 @@ fn a_restarted_lobby_carries_on() {
 fn a_standby_lobby_takes_over_when_the_active_one_dies() {
     let key = LobbyKey::generate().to_hex();
     let token = vec!["tok".to_string()];
-    let (mut one, mut two) = (Master::bind(SocketAddr::from(LOCAL), token.clone()).unwrap(), Master::bind(SocketAddr::from(LOCAL), token).unwrap());
+    let (mut one, mut two) = (LobbyServer::bind(SocketAddr::from(LOCAL), token.clone()).unwrap(), LobbyServer::bind(SocketAddr::from(LOCAL), token).unwrap());
     // Both lobbies have the same key (the one built into the game).
     one.set_key(LobbyKey::from_hex(&key).unwrap());
     two.set_key(LobbyKey::from_hex(&key).unwrap());

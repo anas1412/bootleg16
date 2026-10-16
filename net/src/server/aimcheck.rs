@@ -176,7 +176,7 @@ impl Server {
         println!("aim check flagged {name}: {reason}");
         let (demo, tick) = self.recording_now();
         let Some(key) = &self.server_key else { return };
-        let sealed = key.seal(&encode(&crate::master::LobbyMsg::Flag { ticket, reason, map: self.map.clone(), demo, tick }));
+        let sealed = key.seal(&encode(&crate::lobby::LobbyMsg::Flag { ticket, reason, map: self.map.clone(), demo, tick }));
         for lobby in self.lobbies.clone() {
             self.socket.send(lobby, sealed.clone());
         }

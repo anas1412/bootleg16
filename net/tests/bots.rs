@@ -5,7 +5,7 @@
 mod common;
 use common::*;
 use net::bot::{Bot, BotMap, Difficulty, Profile};
-use net::master::{Command, LobbyClient, Master};
+use net::lobby::{Command, LobbyClient, LobbyServer};
 use net::protocol::{GameEvent, Team};
 use net::server::Server;
 use std::net::SocketAddr;
@@ -22,12 +22,12 @@ const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
 /// A short match: 4 rounds (sides swap after 2), quick timers.
 fn short(lobby: SocketAddr) -> net::config::MatchConfig {
-    net::config::MatchConfig { master: lobby.to_string(), official_token: "tok".into(), max_rounds: 4, overtime_rounds: 0, freeze_time: 1.0, buy_time: 10.0, round_time: 40.0, round_end_delay: 1.0, ..Default::default() }
+    net::config::MatchConfig { lobby: lobby.to_string(), official_token: "tok".into(), max_rounds: 4, overtime_rounds: 0, freeze_time: 1.0, buy_time: 10.0, round_time: 40.0, round_end_delay: 1.0, ..Default::default() }
 }
 
 /// A lobby, an official server and 10 bots booked onto it.
 fn booked(map: &Arc<BotMap>, cfg: impl Fn(SocketAddr) -> net::config::MatchConfig) -> (Server, Vec<Bot>) {
-    let mut m = Master::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
+    let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
     let mut server = Server::new(SocketAddr::from(LOCAL), "test", &map.bsp, assets()).unwrap();

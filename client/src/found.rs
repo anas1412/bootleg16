@@ -45,7 +45,7 @@ fn chirp(lobby: Res<Lobby>, mut was: Local<bool>, mut sounds: MessageWriter<UiSo
 /// Its own root over everything (`MenuRoot`: the next rebuild replaces it).
 pub fn overlay(commands: &mut Commands, kit: &Kit, lobby: &Lobby, memory: &mut UiMemory) {
     // screenshot runs: BOOTLEG16_FOUND shows a match found (3 of 10 in)
-    let fake = std::env::var_os("BOOTLEG16_FOUND").is_some().then_some(net::master::ReadyNet { accepted: 3, total: 10, left: 14.0, you: false });
+    let fake = std::env::var_os("BOOTLEG16_FOUND").is_some().then_some(net::lobby::ReadyNet { accepted: 3, total: 10, left: 14.0, you: false });
     let ready = lobby.shown.as_ref().and_then(|s| s.ready).or(fake);
     // tune in when it appears; later redraws (the count, the time) stay put
     let appeared = memory.previous("found.open") != Some("1");

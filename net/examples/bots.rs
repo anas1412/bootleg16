@@ -7,7 +7,7 @@
 //! Orders (see net/src/bot/control.rs): type them into its terminal, or from anywhere on the
 //! same machine: `bots --order "t plant b; ct hold"` (sent to UDP 127.0.0.1:27099).
 use net::bot::{control, Bot, BotMap, Mode, Order, Profile};
-use net::master::{Command, LobbyClient};
+use net::lobby::{Command, LobbyClient};
 use std::net::UdpSocket;
 use std::sync::mpsc::channel;
 use std::time::{Duration, Instant};

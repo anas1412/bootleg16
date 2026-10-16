@@ -1,4 +1,4 @@
-//! The lobby (parties, matchmaking, custom games). Usage: `master [port] [--tokens file]`.
+//! The lobby (parties, matchmaking, custom games). Usage: `lobby [port] [--tokens file]`.
 //! `--tokens`: one secret per line; only game servers announcing with one get matches.
 //! `--reports file`: where player reports are appended (one JSON object per line).
 //! `--key file`: the lobby's long-term key (made on first start; keep it, its public half is
@@ -18,7 +18,7 @@ mod steam;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let port = args.iter().find_map(|a| a.parse().ok()).unwrap_or(net::master::MASTER_PORT);
+    let port = args.iter().find_map(|a| a.parse().ok()).unwrap_or(net::lobby::LOBBY_PORT);
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
     let tokens: Vec<String> = flag("--tokens")
         .map(|f| std::fs::read_to_string(f).unwrap_or_else(|e| panic!("{f}: {e}")).lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect())
@@ -27,7 +27,7 @@ fn main() {
         println!("{}", net::crypto::to_hex(&load_key(path).public()));
         return;
     }
-    let mut m = net::master::Master::bind(SocketAddr::from(([0, 0, 0, 0], port)), tokens).unwrap_or_else(|e| panic!("binding port {port}: {e}"));
+    let mut m = net::lobby::LobbyServer::bind(SocketAddr::from(([0, 0, 0, 0], port)), tokens).unwrap_or_else(|e| panic!("binding port {port}: {e}"));
     m.reports = flag("--reports").map(std::path::PathBuf::from);
     match flag("--key") {
         Some(path) => m.set_key(load_key(path)),
@@ -48,7 +48,7 @@ fn main() {
     }
     if let Some(peer) = flag("--peer") {
         let peer: SocketAddr = std::net::ToSocketAddrs::to_socket_addrs(peer.as_str()).ok().and_then(|mut a| a.next()).unwrap_or_else(|| panic!("--peer {peer}: not an address"));
-        let port: u16 = flag("--peer-port").and_then(|p| p.parse().ok()).unwrap_or(net::master::MASTER_PORT + 1);
+        let port: u16 = flag("--peer-port").and_then(|p| p.parse().ok()).unwrap_or(net::lobby::LOBBY_PORT + 1);
         m.pair(port, peer).unwrap_or_else(|e| panic!("pairing: {e}"));
         println!("paired with {peer} (listening on {port}): standing by until it's clear who's active");
     }
@@ -57,7 +57,7 @@ fn main() {
     {
         let app: u32 = flag("--steam-app").and_then(|a| a.parse().ok()).unwrap_or(480);
         let mut steam = steam::Checker::start(app);
-        m.steam_mode = net::master::SteamMode::Verify;
+        m.steam_mode = net::lobby::SteamMode::Verify;
         m.require_steam = !args.iter().any(|a| a == "--allow-anonymous");
         if !m.require_steam {
             println!("test lobby: players without Steam (bots, smoke tests) are let in");

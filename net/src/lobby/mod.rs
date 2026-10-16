@@ -28,7 +28,7 @@ mod standby;
 pub use standby::Role;
 pub use client::LobbyClient;
 
-pub const MASTER_PORT: u16 = 27010;
+pub const LOBBY_PORT: u16 = 27010;
 /// Game servers announce this often and are forgotten after missing a few.
 pub const HEARTBEAT_SECONDS: u64 = 5;
 const SERVER_TIMEOUT: Duration = Duration::from_secs(HEARTBEAT_SECONDS * 3);
@@ -112,7 +112,7 @@ struct GameServer {
     maps: Vec<String>,
 }
 
-pub struct Master {
+pub struct LobbyServer {
     udp: UdpSocket,
     servers: HashMap<SocketAddr, GameServer>,
     /// session secret -> player.
@@ -164,12 +164,12 @@ pub struct Master {
     saved: Instant,
 }
 
-impl Master {
-    pub fn bind(addr: SocketAddr, tokens: Vec<String>) -> std::io::Result<Master> {
+impl LobbyServer {
+    pub fn bind(addr: SocketAddr, tokens: Vec<String>) -> std::io::Result<LobbyServer> {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
         let keys = tokens.iter().map(|t| crate::crypto::ServerKey::from_token(t)).collect();
-        Ok(Master { udp, key: crate::crypto::LobbyKey::generate(), cookies: crate::secure::Cookies::new(), keys, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new(), role: Role::Active, peer: None, state_file: None, saved: Instant::now(), ratings: HashMap::new(), ratings_file: None, penalties: HashMap::new(), checks: Vec::new(), active: HashMap::new() })
+        Ok(LobbyServer { udp, key: crate::crypto::LobbyKey::generate(), cookies: crate::secure::Cookies::new(), keys, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new(), role: Role::Active, peer: None, state_file: None, saved: Instant::now(), ratings: HashMap::new(), ratings_file: None, penalties: HashMap::new(), checks: Vec::new(), active: HashMap::new() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {

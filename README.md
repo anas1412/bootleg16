@@ -10,7 +10,7 @@ It reads the maps, models and sounds from your own CS 1.6 install; no game files
 |---|---|
 | `client/` | The game: menus, HUD, rendering, sound, voice, Steam |
 | `server/` | The game server program (also replays recordings) |
-| `master/` | The lobby program: parties, matchmaking, the server pool |
+| `lobby/` | The lobby program: parties, matchmaking, the server pool |
 | `net/` | Networking shared by all three: the game server and lobby logic, encryption, recordings, test bots |
 | `sim/` | The game rules both sides run: movement, weapons, grenades, collision |
 | `goldsrc/` | Readers for CS 1.6 files: maps, models, textures |

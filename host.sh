@@ -169,14 +169,14 @@ rm -f hosting/server*.cfg
   echo "# Made by host.sh: edit config/server.cfg instead, then run ./host.sh"
   echo "services:"
   if [ "$LOBBY" = here ]; then
-    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl --key /bootleg16/keys/lobby.key --state /bootleg16/keys/lobby.state --ratings /bootleg16/keys/ratings.db${PEER:+ --peer $PEER:27011 --peer-port 27011}${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports, ./keys:/bootleg16/keys]}"
+    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: lobby 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl --key /bootleg16/keys/lobby.key --state /bootleg16/keys/lobby.state --ratings /bootleg16/keys/ratings.db${PEER:+ --peer $PEER:27011 --peer-port 27011}${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports, ./keys:/bootleg16/keys]}"
   fi
   for i in $(seq 1 $((SERVERS + DM))); do
     port=$((27014 + i))
     # After the match servers: deathmatch ones (drop-in, 20 players).
     mode=match; slots=10
     [ "$i" -gt "$SERVERS" ] && { mode=deathmatch; slots=20; }
-    sed -e "s|^master = \"\"|master = \"$lobby_addr\"|" \
+    sed -e "s|^lobby = \"\"|lobby = \"$lobby_addr\"|" \
         -e "s|^mode = .*|mode = \"$mode\"|" \
         -e "s|^demos = .*|demos = \"/bootleg16/demos\"|" \
         -e "s|^max_players = .*|max_players = $slots|" \
@@ -192,7 +192,7 @@ rm -f hosting/server*.cfg
 docker build -q -t bootleg16 . >/dev/null
 # The lobby's key (made once, kept): its public half goes into the game build.
 if [ "$LOBBY" = here ]; then
-  public=$(docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/hosting/keys:/bootleg16/keys" bootleg16 master --print-public /bootleg16/keys/lobby.key 2>/dev/null | tail -n1)
+  public=$(docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/hosting/keys:/bootleg16/keys" bootleg16 lobby --print-public /bootleg16/keys/lobby.key 2>/dev/null | tail -n1)
 fi
 if [ -n "${UPDATE:-}" ] && [ -n "$(compose ps -q 2>/dev/null)" ]; then
   # Rolling update: the lobby now (players sign back in by themselves), each game server once

@@ -47,7 +47,7 @@ struct Entry {
     waited: f64,
 }
 
-impl Master {
+impl LobbyServer {
     fn rating_of(&self, player: u32) -> Rating {
         let steam = self.players.values().find(|p| p.id == player).map(|p| p.steam).unwrap_or(0);
         if steam == 0 {
@@ -220,7 +220,7 @@ impl Master {
         // The match is over: nobody can rejoin it.
         let seats: Vec<u64> = winners.iter().chain(losers).chain(abandoned).copied().collect();
         self.active.retain(|_, (_, t, _)| !seats.contains(t));
-        let steam_of = |m: &Master, t: &u64| m.seats.get(t).map(|s| s.0).filter(|s| *s != 0);
+        let steam_of = |m: &LobbyServer, t: &u64| m.seats.get(t).map(|s| s.0).filter(|s| *s != 0);
         for t in abandoned {
             let key = steam_of(self, t).unwrap_or(1 << 62 | *t);
             self.penalize(key, ABANDON_COOLDOWN);
@@ -228,7 +228,7 @@ impl Master {
         if winners.is_empty() || losers.is_empty() {
             return; // a draw (or a one-sided report): nobody's rating moves
         }
-        let ids = |m: &Master, ts: &[u64]| ts.iter().filter_map(|t| steam_of(m, t)).collect::<Vec<u64>>();
+        let ids = |m: &LobbyServer, ts: &[u64]| ts.iter().filter_map(|t| steam_of(m, t)).collect::<Vec<u64>>();
         let (w, l) = (ids(self, winners), ids(self, losers));
         let mut wr: Vec<Rating> = w.iter().map(|s| self.ratings.get(s).copied().unwrap_or_default()).collect();
         let mut lr: Vec<Rating> = l.iter().map(|s| self.ratings.get(s).copied().unwrap_or_default()).collect();
@@ -290,7 +290,7 @@ pub fn save_ratings(ratings: &HashMap<u64, Rating>, path: &std::path::Path) -> s
     crate::secure::write_private(path, &encode(&list))
 }
 
-impl Master {
+impl LobbyServer {
     /// Load the ratings kept at `path` (nothing there: everyone starts fresh).
     pub fn load_ratings(&mut self, path: &std::path::Path) {
         if let Some(list) = std::fs::read(path).ok().and_then(|b| decode::<Vec<(u64, Rating)>>(&b)) {
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn results_move_ratings_and_abandoning_brings_a_cooldown() {
-        let mut m = Master::bind("127.0.0.1:0".parse().unwrap(), vec![]).unwrap();
+        let mut m = LobbyServer::bind("127.0.0.1:0".parse().unwrap(), vec![]).unwrap();
         for (ticket, steam) in [(1, 11), (2, 22), (3, 33)] {
             m.seats.insert(ticket, (steam, String::new(), Instant::now()));
         }

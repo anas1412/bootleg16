@@ -2,7 +2,7 @@
 //! for casual; the lobby reserves the official game server and both get in with tickets.
 mod common;
 use common::*;
-use net::master::{Command, LobbyClient, Master, Mode};
+use net::lobby::{Command, LobbyClient, LobbyServer, Mode};
 use net::protocol::Team;
 use net::server::{Group, Server};
 use sim::pmove::Input;
@@ -23,13 +23,13 @@ fn world(bsp: &goldsrc::bsp::Bsp, match_size: usize) -> (Server, SocketAddr) {
 }
 
 fn world_with(bsp: &goldsrc::bsp::Bsp, match_size: usize, reports: Option<std::path::PathBuf>) -> (Server, SocketAddr) {
-    let mut m = Master::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
+    let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     m.match_size = match_size;
     m.reports = reports;
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
     let mut server = Server::new(SocketAddr::from(LOCAL), "test", bsp, assets()).unwrap();
-    server.set_config(net::config::MatchConfig { master: lobby.to_string(), official_token: "tok".into(), ..Default::default() });
+    server.set_config(net::config::MatchConfig { lobby: lobby.to_string(), official_token: "tok".into(), ..Default::default() });
     (server, lobby)
 }
 
@@ -108,7 +108,7 @@ fn casual_queue_matches_two_strangers() {
 fn steam_sign_in_and_lobby_restart() {
     let Some(bsp) = dust2() else { return };
     let (mut server, lobby) = world(&bsp, 2);
-    let login = |id: u64| -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> { Some(Box::new(move || Some(net::master::SteamLogin { steam_id: id, ticket: vec![1, 2, 3] }))) };
+    let login = |id: u64| -> Option<Box<dyn FnMut() -> Option<net::lobby::SteamLogin> + Send + Sync>> { Some(Box::new(move || Some(net::lobby::SteamLogin { steam_id: id, ticket: vec![1, 2, 3] }))) };
     let mut a = accepting(LobbyClient::new(lobby, "a").unwrap());
     a.steam = login(76561197960287930);
     let mut b = accepting(LobbyClient::new(lobby, "b").unwrap());
@@ -134,9 +134,9 @@ fn steam_sign_in_and_lobby_restart() {
 #[test]
 fn a_checked_steam_sign_in_replaces_the_older_one() {
     // With Steam checks, a second sign-in Steam confirmed ends the first session.
-    let mut m = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
-    m.steam_mode = net::master::SteamMode::Verify;
-    let login = || -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> { Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 5, ticket: vec![9] }))) };
+    let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
+    m.steam_mode = net::lobby::SteamMode::Verify;
+    let login = || -> Option<Box<dyn FnMut() -> Option<net::lobby::SteamLogin> + Send + Sync>> { Some(Box::new(|| Some(net::lobby::SteamLogin { steam_id: 5, ticket: vec![9] }))) };
     let (mut first, mut second) = (accepting(LobbyClient::new(m.local_addr(), "x").unwrap()), accepting(LobbyClient::new(m.local_addr(), "x").unwrap()));
     first.steam = login();
     second.steam = login();
@@ -170,34 +170,34 @@ fn answers_never_outgrow_requests() {
     // The biggest state the lobby sends, against the smallest request it answers.
     let long = "W".repeat(24);
     let addr: SocketAddr = "[2001:db8::1]:27015".parse().unwrap();
-    let state = net::master::LobbyState {
+    let state = net::lobby::LobbyState {
         you: u32::MAX,
         code: "ABC-DEF".into(),
         leader: u32::MAX,
-        mode: net::master::Mode::Custom,
-        members: (0..net::master::MAX_CUSTOM).map(|i| net::master::Member { id: u32::MAX - i as u32, name: long.clone(), group: net::server::Group::B, steam: u64::MAX }).collect(),
+        mode: net::lobby::Mode::Custom,
+        members: (0..net::lobby::MAX_CUSTOM).map(|i| net::lobby::Member { id: u32::MAX - i as u32, name: long.clone(), group: net::server::Group::B, steam: u64::MAX }).collect(),
         searching: Some(1e9),
         found: Some((addr, u64::MAX, [255; 32])),
         rejoin: Some((addr, u64::MAX, [255; 32])),
-        ready: Some(net::master::ReadyNet { accepted: 10, total: 10, left: 20.0, you: true }),
+        ready: Some(net::lobby::ReadyNet { accepted: 10, total: 10, left: 20.0, you: true }),
         cooldown: Some(1e9),
         // (The lobby only ever lists pool maps.)
         map: Some("de_inferno".into()),
-        veto: Some(net::master::Veto { left: net::config::MAP_POOL.iter().map(|m| m.to_string()).collect(), turn: net::server::Group::B }),
+        veto: Some(net::lobby::Veto { left: net::config::MAP_POOL.iter().map(|m| m.to_string()).collect(), turn: net::server::Group::B }),
         notice: "Too many players from your address, or the lobby is full. Try again later.".into(),
-        invites: (0..net::master::MAX_INVITES).map(|_| net::master::Invite { from: long.clone(), steam: u64::MAX, code: "ABC-DEF".into(), left: 30.0 }).collect(),
-        regions: (0..net::master::MAX_REGIONS).map(|_| ("x".repeat(16), addr)).collect(),
+        invites: (0..net::lobby::MAX_INVITES).map(|_| net::lobby::Invite { from: long.clone(), steam: u64::MAX, code: "ABC-DEF".into(), left: 30.0 }).collect(),
+        regions: (0..net::lobby::MAX_REGIONS).map(|_| ("x".repeat(16), addr)).collect(),
     };
-    let answer = net::protocol::encode(&net::master::LobbyMsg::State(state)).len();
+    let answer = net::protocol::encode(&net::lobby::LobbyMsg::State(state)).len();
     // Both travel sealed in the session channel, which adds the same to each.
-    let request = net::protocol::encode(&net::master::LobbyMsg::Command { cmd: Command::Poll, pad: vec![0; net::master::PAD] }).len();
+    let request = net::protocol::encode(&net::lobby::LobbyMsg::Command { cmd: Command::Poll, pad: vec![0; net::lobby::PAD] }).len();
     assert!(answer <= request, "answer {answer} bytes, request {request}");
 }
 
 #[test]
 fn signs_in_again_after_the_lobby_restarts() {
     // A lobby that has never heard of our session answers Expired; the client signs in again.
-    let first = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
+    let first = LobbyServer::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
     let addr = first.local_addr();
     let mut c = accepting(LobbyClient::new(addr, "a").unwrap());
     let mut m = first;
@@ -209,7 +209,7 @@ fn signs_in_again_after_the_lobby_restarts() {
     }
     let code = c.state.as_ref().unwrap().code.clone();
     drop(m);
-    let mut m = Master::bind(addr, vec![]).unwrap();
+    let mut m = LobbyServer::bind(addr, vec![]).unwrap();
     while c.state.as_ref().unwrap().code == code {
         assert!(start.elapsed() < Duration::from_secs(10), "never signed in again");
         m.step();
@@ -223,7 +223,7 @@ fn queue_books_the_region_players_ping_best() {
     let Some(bsp) = dust2() else { return };
     let (mut eu, lobby) = world(&bsp, 2);
     let mut na = Server::new(SocketAddr::from(LOCAL), "test", &bsp, assets()).unwrap();
-    na.set_config(net::config::MatchConfig { master: lobby.to_string(), official_token: "tok".into(), region: "na".into(), ..Default::default() });
+    na.set_config(net::config::MatchConfig { lobby: lobby.to_string(), official_token: "tok".into(), region: "na".into(), ..Default::default() });
     let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     let both = |eu: &mut Server, na: &mut Server, cs: &mut [&mut LobbyClient], what: &str, done: &dyn Fn(&[&mut LobbyClient]) -> bool| {
         let start = Instant::now();
@@ -254,9 +254,9 @@ fn reports_are_filed_with_steam_ids() {
     let _ = std::fs::remove_file(&path);
     let (mut server, lobby) = world_with(&bsp, 2, Some(path.clone()));
     let mut a = accepting(LobbyClient::new(lobby, "a").unwrap());
-    a.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 111, ticket: vec![] })));
+    a.steam = Some(Box::new(|| Some(net::lobby::SteamLogin { steam_id: 111, ticket: vec![] })));
     let mut b = accepting(LobbyClient::new(lobby, "b \"quoted\"").unwrap());
-    b.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 222, ticket: vec![] })));
+    b.steam = Some(Box::new(|| Some(net::lobby::SteamLogin { steam_id: 222, ticket: vec![] })));
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
     a.send(Command::Play);
     b.send(Command::Play);
@@ -296,11 +296,11 @@ fn reports_are_filed_with_steam_ids() {
 
 #[test]
 fn official_lobbies_turn_away_players_without_steam() {
-    let mut m = Master::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
+    let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec![]).unwrap();
     m.require_steam = true;
     let mut anon = accepting(LobbyClient::new(m.local_addr(), "bot").unwrap());
     let mut steam = accepting(LobbyClient::new(m.local_addr(), "player").unwrap());
-    steam.steam = Some(Box::new(|| Some(net::master::SteamLogin { steam_id: 7, ticket: vec![] })));
+    steam.steam = Some(Box::new(|| Some(net::lobby::SteamLogin { steam_id: 7, ticket: vec![] })));
     let start = Instant::now();
     while anon.notice.is_empty() || !steam.online() {
         assert!(start.elapsed() < Duration::from_secs(5));
@@ -360,20 +360,20 @@ fn a_seen_ticket_without_its_key_gets_nobody_in() {
 
 /// A lobby stepped by the test itself (to stand in for Steam's answers), with an official
 /// server in its pool.
-fn manual_world(bsp: &goldsrc::bsp::Bsp) -> (Master, Server) {
-    let mut m = Master::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
+fn manual_world(bsp: &goldsrc::bsp::Bsp) -> (LobbyServer, Server) {
+    let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     m.match_size = 2;
-    m.steam_mode = net::master::SteamMode::Verify;
+    m.steam_mode = net::lobby::SteamMode::Verify;
     let mut server = Server::new(SocketAddr::from(LOCAL), "test", bsp, assets()).unwrap();
-    server.set_config(net::config::MatchConfig { master: m.local_addr().to_string(), official_token: "tok".into(), ..Default::default() });
+    server.set_config(net::config::MatchConfig { lobby: m.local_addr().to_string(), official_token: "tok".into(), ..Default::default() });
     (m, server)
 }
 
-fn steam(id: u64) -> Option<Box<dyn FnMut() -> Option<net::master::SteamLogin> + Send + Sync>> {
-    Some(Box::new(move || Some(net::master::SteamLogin { steam_id: id, ticket: vec![1] })))
+fn steam(id: u64) -> Option<Box<dyn FnMut() -> Option<net::lobby::SteamLogin> + Send + Sync>> {
+    Some(Box::new(move || Some(net::lobby::SteamLogin { steam_id: id, ticket: vec![1] })))
 }
 
-fn step_all(m: &mut Master, server: &mut Server, cs: &mut [&mut LobbyClient], secs: u64, what: &str, done: &dyn Fn(&[&mut LobbyClient]) -> bool) {
+fn step_all(m: &mut LobbyServer, server: &mut Server, cs: &mut [&mut LobbyClient], secs: u64, what: &str, done: &dyn Fn(&[&mut LobbyClient]) -> bool) {
     let start = Instant::now();
     while !done(cs) {
         assert!(start.elapsed() < Duration::from_secs(secs), "timed out: {what}");

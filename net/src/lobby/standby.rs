@@ -91,7 +91,7 @@ fn write_frames(peer: SocketAddr, rx: Receiver<Vec<u8>>) {
     }
 }
 
-impl Master {
+impl LobbyServer {
     /// Pair with another lobby (both run this, pointing at each other). Starts as standby:
     /// if nobody is active it takes over after a few seconds.
     pub fn pair(&mut self, port: u16, peer: SocketAddr) -> std::io::Result<()> {

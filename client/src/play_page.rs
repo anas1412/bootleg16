@@ -6,7 +6,7 @@ use crate::play::{Lobby, LobbyAction};
 use crate::steam::{Presence, Steam};
 use crate::ui::{card, chip, chip_w, chips, kit_text, page_title, primary_button, vh, Choice, Kit, UiAction, AMBER, BAR, BG1, BG2, BG3, CT_COLOR, LINE, LINE_2, OK, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
-use net::master::{Member, Mode, MAX_CUSTOM, MAX_PARTY};
+use net::lobby::{Member, Mode, MAX_CUSTOM, MAX_PARTY};
 use net::server::Group;
 
 fn abs(node: Node) -> Node {
@@ -170,7 +170,7 @@ fn label_block(p: &mut ChildSpawnerCommands, kit: &Kit, s: &str, top: f32) {
 }
 
 /// A row of party slots: members first, then empty "invite" slots up to `count`.
-fn slots(p: &mut ChildSpawnerCommands, kit: &Kit, s: &net::master::LobbyState, members: &[&Member], count: usize, height: f32, group: Option<Group>, steam: Option<&Steam>) {
+fn slots(p: &mut ChildSpawnerCommands, kit: &Kit, s: &net::lobby::LobbyState, members: &[&Member], count: usize, height: f32, group: Option<Group>, steam: Option<&Steam>) {
     let leader = s.leader == s.you;
     let side = if height > 200.0 { 96.0 } else { 64.0 };
     p.spawn(Node { column_gap: vh(16.0), ..default() }).with_children(|row| {

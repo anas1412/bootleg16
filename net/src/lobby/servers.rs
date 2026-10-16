@@ -2,7 +2,7 @@
 //! reports.
 use super::*;
 
-impl Master {
+impl LobbyServer {
     /// Write a report down for review: who, whom (Steam ids and names), why, where.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn file_report(&mut self, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: &str, round: u32, demo: &str, tick: u32) {
@@ -17,7 +17,7 @@ impl Master {
     }
 }
 
-impl Master {
+impl LobbyServer {
     /// A sealed message from a game server: only official ones (holding a token) can make
     /// one, and an old one replayed is ignored.
     pub(super) fn from_server(&mut self, from: SocketAddr, packet: &[u8]) {

@@ -2,7 +2,7 @@
 FROM rust:1-slim-bookworm AS build
 WORKDIR /src
 COPY . .
-RUN cargo build --release -j 2 -p server && cargo build --release -j 2 -p master --features steam \
+RUN cargo build --release -j 2 -p server && cargo build --release -j 2 -p lobby --features steam \
  && cp target/release/libsteam_api.so /src/
 
 FROM debian:bookworm-slim
@@ -17,7 +17,7 @@ RUN dpkg --add-architecture i386 && apt-get update \
  && apt-get purge -y curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/libsteam_api.so /usr/local/lib/
 RUN ldconfig
-COPY --from=build /src/target/release/server /src/target/release/master /usr/local/bin/
+COPY --from=build /src/target/release/server /src/target/release/lobby /usr/local/bin/
 # The servers run as the host user (see host.sh), not root; Steam's library looks in $HOME.
 ENV BOOTLEG16_DIR=/game HOME=/opt/steamhome
 WORKDIR /bootleg16

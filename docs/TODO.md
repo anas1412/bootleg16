@@ -98,8 +98,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Lobby: OS randomness for tickets, regions/ping in the queue, standby lobby, saved state, hidden skill matchmaking, ready check, cooldowns, vote kick, reconnect
 - [ ] Accounts: Steam (sign-in done with Valve's test app 480); our own App ID before release
 - [x] One-command hosting: ./host.sh (Docker, fleets, standby lobby, firewall, rolling updates)
-- [ ] Home hosting without port forwarding: UPnP from the server, relay through the master as fallback
-- [x] Server protection: join cookie (stateless, no spoofed slots), per-IP packet budget, max 6 players per IP, 1400-byte cap, padded info/list requests (no amplification), master list rate limit
+- [ ] Home hosting without port forwarding: UPnP from the server, relay through the lobby as fallback
+- [x] Server protection: join cookie (stateless, no spoofed slots), per-IP packet budget, max 6 players per IP, 1400-byte cap, padded info/list requests (no amplification), lobby rate limits
 - [x] Kernel flood filtering: ./host.sh firewall (nftables)
 - [ ] Host-side DDoS filtering: choose a provider with game DDoS protection (OVH Game, Path.net); a user decision
 - [x] Encryption/authentication (X25519 + ChaCha20-Poly1305, per-seat keys, sealed server <-> lobby)

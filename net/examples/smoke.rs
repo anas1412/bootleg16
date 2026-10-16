@@ -1,7 +1,7 @@
 //! Smoke test for a deployment: two fake players party up on the lobby, start a custom game,
 //! and join the server it books. `cargo run -p net --example smoke -- <lobby-host:port> [--local]`
 //! (`--local`: join through 127.0.0.1, for testing on the hosting machine behind a home router).
-use net::master::{Command, LobbyClient, Mode};
+use net::lobby::{Command, LobbyClient, Mode};
 use std::time::{Duration, Instant};
 
 fn main() {

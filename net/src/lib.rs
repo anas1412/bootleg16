@@ -10,7 +10,7 @@ pub mod client;
 pub mod config;
 pub mod crypto;
 pub mod demo;
-pub mod master;
+pub mod lobby;
 pub mod protocol;
 pub mod replay;
 pub mod rounds;

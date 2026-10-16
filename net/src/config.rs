@@ -39,7 +39,7 @@ pub struct MatchConfig {
     /// address players should connect to (empty = the one the lobby sees; set it behind NAT).
     pub name: String,
     pub region: String,
-    pub master: String,
+    pub lobby: String,
     pub official_token: String,
     pub public_address: String,
     /// Player slots.
@@ -73,7 +73,7 @@ impl Default for MatchConfig {
             voice_range: 1500.0,
             name: "bootleg16 server".into(),
             region: "eu".into(),
-            master: String::new(),
+            lobby: String::new(),
             official_token: String::new(),
             public_address: String::new(),
             max_players: 10,
@@ -128,7 +128,7 @@ impl MatchConfig {
                 "voice_range" => c.voice_range = num(v)?,
                 "name" => c.name = v.to_string(),
                 "region" => c.region = v.to_string(),
-                "master" => c.master = v.to_string(),
+                "lobby" => c.lobby = v.to_string(),
                 "official_token" => c.official_token = v.to_string(),
                 "public_address" => c.public_address = v.to_string(),
                 "max_players" => c.max_players = v.parse().map_err(|_| bad())?,
