@@ -33,6 +33,7 @@ pub enum UiAction {
     Buy(net::protocol::BuyItem),
     BuyCategory(usize),
     CloseBuy,
+    Voice(crate::voice::VoiceAction),
 }
 
 #[derive(Resource, Default)]

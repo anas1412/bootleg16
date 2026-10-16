@@ -26,7 +26,12 @@ pub enum Page {
     Practice,
     Join,
     Settings,
+    Voice,
 }
+
+/// Set to redraw the menu from outside (e.g. after a voice key was bound).
+#[derive(Resource, Default)]
+pub struct MenuDirty(pub bool);
 
 /// Player settings, saved in ~/.config/bootleg16/settings.txt.
 #[derive(Resource, Clone)]
@@ -122,6 +127,7 @@ pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<UiActions>()
+            .init_resource::<MenuDirty>()
             .insert_resource(Settings::load())
             .add_systems(Startup, from_command_line)
             .add_systems(OnEnter(AppState::Menu), enter_menu)
@@ -187,11 +193,12 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
 #[derive(Resource)]
 pub struct MenuError(pub String);
 
-fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res<Settings>, roots: Query<Entity, With<MenuRoot>>) {
-    if !st.rebuild {
+fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res<Settings>, voice: Res<crate::voice::VoiceSettings>, mut dirty: ResMut<MenuDirty>, roots: Query<Entity, With<MenuRoot>>) {
+    if !st.rebuild && !dirty.0 {
         return;
     }
     st.rebuild = false;
+    dirty.0 = false;
     for e in &roots {
         commands.entity(e).despawn();
     }
@@ -211,7 +218,7 @@ fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res
             root.spawn(Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(56)), width: px(380), ..default() }).with_children(|col| {
                 col.spawn(text("BOOTLEG", 54.0, TEXT));
                 col.spawn((text("16", 54.0, ACCENT), Node { margin: UiRect { top: px(-18), bottom: px(36), ..default() }, ..default() }));
-                for (label, page) in [("Practice", Page::Practice), ("Join server", Page::Join), ("Settings", Page::Settings)] {
+                for (label, page) in [("Practice", Page::Practice), ("Join server", Page::Join), ("Settings", Page::Settings), ("Voice", Page::Voice)] {
                     button(col, label, UiAction::Page(page), st.page == page);
                 }
                 button(col, "Quit", UiAction::Quit, false);
@@ -267,6 +274,9 @@ fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res
                         button(p, "Connect", UiAction::Connect, true);
                     });
                 }
+                Page::Voice => {
+                    right.spawn(panel(Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(28)), row_gap: px(6), ..default() })).with_children(|p| crate::voice::page(p, &voice));
+                }
                 Page::Settings => {
                     right.spawn(panel(Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(28)), row_gap: px(6), ..default() })).with_children(|p| {
                         p.spawn(text("Settings", 30.0, TEXT));
@@ -284,7 +294,7 @@ fn rebuild_menu(mut commands: Commands, mut st: ResMut<MenuState>, settings: Res
         });
 }
 
-fn setting_row(p: &mut ChildSpawnerCommands, label: &str, minus: UiAction, plus: UiAction) {
+pub fn setting_row(p: &mut ChildSpawnerCommands, label: &str, minus: UiAction, plus: UiAction) {
     p.spawn(Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(10), ..default() }).with_children(|r| {
         r.spawn((text(label, 20.0, TEXT), Node { width: px(320), ..default() }));
         button(r, "-", minus, false);
@@ -322,6 +332,7 @@ fn menu_actions(
     mut next: ResMut<NextState<AppState>>,
     mut exit: MessageWriter<AppExit>,
     keys: Res<ButtonInput<KeyCode>>,
+    (mut voice, devices): (ResMut<crate::voice::VoiceSettings>, Res<crate::voice::Devices>),
 ) {
     if keys.just_pressed(KeyCode::Enter) && st.page == Page::Join {
         actions.0.push(UiAction::Connect);
@@ -362,6 +373,7 @@ fn menu_actions(
                 settings.fps_max = CAPS[(i + step).clamp(0, CAPS.len() as i32 - 1) as usize];
                 settings.save();
             }
+            UiAction::Voice(a) => crate::voice::apply(&mut voice, &devices, a),
             UiAction::CycleTeamIds => {
                 settings.team_ids = (settings.team_ids + 1) % 3;
                 settings.save();

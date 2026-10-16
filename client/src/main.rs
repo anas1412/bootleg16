@@ -27,6 +27,7 @@ mod sound;
 mod teammates;
 mod ui;
 mod viewmodel;
+mod voice;
 
 use bevy::{
     light::GlobalAmbientLight,
@@ -72,7 +73,8 @@ fn main() {
             hud::HudPlugin,
             round_hud::RoundHudPlugin,
             bomb::BombPlugin,
-            teammates::TeammatesPlugin,
+            // (Bevy takes at most 15 plugins per tuple.)
+            (teammates::TeammatesPlugin, voice::VoicePlugin),
         ))
         .add_systems(Update, screenshot)
         .run();

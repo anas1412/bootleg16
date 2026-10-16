@@ -8,6 +8,9 @@ goldsrc = { path = "../goldsrc" }
 sim = { path = "../sim" }
 net = { path = "../net" }
 bevy = { version = "0.20", features = ["wav"] }
+# Voice chat: microphone / output streams (same cpal Bevy's audio uses) and the Opus codec.
+cpal = "0.17"
+opus = "0.3"
 
 [features]
 # Development builds link Bevy as a shared library (rebuilds only link our code).
