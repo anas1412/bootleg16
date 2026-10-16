@@ -10,7 +10,7 @@ use sim::pmove::Input;
 fn knife_round_then_winners_pick_sides() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig::default());
-    g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: true });
+    g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: true, keys: Vec::new() });
     g.a.ticket = 111;
     g.b.ticket = 222;
     let mut ev = Vec::new();
@@ -79,7 +79,7 @@ fn knife_round_then_winners_pick_sides() {
 fn abandoned_match_frees_the_server() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig::default());
-    g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: false });
+    g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: false, keys: Vec::new() });
     // Nobody with a ticket shows up (a and b have none): after the wait, the server is free again.
     for _ in 0..92 * 128 {
         g.server.step();
@@ -91,7 +91,7 @@ fn abandoned_match_frees_the_server() {
 fn draining_waits_for_the_match_to_end() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig::default());
-    g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: false });
+    g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: false, keys: Vec::new() });
     g.a.ticket = 111;
     g.b.ticket = 222;
     for _ in 0..128 {

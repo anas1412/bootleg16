@@ -17,9 +17,9 @@ impl Server {
             return;
         }
         r.reports.push((reporter, target));
-        let cfg = &self.round.cfg;
-        let Some(lobby) = self.lobby else { return };
-        let msg = crate::master::LobbyMsg::Report { token: cfg.official_token.clone(), reporter, target, reason, map: self.map.clone(), round: self.round.round };
-        self.socket.send(lobby, encode(&msg));
+        let (Some(lobby), Some(key)) = (self.lobby, &self.server_key) else { return };
+        let msg = crate::master::LobbyMsg::Report { reporter, target, reason, map: self.map.clone(), round: self.round.round };
+        let sealed = key.seal(&encode(&msg));
+        self.socket.send(lobby, sealed);
     }
 }

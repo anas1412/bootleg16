@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # Everything in hosting/ is private: the token (and the configs holding it) are secrets.
 umask 077
-mkdir -p hosting hosting/reports
+mkdir -p hosting hosting/reports hosting/keys
 chmod -R go-rwx hosting
 compose() { docker compose -p bootleg16 -f hosting/compose.yaml "$@"; }
 # The containers run as you (not root): they can read the private files and nothing else.
@@ -76,7 +76,7 @@ rm -f hosting/server*.cfg
   echo "# Made by host.sh: edit config/server.cfg instead, then run ./host.sh"
   echo "services:"
   if [ "$LOBBY" = here ]; then
-    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports]}"
+    echo "  lobby: {image: bootleg16, $as_me network_mode: host, restart: unless-stopped, command: master 27010 --tokens /bootleg16/tokens.txt --reports /bootleg16/reports/reports.jsonl --key /bootleg16/keys/lobby.key${TEST:+ --allow-anonymous}, volumes: [./tokens.txt:/bootleg16/tokens.txt:ro, ./reports:/bootleg16/reports, ./keys:/bootleg16/keys]}"
   fi
   for i in $(seq 1 "$SERVERS"); do
     port=$((27014 + i))
@@ -91,6 +91,10 @@ rm -f hosting/server*.cfg
 } > hosting/compose.yaml
 
 docker build -q -t bootleg16 . >/dev/null
+# The lobby's key (made once, kept): its public half goes into the game build.
+if [ "$LOBBY" = here ]; then
+  public=$(docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/hosting/keys:/bootleg16/keys" bootleg16 master --print-public /bootleg16/keys/lobby.key 2>/dev/null | tail -n1)
+fi
 if [ -n "${UPDATE:-}" ] && [ -n "$(compose ps -q 2>/dev/null)" ]; then
   # Rolling update: the lobby now (players sign back in by themselves), each game server once
   # its match is over (it finishes the match on SIGTERM; nothing new is booked on it meanwhile).
@@ -107,5 +111,5 @@ echo "Running $SERVERS game server(s) on $IP (UDP $([ "$SERVERS" = 1 ] && echo 2
 echo "Open those UDP ports in your firewall / router."
 if [ "$LOBBY" = here ]; then
   echo "More machines:  ./host.sh join $IP $token"
-  echo "Ship the game:  BOOTLEG16_LOBBY=$IP:27010 cargo build --release -p client --no-default-features --features steam"
+  echo "Ship the game:  BOOTLEG16_LOBBY=$IP:27010 BOOTLEG16_LOBBY_KEY=$public cargo build --release -p client --no-default-features --features steam"
 fi

@@ -8,6 +8,7 @@
 pub mod bot;
 pub mod client;
 pub mod config;
+pub mod crypto;
 pub mod master;
 pub mod protocol;
 pub mod rounds;

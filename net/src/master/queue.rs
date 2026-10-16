@@ -2,7 +2,6 @@
 //! close to the players. Each player measures their ping to every region; a party may play
 //! in a region where all of them have a good ping, and "good" widens the longer they wait.
 use super::*;
-use crate::protocol::ClientMsg;
 use crate::server::MatchSetup;
 
 /// The worst ping a party accepts at first, how much it widens per second of waiting, and
@@ -50,18 +49,20 @@ impl Master {
     /// hand out tickets. False if none.
     pub(super) fn start_match(&mut self, players: Vec<(u32, Group)>, knife_round: bool, region: Option<&str>) -> bool {
         let free = self.servers.iter().find(|(_, s)| s.official && !s.busy && region.is_none_or(|r| s.region == r));
-        let Some((addr, public, token, region)) = free.map(|(a, s)| (*a, s.public, s.token.clone(), s.region.clone())) else { return false };
-        let tickets: Vec<(u32, u64, Group)> = players.iter().map(|(id, g)| (*id, self.rand() | 1, *g)).collect();
-        let setup = MatchSetup { players: tickets.iter().map(|(_, t, g)| (*t, *g)).collect(), knife_round };
-        // The server checks the token: only we can reserve official servers.
-        let msg = encode(&ClientMsg::Reserve { token, setup });
+        let Some((addr, public, key, region)) = free.map(|(a, s)| (*a, s.public, s.key, s.region.clone())) else { return false };
+        // A seat number and a fresh key per player: the server learns the keys from this
+        // (sealed) booking, the player from the lobby (encrypted); they never travel in clear.
+        let tickets: Vec<(u32, u64, Group, [u8; 32])> = players.iter().map(|(id, g)| (*id, self.rand() | 1, *g, crate::crypto::new_key())).collect();
+        let setup = MatchSetup { players: tickets.iter().map(|(_, t, g, _)| (*t, *g)).collect(), knife_round, keys: tickets.iter().map(|(_, t, _, k)| (*t, *k)).collect() };
+        // Sealed with the server's token key: only it can read it, nobody can forge one.
+        let msg = self.keys[key].seal(&encode(&setup));
         let _ = self.udp.send_to(&msg, addr);
         self.booking.insert(addr, (msg, Instant::now(), Instant::now()));
         self.servers.get_mut(&addr).unwrap().busy = true;
         println!("match booked on {public} ({region}): {} players{}", players.len(), if knife_round { ", custom" } else { "" });
-        for (id, ticket, _) in tickets {
+        for (id, ticket, _, k) in tickets {
             if let Some(p) = self.players.values_mut().find(|p| p.id == id) {
-                p.found = Some((public, ticket));
+                p.found = Some((public, ticket, k));
                 self.seats.insert(ticket, (p.steam, p.name.clone(), Instant::now()));
             }
             if let Some(party) = self.parties.values_mut().find(|q| q.members.iter().any(|(m, _)| *m == id)) {

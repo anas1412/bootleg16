@@ -112,12 +112,13 @@ fn main() {
                 queued[i] = true;
                 lobbies[i].send(Command::Play);
             }
-            if let Some((mut addr, ticket)) = lobbies[i].found.take() {
+            if let Some((mut addr, ticket, key)) = lobbies[i].found.take() {
                 if local {
                     addr.set_ip([127, 0, 0, 1].into());
                 }
                 let mut client = net::Client::connect(addr, &format!("bot{i}"), map.world()).unwrap();
                 client.ticket = ticket;
+                client.key = Some(key);
                 if i == 0 {
                     println!("bots booked on {addr}");
                 }

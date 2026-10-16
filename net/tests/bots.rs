@@ -31,7 +31,7 @@ fn booked(map: &Arc<BotMap>, cfg: impl Fn(SocketAddr) -> net::config::MatchConfi
     let mut asked = [false; 10];
     let start = Instant::now();
     while bots.len() < 10 {
-        assert!(start.elapsed() < Duration::from_secs(20), "not all bots got a match");
+        assert!(start.elapsed() < Duration::from_secs(20), "not all bots got a match: {} online, {} booked, notices {:?}", queue.iter().filter(|c| c.online()).count(), bots.len(), queue.iter().map(|c| c.notice.clone()).collect::<Vec<_>>());
         server.step();
         for (i, c) in queue.iter_mut().enumerate() {
             c.tick();
@@ -39,9 +39,10 @@ fn booked(map: &Arc<BotMap>, cfg: impl Fn(SocketAddr) -> net::config::MatchConfi
                 asked[i] = true;
                 c.send(Command::Play);
             }
-            if let Some((addr, ticket)) = c.found.take() {
+            if let Some((addr, ticket, key)) = c.found.take() {
                 let mut client = net::Client::connect(addr, &format!("bot{i}"), map.world()).unwrap();
                 client.ticket = ticket;
+                client.key = Some(key);
                 bots.push(Bot::new(client, map.clone(), i, Profile::of(Difficulty::Normal)));
             }
         }

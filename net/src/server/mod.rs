@@ -7,6 +7,10 @@ mod guard;
 mod ground;
 mod reserve;
 mod report;
+mod sealed;
+
+/// Ticks between heartbeats to the lobby.
+const HEARTBEAT_EVERY: u32 = crate::master::HEARTBEAT_SECONDS as u32 * TICK_RATE;
 mod round;
 mod surrender;
 mod visibility;
@@ -196,6 +200,15 @@ pub struct Server {
     draining: Option<u32>,
     /// The lobby's address (`master` in the config, looked up again at every heartbeat).
     lobby: Option<SocketAddr>,
+    /// A name lookup of the lobby's address running in the background (a slow DNS server
+    /// must never stall the game loop).
+    lookup: Option<std::sync::mpsc::Receiver<Option<SocketAddr>>>,
+    /// The key for talking to the lobby (from the official token, which is never sent).
+    server_key: Option<crate::crypto::ServerKey>,
+    /// When the last booking we took was sealed (older ones are replays).
+    last_booking: u64,
+    /// A new player's channel, opened from their ticket's key while their join is checked.
+    joining: Option<(SocketAddr, u64, crate::crypto::Channel)>,
     /// Size of the last snapshot sent (bandwidth checks).
     snapshot_bytes: usize,
     /// Anti-wallhack: when each (viewer, target) pair last had line of sight.
@@ -243,13 +256,19 @@ impl Server {
             reserved: None,
             draining: None,
             lobby: None,
+            lookup: None,
+            server_key: None,
+            last_booking: 0,
+            joining: None,
         })
     }
 
     /// Match settings (server config file). Restarts the match.
     pub fn set_config(&mut self, cfg: MatchConfig) {
-        self.lobby = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next());
+        self.lobby = cfg.master.parse().ok();
+        self.server_key = (!cfg.official_token.is_empty()).then(|| crate::crypto::ServerKey::from_token(&cfg.official_token));
         self.round = Match::new(cfg, TICK_RATE);
+        self.look_up_lobby();
     }
 
     /// An official server (it has the lobby's token): only booked players may join.
@@ -340,13 +359,31 @@ impl Server {
         }
     }
 
+    /// Start looking up the lobby's name (no-op for an address: that's parsed directly).
+    fn look_up_lobby(&mut self) {
+        let master = self.round.cfg.master.clone();
+        if master.is_empty() || master.parse::<SocketAddr>().is_ok() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || _ = tx.send(std::net::ToSocketAddrs::to_socket_addrs(&master).ok().and_then(|mut a| a.next())));
+        self.lookup = Some(rx);
+    }
+
     /// Announce this server to the lobby (if one is set), so it can be given matches.
     fn heartbeat(&mut self) {
         let cfg = &self.round.cfg;
         if cfg.master.is_empty() {
             return;
         }
-        self.lobby = std::net::ToSocketAddrs::to_socket_addrs(&cfg.master).ok().and_then(|mut a| a.next()).or(self.lobby);
+        // A name (not an address): look it up again now and then, in the background.
+        if let Some(found) = self.lookup.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.lobby = found.or(self.lobby);
+            self.lookup = None;
+        }
+        if self.lookup.is_none() && self.tick % (60 * TICK_RATE) < HEARTBEAT_EVERY {
+            self.look_up_lobby();
+        }
         let Some(master) = self.lobby else { return };
         let cfg = &self.round.cfg;
         let players = self.clients.values().filter(|c| !c.bot).count() as u8;
@@ -357,11 +394,14 @@ impl Server {
             players,
             max: cfg.max_players,
             region: cfg.region.clone(),
-            token: cfg.official_token.clone(),
             busy,
             address: cfg.public_address.clone(),
         };
-        self.socket.send(master, encode(&msg));
+        // Sealed with the token's key (the token itself never goes out): only the lobby can
+        // read it, and nobody can pretend to be us.
+        if let Some(key) = &self.server_key {
+            self.socket.send(master, key.seal(&encode(&msg)));
+        }
     }
 
     /// Bytes in the last snapshot sent to a client.
@@ -469,21 +509,40 @@ impl Server {
         let tick = self.tick;
         for (from, bytes) in self.socket.recv_all() {
             // The lobby's bookings have their own way in, so strangers can't crowd them out
-            // (only bookings: its address can be faked, the token can't).
-            if Some(from) == self.lobby && bytes.len() <= guard::MAX_PACKET {
-                if let Some(msg @ ClientMsg::Reserve { .. }) = decode::<ClientMsg>(&bytes) {
-                    self.handle(from, msg);
-                    continue;
+            // (its address can be faked; the key it seals them with can't).
+            if bytes.first() == Some(&crate::crypto::SERVER) {
+                if Some(from) == self.lobby && bytes.len() <= guard::MAX_PACKET {
+                    self.booking(&bytes);
                 }
+                continue;
             }
             // Budget first: floods and junk cost nothing past this line.
             let players = if self.clients.contains_key(&from) { self.clients.keys().filter(|a| a.ip() == from.ip()).count() } else { 0 };
             if !self.guard.allow(from, bytes.len(), players, tick) {
                 continue;
             }
-            if let Some(msg) = decode::<ClientMsg>(&bytes) {
+            let plain = if bytes.first() == Some(&crate::crypto::CHANNEL) {
+                match self.unseal(from, &bytes) {
+                    Some(p) => p,
+                    None => continue,
+                }
+            } else if self.official() {
+                // Official servers talk encrypted only; in the clear: just region pings.
+                if let Some(msg @ ClientMsg::Info { .. }) = decode::<ClientMsg>(&bytes) {
+                    self.handle(from, msg);
+                }
+                continue;
+            } else {
+                bytes
+            };
+            if let Some(msg) = decode::<ClientMsg>(&plain) {
                 self.handle(from, msg);
             }
+            self.joining = None;
+        }
+        if tick % TICK_RATE == 0 {
+            let clients: std::collections::HashSet<SocketAddr> = self.clients.keys().copied().collect();
+            self.socket.keep_channels(|a| clients.contains(a));
         }
         if tick % TICK_RATE == 0 {
             self.guard.tidy(tick);
@@ -630,7 +689,7 @@ impl Server {
                 self.socket.send(a, msg.clone());
             }
         }
-        if self.tick % (crate::master::HEARTBEAT_SECONDS as u32 * TICK_RATE) == 1 {
+        if self.tick % HEARTBEAT_EVERY == 1 {
             self.heartbeat();
         }
         if self.tick % SNAPSHOT_EVERY == 0 {
@@ -904,6 +963,10 @@ impl Server {
                         }
                     }
                     self.clients.insert(from, r);
+                    // An encrypted join: this address talks over the player's channel now.
+                    if let Some((addr, ticket, ch)) = self.joining.take().filter(|j| j.0 == from) {
+                        self.socket.secure(addr, ticket, ch);
+                    }
                 }
                 let id = self.clients[&from].id;
                 self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), map_hash: self.map_hash, tick_rate: TICK_RATE, practice: self.rules.practice }));
@@ -963,13 +1026,6 @@ impl Server {
                     let short = |s: &str| s.chars().take(24).collect::<String>();
                     let info = ServerMsg::Info { version: PROTOCOL_VERSION, name: short(&cfg.name), map: short(&self.map), players, max: cfg.max_players };
                     self.socket.send(from, encode(&info));
-                }
-            }
-            ClientMsg::Reserve { token, setup } => {
-                let cfg = &self.round.cfg;
-                if !cfg.official_token.is_empty() && crate::secure::same_secret(&token, &cfg.official_token) && self.lobby == Some(from) && self.reserved.is_none() {
-                    self.reserve(setup);
-                    self.heartbeat(); // tell the lobby right away that we took it
                 }
             }
             ClientMsg::Bye => {

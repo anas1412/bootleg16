@@ -104,9 +104,10 @@ impl Bot {
                 self.gone = true;
             }
             Order::Rejoin if self.gone => {
-                let (server, ticket) = (self.client.server(), self.client.ticket);
+                let (server, ticket, key) = (self.client.server(), self.client.ticket, self.client.key);
                 if let Ok(mut c) = Client::connect(server, &self.name, self.map.world()) {
                     c.ticket = ticket;
+                    c.key = key;
                     self.client = c;
                     self.gone = false;
                 }

@@ -41,13 +41,14 @@ fn until(server: &mut Server, cs: &mut [&mut LobbyClient], what: &str, done: imp
 }
 
 /// Both join the server they were sent to with their tickets; returns their teams.
-fn play(server: &mut Server, bsp: &goldsrc::bsp::Bsp, found: [(SocketAddr, u64); 2]) -> [Team; 2] {
+fn play(server: &mut Server, bsp: &goldsrc::bsp::Bsp, found: [(SocketAddr, u64, [u8; 32]); 2]) -> [Team; 2] {
     let mut cs: Vec<net::Client> = found
         .iter()
-        .map(|(addr, ticket)| {
+        .map(|(addr, ticket, key)| {
             assert_eq!(*addr, server.local_addr());
             let mut c = net::Client::connect(*addr, "p", sim::collision::World::from_bsp(bsp)).unwrap();
             c.ticket = *ticket;
+            c.key = Some(*key);
             c
         })
         .collect();
@@ -170,13 +171,14 @@ fn answers_never_outgrow_requests() {
         mode: net::master::Mode::Custom,
         members: (0..net::master::MAX_CUSTOM).map(|i| net::master::Member { id: u32::MAX - i as u32, name: long.clone(), group: net::server::Group::B, steam: u64::MAX }).collect(),
         searching: Some(1e9),
-        found: Some((addr, u64::MAX)),
+        found: Some((addr, u64::MAX, [255; 32])),
         notice: "Too many players from your address, or the lobby is full. Try again later.".into(),
         invites: (0..net::master::MAX_INVITES).map(|_| net::master::Invite { from: long.clone(), steam: u64::MAX, code: "ABC-DEF".into(), left: 30.0 }).collect(),
         regions: (0..net::master::MAX_REGIONS).map(|_| ("x".repeat(16), addr)).collect(),
     };
     let answer = net::protocol::encode(&net::master::LobbyMsg::State(state)).len();
-    let request = net::protocol::encode(&net::master::LobbyMsg::Command { session: 0, cmd: Command::Poll, pad: vec![0; net::master::PAD] }).len();
+    // Both travel sealed in the session channel, which adds the same to each.
+    let request = net::protocol::encode(&net::master::LobbyMsg::Command { cmd: Command::Poll, pad: vec![0; net::master::PAD] }).len();
     assert!(answer <= request, "answer {answer} bytes, request {request}");
 }
 
@@ -249,9 +251,10 @@ fn reports_are_filed_with_steam_ids() {
     until(&mut server, &mut [&mut a, &mut b], "match found", |c| c.iter().all(|c| c.found.is_some()));
     let mut cs: Vec<net::Client> = [a.found.unwrap(), b.found.unwrap()]
         .iter()
-        .map(|(addr, ticket)| {
+        .map(|(addr, ticket, key)| {
             let mut c = net::Client::connect(*addr, "p", sim::collision::World::from_bsp(&bsp)).unwrap();
             c.ticket = *ticket;
+            c.key = Some(*key);
             c
         })
         .collect();
@@ -307,6 +310,38 @@ fn official_servers_only_take_booked_players() {
         c.tick(Input::default());
         std::thread::sleep(Duration::from_micros(150));
     }
-    assert_eq!(c.status, net::client::Status::Rejected);
-    assert!(c.reject_reason.unwrap().contains("lobby"));
+    // Not let in, and not even answered: official servers take nothing unencrypted (an
+    // answer bigger than the walk-in's hello would make us a flood amplifier).
+    assert_eq!(c.status, net::client::Status::Connecting);
+    assert!(c.id().is_none());
+}
+
+#[test]
+fn a_seen_ticket_without_its_key_gets_nobody_in() {
+    let Some(bsp) = dust2() else { return };
+    let (mut server, lobby) = world(&bsp, 2);
+    let (mut a, mut b) = (LobbyClient::new(lobby, "a").unwrap(), LobbyClient::new(lobby, "b").unwrap());
+    until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
+    a.send(Command::Play);
+    b.send(Command::Play);
+    until(&mut server, &mut [&mut a, &mut b], "match found", |c| c.iter().all(|c| c.found.is_some()));
+    let (addr, ticket, key) = a.found.unwrap();
+    // Someone who saw A's ticket (but not the key, which never travels in the clear) tries
+    // first; then A joins for real.
+    let mut thief = net::Client::connect(addr, "thief", sim::collision::World::from_bsp(&bsp)).unwrap();
+    thief.ticket = ticket;
+    thief.key = Some([7; 32]);
+    let mut real = net::Client::connect(addr, "a", sim::collision::World::from_bsp(&bsp)).unwrap();
+    real.ticket = ticket;
+    real.key = Some(key);
+    for t in 0..512 {
+        server.step();
+        thief.tick(Input::default());
+        if t > 256 {
+            real.tick(Input::default());
+        }
+        std::thread::sleep(Duration::from_micros(150));
+    }
+    assert!(thief.id().is_none(), "the wrong key gets nowhere");
+    assert!(real.id().is_some(), "the seat is still A's");
 }

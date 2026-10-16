@@ -29,11 +29,12 @@ fn main() {
     wait(&mut a, &mut b, "match booked", &|a, b| a.found.is_some() && b.found.is_some());
     let mut players: Vec<net::Client> = [a.found.unwrap(), b.found.unwrap()]
         .iter()
-        .map(|(addr, ticket)| {
+        .map(|(addr, ticket, key)| {
             let local = std::env::args().any(|a| a == "--local");
             let addr = if local { std::net::SocketAddr::from(([127, 0, 0, 1], addr.port())) } else { *addr };
             let mut c = net::Client::connect(addr, "smoke", sim::collision::World::flat_floor(-100_000.0)).unwrap();
             c.ticket = *ticket;
+            c.key = Some(*key);
             c
         })
         .collect();

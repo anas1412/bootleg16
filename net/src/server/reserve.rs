@@ -14,12 +14,15 @@ pub enum Group {
 }
 
 /// What the matchmaker (or a custom game's host) sets up.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct MatchSetup {
-    /// Each player's ticket (a secret the matchmaker gave them) and group.
+    /// Each player's ticket (their seat's number) and group.
     pub players: Vec<(u64, Group)>,
     /// Knife round first, winners pick sides (custom games). Otherwise A starts as T.
     pub knife_round: bool,
+    /// Each ticket's encryption key (official servers: a player proves their seat by
+    /// encrypting with it; the key itself never crosses the network in the clear).
+    pub keys: Vec<(u64, [u8; 32])>,
 }
 
 /// How long to wait for everyone before starting with whoever came, and for the side vote.

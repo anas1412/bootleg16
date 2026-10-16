@@ -49,9 +49,6 @@ pub enum ClientMsg {
     /// One 20 ms Opus voice frame while a push-to-talk key is held.
     Voice { channel: VoiceChannel, data: Vec<u8> },
     Bye,
-    /// Lobby -> game server: run this match. Only obeyed with our official token, from the
-    /// lobby address in server.cfg.
-    Reserve { token: String, setup: crate::server::MatchSetup },
 }
 
 /// Why a player was reported.

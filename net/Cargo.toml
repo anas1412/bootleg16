@@ -11,3 +11,8 @@ serde = { version = "1", features = ["derive"] }
 postcard = { version = "1", features = ["alloc"] }
 # Secrets (tickets, sessions, join cookies) from the OS random source.
 getrandom = "0.3"
+# Encryption: key exchange (X25519), authenticated encryption (ChaCha20-Poly1305), key
+# derivation (BLAKE3). Audited RustCrypto / dalek / BLAKE3 crates, no home-made crypto.
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+chacha20poly1305 = "0.10"
+blake3 = "1"

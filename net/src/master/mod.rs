@@ -44,22 +44,40 @@ pub const MAX_CUSTOM: usize = 10;
 pub enum LobbyMsg {
     /// Game server -> lobby: "I'm here", and whether it's running a match.
     /// `address`: where players connect (empty = where this came from).
-    Heartbeat { name: String, map: String, players: u8, max: u8, region: String, token: String, busy: bool, address: String },
-    /// Player -> lobby: sign in. `steam`: a Steam login (the lobby checks it with Steam); None
-    /// = anonymous (tests, and builds without Steam).
-    Hello { name: String, steam: Option<SteamLogin>, pad: Vec<u8> },
-    /// Player -> lobby: do something (or just `Poll`), proving who you are with your session.
-    Command { session: u64, cmd: Command, pad: Vec<u8> },
-    /// Lobby -> player: your session secret.
-    Welcome { session: u64 },
+    /// Sealed with the official token's key (see `crypto::ServerKey`).
+    Heartbeat { name: String, map: String, players: u8, max: u8, region: String, busy: bool, address: String },
+    /// Player -> lobby: sign in. `public`: a fresh key for this session; `sealed`: a `SignIn`
+    /// only the lobby can read (see `crypto::client_hello`). `cookie`: 0 at first, then the
+    /// one from `Cookie` (proves the address is real before the lobby does any crypto).
+    Hello { cookie: u64, public: [u8; 32], sealed: Vec<u8> },
+    /// Lobby -> player: say hello again with this.
+    Cookie { cookie: u64 },
+    /// Lobby -> player: signed in. `public`: the lobby's fresh key (finishes the handshake);
+    /// `sealed`: the session number, over the new channel.
+    Welcome { public: [u8; 32], sealed: Vec<u8> },
+    /// Player -> lobby, in the session channel: do something (or just `Poll`).
+    Command { cmd: Command, pad: Vec<u8> },
+    /// Player -> lobby: what's your public key? Only for builds without one built in (tests,
+    /// development): trusting the answer is only as good as the network it came over.
+    KeyPlease { pad: Vec<u8> },
+    Key { public: [u8; 32] },
     /// Lobby -> player: everything about you now.
     State(LobbyState),
     /// Lobby -> player: unknown session (the lobby restarted, or you timed out): sign in again.
     Expired,
     /// Lobby -> player: not let in (this lobby needs a Steam login).
     Refused { reason: String },
-    /// Game server -> lobby: a player reported another (by their match tickets).
-    Report { token: String, reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: String, round: u32 },
+    /// Game server -> lobby: a player reported another (by their match tickets). Sealed.
+    Report { reporter: u64, target: u64, reason: crate::protocol::ReportReason, map: String, round: u32 },
+}
+
+/// What a player signs in with (inside the sealed hello).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SignIn {
+    pub name: String,
+    /// A Steam login (the lobby checks it with Steam); None = anonymous (tests, no Steam).
+    pub steam: Option<SteamLogin>,
+    pub pad: Vec<u8>,
 }
 
 /// Steam sign-in: who you say you are and Steam's ticket proving it.
@@ -144,7 +162,8 @@ pub struct LobbyState {
     /// Seconds in the casual queue, if queued.
     pub searching: Option<f32>,
     /// Match ready: the server and your ticket.
-    pub found: Option<(SocketAddr, u64)>,
+    /// Match ready: the server, your ticket and your key for it.
+    pub found: Option<(SocketAddr, u64, [u8; 32])>,
     /// Something to tell the player ("no server free", "party full"...).
     pub notice: String,
     /// Invites to other parties, newest last.
@@ -154,6 +173,8 @@ pub struct LobbyState {
 }
 
 struct Player {
+    /// The encrypted session (commands in, states out).
+    channel: crate::crypto::Channel,
     id: u32,
     name: String,
     /// Steam id once signed in with Steam (0 = anonymous).
@@ -161,7 +182,7 @@ struct Player {
     addr: SocketAddr,
     party: u32,
     seen: Instant,
-    found: Option<(SocketAddr, u64)>,
+    found: Option<(SocketAddr, u64, [u8; 32])>,
     notice: String,
     /// Who invited us (player id) and when.
     invites: Vec<(u32, Instant)>,
@@ -182,20 +203,28 @@ struct GameServer {
     /// Where players connect (the heartbeat's source unless the server says otherwise).
     public: SocketAddr,
     region: String,
-    token: String,
+    /// Which official token (its key seals our messages to it).
+    key: usize,
     official: bool,
     busy: bool,
     seen: Instant,
+    /// When its newest heartbeat was sealed (older ones are replays).
+    sent: u64,
 }
 
 pub struct Master {
     udp: UdpSocket,
-    tokens: Vec<String>,
     servers: HashMap<SocketAddr, GameServer>,
     /// session secret -> player.
     players: HashMap<u64, Player>,
     parties: HashMap<u32, Party>,
     next_id: u32,
+    /// Our long-term key (its public half is built into the game) and the secret behind the
+    /// sign-in cookies.
+    key: crate::crypto::LobbyKey,
+    cookie_secret: [u8; 32],
+    /// The official tokens' keys (game servers seal everything with theirs).
+    pub(super) keys: Vec<crate::crypto::ServerKey>,
     /// Packet budgets per IP (players and servers alike).
     limits: crate::secure::Buckets<std::net::IpAddr>,
     started: Instant,
@@ -222,7 +251,8 @@ impl Master {
     pub fn bind(addr: SocketAddr, tokens: Vec<String>) -> std::io::Result<Master> {
         let udp = UdpSocket::bind(addr)?;
         udp.set_read_timeout(Some(Duration::from_millis(100)))?;
-        Ok(Master { udp, tokens, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new() })
+        let keys = tokens.iter().map(|t| crate::crypto::ServerKey::from_token(t)).collect();
+        Ok(Master { udp, key: crate::crypto::LobbyKey::generate(), cookie_secret: crate::crypto::new_key(), keys, servers: HashMap::new(), players: HashMap::new(), parties: HashMap::new(), next_id: 1, limits: crate::secure::Buckets::new(100_000), started: Instant::now(), match_size: 10, reported: Instant::now(), steam_mode: SteamMode::Trust, require_steam: false, steam_checks: Vec::new(), seats: HashMap::new(), reports: None, booking: HashMap::new() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -233,10 +263,6 @@ impl Master {
     /// tell you anyone else's.
     fn rand(&mut self) -> u64 {
         crate::secure::random()
-    }
-
-    fn is_token(&self, token: &str) -> bool {
-        !token.is_empty() && self.tokens.iter().any(|t| crate::secure::same_secret(t, token))
     }
 
     /// A party code nobody else has.
@@ -286,70 +312,23 @@ impl Master {
             let _ = self.udp.set_nonblocking(true);
             // Every IP has a budget: floods cost nothing past here.
             let now = self.started.elapsed().as_secs_f64();
-            if !self.limits.allow(from.ip(), IP_RATE, now) {
+            // (Loopback can't be faked from outside, and tests run everyone from it.)
+            if !from.ip().is_loopback() && !self.limits.allow(from.ip(), IP_RATE, now) {
+                continue;
+            }
+            if buf[0] == crate::crypto::SERVER {
+                self.from_server(from, &buf[..n]);
+                continue;
+            }
+            if buf[0] == crate::crypto::CHANNEL {
+                self.from_player(from, &buf[..n]);
                 continue;
             }
             match decode::<LobbyMsg>(&buf[..n]) {
-                Some(LobbyMsg::Heartbeat { token, busy, address, region, .. }) => {
-                    let region: String = region.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(16).collect();
-                    let public = address.parse().unwrap_or(from);
-                    // Only official servers (our token) are kept: anyone else could flood the list.
-                    let official = self.is_token(&token);
-                    if !official || (!self.servers.contains_key(&from) && self.servers.len() >= MAX_SERVERS) {
-                        continue;
-                    }
-                    if !self.servers.contains_key(&from) {
-                        println!("server {public} ({region}) joined the pool");
-                    }
-                    if busy {
-                        self.booking.remove(&from); // took the match
-                    }
-                    // Booked, not confirmed yet: still busy as far as we're concerned.
-                    let busy = busy || self.booking.contains_key(&from);
-                    self.servers.insert(from, GameServer { public, region, token, official, busy, seen: Instant::now() });
+                Some(LobbyMsg::KeyPlease { pad }) if pad.len() >= 64 => {
+                    let _ = self.udp.send_to(&encode(&LobbyMsg::Key { public: self.key.public() }), from);
                 }
-                Some(LobbyMsg::Report { token, reporter, target, reason, map, round }) if self.is_token(&token) => self.file_report(reporter, target, reason, &map, round),
-                Some(LobbyMsg::Hello { steam: None, pad, .. }) if pad.len() >= PAD && self.require_steam => {
-                    let _ = self.udp.send_to(&encode(&LobbyMsg::Refused { reason: "Start Steam to play online.".into() }), from);
-                }
-                Some(LobbyMsg::Hello { name, steam, pad }) if pad.len() >= PAD => {
-                    // Signed in already (our Welcome got lost): the same session again.
-                    let session = match self.players.iter().find(|(_, p)| p.addr == from) {
-                        Some((s, _)) => *s,
-                        None if self.players.len() >= MAX_PLAYERS || (!from.ip().is_loopback() && self.players.values().filter(|p| p.addr.ip() == from.ip()).count() >= SESSIONS_PER_IP) => {
-                            let _ = self.udp.send_to(&encode(&LobbyMsg::Refused { reason: "Too many players from your address, or the lobby is full. Try again later.".into() }), from);
-                            continue;
-                        }
-                        None => {
-                            let session = self.rand();
-                            let id = self.next_id;
-                            self.next_id += 1;
-                            let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
-                            let party = self.new_party(id);
-                            self.players.insert(session, Player { id, name, steam: 0, addr: from, party, seen: Instant::now(), found: None, notice: String::new(), invites: Vec::new(), pings: HashMap::new() });
-                            if let Some(login) = steam {
-                                match self.steam_mode {
-                                    // Unchecked: never let a claim push anyone else out.
-                                    SteamMode::Trust if self.players.values().any(|p| p.steam == login.steam_id) => {}
-                                    SteamMode::Trust => self.steam_checked(login.steam_id, Some(session)),
-                                    SteamMode::Verify => self.steam_checks.push((session, login.steam_id, login.ticket)),
-                                }
-                            }
-                            session
-                        }
-                    };
-                    let _ = self.udp.send_to(&encode(&LobbyMsg::Welcome { session }), from);
-                }
-                Some(LobbyMsg::Command { session, cmd, pad }) if pad.len() >= PAD => {
-                    if self.players.get(&session).is_some_and(|p| p.addr == from) {
-                        self.command(session, cmd);
-                        if let Some(state) = self.state_of(session) {
-                            let _ = self.udp.send_to(&encode(&LobbyMsg::State(state)), from);
-                        }
-                    } else {
-                        let _ = self.udp.send_to(&encode(&LobbyMsg::Expired), from);
-                    }
-                }
+                Some(LobbyMsg::Hello { cookie, public, sealed }) if sealed.len() >= PAD => self.hello(from, cookie, public, &sealed),
                 _ => {}
             }
         }
@@ -392,6 +371,85 @@ impl Master {
     pub fn run(&mut self) {
         loop {
             self.step();
+        }
+    }
+
+    /// Our public key (build it into the game: `BOOTLEG16_LOBBY_KEY`).
+    pub fn public_key(&self) -> [u8; 32] {
+        self.key.public()
+    }
+
+    /// Use this long-term key (kept in a file, so the built-in public key stays valid).
+    pub fn set_key(&mut self, key: crate::crypto::LobbyKey) {
+        self.key = key;
+    }
+
+    /// The sign-in cookie for an address in a 10-second window (stateless).
+    fn cookie(&self, from: SocketAddr, previous: bool) -> u64 {
+        let window = self.started.elapsed().as_secs() / 10 - previous as u64;
+        let mut h = blake3::Hasher::new_keyed(&self.cookie_secret);
+        h.update(from.to_string().as_bytes());
+        h.update(&window.to_le_bytes());
+        u64::from_le_bytes(h.finalize().as_bytes()[..8].try_into().unwrap()) | 1
+    }
+
+    /// A sign-in: check the cookie (cheap) before the key exchange (not cheap), then read
+    /// who it is and start their session.
+    fn hello(&mut self, from: SocketAddr, cookie: u64, public: [u8; 32], sealed: &[u8]) {
+        if cookie != self.cookie(from, false) && (self.started.elapsed().as_secs() < 10 || cookie != self.cookie(from, true)) {
+            let _ = self.udp.send_to(&encode(&LobbyMsg::Cookie { cookie: self.cookie(from, false) }), from);
+            return;
+        }
+        let Some((payload, fresh, channel)) = crate::crypto::lobby_hello(&self.key, &public, sealed) else { return };
+        let Some(SignIn { name, steam, pad }) = decode::<SignIn>(&payload) else { return };
+        if pad.len() < PAD {
+            return;
+        }
+        let refuse = |m: &Master, reason: &str| _ = m.udp.send_to(&encode(&LobbyMsg::Refused { reason: reason.into() }), from);
+        if steam.is_none() && self.require_steam {
+            return refuse(self, "Start Steam to play online.");
+        }
+        if self.players.len() >= MAX_PLAYERS || (!from.ip().is_loopback() && self.players.values().filter(|p| p.addr.ip() == from.ip()).count() >= SESSIONS_PER_IP) {
+            return refuse(self, "Too many players from your address, or the lobby is full. Try again later.");
+        }
+        let session = self.rand();
+        let id = self.next_id;
+        self.next_id += 1;
+        let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
+        let party = self.new_party(id);
+        self.players.insert(session, Player { channel, id, name, steam: 0, addr: from, party, seen: Instant::now(), found: None, notice: String::new(), invites: Vec::new(), pings: HashMap::new() });
+        if let Some(login) = steam {
+            match self.steam_mode {
+                // Unchecked: never let a claim push anyone else out.
+                SteamMode::Trust if self.players.values().any(|p| p.steam == login.steam_id) => {}
+                SteamMode::Trust => self.steam_checked(login.steam_id, Some(session)),
+                SteamMode::Verify => self.steam_checks.push((session, login.steam_id, login.ticket)),
+            }
+        }
+        let p = self.players.get_mut(&session).unwrap();
+        let sealed = p.channel.seal(session, &session.to_le_bytes());
+        let _ = self.udp.send_to(&encode(&LobbyMsg::Welcome { public: fresh, sealed }), from);
+    }
+
+    /// A packet in a player's session: their command, answered with their state. The key
+    /// proves who it is, so a player whose address changed (a phone between networks) carries on.
+    fn from_player(&mut self, from: SocketAddr, packet: &[u8]) {
+        let Some(session) = crate::crypto::channel_id(packet) else { return };
+        let Some(p) = self.players.get_mut(&session) else {
+            let _ = self.udp.send_to(&encode(&LobbyMsg::Expired), from);
+            return;
+        };
+        let Some(plain) = p.channel.open(packet) else { return };
+        let Some(LobbyMsg::Command { cmd, pad }) = decode::<LobbyMsg>(&plain) else { return };
+        if pad.len() < PAD {
+            return;
+        }
+        p.addr = from;
+        self.command(session, cmd);
+        if let Some(state) = self.state_of(session) {
+            let p = self.players.get_mut(&session).unwrap();
+            let sealed = p.channel.seal(session, &encode(&LobbyMsg::State(state)));
+            let _ = self.udp.send_to(&sealed, from);
         }
     }
 
@@ -569,6 +627,36 @@ impl Master {
                 Ok(mut f) => _ = writeln!(f, "{line}"),
                 Err(e) => println!("can't write reports to {}: {e}", path.display()),
             }
+        }
+    }
+}
+
+impl Master {
+    /// A sealed message from a game server: only official ones (holding a token) can make
+    /// one, and an old one replayed is ignored.
+    fn from_server(&mut self, from: SocketAddr, packet: &[u8]) {
+        let Some(id) = crate::crypto::server_key_id(packet) else { return };
+        let Some(key) = self.keys.iter().position(|k| k.id == id) else { return };
+        let Some((sent, body)) = self.keys[key].open(packet) else { return };
+        match decode::<LobbyMsg>(&body) {
+            Some(LobbyMsg::Heartbeat { busy, address, region, .. }) => {
+                if self.servers.get(&from).is_some_and(|s| sent < s.sent) || (!self.servers.contains_key(&from) && self.servers.len() >= MAX_SERVERS) {
+                    return;
+                }
+                let region: String = region.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(16).collect();
+                let public = address.parse().unwrap_or(from);
+                if !self.servers.contains_key(&from) {
+                    println!("server {public} ({region}) joined the pool");
+                }
+                if busy {
+                    self.booking.remove(&from); // took the match
+                }
+                // Booked, not confirmed yet: still busy as far as we're concerned.
+                let busy = busy || self.booking.contains_key(&from);
+                self.servers.insert(from, GameServer { public, region, key, official: true, busy, seen: Instant::now(), sent });
+            }
+            Some(LobbyMsg::Report { reporter, target, reason, map, round }) => self.file_report(reporter, target, reason, &map, round),
+            _ => {}
         }
     }
 }

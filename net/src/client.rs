@@ -86,6 +86,9 @@ pub struct Client {
     cookie: u64,
     /// Our seat in a reserved match (0 = none), from the matchmaker.
     pub ticket: u64,
+    /// The seat's key (official servers): everything to and from the server is encrypted
+    /// with it. Set it with `ticket`, before the first tick.
+    pub key: Option<[u8; 32]>,
     /// The reserved match ended (the game goes back to the menu).
     pub match_ended: bool,
     /// Breakables broken as of the last snapshot.
@@ -135,6 +138,7 @@ impl Client {
             broken: Vec::new(),
             cookie: 0,
             ticket: 0,
+            key: None,
             match_ended: false,
             wanted_team: None,
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0, stage: Stage::Match, abandoned: [false; 2], vote: None, paused: false },
@@ -163,11 +167,24 @@ impl Client {
     pub fn tick(&mut self, input: Input) -> (Events, Fired) {
         self.ticks += 1;
         self.socket.tick();
+        if let Some(key) = self.key.filter(|_| !self.socket.is_secure(self.server)) {
+            self.socket.secure(self.server, self.ticket, crate::crypto::Channel::new(&key, true));
+        }
         for (from, bytes) in self.socket.recv_all() {
             if from != self.server {
                 continue;
             }
-            if let Some(msg) = decode::<ServerMsg>(&bytes) {
+            let plain = if bytes.first() == Some(&crate::crypto::CHANNEL) {
+                match self.socket.open(from, &bytes) {
+                    Some(p) => p,
+                    None => continue,
+                }
+            } else if self.key.is_some() && self.status != Status::Connecting {
+                continue; // an encrypted session takes nothing in the clear
+            } else {
+                bytes
+            };
+            if let Some(msg) = decode::<ServerMsg>(&plain) {
                 self.handle(msg);
             }
         }

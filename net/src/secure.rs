@@ -1,17 +1,12 @@
 //! Security helpers shared by the lobby and the game server: secrets from the OS's random
 //! source (tickets, sessions, codes, cookies must not be guessable from the ones you see),
-//! constant-time secret comparison, and per-key packet budgets (token buckets).
+//! and per-key packet budgets (token buckets). Encryption is in `crypto`.
 use std::collections::HashMap;
 use std::hash::Hash;
 
 /// A random u64 from the OS (unpredictable, unlike any seeded generator).
 pub fn random() -> u64 {
     getrandom::u64().expect("the OS random source")
-}
-
-/// Compare secrets without leaking how much of them matched through timing.
-pub fn same_secret(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// Packet budgets per key: each key gets `rate` per second, banking up to one second's worth.
@@ -54,7 +49,6 @@ mod tests {
     #[test]
     fn secrets_and_budgets() {
         assert_ne!(random(), random());
-        assert!(same_secret("abc", "abc") && !same_secret("abc", "abd") && !same_secret("abc", "ab"));
         let mut b = Buckets::new(2);
         let hits = (0..30).filter(|i| b.allow(1, 10.0, *i as f64 * 0.01)).count();
         assert!((10..=13).contains(&hits), "{hits}: one second's budget, a little refill");
