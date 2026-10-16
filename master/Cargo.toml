@@ -10,4 +10,8 @@ steamworks = { version = "0.13", optional = true }
 
 [features]
 # Check players' Steam logins with Steam (needs Steam's steamclient.so on the machine).
-steam = ["dep:steamworks"]
+steam = ["dep:steamworks", "dep:steamworks-sys"]
+
+[build-dependencies]
+# Built first so build.rs can put Steam's libsteam_api.so next to the lobby.
+steamworks-sys = { version = "0.13", optional = true }
