@@ -1,39 +1,68 @@
-# UI design system
+# UI design system: Interference
 
-Mockups: `design/mockups/d.html` (serve `design/` and open `?s=menu|hud|buy|score|system`).
-Tokens live in `design/mockups/system.css`. The Bevy UI must use the same values.
+The spec is the mockup, `design/mockups/ui` (serve `design/`, open `mockups/ui/index.html`;
+`system.html` is the whole system on one sheet). The code is `client/src/ui`. The two use the
+same names: `tokens.css` mirrors `ui/tokens.rs`, and each mockup component in `ui.js` has one
+widget in `ui/`. Change both together.
 
-## Audit of the first D pass, and the fix for each issue
-| # | Problem | Fix |
-|---|---------|-----|
-| 1 | Palette read as Valorant: cream text plus red-orange on black. | Olive-graphite base (1.6 VGUI heritage), cool off-white text, one amber accent (1.6 HUD). |
-| 2 | Two HUD languages: 1.6 bitmap digits at the bottom, flat panels at the top. | One numeric style everywhere: JetBrains Mono, tabular. |
-| 3 | Edge margins varied (24/28/34/40 px). | 32 px safe margin on every edge at 1080p. |
-| 4 | Proportional digits in Space Grotesk made numbers jump width (100 to 99). | Every number is mono and tabular, no exceptions. |
-| 5 | Three corner treatments (double 18 px cut, 10 px cut, square). | One signature: a single 12 px notch, top-right, on panels and buttons. |
-| 6 | Accent overused: kill icons, chat, buyzone, money, CTA, selection. | Accent only for: you, selected/focus, primary action. |
-| 7 | Menu bloat: meta header, registration marks, footer hints, hairline grid. | Removed. Wordmark, nav, profile chip only. |
-| 8 | "Featured de_dust" card on the menu was out of place. | Removed. Play leads to its own flow. |
-| 9 | Unaffordable buy items used low-opacity red text, which was unreadable. | The card stays solid; gun and name drop to tertiary; price stays in `bad` at full opacity. |
-| 10 | Selected buy card used a cream fill (Valorant tell). | Raised surface plus a 2 px accent outline. |
-| 11 | Chat and labels had low contrast on bright sand. | Bottom scrim plus a text shadow token; labels use `tx-2`, never `tx-3`, over the game. |
-| 12 | Timer at the bottom and score at the top split the round state. | Round state lives together at top centre: score, timer, round, alive. |
+## The idea
+The UI is a signal. At rest it is clean. When something changes, it splits into its two
+channels and tunes back in: cyan (Bureau, `CH_A`) to one side, pink (Strays, `CH_B`) to the
+other. The split only happens in transitions (entering, a hover burst, a choice, a value
+stepping), never at rest. **Amber is you**: your selection, your main action, your row.
 
-## Tokens
-- **Surfaces:** `bg-0 #0B0D0B` (page), `bg-1 #121511` (panel), `bg-2 #1A1E18` (raised), `bg-3 #242A21` (hover/selected). `hud rgba(11,13,11,.78)` for panels over the game.
-- **Lines:** `line rgba(233,238,228,.10)`, `line-2 rgba(233,238,228,.22)`.
-- **Text:** `tx-1 #EEF0EA`, `tx-2 #A3AA9C`, `tx-3 #6A7164`.
-- **Accent:** `acc #FFA000`, with `acc-ink #1A1200` for text on accent.
-- **Teams:** `ct #8CBEF0`, `t #E86A4A`.
-- **States:** `ok #7CCB6A` (money, online), `bad #FF5252` (low HP, cannot afford).
-- **Type:**
-  - Space Grotesk for words: display 128, h2 44, h3 28, body 18, all 700/500.
-  - JetBrains Mono for numbers and labels: num-l 56, num-m 32, num-s 18, label 13 caps with +0.14 em tracking.
-- **Space:** 4 px grid; component gaps of 8, 16 and 24; 32 px HUD safe margin.
-- **Shape:** notch 12 px top-right; 1 px `line` stroke; no radius, no blur.
-- **HUD placement (kept from 1.6):**
-  - radar and money top-left;
-  - round state top-centre;
-  - kill feed top-right;
-  - HP and armor bottom-left;
-  - ammo bottom-right.
+## Tokens (`ui/tokens.rs`)
+- **Surfaces:** `BG0 #07080B` page and clear colour, `BG1 #0E1116` panels and cards,
+  `BG2 #151A21` raised (toasts), `BG3 #1D242D` selected and avatars.
+  `HUD_BG rgba(7,9,12,.76)` glass over the game. `BACKDROP rgba(7,8,11,.72)` dims behind menus.
+- **Text:** `TX1 #EAF2F8`, `TX2 #8E9BA8`, `TX3 #56616D` (menus only, never over the game).
+- **You:** `AMBER #FFA000`, `AMBER_INK #170E00` on amber, `AMBER_WASH` .08 and `AMBER_WASH_2`
+  .16 under a selection or a hovered main action.
+- **Sides:** `CH_A #49C6FF` = `CT_COLOR` (Bureau), `CH_B #FF4F8B` = `T_COLOR` (Strays).
+- **States:** `OK #5BE3A0` (money, ready, online), `BAD #FF4040` (low health, can't afford, the
+  last seconds). Red always means a problem: waiting or neutral states are grey.
+- **Lines:** `LINE` .10 hairlines, `LINE_2` .24 quiet frames, `LINE_3` .45 hovered frames
+  (all `rgba(200,230,255,a)`); `HOVER` .04 wash under a hovered row.
+- **Space (1080p px, `vh()` scales with the window height):** `GAP_S 8`, `GAP 16`, `PAD 24`,
+  `SAFE 32` (HUD from every edge), `BAR 4` (the amber bar); menu pages keep 96 at the sides.
+- **Shape:** `RADIUS 6` panels and cards, `RADIUS_S 4` chips, rows and buttons. A soft lift
+  shadow under panels (`panels::lift`).
+- **Type (`Type`):** Display 150 and H2 52 in Big Shoulders 800; H3 28, Body 18 and Label 13
+  (caps, +.18 em) in Chakra Petch 600; Jp 13 in Noto Sans JP 700; NumL 56, NumM 32, NumS 18 in
+  JetBrains Mono 700. Every number is mono and tabular.
+- **Motion:** `T_HOVER .14`, `T_TUNE .32`, `T_OUT .18`, `T_BURST .24`, `T_SLIDE .28`,
+  `T_ROLL .22`, `STAGGER .04`, `T_BLUR .22`, `SPLIT_IN 8` px.
+
+## Components
+- **`panels`:** `soft` (radius), `lift`, `hud_panel` (glass, tinted 7% to your side via
+  `Tint::Team`), `card` (selected: amber frame on an amber wash), `feed_row` (kill feed and
+  voice rows: yours `Tint::You` with the amber bar on the outer side, inside the padding, so
+  content lines up).
+- **`widgets`:** `nav` (numbered list, the selection slides), `chips` / `Choice` (one
+  selection per group, it slides), `chip`, `chip_w`, `stepper` (the value rolls),
+  `setting_row`, `primary_button` (the one main action: amber frame, 6 px bar on the reading
+  edge, key on the far edge), `primary_off` (same shape, quiet, the reason in red),
+  `page_title`, `status_label`.
+- **`motion`:** `Anim` (tune in / out, burst, slam, roll, tick) on a node and its whole
+  subtree; `Slide`; `Fade` / `FadeBorder` hovers; `Blurs` for menus over the game (the game
+  blurs, the shared scrim dims it, a scanline sweeps, the HUD hides; `Covered` says so).
+- **`motion::live` (the HUD):** `Edge` (the light on a HUD panel's top edge in your side's
+  colour, or a fixed one; `flare`, `alert` red, `beat` heartbeat), `Meter` (drops at once, a
+  light trail drains after it), `Count` (numbers count), `Opens` (status icons open and close
+  in place), `Side` (which side you're on; the game sets it).
+- **`sound`:** `UiSound` blips made in code: the assistant's chirps (each has its own pitch),
+  the timer's last seconds, a match found, status icons. Quiet, so footsteps stay clear.
+
+## Screens
+- **Menu:** numbered list left, wordmark bottom left, you top right with your running match
+  (Reconnect) and invites under it, the page right. Pages swap inside a frame that stays.
+  Play is a full screen of its own. A match found covers any page.
+- **HUD (kept from 1.6):** radar, money (with status icons) and the voice list top left;
+  score, clock and alive ticks top centre, a team vote under them; frame rate and ping, then
+  the kill feed top right; health and armor bottom left; weapon and ammo bottom right; the
+  assistant's uplink bottom centre (in matches only); announcements upper middle.
+- **Over the game:** TX1 and TX2 text only, with a dark text shadow on bare text.
+
+## Copy
+Plain words, no em dashes. Side names are Bureau (defends) and Strays (attack); the code still
+says Ct and T. Labels in caps with letter spacing.

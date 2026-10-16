@@ -22,11 +22,17 @@ pub struct Settings {
     pub relay: bool,
     /// Talk during live rounds at all (competitive servers can force this off).
     pub assistant_in_round: bool,
+    /// Crosshair: colour (index into `hud::CROSSHAIR_COLORS`), size 0 small .. 2 large, whether
+    /// the gap follows the weapon's spread (CS's dynamic crosshair), and a centre dot.
+    pub crosshair_color: u8,
+    pub crosshair_size: u8,
+    pub crosshair_dynamic: bool,
+    pub crosshair_dot: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true }
+        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false }
     }
 }
 
@@ -50,6 +56,10 @@ impl Settings {
                     Some(("chattiness", v)) => s.chattiness = v.trim().parse::<u8>().unwrap_or(s.chattiness).min(2),
                     Some(("relay", v)) => s.relay = v.trim() == "true",
                     Some(("assistant_in_round", v)) => s.assistant_in_round = v.trim() == "true",
+                    Some(("crosshair_color", v)) => s.crosshair_color = v.trim().parse::<u8>().unwrap_or(0).min(crate::hud::CROSSHAIR_COLORS.len() as u8 - 1),
+                    Some(("crosshair_size", v)) => s.crosshair_size = v.trim().parse::<u8>().unwrap_or(1).min(2),
+                    Some(("crosshair_dynamic", v)) => s.crosshair_dynamic = v.trim() == "true",
+                    Some(("crosshair_dot", v)) => s.crosshair_dot = v.trim() == "true",
                     _ => {}
                 }
             }
@@ -63,8 +73,8 @@ impl Settings {
         let _ = std::fs::write(
             p,
             format!(
-                "name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nteam_ids={}\nassistant={}\nchattiness={}\nrelay={}\nassistant_in_round={}\n",
-                self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.team_ids, self.assistant, self.chattiness, self.relay, self.assistant_in_round
+                "name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nteam_ids={}\nassistant={}\nchattiness={}\nrelay={}\nassistant_in_round={}\ncrosshair_color={}\ncrosshair_size={}\ncrosshair_dynamic={}\ncrosshair_dot={}\n",
+                self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.team_ids, self.assistant, self.chattiness, self.relay, self.assistant_in_round, self.crosshair_color, self.crosshair_size, self.crosshair_dynamic, self.crosshair_dot
             ),
         );
     }

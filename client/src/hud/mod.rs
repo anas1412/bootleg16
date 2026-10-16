@@ -2,12 +2,15 @@
 //! and ammo bottom right, frame rate and ping top right. Every panel is HUD glass with an edge
 //! light in your side's colour; `motion` brings them to life (hits, shots, reloads, weapon
 //! switches, sway). `crosshair` is the crosshair and the sniper scope, `icons` the install's
-//! HUD sprites. Round state and money are `round_hud`, the kill feed `killfeed`.
+//! HUD sprites, `hint` short hints in the low middle. Round state and money are `round_hud`, the kill feed `killfeed`.
 mod crosshair;
+mod hint;
 mod icons;
 mod motion;
 
 pub use crate::ui::SAFE;
+pub use crosshair::{draw as draw_crosshair, CROSSHAIR_COLORS, STATIC_GAP};
+pub use hint::Hint;
 pub use icons::{gun_art, weapon_icon, Icons};
 
 use crate::game::{Frame, Walker};
@@ -27,6 +30,7 @@ impl Plugin for HudPlugin {
             .add_systems(OnEnter(AppState::InGame), (spawn, crosshair::spawn))
             .add_systems(Update, (status, crosshair::crosshair, net_stats).in_set(Frame::Ui));
         motion::plugin(app);
+        hint::plugin(app);
     }
 }
 

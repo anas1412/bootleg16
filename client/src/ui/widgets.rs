@@ -152,7 +152,8 @@ impl<'a> Choice<'a> {
 
 /// A row of choices with one sliding selection (amber frame on an amber wash).
 pub fn chips(p: &mut ChildSpawnerCommands, kit: &Kit, key: &str, options: Vec<Choice>) {
-    p.spawn(Node { flex_wrap: FlexWrap::Wrap, column_gap: vh(GAP_S), row_gap: vh(GAP_S), align_items: AlignItems::Center, ..default() }).with_children(|g| {
+    // one line, always: groups are sized to fit their row
+    p.spawn(Node { column_gap: vh(GAP_S), align_items: AlignItems::Center, flex_shrink: 0.0, ..default() }).with_children(|g| {
         let ind = g.spawn((Node { position_type: PositionType::Absolute, border: UiRect::all(px(1)), border_radius: BorderRadius::all(vh(RADIUS_S)), ..default() }, BackgroundColor(AMBER_WASH), BorderColor::all(AMBER), Pickable::IGNORE)).id();
         let mut chosen = None;
         for o in options {
@@ -200,7 +201,7 @@ pub fn stepper(p: &mut ChildSpawnerCommands, kit: &Kit, memory: &mut UiMemory, k
 pub fn setting_row(p: &mut ChildSpawnerCommands, kit: &Kit, name: &str, controls: impl FnOnce(&mut ChildSpawnerCommands)) -> Entity {
     p.spawn((Node { min_height: vh(60.0), align_items: AlignItems::Center, padding: UiRect::vertical(vh(GAP_S)), border: UiRect::top(px(1)), ..default() }, BorderColor::all(LINE))).with_children(|r| {
         r.spawn((kit_text(name.to_uppercase(), 22.0, TX1, &kit.text), Node { width: vh(360.0), flex_shrink: 0.0, ..default() }));
-        r.spawn(Node { align_items: AlignItems::Center, column_gap: vh(GAP_S), flex_wrap: FlexWrap::Wrap, row_gap: vh(GAP_S), ..default() }).with_children(controls);
+        r.spawn(Node { flex_grow: 1.0, align_items: AlignItems::Center, column_gap: vh(GAP_S), ..default() }).with_children(controls);
     })
     .id()
 }

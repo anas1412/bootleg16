@@ -126,7 +126,7 @@ pub fn rebuild_menu(
     page.with_children(|page| match st.page {
         Page::Main | Page::Join => {}
         Page::Practice => practice(page, &kit, &mut memory, st, &lobby),
-        Page::Settings => settings_page(page, &kit, &faces, &mut memory, &settings, tune_page.then_some(delay)),
+        Page::Settings => settings_page(page, &kit, &faces, &mut memory, &settings, steam, st.settings_tab, tune_page.then_some(delay)),
         Page::Voice => crate::voice::page(page, &kit, &mut memory, &voice, tune_page.then_some(delay)),
     });
 }
@@ -174,45 +174,79 @@ pub(crate) fn rows(page: &mut ChildSpawnerCommands, tune: Option<f32>, build: im
     });
 }
 
-fn settings_page(page: &mut ChildSpawnerCommands, kit: &Kit, faces: &crate::assistant::view::Faces, memory: &mut UiMemory, s: &Settings, tune: Option<f32>) {
+/// Settings, in three sections picked by chips under the title; a new section's rows tune in.
+#[allow(clippy::too_many_arguments)]
+fn settings_page(page: &mut ChildSpawnerCommands, kit: &Kit, faces: &crate::assistant::view::Faces, memory: &mut UiMemory, s: &Settings, steam: Option<&crate::steam::Steam>, tab: u8, tune: Option<f32>) {
     page_title(page, kit, "Saved as you change them", "Settings", "設定");
+    // straight on the page (a wrapper would shrink the group and wrap it)
+    page.spawn(Node { height: vh(24.0), ..default() });
+    chips(page, kit, "set.tab", ["General", "Crosshair", "AI assistant"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::SettingsTab(i as u8), tab == i as u8)).collect());
+    let tune = if memory.changed("set.tab.shown", &tab.to_string()) { Some(0.0) } else { tune };
     let on_off = |key: &str, on: bool, a: fn(bool) -> UiAction| (key.to_string(), on, a);
-    rows(page, tune, |rows| {
-        let mut ids = vec![setting_row(rows, kit, "Name", |r| {
-            r.spawn(kit_text(format!("{}_", s.name), 20.0, TX1, &kit.num));
-            r.spawn(kit_text("TYPE TO CHANGE", 13.0, TX3, &kit.text));
-        })];
-        ids.push(setting_row(rows, kit, "Sensitivity", |r| stepper(r, kit, memory, "set.sens", &format!("{:.2}", s.sensitivity), UiAction::Sensitivity(-0.1), UiAction::Sensitivity(0.1))));
-        ids.push(setting_row(rows, kit, "Volume", |r| stepper(r, kit, memory, "set.vol", &format!("{:.0}%", s.volume * 100.0), UiAction::Volume(-0.05), UiAction::Volume(0.05))));
-        let cap = if s.fps_max == 0 { "Off".to_string() } else { s.fps_max.to_string() };
-        ids.push(setting_row(rows, kit, "Frame rate cap", |r| stepper(r, kit, memory, "set.fps", &cap, UiAction::FpsMax(-1), UiAction::FpsMax(1))));
-        for (name, (key, on, a)) in [("VSync", on_off("set.vsync", s.vsync, UiAction::SetVsync))] {
-            ids.push(setting_row(rows, kit, name, |r| chips(r, kit, &key, vec![Choice::new("On", a(true), on), Choice::new("Off", a(false), !on)])));
+    let toggle = |rows: &mut ChildSpawnerCommands, name: &str, (key, on, a): (String, bool, fn(bool) -> UiAction)| setting_row(rows, kit, name, |r| chips(r, kit, &key, vec![Choice::new("On", a(true), on), Choice::new("Off", a(false), !on)]));
+    match tab {
+        1 => {
+            rows(page, tune, |rows| {
+                vec![
+                    setting_row(rows, kit, "Colour", |r| {
+                        chips(r, kit, "set.xcolor", crate::hud::CROSSHAIR_COLORS.iter().enumerate().map(|(i, (l, _))| Choice::new(l, UiAction::CrosshairColor(i as u8), s.crosshair_color == i as u8)).collect());
+                    }),
+                    setting_row(rows, kit, "Size", |r| {
+                        chips(r, kit, "set.xsize", ["Small", "Medium", "Large"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::CrosshairSize(i as u8), s.crosshair_size == i as u8)).collect());
+                    }),
+                    toggle(rows, "Opens with spread", on_off("set.xdyn", s.crosshair_dynamic, UiAction::CrosshairDynamic)),
+                    toggle(rows, "Centre dot", on_off("set.xdot", s.crosshair_dot, UiAction::CrosshairDot)),
+                ]
+            });
+            // what it looks like, on a wall
+            page.spawn((Node { width: vh(320.0), height: vh(180.0), margin: UiRect::top(vh(32.0)), border_radius: BorderRadius::all(vh(crate::ui::RADIUS)), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() }, BackgroundColor(Color::srgb(0.62, 0.50, 0.36)))).with_children(|b| {
+                b.spawn(Node { width: px(0), height: px(0), ..default() }).with_children(|c| crate::hud::draw_crosshair(c, s, crate::hud::STATIC_GAP));
+            });
         }
-        ids.push(setting_row(rows, kit, "Team IDs through walls", |r| {
-            chips(r, kit, "set.ids", ["Off", "Pips", "Pips + names"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::SetTeamIds(i as u8), s.team_ids == i as u8)).collect());
-        }));
-        ids.push(setting_row(rows, kit, "AI assistant", |r| {
-            let mut options: Vec<Choice> = ASSISTANTS
-                .iter()
-                .enumerate()
-                .map(|(i, a)| {
-                    let color = a.color;
-                    let face = i;
-                    Choice { label: a.name, action: UiAction::SetAssistant(i as u8), selected: s.assistant == i as u8, lead: Some(Box::new(move |c: &mut ChildSpawnerCommands| crate::assistant::view::chip_portrait(c, faces, face, color))) }
-                })
-                .collect();
-            options.push(Choice::new("Off", UiAction::SetAssistant(OFF), s.assistant == OFF));
-            chips(r, kit, "set.ai", options);
-        }));
-        ids.push(setting_row(rows, kit, "AI assistant messages", |r| {
-            chips(r, kit, "set.chat", ["Quiet", "Normal", "Chatty"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::Chattiness(i as u8), s.chattiness == i as u8)).collect());
-        }));
-        for (name, (key, on, a)) in [("Relay team info", on_off("set.relay", s.relay, UiAction::SetRelay)), ("During rounds", on_off("set.inround", s.assistant_in_round, UiAction::SetAssistantInRound))] {
-            ids.push(setting_row(rows, kit, name, |r| chips(r, kit, &key, vec![Choice::new("On", a(true), on), Choice::new("Off", a(false), !on)])));
-        }
-        ids
-    });
+        2 => rows(page, tune, |rows| {
+            let mut ids = vec![setting_row(rows, kit, "AI assistant", |r| {
+                let mut options: Vec<Choice> = ASSISTANTS
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| {
+                        let color = a.color;
+                        let face = i;
+                        Choice { label: a.name, action: UiAction::SetAssistant(i as u8), selected: s.assistant == i as u8, lead: Some(Box::new(move |c: &mut ChildSpawnerCommands| crate::assistant::view::chip_portrait(c, faces, face, color))) }
+                    })
+                    .collect();
+                options.push(Choice::new("Off", UiAction::SetAssistant(OFF), s.assistant == OFF));
+                chips(r, kit, "set.ai", options);
+            })];
+            ids.push(setting_row(rows, kit, "Messages", |r| {
+                chips(r, kit, "set.chat", ["Quiet", "Normal", "Chatty"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::Chattiness(i as u8), s.chattiness == i as u8)).collect());
+            }));
+            ids.push(toggle(rows, "Relay team info", on_off("set.relay", s.relay, UiAction::SetRelay)));
+            ids.push(toggle(rows, "During rounds", on_off("set.inround", s.assistant_in_round, UiAction::SetAssistantInRound)));
+            ids
+        }),
+        _ => rows(page, tune, |rows| {
+            // your Steam name; typed only when playing without Steam
+            let mut ids = vec![setting_row(rows, kit, "Name", |r| match steam {
+                Some(st) => {
+                    r.spawn(kit_text(st.name.clone(), 20.0, TX1, &kit.text));
+                    r.spawn(kit_text("FROM STEAM", 13.0, TX3, &kit.text));
+                }
+                None => {
+                    r.spawn(kit_text(format!("{}_", s.name), 20.0, TX1, &kit.num));
+                    r.spawn(kit_text("TYPE TO CHANGE", 13.0, TX3, &kit.text));
+                }
+            })];
+            ids.push(setting_row(rows, kit, "Sensitivity", |r| stepper(r, kit, memory, "set.sens", &format!("{:.2}", s.sensitivity), UiAction::Sensitivity(-0.1), UiAction::Sensitivity(0.1))));
+            ids.push(setting_row(rows, kit, "Volume", |r| stepper(r, kit, memory, "set.vol", &format!("{:.0}%", s.volume * 100.0), UiAction::Volume(-0.05), UiAction::Volume(0.05))));
+            let cap = if s.fps_max == 0 { "Off".to_string() } else { s.fps_max.to_string() };
+            ids.push(setting_row(rows, kit, "Frame rate cap", |r| stepper(r, kit, memory, "set.fps", &cap, UiAction::FpsMax(-1), UiAction::FpsMax(1))));
+            ids.push(toggle(rows, "VSync", on_off("set.vsync", s.vsync, UiAction::SetVsync)));
+            ids.push(setting_row(rows, kit, "Team IDs through walls", |r| {
+                chips(r, kit, "set.ids", ["Off", "Pips", "Pips + names"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::SetTeamIds(i as u8), s.team_ids == i as u8)).collect());
+            }));
+            ids
+        }),
+    }
 }
 
 /// A small caps label above a control.

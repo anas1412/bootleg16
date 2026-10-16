@@ -71,7 +71,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] FPS + ping counter (top left); Max FPS and VSync settings
 - [x] CS2 "Show Team ID Through Walls": pip + name over teammates through walls (client/src/teammates.rs; Settings: off / pips / pips + names). Safe: hidden enemies are never sent
 - [ ] Team IDs: health/equipment like CS2's option 2; fade with distance
-- [ ] Settings: FOV, key binds, crosshair style
+- [ ] Settings: key binds (crosshair style done; FOV stays fixed at 90° at 4:3 for fairness, as in CS)
 - [x] Viewmodel GPU-skinned (mirrored bones through a reflection transform)
 - [ ] Try drawing the viewmodel without a second camera (depth range trick)
 - [x] Spawn view angle from the spawn point

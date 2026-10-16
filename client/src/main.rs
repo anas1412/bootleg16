@@ -8,7 +8,8 @@
 //! `BOOTLEG16_SCREENSHOT=path.png` saves one frame (after `BOOTLEG16_SCREENSHOT_AT` seconds,
 //! default 2) and exits; such runs ignore mouse and keyboard (used for automated checks).
 //! `BOOTLEG16_TEAM=t|ct|spec` picks the team in such runs (default auto).
-//! `BOOTLEG16_MENU_PAGE=practice|join|settings|voice` opens that menu page in such runs.
+//! `BOOTLEG16_MENU_PAGE=practice|join|settings|crosshair|assistant|voice` opens that menu page
+//! (crosshair and assistant: Settings sections) in such runs.
 //! `BOOTLEG16_OVERLAY=pause|teams` shows that in-game overlay; `BOOTLEG16_MENU=1` the buy menu.
 //! `BOOTLEG16_SCORES=1` holds the scoreboard open.
 //! `BOOTLEG16_ASSISTANT=0..3` picks the AI assistant for the run (not saved).

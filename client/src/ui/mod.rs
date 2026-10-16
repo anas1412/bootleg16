@@ -45,6 +45,12 @@ pub enum UiAction {
     Chattiness(u8),
     SetRelay(bool),
     SetAssistantInRound(bool),
+    /// Settings page section: 0 general, 1 crosshair, 2 AI assistant.
+    SettingsTab(u8),
+    CrosshairColor(u8),
+    CrosshairSize(u8),
+    CrosshairDynamic(bool),
+    CrosshairDot(bool),
     Quit,
     Resume,
     Leave,

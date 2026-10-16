@@ -49,7 +49,7 @@ const ui = {
   // Your match is still on: under your name, every menu page, until it ends.
   rejoin: (top) => `<div class="abs panel raised bar-r tune" style="right:var(--margin);top:${top}px;width:480px;padding:var(--gap) 20px;z-index:4;border-radius:6px">
     <div class="label" style="color:var(--amber)">Your match is still on</div>
-    <div class="body" style="margin-top:4px">de_dust2 · round 9 · 5 to 3</div>
+    <div class="body" style="margin-top:4px">Your team is waiting: get back in before it ends</div>
     <div style="margin-top:var(--gap)">${ui.primary('Reconnect', 'Enter').replace('min-width:420px', '')}</div></div>`,
   // A team vote: what it's about, yes and no against what's needed, time left, the keys.
   vote: (what, yes, no, needed, total, left) => `<div class="vote tune">

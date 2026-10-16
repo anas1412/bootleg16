@@ -81,6 +81,7 @@ fn buy_menu(
     mut shown: Local<Option<(Option<Option<usize>>, usize, Team, i32)>>,
     mut cursor: Single<&mut CursorOptions>,
     roots: Query<Entity, With<BuyRoot>>,
+    mut hints: MessageWriter<crate::hud::Hint>,
 ) {
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
     if auto && std::env::var_os("BOOTLEG16_MENU").is_none() {
@@ -105,6 +106,11 @@ fn buy_menu(
     }
     if keys.just_pressed(KeyCode::KeyB) && can_buy {
         menu.0 = if menu.0.is_some() { None } else { Some(None) };
+    } else if keys.just_pressed(KeyCode::KeyB) && w.client.vitals.alive() && team != Team::Spectator {
+        // say why instead of ignoring the key
+        let side = if ct { sim::zones::Side::Ct } else { sim::zones::Side::T };
+        let why = if w.client.world.zones.in_buy_zone(side, w.client.me().origin) { "Buy time is over" } else { "Not in a buy zone" };
+        hints.write(crate::hud::Hint(why.into()));
     } else if let (Some(state), Some(n)) = (menu.0, digits.iter().position(|k| keys.just_pressed(*k))) {
         let i = n.wrapping_sub(1);
         actions.0.push(match (n, state) {

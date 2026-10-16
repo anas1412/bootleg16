@@ -37,7 +37,7 @@ pub struct LocalServer(pub Arc<AtomicBool>);
 pub struct PendingClient(pub Option<net::Client>);
 
 /// Start the built-in server if needed and open the connection.
-pub(super) fn start_connecting(mut commands: Commands, config: Res<GameConfig>, settings: Res<Settings>, mut next: ResMut<NextState<AppState>>) {
+pub(super) fn start_connecting(mut commands: Commands, config: Res<GameConfig>, settings: Res<Settings>, steam: Option<Res<crate::steam::Steam>>, mut next: ResMut<NextState<AppState>>) {
     let root = game_dir();
     let fail = |commands: &mut Commands, next: &mut NextState<AppState>, msg: String| {
         commands.insert_resource(MenuError(msg));
@@ -73,7 +73,9 @@ pub(super) fn start_connecting(mut commands: Commands, config: Res<GameConfig>, 
         }
     };
     // The world gets filled in once the server tells us the map.
-    let mut client = match net::Client::connect(addr, &settings.name, sim::collision::World::flat_floor(-100_000.0)) {
+    // with Steam you play under your Steam name
+    let name = steam.as_ref().map(|s| s.name.clone()).unwrap_or_else(|| settings.name.clone());
+    let mut client = match net::Client::connect(addr, &name, sim::collision::World::flat_floor(-100_000.0)) {
         Ok(c) => c,
         Err(e) => return fail(&mut commands, &mut next, format!("Network error: {e}")),
     };

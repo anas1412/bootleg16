@@ -44,6 +44,8 @@ pub(crate) struct MenuState {
     pub(crate) dummies: i32,
     /// Practice page: deathmatch online (else solo, offline).
     pub(crate) deathmatch: bool,
+    /// Settings page section (`UiAction::SettingsTab`).
+    pub(crate) settings_tab: u8,
     pub(crate) address: String,
     pub(crate) error: Option<String>,
     pub(crate) rebuild: bool,
@@ -108,11 +110,18 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
     cursor.grab_mode = CursorGrabMode::None;
     cursor.visible = true;
     let maps = maps_installed();
-    // Screenshot runs can open a page directly (BOOTLEG16_MENU_PAGE=practice|join|settings|voice).
-    let page = match std::env::var("BOOTLEG16_MENU_PAGE").as_deref() {
+    // Screenshot runs can open a page directly (BOOTLEG16_MENU_PAGE=practice|join|settings|
+    // crosshair|assistant|voice; the last two are Settings sections).
+    let wanted = std::env::var("BOOTLEG16_MENU_PAGE");
+    let settings_tab = match wanted.as_deref() {
+        Ok("crosshair") => 1,
+        Ok("assistant") => 2,
+        _ => 0,
+    };
+    let page = match wanted.as_deref() {
         Ok("practice") => Page::Practice,
         Ok("join") => Page::Join,
-        Ok("settings") => Page::Settings,
+        Ok("settings" | "crosshair" | "assistant") => Page::Settings,
         Ok("voice") => Page::Voice,
         _ => Page::Main,
     };
@@ -122,6 +131,7 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
         maps,
         dummies: 5,
         deathmatch: false,
+        settings_tab,
         address: String::new(),
         error: error.map(|e| e.0.clone()),
         rebuild: true,
@@ -136,11 +146,12 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
 pub struct MenuError(pub String);
 
 /// Typing into the party code / address field (Play page) or the name (Settings page).
-fn type_text(mut keys: MessageReader<KeyboardInput>, mut st: ResMut<MenuState>, mut settings: ResMut<Settings>) {
+/// With Steam your name is your Steam name, so the Settings field is only typed into without it.
+fn type_text(mut keys: MessageReader<KeyboardInput>, mut st: ResMut<MenuState>, mut settings: ResMut<Settings>, steam: Option<Res<crate::steam::Steam>>) {
     for k in keys.read().filter(|k| k.state.is_pressed()) {
         let field = match st.page {
             Page::Join => &mut st.address,
-            Page::Settings => &mut settings.name,
+            Page::Settings if steam.is_none() && st.settings_tab == 0 => &mut settings.name,
             _ => continue,
         };
         match &k.logical_key {
@@ -251,6 +262,23 @@ fn menu_actions(
             }
             UiAction::SetAssistantInRound(v) => {
                 settings.assistant_in_round = v;
+                settings.save();
+            }
+            UiAction::SettingsTab(t) => st.settings_tab = t.min(2),
+            UiAction::CrosshairColor(c) => {
+                settings.crosshair_color = c.min(crate::hud::CROSSHAIR_COLORS.len() as u8 - 1);
+                settings.save();
+            }
+            UiAction::CrosshairSize(v) => {
+                settings.crosshair_size = v.min(2);
+                settings.save();
+            }
+            UiAction::CrosshairDynamic(v) => {
+                settings.crosshair_dynamic = v;
+                settings.save();
+            }
+            UiAction::CrosshairDot(v) => {
+                settings.crosshair_dot = v;
                 settings.save();
             }
             UiAction::Quit => {
