@@ -81,6 +81,12 @@ struct OtherPlayer {
     /// The p_ model in their hand and its bones (it borrows the body's pose by bone name).
     gun: Option<(Arc<models::Loaded>, models::SpawnedSkin)>,
     gait_frame: f32,
+    /// Which way the legs face (degrees, GoldSrc), and whether the gait plays backwards
+    /// (walking away from where they look), as CS's `StudioEstimateGait`.
+    gait_yaw: f32,
+    backwards: bool,
+    /// When they left the ground (the jump animation plays once from there).
+    jumped: Option<f32>,
     last_origin: [f32; 3],
     speed: f32,
     crouched: bool,
@@ -208,7 +214,7 @@ fn draw_others(
         });
         let flash = crate::muzzle::spawn(&mut commands, &flash_look);
         commands.entity(parent).add_child(flash);
-        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, gait_frame: 0.0, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None, flash, flash_until: 0.0 });
+        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, gait_frame: 0.0, gait_yaw: o.yaw, backwards: false, jumped: None, last_origin: o.origin, speed: 0.0, crouched: o.crouched, action: None, flash, flash_until: 0.0 });
     }
 }
 
@@ -231,7 +237,30 @@ fn animate(
     let others = w.client.others();
     for (e, mut p, mut tf) in &mut live {
         let Some(o) = others.iter().find(|o| o.id == p.id) else { continue };
-        *tf = place(o);
+        // Legs face where they move (or slowly catch up with the view standing still); turned
+        // more than 120 degrees from the view, they face the other way and walk backwards.
+        let (vx, vy) = ((o.origin[0] - p.last_origin[0]) / dt, (o.origin[1] - p.last_origin[1]) / dt);
+        let wrap = |a: f32| (a + 540.0).rem_euclid(360.0) - 180.0;
+        if (vx * vx + vy * vy).sqrt() < 5.0 {
+            let diff = wrap(o.yaw - p.gait_yaw);
+            p.gait_yaw = wrap(p.gait_yaw + diff * if dt < 0.25 { dt * 4.0 } else { dt });
+            p.backwards = false;
+        } else {
+            p.gait_yaw = vy.atan2(vx).to_degrees();
+            p.backwards = false;
+        }
+        let mut twist = wrap(o.yaw - p.gait_yaw);
+        if twist > 120.0 {
+            p.gait_yaw = wrap(p.gait_yaw - 180.0);
+            p.backwards = true;
+            twist -= 180.0;
+        } else if twist < -120.0 {
+            p.gait_yaw = wrap(p.gait_yaw + 180.0);
+            p.backwards = true;
+            twist += 180.0;
+        }
+        let twist = twist.clamp(-90.0, 90.0);
+        *tf = Transform::from_translation(Vec3::from(map::to_y_up(o.origin))).with_rotation(Quat::from_rotation_y(p.gait_yaw.to_radians()));
         if let Ok(mut v) = vis.get_mut(e) {
             v.set_if_neq(if in_eye == Some(p.id) { Visibility::Hidden } else { Visibility::Inherited });
         }
@@ -251,10 +280,22 @@ fn animate(
             (false, s) if s > 10.0 => ("walk", 130.0),
             _ => ("idle1", 0.0),
         };
-        let gait = seq(model, gait_name).unwrap_or(0);
+        let mut gait = seq(model, gait_name).unwrap_or(0);
         let gs = &model.sequences[gait];
         let rate = if nominal > 0.0 { (speed / nominal).clamp(0.5, 1.5) } else { 1.0 };
-        p.gait_frame = (p.gait_frame + gs.fps * rate * dt) % gs.frames.max(1) as f32;
+        let step = gs.fps * rate * dt * if p.backwards { -1.0 } else { 1.0 };
+        p.gait_frame = (p.gait_frame + step).rem_euclid(gs.frames.max(1) as f32);
+        // In the air: the jump animation, once from take-off (CS's ACT_HOP gait).
+        let mut gait_frame = p.gait_frame;
+        match (o.airborne, p.jumped) {
+            (true, None) => p.jumped = Some(now),
+            (false, Some(_)) => p.jumped = None,
+            _ => {}
+        }
+        if let (Some(t0), Some(j)) = (p.jumped, seq(model, "jump")) {
+            gait = j;
+            gait_frame = ((now - t0) * model.sequences[j].fps).min(model.sequences[j].frames as f32 - 1.0);
+        }
         // Upper body: a one-off action, else the weapon's aim pose.
         let aim = seq(model, &format!("{stance}_aim_{}", sim::weapons::data::anim_ext(p.weapon))).or_else(|| seq(model, &format!("{stance}_aim_carbine"))).unwrap_or(0);
         let mut upper = (aim, 0.0);
@@ -269,7 +310,7 @@ fn animate(
         }
         // Aim pitch picks the blend (9 sets from looking up to looking down; GoldSrc pitch is down-positive).
         let blend = 0.5 + o.pitch.clamp(-90.0, 90.0) / 180.0;
-        let pose = model.player_pose((gait, p.gait_frame), upper, blend);
+        let pose = model.player_pose((gait, gait_frame), upper, blend, twist);
         models::set_pose(&p.body, &pose, &mut bones);
         let lit = now < p.flash_until;
         if let Some((wm, g)) = &p.gun {

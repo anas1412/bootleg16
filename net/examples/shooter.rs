@@ -1,5 +1,5 @@
 //! Headless test client: joins a team and shoots at the nearest other player, for checking
-//! blood, flinches, deaths and bullet holes. Usage: shooter <server addr> [t|ct] [seconds] [pitch: just look that way, no shooting]
+//! blood, flinches, deaths and bullet holes. Usage: shooter <server addr> [t|ct] [seconds] [pitch: just look that way, no shooting] [strafe: and walk side to side (for leg animations)]
 use net::protocol::Team;
 use net::Client;
 use sim::pmove::Input;
@@ -11,6 +11,7 @@ fn main() {
     let team = if a.get(2).is_some_and(|t| t == "t") { Team::T } else { Team::Ct };
     let secs: u64 = a.get(3).and_then(|x| x.parse().ok()).unwrap_or(30);
     let fixed_pitch: Option<f32> = a.get(4).and_then(|x| x.parse().ok());
+    let strafe = a.get(5).is_some_and(|x| x == "strafe");
     let home = std::env::var("HOME").unwrap();
     let bsp = goldsrc::bsp::Bsp::load(format!("{home}/.steam/steam/steamapps/common/Half-Life/cstrike/maps/de_dust2.bsp")).unwrap();
     let mut c = Client::connect(addr, "shooter", sim::collision::World::from_bsp(&bsp)).unwrap();
@@ -38,7 +39,9 @@ fn main() {
             input.attack = t > 300 && t % 64 < 8;
         }
         if let Some(p) = fixed_pitch {
-            input = Input { yaw: input.yaw, pitch: p, ..Default::default() };
+            // Strafing: side to side every second, facing one fixed way.
+            let side = if strafe { if (t / 128) % 2 == 0 { 400.0 } else { -400.0 } } else { 0.0 };
+            input = Input { yaw: if strafe { 0.0 } else { input.yaw }, pitch: p, side, ..Default::default() };
         }
         c.tick(input);
         std::thread::sleep(tick);

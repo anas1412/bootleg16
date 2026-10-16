@@ -192,22 +192,28 @@ impl Model {
     /// Like `pose`, at a fractional frame: neighbouring frames are blended, as the
     /// engine does, so animations are smooth at any frame rate.
     pub fn pose_at(&self, seq: usize, frame: f32, blend: f32) -> Vec<BoneTransform> {
-        self.to_model_space(self.local_pose(seq, frame, blend))
+        self.to_model_space(self.local_pose(seq, frame, blend, 0.0))
     }
 
     /// A player pose the way GoldSrc draws one: the legs (every bone before "Bip01 Spine")
     /// from the gait sequence (run, walk, crouch...), the rest from the upper-body one
-    /// (aim, shoot, reload, flinch). `gait` and `upper` are (sequence, frame).
-    pub fn player_pose(&self, gait: (usize, f32), upper: (usize, f32), blend: f32) -> Vec<BoneTransform> {
-        let mut local = self.local_pose(upper.0, upper.1, blend);
-        let legs = self.local_pose(gait.0, gait.1, 0.5);
+    /// (aim, shoot, reload, flinch). `gait` and `upper` are (sequence, frame). `twist`: degrees
+    /// the torso turns from the legs (CS: spread over the four spine bones, a quarter each).
+    pub fn player_pose(&self, gait: (usize, f32), upper: (usize, f32), blend: f32, twist: f32) -> Vec<BoneTransform> {
+        let mut local = self.local_pose(upper.0, upper.1, blend, twist);
+        let legs = self.local_pose(gait.0, gait.1, 0.5, 0.0);
         let spine = self.bones.iter().position(|b| b.name == "Bip01 Spine").unwrap_or(0);
         local[..spine].copy_from_slice(&legs[..spine]);
         self.to_model_space(local)
     }
 
     /// Each bone's rotation and position relative to its parent.
-    fn local_pose(&self, seq: usize, frame: f32, blend: f32) -> Vec<(Quat, Vec3)> {
+    fn local_pose(&self, seq: usize, frame: f32, blend: f32, twist: f32) -> Vec<(Quat, Vec3)> {
+        // The spine bones' share of the twist, round their own x axis (along the spine).
+        let adj = |b: usize, ch: usize| -> f32 {
+            let spine = matches!(self.bones[b].name.as_str(), "Bip01 Spine" | "Bip01 Spine1" | "Bip01 Spine2" | "Bip01 Spine3");
+            if spine && ch == 3 { (twist / 4.0).to_radians() } else { 0.0 }
+        };
         let s = &self.sequences[seq];
         let frame = frame.clamp(0.0, (s.frames - 1) as f32);
         let (f0, ft) = (frame.floor() as usize, frame.fract());
@@ -218,7 +224,7 @@ impl Model {
             (0..self.bones.len())
                 .map(|b| {
                     let c = |ch| self.channel(anim, b, ch, frame);
-                    (angle_quaternion([c(3), c(4), c(5)]), [c(0), c(1), c(2)])
+                    (angle_quaternion([c(3) + adj(b, 3), c(4) + adj(b, 4), c(5) + adj(b, 5)]), [c(0), c(1), c(2)])
                 })
                 .collect()
         };
