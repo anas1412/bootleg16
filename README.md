@@ -1,6 +1,43 @@
 # bootleg16
 
-Counter-Strike 1.6 rebuilt in Rust. It reads the maps and models from your own CS 1.6 install; no game files are shipped.
+Counter-Strike 1.6 rebuilt in Rust with Bevy: CS 1.6 movement, guns and economy in a modern competitive setup. 5 v 5 matches in CS2's format on official servers, matchmaking with parties, custom games with a knife round and map vetoes, deathmatch for warming up, Steam sign-in, voice chat, match recordings and server-side anti-cheat.
+
+It reads the maps, models and sounds from your own CS 1.6 install; no game files are in this repository. Own maps, characters and a new name come later (see `docs/TODO.md`).
+
+## What's where
+
+| Folder | What |
+|---|---|
+| `client/` | The game: menus, HUD, rendering, sound, voice, Steam |
+| `server/` | The game server program (also replays recordings) |
+| `master/` | The lobby program: parties, matchmaking, the server pool |
+| `net/` | Networking shared by all three: the game server and lobby logic, encryption, recordings, test bots |
+| `sim/` | The game rules both sides run: movement, weapons, grenades, collision |
+| `goldsrc/` | Readers for CS 1.6 files: maps, models, textures |
+| `config/` | `server.cfg`: the match rules |
+| `docs/` | Design notes, rules, the TODO list, lessons learned (`GOTCHAS.md`) |
+| `design/` | UI mockups |
+| `tools/` | Helper scripts (offline bundle) |
+
+## Building and running
+
+You need Rust (stable), a CS 1.6 install (Steam's default folder, or set `BOOTLEG16_DIR` to the folder that has `cstrike/` in it), and Linux with Wayland and Vulkan.
+
+```bash
+cargo run -p client
+```
+
+That opens the main menu; **Practice > Solo** plays offline straight away. Development builds link Bevy dynamically and rebuild in about a minute; the first build of Bevy takes a while. A release build:
+
+```bash
+cargo build --release -p client --no-default-features --features steam
+```
+
+Tests (run the ones for what you changed; they skip themselves without CS 1.6 installed):
+
+```bash
+cargo test -p net -p sim
+```
 
 ## How it fits together
 
