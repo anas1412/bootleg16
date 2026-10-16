@@ -140,7 +140,9 @@ impl ModelCache {
                 .textures()
                 .into_iter()
                 .map(|t| {
-                    let image = images.add(rgba_image(t.width, t.height, t.rgba, false, TextureFormat::Rgba8UnormSrgb));
+                    let mut rgba = t.rgba;
+                    crate::level::tex_gamma(&mut rgba);
+                    let image = images.add(rgba_image(t.width, t.height, rgba, false, TextureFormat::Rgba8UnormSrgb));
                     // ⚠ Unlit until models are lit from the map's lightmaps like GoldSrc does.
                     materials.add(StandardMaterial { base_color_texture: Some(image), unlit: true, alpha_mode: AlphaMode::Mask(0.5), ..default() })
                 })

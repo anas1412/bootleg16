@@ -12,8 +12,40 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 
-/// GoldSrc brightens lightmaps (overbright); this matches it by eye.
-const LIGHTMAP_SCALE: f32 = 2.0;
+/// GoldSrc's video defaults: `gamma` 2.5 (also `lightgamma`), `texgamma` 2.0, `brightness` 1.
+const GAMMA: f32 = 2.5;
+const TEX_GAMMA: f32 = 2.0;
+const BRIGHTNESS: f32 = 1.0;
+
+/// GoldSrc's `texgammatable`: every texture brightened a little (x^(texgamma / gamma)).
+pub fn tex_gamma(rgba: &mut [u8]) {
+    let table: Vec<u8> = (0..256).map(|i| (255.0 * (i as f32 / 255.0).powf(TEX_GAMMA / GAMMA)).round() as u8).collect();
+    for px in rgba.chunks_mut(4) {
+        for c in &mut px[..3] {
+            *c = table[*c as usize];
+        }
+    }
+}
+
+/// GoldSrc's `lightgammatable`: light below `g3` is lifted (more with `brightness`), then
+/// everything is raised to 1 / gamma. The result multiplies the texture in display space.
+fn light_gamma(rgba: &mut [u8]) {
+    let g3 = if BRIGHTNESS <= 0.0 { 0.125 } else if BRIGHTNESS > 1.0 { 0.05 } else { 0.125 - BRIGHTNESS * BRIGHTNESS * 0.075 };
+    let table: Vec<u8> = (0..256)
+        .map(|i| {
+            let mut f = i as f32 / 255.0;
+            if BRIGHTNESS > 0.0 {
+                f = if f > g3 { 0.125 + (f - g3) / (1.0 - g3) * 0.875 } else { f / g3 * 0.125 };
+            }
+            (255.0 * f.powf(1.0 / GAMMA)).round() as u8
+        })
+        .collect();
+    for px in rgba.chunks_mut(4) {
+        for c in &mut px[..3] {
+            *c = table[*c as usize];
+        }
+    }
+}
 
 pub struct LevelPlugin;
 
@@ -60,20 +92,27 @@ fn spawn_level(
     commands.insert_resource(Spawns(geo.spawns.clone()));
 
     let (lw, lh) = geo.lightmap_size;
-    // Lightmaps are light intensities, not colours: keep them linear (no sRGB decode).
-    let lightmap = images.add(rgba_image(lw as u32, lh as u32, geo.lightmap_rgba, false, TextureFormat::Rgba8Unorm));
+    // Through GoldSrc's light curve, stored as display values (sRGB): Bevy decodes both it and
+    // the texture, multiplies, and encodes again, which is GoldSrc's multiply in display space.
+    let mut lm = geo.lightmap_rgba;
+    light_gamma(&mut lm);
+    let lightmap = images.add(rgba_image(lw as u32, lh as u32, lm, false, TextureFormat::Rgba8UnormSrgb));
     let mut tex_handles = vec![None; geo.textures.len()];
 
     let mut spawn_batch = |b: map::Batch, render: Option<map::Render>, commands: &mut Commands| -> Entity {
         let t = &geo.textures[b.texture];
         let image = tex_handles[b.texture]
-            .get_or_insert_with(|| images.add(rgba_image(t.width, t.height, t.rgba.clone(), true, TextureFormat::Rgba8UnormSrgb)))
+            .get_or_insert_with(|| {
+                let mut rgba = t.rgba.clone();
+                tex_gamma(&mut rgba);
+                images.add(rgba_image(t.width, t.height, rgba, true, TextureFormat::Rgba8UnormSrgb))
+            })
             .clone();
         let material = materials.add(StandardMaterial {
             base_color_texture: Some(image),
             perceptual_roughness: 1.0,
             reflectance: 0.0,
-            lightmap_exposure: LIGHTMAP_SCALE,
+            lightmap_exposure: 1.0,
             // See-through brushes: `texture` mode fades by renderamt, `additive` glows (nuke's glass).
             base_color: Color::WHITE.with_alpha(render.filter(|r| matches!(r.mode, 1 | 2 | 3 | 5)).map(|r| r.amt).unwrap_or(1.0)),
             alpha_mode: match render.map(|r| r.mode) {
