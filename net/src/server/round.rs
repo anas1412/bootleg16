@@ -35,7 +35,7 @@ impl Server {
 
     /// Once a tick: phase changes and round wins.
     pub(super) fn round_step(&mut self) {
-        if !self.rounds_on() || self.reserved_step() {
+        if !self.rounds_on() || self.surrender_step() || self.reserved_step() {
             return;
         }
         let tick = self.tick;
@@ -178,6 +178,15 @@ impl Server {
             Phase::Warmup => 0.0,
             _ => self.round.phase_end.saturating_sub(self.tick) as f32 * TICK,
         };
-        RoundNet { phase: if self.rounds_on() { self.round.phase } else { Phase::Warmup }, round: self.round.round, score: self.round.score, left, stage: self.stage() }
+        RoundNet {
+            phase: if self.rounds_on() { self.round.phase } else { Phase::Warmup },
+            round: self.round.round,
+            score: self.round.score,
+            left,
+            stage: self.stage(),
+            abandoned: [self.abandoned(Team::T), self.abandoned(Team::Ct)],
+            vote: self.vote_net(),
+            paused: self.reserved.as_ref().is_some_and(|r| r.empty_since.is_some()),
+        }
     }
 }

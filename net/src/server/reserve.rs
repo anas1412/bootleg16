@@ -50,6 +50,13 @@ pub(super) struct Reserved {
     saved: HashMap<u64, (i32, i32, u32)>,
     /// The side group A is on now (B is the other); flips at every side swap.
     pub(super) a_side: Team,
+    /// Tickets of players who left, and when (they're back when they reconnect).
+    pub(super) left_at: HashMap<u64, u32>,
+    /// A surrender vote running, and the round each team (T, CT) last called one.
+    pub(super) vote: Option<super::surrender::Vote>,
+    pub(super) voted_in_round: [Option<u32>; 2],
+    /// Since when a side has had nobody connected (the match is paused).
+    pub(super) empty_since: Option<u32>,
 }
 
 impl Server {
@@ -57,12 +64,12 @@ impl Server {
     pub fn reserve(&mut self, setup: MatchSetup) {
         self.clients.retain(|_, c| c.bot);
         let knife = if setup.knife_round { Knife::Pending } else { Knife::Done };
-        self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T });
+        self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T, left_at: HashMap::new(), vote: None, voted_in_round: [None; 2], empty_since: None });
         self.round = crate::rounds::Match::new(self.round.cfg.clone(), TICK_RATE);
     }
 
     /// The team a group plays on now: A starts T, B CT, and they swap with every side swap.
-    fn team_for(&self, group: Group) -> Team {
+    pub(super) fn team_for(&self, group: Group) -> Team {
         let a = self.reserved.as_ref().map(|r| r.a_side).unwrap_or(Team::T);
         if group == Group::A {
             a
@@ -81,6 +88,9 @@ impl Server {
             return Err("You're already in this match.".into());
         }
         let saved = self.reserved.as_mut().and_then(|r| r.saved.remove(&ticket));
+        if let Some(r) = &mut self.reserved {
+            r.left_at.remove(&ticket);
+        }
         Ok(Some((group, self.team_for(group), saved)))
     }
 
@@ -94,6 +104,7 @@ impl Server {
         if let Some(r) = &mut self.reserved {
             if c.ticket != 0 {
                 r.saved.insert(c.ticket, (c.money, c.kills, c.deaths));
+                r.left_at.insert(c.ticket, self.tick);
             }
         }
     }

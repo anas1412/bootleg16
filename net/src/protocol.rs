@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 22;
+pub const PROTOCOL_VERSION: u32 = 23;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -40,6 +40,10 @@ pub enum ClientMsg {
     JoinTeam { team: Option<Team> },
     /// After winning the knife round: switch sides (true) or stay.
     SideVote { switch: bool },
+    /// Ask your team to surrender (only once a teammate has abandoned the match).
+    CallSurrender,
+    /// Your answer to your team's surrender vote.
+    Vote { yes: bool },
     /// One 20 ms Opus voice frame while a push-to-talk key is held.
     Voice { channel: VoiceChannel, data: Vec<u8> },
     Bye,
@@ -179,6 +183,8 @@ pub enum GameEvent {
     KnifeWon { winners: Team },
     /// Sides are settled; the match starts.
     SidesChosen { switched: bool },
+    /// This team surrendered (the other wins the match).
+    Surrendered { team: Team },
     /// A breakable broke (for its sound and debris; the state itself is `Snapshot::broken`).
     Broke { model: u16, material: sim::breakables::Material, at: [f32; 3] },
 }
@@ -199,6 +205,7 @@ impl GameEvent {
                 | GameEvent::BombExploded { .. }
                 | GameEvent::KnifeWon { .. }
                 | GameEvent::SidesChosen { .. }
+                | GameEvent::Surrendered { .. }
         )
     }
 }
@@ -217,6 +224,23 @@ pub struct RoundNet {
     pub left: f32,
     /// Before the match proper: waiting for players, the knife round, the side vote.
     pub stage: Stage,
+    /// A player of the terrorists / counter-terrorists abandoned (they may vote to surrender).
+    pub abandoned: [bool; 2],
+    /// A surrender vote running.
+    pub vote: Option<VoteNet>,
+    /// The match is paused: one side has nobody connected.
+    pub paused: bool,
+}
+
+/// A team's surrender vote.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct VoteNet {
+    pub team: Team,
+    pub yes: u8,
+    pub no: u8,
+    /// Yes votes it takes (a majority of the team still connected).
+    pub needed: u8,
+    pub left: f32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]

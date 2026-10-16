@@ -137,7 +137,7 @@ impl Client {
             ticket: 0,
             match_ended: false,
             wanted_team: None,
-            round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0, stage: Stage::Match },
+            round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0, stage: Stage::Match, abandoned: [false; 2], vote: None, paused: false },
             bomb: BombNet::None,
             me_info: Me { money: 0, limits: Default::default(), can_buy: false, defuse_kit: false },
         })
@@ -400,6 +400,16 @@ impl Client {
     /// Knife round winners: vote to switch sides (true) or stay.
     pub fn side_vote(&mut self, switch: bool) {
         self.socket.send(self.server, encode(&ClientMsg::SideVote { switch }));
+    }
+
+    /// Ask your team to surrender (the server only starts the vote once a teammate abandoned).
+    pub fn call_surrender(&mut self) {
+        self.socket.send(self.server, encode(&ClientMsg::CallSurrender));
+    }
+
+    /// Answer your team's surrender vote.
+    pub fn surrender_vote(&mut self, yes: bool) {
+        self.socket.send(self.server, encode(&ClientMsg::Vote { yes }));
     }
 
     pub fn disconnect(&mut self) {

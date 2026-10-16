@@ -195,6 +195,11 @@ impl Match {
         Next::Round { swap, money }
     }
 
+    /// The match ends now (a surrender or a forfeit).
+    pub fn forfeit(&mut self, tick: u32, winner: Team) {
+        self.game_over(tick, Some(winner));
+    }
+
     fn game_over(&mut self, tick: u32, winner: Option<Team>) -> Next {
         self.phase = Phase::GameOver;
         self.phase_end = tick + self.ticks(GAME_OVER_SECONDS);

@@ -7,6 +7,7 @@ mod guard;
 mod ground;
 mod reserve;
 mod round;
+mod surrender;
 mod visibility;
 mod voice;
 
@@ -906,6 +907,8 @@ impl Server {
             }
             ClientMsg::Buy { item } => self.buy(from, item),
             ClientMsg::SideVote { switch } => self.side_vote(from, switch),
+            ClientMsg::CallSurrender => self.call_surrender(from),
+            ClientMsg::Vote { yes } => self.surrender_vote(from, yes),
             ClientMsg::JoinTeam { .. } if self.reserved.is_some() => {} // teams are fixed in a reserved match
             ClientMsg::JoinTeam { team } => {
                 let (t, ct) = self.clients.values().filter(|c| !c.bot).fold((0, 0), |(t, ct), c| match c.team {
