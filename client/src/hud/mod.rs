@@ -57,6 +57,9 @@ struct AliveOnly;
 struct WeaponIcon;
 #[derive(Component)]
 struct NetStats;
+/// The clip and reserve half of the weapon panel (hidden while spectating: their ammo isn't sent).
+#[derive(Component)]
+struct AmmoPart;
 
 // The parts `motion` brings to life.
 #[derive(Component)]
@@ -139,8 +142,8 @@ fn spawn(mut commands: Commands, kit: Res<Kit>, icons: Res<Icons>) {
                     s.spawn((Field::Weapon, kit_text("", 13.0, TX1, &kit.text), TextLayout::no_wrap()));
                     s.spawn((WeaponIcon, icons.node("d_knife", 36.0, TX2)));
                 });
-                p.spawn(divider());
-                p.spawn(Node { align_items: AlignItems::Baseline, column_gap: vh(10.0), padding: UiRect::axes(vh(24.0), vh(16.0)), ..default() }).with_children(|s| {
+                p.spawn((AmmoPart, divider()));
+                p.spawn((AmmoPart, Node { align_items: AlignItems::Baseline, column_gap: vh(10.0), padding: UiRect::axes(vh(24.0), vh(16.0)), ..default() })).with_children(|s| {
                     s.spawn((Field::Clip, ClipNumber, kit_text("", 56.0, TX1, &kit.num)));
                     s.spawn((Field::Reserve, kit_text("", 18.0, TX2, &kit.num)));
                 });
@@ -174,10 +177,20 @@ fn status(
     mut alive_only: Query<&mut Visibility, With<AliveOnly>>,
     covered: Res<crate::ui::Covered>,
     bursting: Query<(), (With<VitalsPanel>, With<crate::ui::Anim>)>,
+    watch: Res<crate::spectate::Watch>,
+    mut ammo_parts: Query<&mut Node, With<AmmoPart>>,
 ) {
-    let v = w.client.vitals;
+    let mut v = w.client.vitals;
     let l = &w.client.state.loadout;
-    let alive = v.alive() && w.client.id().is_some() && w.client.team() != Team::Spectator;
+    // spectating: the HUD shows the player you watch (health, armor, weapon; their ammo isn't sent)
+    let watched = crate::spectate::spectating(&w).then(|| crate::spectate::target(&w, &watch)).flatten().filter(|t| t.mate.is_some());
+    if let Some(m) = watched.as_ref().and_then(|t| t.mate) {
+        v.health = m.health as f32;
+        v.armor = m.armor as f32;
+    }
+    let weapon = watched.as_ref().map(|t| t.weapon).unwrap_or(l.active_id());
+    let watched_name = watched.as_ref().and_then(|t| w.client.scores.iter().find(|s| s.id == t.id)).map(|s| s.name.clone());
+    let alive = (w.client.vitals.alive() && w.client.id().is_some() && w.client.team() != Team::Spectator) || watched.is_some();
     for mut vis in &mut alive_only {
         vis.set_if_neq(if alive && !covered.0 { Visibility::Inherited } else { Visibility::Hidden });
     }
@@ -191,16 +204,23 @@ fn status(
     hm.color = if low { BAD } else { TX1 };
     armor.target = v.armor;
     am.value = v.armor / 100.0;
-    let gun = l.active_gun();
-    let [he, fl, sm] = l.grenades;
+    let gun = if watched.is_some() { None } else { l.active_gun() };
+    for mut n in &mut ammo_parts {
+        let d = if watched.is_some() { Display::None } else { Display::Flex };
+        if n.display != d {
+            n.display = d;
+        }
+    }
+    let [he, fl, sm] = if watched.is_some() { [0; 3] } else { l.grenades };
     for (field, mut t) in &mut fields {
         let s = match field {
             Field::Clip => gun.map(|g| g.clip.to_string()).unwrap_or_default(),
             Field::Reserve => gun.map(|g| format!("/ {}", g.reserve)).unwrap_or_default(),
-            Field::Weapon => sim::weapons::def(l.active_id()).name.to_uppercase(),
+            Field::Weapon => sim::weapons::def(weapon).name.to_uppercase(),
             Field::Grenades => [("HE", he), ("FLASH", fl), ("SMOKE", sm)].iter().filter(|(_, n)| *n > 0).map(|(name, n)| if *n > 1 { format!("{name} x{n}") } else { name.to_string() }).collect::<Vec<_>>().join("   "),
             Field::Notice => match w.client.team() {
                 _ if w.client.id().is_none() => "Connecting...".into(),
+                _ if watched_name.is_some() => format!("Watching {}", watched_name.clone().unwrap_or_default()),
                 Team::Spectator => "Spectating  ·  press M to choose a team".into(),
                 _ if !v.alive() => if w.client.practice { "Respawning..." } else { "You are dead" }.into(),
                 _ => String::new(),
@@ -211,7 +231,7 @@ fn status(
         }
     }
     // Swap the weapon silhouette when the weapon changes.
-    let (wanted, _) = icons::icons_rect(&icons, weapon_icon(l.active_id()));
+    let (wanted, _) = icons::icons_rect(&icons, weapon_icon(weapon));
     if icon.rect != wanted {
         icon.rect = wanted;
     }
