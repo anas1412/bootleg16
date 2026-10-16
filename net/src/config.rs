@@ -77,7 +77,13 @@ impl MatchConfig {
     pub fn parse(text: &str) -> Result<MatchConfig, String> {
         let mut c = MatchConfig::default();
         for (n, line) in text.lines().enumerate() {
-            let line = line.split('#').next().unwrap_or("").trim();
+            // A `#` starts a comment, except inside quotes ("Official EU #1").
+            let mut quoted = false;
+            let end = line.char_indices().find(|&(_, c)| {
+                quoted ^= c == '"';
+                c == '#' && !quoted
+            });
+            let line = end.map_or(line, |(i, _)| &line[..i]).trim();
             if line.is_empty() {
                 continue;
             }
@@ -133,7 +139,8 @@ mod tests {
 
     #[test]
     fn parses_and_rejects_typos() {
-        let c = MatchConfig::parse("# comment\nmax_rounds = 30\nloss_bonus = \"cs16\"\nfreeze_time=20 # pro\n").unwrap();
+        let c = MatchConfig::parse("# comment\nmax_rounds = 30\nloss_bonus = \"cs16\"\nfreeze_time=20 # pro\nname = \"EU #1\" # mine\n").unwrap();
+        assert_eq!(c.name, "EU #1");
         assert_eq!((c.max_rounds, c.loss_bonus, c.freeze_time, c.start_money), (30, LossBonus::Cs16, 20.0, 800));
         assert!(MatchConfig::parse("freezetime = 3").is_err());
         assert!(MatchConfig::parse("max_rounds = 25").is_err());
