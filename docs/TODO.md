@@ -138,3 +138,5 @@ land, and add new ones here instead of leaving them only in chat.
       so keep the height spread small (about ±6 %) or adjust it if the stats show an edge.
 - [ ] Standalone release: own assets, own name (`bootleg16` is a codename;
       pick e.g. Oxidestrike/Fuseline), legal check before selling
+
+  - Own player/weapon models later (Blender + Blender MCP, glTF; 1 weapon end to end first); keep the CS 1.6 models until the game is finished (decided 2026-10-16)
