@@ -17,7 +17,9 @@ pub fn roots(game: &Path) -> Vec<PathBuf> {
     Some(game.to_path_buf()).filter(|p| p.is_dir()).into_iter().collect()
 }
 
-/// `rel` under each root, in lookup order.
+/// `rel` under each root, in lookup order. All game file names are lowercase
+/// (`tools/normalize_names.py`), so a request in any case finds the file.
 pub fn paths(game: &Path, rel: &str) -> Vec<PathBuf> {
-    roots(game).into_iter().map(|r| r.join(rel)).collect()
+    let rel = rel.to_lowercase();
+    roots(game).into_iter().map(|r| r.join(&rel)).collect()
 }

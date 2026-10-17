@@ -119,7 +119,7 @@ pub fn load(bsp: &Bsp, search: &[&Path]) -> MapGeometry {
     let wads: Vec<Wad> = bsp
         .wad_names()
         .iter()
-        .filter_map(|n| search.iter().find_map(|d| Wad::load(d.join(n)).ok()))
+        .filter_map(|n| search.iter().find_map(|d| Wad::load(d.join(n.to_lowercase())).ok()))
         .collect();
     let textures: Vec<Texture> = bsp
         .textures

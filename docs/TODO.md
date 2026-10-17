@@ -216,3 +216,7 @@ Priority now: playable online. These wait. Everything below replaces what is sti
 - **Tracer lines:** the yellow bullet tracer lines when shooting do not start or end where the shots go (muzzle origin vs the shot's start, and the end point). Check `client/src/` tracer code against the viewmodel muzzle attachment and the server's shot origin.
 - **Collision:** "collision whatsoever" (details not given yet): ask for the places. The world collision is `sim::collision` (BSP hulls); the added map data is Valve's maps unchanged, so suspect model or door collision first.
 - **Animation names:** done with `tools/sequence_names.py` (rules in `tools/sequence_names.txt`); run it again on any new `v_*.mdl` added to `dist/gamedata/models/`.
+
+## Game data rules (2026-10-17: we are making a game, not a mod)
+- One naming rule: every file and folder name in `dist/gamedata/` is lowercase (`tools/normalize_names.py`); the game lowercases its requests (`net::gamefiles::paths`, map WAD names). Player models carry their own textures (`tools/merge_model_textures.py`); animation names follow `tools/sequence_names.txt`. Run the three tools on any new data.
+- **Rights: the add-on contains sound packs from other games.** Folders under `sound/weapons/` are named for Call of Duty / Modern Warfare 2019 (`galil_arm_cod17`, `mw2019_grenades`, `scout_mw2019`), a Minimi, a FAMAS F1 and a "Slayer5530's G3SG-1" pack. These cannot ship: find which the game uses (`client/src/sound.rs`) and replace them with our own or CC0 sounds; delete the unused ones from the data folder.

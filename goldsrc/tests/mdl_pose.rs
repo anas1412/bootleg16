@@ -11,8 +11,8 @@ fn a_sequence_number_past_the_end_is_clamped() {
 }
 
 #[test]
-fn a_player_model_without_textures_takes_them_from_its_t_file() {
+fn player_models_carry_their_textures() {
     let path = format!("{}/../dist/gamedata/models/player/urban/urban.mdl", env!("CARGO_MANIFEST_DIR"));
     let Ok(model) = Model::load(&path) else { return };
-    assert!(!model.textures().is_empty(), "urban.mdl has no textures of its own: they are in urbanT.mdl");
+    assert!(!model.textures().is_empty(), "urban.mdl must hold its own textures (tools/merge_model_textures.py)");
 }
