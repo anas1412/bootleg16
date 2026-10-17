@@ -59,6 +59,10 @@ pub struct ViewModel {
     /// Updates left before a just-spawned model is shown: its bones exist from the next frame,
     /// and until a pose lands it would show in its rest pose (huge arms round the camera).
     reveal: u8,
+    /// Where this weapon sits (see `placement_transform`).
+    placement: Transform,
+    /// The muzzle in camera space (tracers start there), when the model has one.
+    pub muzzle: Option<Vec3>,
 }
 
 #[derive(Component)]
@@ -93,6 +97,37 @@ fn to_camera() -> Transform {
     // (a, b, c) -> (-c, b, -a): a reflection, written as a mirror in x then a rotation.
     let rotation = Quat::from_mat3(&Mat3::from_cols(Vec3::new(0.0, 0.0, 1.0), Vec3::Y, Vec3::new(-1.0, 0.0, 0.0)));
     Transform { rotation, scale: Vec3::new(-1.0, 1.0, 1.0), ..default() }
+}
+
+/// Where a weapon sits in your hands: from `assets/viewmodels.txt`.
+struct Placement {
+    /// Right, up, forward (the file's numbers).
+    offset: Vec3,
+    mirror: bool,
+}
+
+fn placements() -> &'static std::collections::HashMap<String, Placement> {
+    static PLACEMENTS: std::sync::OnceLock<std::collections::HashMap<String, Placement>> = std::sync::OnceLock::new();
+    PLACEMENTS.get_or_init(|| {
+        include_str!("../assets/viewmodels.txt")
+            .lines()
+            .filter_map(|line| {
+                let w: Vec<&str> = line.split('#').next()?.split_whitespace().collect();
+                let n = |i: usize| w.get(i)?.parse::<f32>().ok();
+                Some((w.first()?.to_string(), Placement { offset: Vec3::new(n(1)?, n(2)?, n(3)?), mirror: w.get(4)? != &"no" }))
+            })
+            .collect()
+    })
+}
+
+/// The transform from a model's Y-up space to camera space for this weapon.
+fn placement_transform(id: Id) -> Transform {
+    let p = placements().get(sim::weapons::def(id).name);
+    let (offset, mirror) = p.map_or((Vec3::ZERO, true), |p| (p.offset, p.mirror));
+    let mut t = if mirror { to_camera() } else { Transform::from_rotation(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)) };
+    // Camera space: x right, y up, looking down -z.
+    t.translation = Vec3::new(offset.x, offset.y, -offset.z);
+    t
 }
 
 fn find(model: &goldsrc::mdl::Model, names: &[&str]) -> Option<usize> {
@@ -136,7 +171,8 @@ fn update(
         vm.model = cache.get(&weapon_model("v", id), &mut images, &mut materials);
         if let Some(m) = vm.model.clone() {
             // The parts hang off the view model camera, which only sees their layer.
-            let skin = m.spawn_skinned(&mut commands, *camera, Some(to_camera()), &mut meshes, &mut bindposes, &mut materials);
+            vm.placement = placement_transform(id);
+            let skin = m.spawn_skinned(&mut commands, *camera, Some(vm.placement), &mut meshes, &mut bindposes, &mut materials);
             for e in &skin.parts {
                 commands.entity(*e).insert((RenderLayers::layer(LAYER), Visibility::Hidden));
             }
@@ -274,6 +310,7 @@ fn update(
         }
     }
     vm.reveal = reveal;
+    vm.muzzle = m.model.attachment(0, &pose).map(|at| vm.placement.transform_point(Vec3::from(crate::map::to_y_up(at))));
     // Muzzle flash at the muzzle, facing us, a random turn each shot.
     let flash = *vm.flash.get_or_insert_with(|| {
         let e = crate::muzzle::spawn(&mut commands, &flash_look);
@@ -284,7 +321,7 @@ fn update(
     let lit = now < vm.flash_until && alive;
     if let (true, Some(at)) = (lit, m.model.attachment(0, &pose)) {
         if let Ok(mut t) = bones.get_mut(flash) {
-            t.translation = to_camera().transform_point(Vec3::from(crate::map::to_y_up(at)));
+            t.translation = vm.placement.transform_point(Vec3::from(crate::map::to_y_up(at)));
             t.rotation = Quat::from_rotation_z((now * 9973.0).fract() * std::f32::consts::TAU);
             t.scale = Vec3::splat(9.0);
         }

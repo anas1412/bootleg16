@@ -316,9 +316,13 @@ fn walk(
                 end = i.point;
             }
         }
-        // The streak leaves from about where the muzzle is (low and to the right of the eye), not
-        // from the eye itself: seen from the eye it would be one flat line across the screen.
-        let muzzle = std::array::from_fn(|i| eye[i] + right[i] * 9.0 - up[i] * 8.0 + f[i] * 30.0);
+        // The streak leaves from the muzzle, not from the eye: seen from the eye it would be one
+        // flat line across the screen.
+        let muzzle = match vm.muzzle {
+            // The model's own muzzle, from camera space (x right, y up, -z forward) to the world.
+            Some(m) => std::array::from_fn(|i| eye[i] + right[i] * m.x + up[i] * m.y - f[i] * m.z),
+            None => std::array::from_fn(|i| eye[i] + right[i] * 9.0 - up[i] * 8.0 + f[i] * 30.0),
+        };
         tracers.shot(muzzle, end);
     }
 }

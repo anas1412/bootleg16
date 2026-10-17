@@ -100,7 +100,8 @@ impl Loaded {
     /// Spawn bones and skinned meshes as children of `parent` (posed with `set_pose`).
     /// `mirror`: the bones go through this reflection first (the first-person view model).
     pub fn spawn_skinned(&self, commands: &mut Commands, parent: Entity, mirror: Option<Transform>, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>, materials: &mut Assets<StudioMaterial>) -> SpawnedSkin {
-        let skin = self.skin(mirror.is_some(), meshes, bindposes);
+        // A reflection (negative scale) turns the triangles inside out: flip them back.
+        let skin = self.skin(mirror.is_some_and(|t| t.scale.x * t.scale.y * t.scale.z < 0.0), meshes, bindposes);
         let mirror = mirror.map(|t| commands.spawn((t, ChildOf(parent))).id());
         let joints: Vec<Entity> = (0..self.model.bones.len().max(1)).map(|_| commands.spawn((Transform::default(), ChildOf(mirror.unwrap_or(parent)))).id()).collect();
         let mut parts = Vec::new();
