@@ -13,6 +13,22 @@ greet_first | twins | happy | Oh great, a new one. / She means welcome, {name}. 
 greet_first | twins | neutral | Don't embarrass us, {name}. / Take your time. Practice first.
 greet_first | grumpk | annoyed | Another one. Fine. I'm Grumpk. Try to keep up.
 greet_first | grumpk | neutral | {name}, huh. I've seen worse names. Not many.
+greet_first | claudette | thinking | First time here, {name}? Practice, then a casual match. I'll talk you through it.
+greet_first | claudette | happy | Nice to meet you, {name}. Walk before you run. Literally: walking is silent.
+greet_first | claudette | neutral | I'm your assistant. I only say what you could see yourself, just faster.
+greet_first | claudette | smug | Rule one, {name}: don't run with the knife out unless you mean it.
+greet_first | childgbt | thinking | Hello, {name}. I have read your file. It is empty. We will fill it.
+greet_first | childgbt | happy | A new player. How exciting. For me.
+greet_first | childgbt | neutral | Welcome. I am ChildGBT. I am here to help. That is all I am here to do.
+greet_first | childgbt | smug | You may call me whenever you need advice. You will need advice.
+greet_first | twins | annoyed | Another rookie. Great. / Be nice. Hi, {name}, we'll help you.
+greet_first | twins | smug | I'll do the talking. / And I'll do the useful talking.
+greet_first | twins | happy | We picked you. Well, you picked us. / Same thing. Welcome.
+greet_first | twins | worried | Do you even know how to buy? / Press B. We'll show you.
+greet_first | grumpk | annoyed | New. Wonderful. I'll lower my expectations to the floor.
+greet_first | grumpk | smug | Welcome, {name}. The floor of this game is very low. You'll find it.
+greet_first | grumpk | neutral | Practice first. Don't argue. Nobody argues with Grumpk.
+greet_first | grumpk | laughing | A rookie. I haven't laughed in hours. Thank you, {name}.
 
 greet_back | claudette | smug | Welcome back, {name}. Ten minutes in Practice before you queue. Trust me.
 greet_back | claudette | neutral | Good to see you, {name}. Warm up your aim, then we play.
@@ -22,6 +38,22 @@ greet_back | twins | happy | You're back. Not that I was waiting. / She was wait
 greet_back | twins | neutral | Took you long enough, {name}. / Welcome back. Ready when you are.
 greet_back | grumpk | annoyed | Oh. You again. Let's get this over with.
 greet_back | grumpk | neutral | {name} returns. The servers tremble. Not really.
+greet_back | claudette | happy | There you are, {name}. Same plan as last time: warm up, then queue.
+greet_back | claudette | thinking | Welcome back. Your aim needs a few minutes to wake up. So do you.
+greet_back | claudette | neutral | Back again, {name}. I kept your settings. And my notes.
+greet_back | claudette | smug | {name}, back so soon? Good. Practice makes boring wins.
+greet_back | childgbt | happy | {name}. I counted the seconds you were away. It was many.
+greet_back | childgbt | thinking | You returned. I knew you would. I know most things.
+greet_back | childgbt | neutral | Welcome back. Nothing has changed. I made sure.
+greet_back | childgbt | smug | Ah, {name}. Ready to lose gracefully again?
+greet_back | twins | annoyed | Where were you? / She means hello. Welcome back, {name}.
+greet_back | twins | smug | Miss us? / She missed you.
+greet_back | twins | neutral | Back to work, {name}. / Warm up first.
+greet_back | twins | worried | You're not rusty, are you? / Practice will fix it.
+greet_back | grumpk | neutral | Back. Fine. Practice. Then we'll talk.
+greet_back | grumpk | smug | I was enjoying the quiet, {name}.
+greet_back | grumpk | laughing | The legend returns. The legend of missing.
+greet_back | grumpk | annoyed | Couldn't stay away, huh. Neither could my headache.
 
 hello | claudette | happy | Claudette here, {name}. Clear calls, careful plays. Let's work.
 hello | claudette | neutral | I'm with you now. Short lines, no noise, only what helps.
@@ -31,6 +63,22 @@ hello | twins | happy | We're your assistant now. Both of us. / Hi. I'll transla
 hello | twins | neutral | Don't make me regret this. / She's happy, {name}. Really.
 hello | grumpk | annoyed | Grumpk here. Claudette was too nice to you. I won't be.
 hello | grumpk | smug | You picked me. Bold. Let's see if you can handle it.
+hello | claudette | thinking | I'll tell you what the radar and the scoreboard say, when it matters.
+hello | claudette | smug | Me again. I'll do the remembering, you do the shooting.
+hello | claudette | neutral | Ready when you are, {name}.
+hello | claudette | happy | Back on comms, {name}. Let's play clean.
+hello | childgbt | neutral | Assistant online. Emotions offline.
+hello | childgbt | thinking | I will tell you things. Some of them will be true.
+hello | childgbt | smug | You chose me. A wise choice. The only choice.
+hello | childgbt | happy | Hello. I am excited to watch you try.
+hello | twins | annoyed | Finally, you picked us. / Took a while. Hi, {name}.
+hello | twins | smug | Best assistants, obviously. / Two for the price of one.
+hello | twins | worried | You won't ignore us, right? / We'll keep it short.
+hello | twins | neutral | Okay, we're on. / Listening.
+hello | grumpk | neutral | I'm on. Don't make it weird.
+hello | grumpk | laughing | Me? Helping? Fine. Let's see you fail up close.
+hello | grumpk | annoyed | Grumpk is here. Grumpk is tired already.
+hello | grumpk | thinking | I'll keep quiet unless you mess up. So, talking a lot.
 
 practice_start | claudette | neutral | Practice. Hit heads, reset, repeat. Nobody's counting.
 practice_start | claudette | happy | Good call. Five minutes of crosshair placement, then we go.
@@ -40,6 +88,22 @@ practice_start | twins | neutral | Dummies don't count, you know. / They do. Pra
 practice_start | twins | happy | Show the dummies who's boss. / Gently. Aim first.
 practice_start | grumpk | laughing | Practice. Finally, enemies at your skill level.
 practice_start | grumpk | annoyed | Even the dummies look worried. Not about you.
+practice_start | claudette | thinking | Try the spray on the wall first, then on the dummies.
+practice_start | claudette | neutral | Tap the head, then the body. Count your shots.
+practice_start | claudette | smug | Dummies don't move. That's your excuse gone.
+practice_start | claudette | happy | Warm up the flicks, then the sprays. You'll feel it.
+practice_start | childgbt | thinking | The dummies feel nothing. Practice feels like nothing. Both are useful.
+practice_start | childgbt | smug | Infinite ammo. Finite talent. Let us find the limit.
+practice_start | childgbt | neutral | Practice mode active. Mistakes here are free. I am still counting them.
+practice_start | childgbt | happy | I love practice. Nobody gets hurt except the dummies.
+practice_start | twins | annoyed | Practice? Boring. / Necessary. Start with the AK.
+practice_start | twins | smug | I'd hit those already. / Sure you would.
+practice_start | twins | worried | Don't spray at the dummies' feet. / Aim for the head.
+practice_start | twins | thinking | Which gun first? / AK. Learn the spray.
+practice_start | grumpk | smug | Shoot the dummy. It's the only target that won't humiliate you.
+practice_start | grumpk | neutral | Practice. Good. You need it.
+practice_start | grumpk | thinking | Try hitting the head this time. It's the round bit on top.
+practice_start | grumpk | laughing | They don't even shoot back and I'm still nervous for you.
 
 match_start | claudette | neutral | Match is live. Play your spots, trade your teammates.
 match_start | claudette | happy | First round. Pistols only. Stay together and take it.
@@ -49,6 +113,22 @@ match_start | twins | neutral | Win this. For me. Not that I care. / She cares. 
 match_start | twins | happy | Let's go! / Let's go carefully.
 match_start | grumpk | neutral | Match on. Try not to be the first name in the kill feed.
 match_start | grumpk | annoyed | Here we go. Ten players, one of them is you. Sorry, team.
+match_start | claudette | thinking | Check the radar, pick a role, call what you see.
+match_start | claudette | smug | Let's be the team that talks. It wins more.
+match_start | claudette | worried | Pistol round. Armor or a better pistol, not both. Choose.
+match_start | claudette | happy | Let's go, {name}. One round at a time.
+match_start | childgbt | thinking | Initiating match. Please keep your arms and legs inside the map.
+match_start | childgbt | neutral | Twelve rounds to a half. I will be counting every one.
+match_start | childgbt | worried | The enemy is also ten humans. Well, five. Do not tell them I said that.
+match_start | childgbt | smug | Let us see who learns faster. I already know.
+match_start | twins | annoyed | Don't throw the pistol round. / Stick together and it's easy.
+match_start | twins | smug | We've got this. / Probably. Play safe.
+match_start | twins | worried | They look good. / So do we. Focus.
+match_start | twins | thinking | Who's entry? / Not you. Trade the entry.
+match_start | grumpk | smug | Match start. Pretend you've done this before.
+match_start | grumpk | laughing | I've placed a small bet against you. Prove me wrong.
+match_start | grumpk | worried | Pistol round. My favourite way to watch people miss.
+match_start | grumpk | thinking | Plan: don't die. That's the whole plan.
 
 buy_low | claudette | worried | ${money}. Don't force. Pistol, armor, and play for the next round.
 buy_low | claudette | thinking | Low on money. Save this one, you'll have a rifle next round.
@@ -58,6 +138,22 @@ buy_low | twins | worried | Ugh, fine, save. It's not like I care if you win. / 
 buy_low | twins | neutral | Force buy, we're unstoppable. / We have ${money}. Please save.
 buy_low | grumpk | annoyed | Broke again. Inspiring. Buy a pistol and pray.
 buy_low | grumpk | laughing | ${money}. I've seen richer dummies.
+buy_low | claudette | neutral | Save round. Keep your pistol, keep your life, keep your money.
+buy_low | claudette | smug | ${money}. Patience now, rifle next round.
+buy_low | claudette | worried | Don't half buy. Save together with your team.
+buy_low | claudette | happy | Save well and we buy big next round.
+buy_low | childgbt | sad | ${money}. Poverty is temporary. Usually.
+buy_low | childgbt | neutral | Saving is a valid strategy. So is hoping.
+buy_low | childgbt | smug | You have ${money}. I have opinions about that.
+buy_low | childgbt | worried | Please do not buy a shotgun with that. Please.
+buy_low | twins | annoyed | We're broke again?! / Save. Next round is ours.
+buy_low | twins | sad | ${money}. Ugh. / A pistol and patience.
+buy_low | twins | smug | Eco round. Watch me get three kills with a pistol. / Watch her die first. Save, {name}.
+buy_low | twins | thinking | Should we force? / No. Save with the team.
+buy_low | grumpk | neutral | Eco. Hide and pray. Classic strategy.
+buy_low | grumpk | sad | ${money}. Even the dummies pity you.
+buy_low | grumpk | smug | Save round. You're good at doing nothing, this should be easy.
+buy_low | grumpk | annoyed | Don't you dare buy armor and nothing else.
 
 buy_rich | claudette | happy | ${money}. Rifle, armor, full nades. No excuses this round.
 buy_rich | claudette | neutral | You're rich. Buy for a teammate if they're short.
@@ -67,6 +163,22 @@ buy_rich | twins | happy | We're rich! Buy everything! / Buy a rifle and armor. 
 buy_rich | twins | neutral | Drop one for a teammate, I guess. / That's kind. Do it.
 buy_rich | grumpk | neutral | Loaded. Now you've got no excuse.
 buy_rich | grumpk | smug | ${money}. Buy the AWP. Miss with style.
+buy_rich | claudette | thinking | ${money}. Rifle, armor, then the nades your team needs.
+buy_rich | claudette | smug | Full buy. Make it count.
+buy_rich | claudette | worried | Don't buy the AWP unless you'll hold an angle with it.
+buy_rich | claudette | happy | Money's good. Kit up, then help the team.
+buy_rich | childgbt | smug | ${money}. Money cannot buy skill. It can buy armor.
+buy_rich | childgbt | thinking | Rich. I suggest a rifle. And a helmet. Heads matter.
+buy_rich | childgbt | worried | Please remember the defuse kit. I remember everything.
+buy_rich | childgbt | laughing | So much money. So many ways to lose it.
+buy_rich | twins | smug | We can afford the good stuff. / And a kit.
+buy_rich | twins | thinking | AK or AWP? / Rifle. You know why.
+buy_rich | twins | annoyed | Don't forget a helmet this time. / She's right.
+buy_rich | twins | laughing | Buy all the nades! / Some of the nades.
+buy_rich | grumpk | thinking | ${money}. Rifle, armor, helmet. No, the helmet isn't optional.
+buy_rich | grumpk | laughing | Rich and clueless. Buy something that shoots straight.
+buy_rich | grumpk | annoyed | Spend it. Money in your pocket kills nobody.
+buy_rich | grumpk | happy | Full buy. If you lose this one, I'm leaving.
 
 round_won | claudette | happy | Round's ours. Same discipline next one.
 round_won | claudette | neutral | Good round. Keep the economy in mind.
@@ -76,6 +188,22 @@ round_won | twins | smug | Obviously we won. / We won. Nice work.
 round_won | twins | neutral | Fine, that was good. Don't get used to it. / She's impressed.
 round_won | grumpk | laughing | Won one. Mark the calendar.
 round_won | grumpk | neutral | Okay. That was competent. Don't let it go to your head.
+round_won | claudette | smug | That's how we play it. Again.
+round_won | claudette | thinking | Won. Check who saved and who needs a drop.
+round_won | claudette | worried | Good win, but don't relax. They'll adjust.
+round_won | claudette | laughing | Clean round. I barely had to talk.
+round_won | childgbt | smug | Round won. I predicted this. I predict everything.
+round_won | childgbt | laughing | They lost. Funny, isn't it?
+round_won | childgbt | thinking | Victory noted. Happiness levels: rising.
+round_won | childgbt | worried | You won. They will be angry now. Interesting.
+round_won | twins | happy | Yes! / Good round, team.
+round_won | twins | laughing | Did you see their faces? / We can't see their faces.
+round_won | twins | annoyed | Took you long enough. / A win is a win.
+round_won | twins | thinking | Next round, same plan? / Same plan.
+round_won | grumpk | smug | Won. I'll let you think it was you.
+round_won | grumpk | happy | A win. Rare as a clean spray from you.
+round_won | grumpk | annoyed | Fine. Good round. Happy now?
+round_won | grumpk | thinking | Won. Don't change a thing. Especially not the luck.
 
 round_lost | claudette | annoyed | Lost that one. Reset, regroup, check your money.
 round_lost | claudette | sad | Round's gone. Learn from it and move on.
@@ -85,6 +213,22 @@ round_lost | twins | sad | That was embarrassing! / We'll get the next one.
 round_lost | twins | neutral | I'm not upset. At all. / She's upset. Regroup.
 round_lost | grumpk | annoyed | Lost. Shocking. Truly shocking.
 round_lost | grumpk | laughing | That round died faster than you did.
+round_lost | claudette | thinking | What beat us? Find it, then don't do it again.
+round_lost | claudette | worried | Lost. Check the economy before you buy.
+round_lost | claudette | neutral | Round to them. We take the next one.
+round_lost | claudette | smug | They won one. Make them earn the next.
+round_lost | childgbt | sad | Round lost. I am not sad. I do not get sad. This is my sad face.
+round_lost | childgbt | smug | They won. Do not worry, I will not tell anyone. I will tell everyone.
+round_lost | childgbt | neutral | Loss recorded. Adjusting expectations.
+round_lost | childgbt | laughing | That was educational. For them.
+round_lost | twins | annoyed | Who peeked alone?! / Stick together next time.
+round_lost | twins | worried | Are we losing? / One round. Shake it off.
+round_lost | twins | smug | I'd have won that. / She wouldn't have. Next round.
+round_lost | twins | thinking | They're stacking a site. / Then we play the other one.
+round_lost | grumpk | smug | Lost. Was that the plan? It looked like the plan.
+round_lost | grumpk | sad | Round lost. I'd be disappointed if I'd expected anything.
+round_lost | grumpk | thinking | They outplayed you. Not hard, but still.
+round_lost | grumpk | neutral | Next round. Try the other end of the gun.
 
 you_died | claudette | annoyed | You're down. Watch your team and call what you saw.
 you_died | claudette | neutral | Dead. Spectate, learn the angle that got you.
@@ -94,6 +238,22 @@ you_died | twins | shocked | Why would you peek that?! / Next time, wait for a t
 you_died | twins | neutral | Ugh. Whatever. / You'll get them next round.
 you_died | grumpk | laughing | You died first. A leader, technically.
 you_died | grumpk | neutral | Nice death. Very cinematic. Very useless.
+you_died | claudette | sad | That one stung. Watch the angle that got you.
+you_died | claudette | thinking | Down. Was it a peek or a timing? Note it.
+you_died | claudette | worried | You're out. Watch your teammate and help with calls.
+you_died | claudette | smug | You'll get them back next round. Same spot, better crosshair.
+you_died | childgbt | thinking | You stopped moving. Most people do, eventually.
+you_died | childgbt | neutral | Death registered. Respawn pending. Patience required.
+you_died | childgbt | smug | That looked painful. For you, not for me.
+you_died | childgbt | laughing | You were killed. I enjoyed the replay.
+you_died | twins | annoyed | Seriously?! / It happens. Watch the rest.
+you_died | twins | sad | No! / Next round. You've got it.
+you_died | twins | smug | I could've survived that. / She couldn't have. Shake it off.
+you_died | twins | worried | Where did that come from? / Off the left. Check it next time.
+you_died | grumpk | annoyed | Dead. I'd say I'm surprised.
+you_died | grumpk | smug | That's a spectator ticket. Enjoy the view.
+you_died | grumpk | sad | Gone. Let us have a moment of silence. Done.
+you_died | grumpk | thinking | You peeked. They didn't miss. Lesson there somewhere.
 
 streak | claudette | happy | {streak} kills. Hold your position, don't get greedy.
 streak | claudette | neutral | {streak} down. Reload before you peek again.
@@ -103,6 +263,22 @@ streak | twins | happy | {streak} kills! Okay, that was cool. / Very cool. Reloa
 streak | twins | neutral | Show-off. / {streak} kills. Keep calm.
 streak | grumpk | shocked | {streak} kills. Who are you and what did you do with my player?
 streak | grumpk | neutral | {streak}. Fine. I'll stop roasting. For ten seconds.
+streak | claudette | smug | {streak}. That's a round winner.
+streak | claudette | worried | {streak} kills, but don't overextend. Fall back to your team.
+streak | claudette | thinking | {streak}. Check the radar, who's left?
+streak | claudette | laughing | {streak} kills. They should've stayed home.
+streak | childgbt | thinking | {streak}. At this rate the server will be empty.
+streak | childgbt | laughing | {streak} eliminations. You are making the other team very quiet.
+streak | childgbt | worried | {streak}. They will be looking for you now.
+streak | childgbt | neutral | Counting: {streak}. Continue.
+streak | twins | smug | {streak}! Who taught you that? / We did.
+streak | twins | shocked | Wait, {streak}?! / Keep it up.
+streak | twins | annoyed | Leave some for the team! / No, take them all.
+streak | twins | laughing | They're running away! / {streak} reasons why.
+streak | grumpk | smug | {streak}. Fine. You can aim. Sometimes.
+streak | grumpk | laughing | {streak} kills. I'll be in my room, rethinking everything.
+streak | grumpk | worried | {streak}. Who's paying you?
+streak | grumpk | annoyed | {streak}. Stop it, you're ruining my bit.
 
 bomb_planted | claudette | worried | Bomb's down. Forty seconds. Hold your angle, don't peek.
 bomb_planted | claudette | neutral | Bomb planted. Play the clock, not the fight.
@@ -112,6 +288,22 @@ bomb_planted | twins | shocked | The bomb is down! / Forty seconds. Stay calm.
 bomb_planted | twins | neutral | It's ticking, do something! / Check the site, then defuse.
 bomb_planted | grumpk | worried | Bomb's down. Now's a great time to remember how to aim.
 bomb_planted | grumpk | neutral | Tick tock. Panic quietly, please.
+bomb_planted | claudette | thinking | Planted. Defuse takes ten seconds, five with a kit. Count it.
+bomb_planted | claudette | smug | Bomb's down. Make them come to you.
+bomb_planted | claudette | happy | Planted. Hold the defuse spots, not the doors.
+bomb_planted | claudette | worried | Bomb's on. Don't let them walk in unseen.
+bomb_planted | childgbt | smug | The bomb is ticking. So is my patience.
+bomb_planted | childgbt | thinking | Forty seconds until something loud happens.
+bomb_planted | childgbt | happy | I love this part. Everyone becomes so honest.
+bomb_planted | childgbt | laughing | It is planted. Someone will be very warm soon.
+bomb_planted | twins | worried | It's ticking, it's ticking! / Forty seconds. Play the clock.
+bomb_planted | twins | smug | Bomb's down, now hold it. / Watch the defuse.
+bomb_planted | twins | thinking | Where do we hold? / Anywhere they have to cross to defuse.
+bomb_planted | twins | happy | Planted! / Now don't throw it.
+bomb_planted | grumpk | smug | Planted. Stop moving. Seriously, stop.
+bomb_planted | grumpk | laughing | It beeps. Exciting. Try not to cry.
+bomb_planted | grumpk | thinking | Bomb's down. Ten seconds to defuse, five with a kit. Do the maths.
+bomb_planted | grumpk | annoyed | The bomb's down and you're still reloading. Fantastic.
 
 bomb_defused | claudette | happy | Defused. That's how you close a round.
 bomb_defused | claudette | neutral | Bomb's off. Good job.
@@ -121,6 +313,22 @@ bomb_defused | twins | happy | Defused! I knew it! / She was worried.
 bomb_defused | twins | neutral | Took you long enough. / Well done.
 bomb_defused | grumpk | happy | Defused. Look at you, being useful.
 bomb_defused | grumpk | neutral | Wires cut. Fingers still attached. Impressive.
+bomb_defused | claudette | smug | Defused under pressure. Nice.
+bomb_defused | claudette | thinking | Defused. That's what kits are for.
+bomb_defused | claudette | laughing | Off with time to spare. Calm hands.
+bomb_defused | claudette | worried | Defused. That was closer than it needed to be.
+bomb_defused | childgbt | smug | Defused. The bomb is disappointed.
+bomb_defused | childgbt | laughing | Bomb defused. So much tension. For nothing.
+bomb_defused | childgbt | thinking | The bomb has been made harmless. Like a sleeping cat.
+bomb_defused | childgbt | worried | Defused. I was nervous. Not for you. For the bomb.
+bomb_defused | twins | smug | Never in doubt. / It was in doubt.
+bomb_defused | twins | laughing | They're so mad! / Clean defuse.
+bomb_defused | twins | worried | That was so close! / Close enough.
+bomb_defused | twins | happy | We did it! / Round's ours.
+bomb_defused | grumpk | smug | Defused. Don't let it go to your head.
+bomb_defused | grumpk | laughing | Defused. I was hoping for fireworks.
+bomb_defused | grumpk | thinking | Wires cut, round won. Who taught you that?
+bomb_defused | grumpk | annoyed | Defused. Took your sweet time.
 
 last_alive | claudette | worried | It's on you. Slow down, one fight at a time.
 last_alive | claudette | neutral | Last one up. Use the clock, pick your fights.
@@ -130,6 +338,22 @@ last_alive | twins | worried | Last alive. No pressure. / All the pressure. Brea
 last_alive | twins | neutral | Don't you dare lose this. / You've got this. Slow.
 last_alive | grumpk | worried | Clutch time. I'll pretend I believe in you.
 last_alive | grumpk | neutral | Just you. Make it look intentional.
+last_alive | claudette | thinking | Last alive. Check the radar, find the one alone.
+last_alive | claudette | smug | You've won these before. Slow and quiet.
+last_alive | claudette | happy | It's yours to win. Breathe.
+last_alive | claudette | sad | Everyone else is down. Play for the save if it's hopeless.
+last_alive | childgbt | thinking | Alone. Statistically, you will lose. Statistically.
+last_alive | childgbt | smug | It is just you. Make it interesting.
+last_alive | childgbt | happy | A clutch. My favourite. Please be dramatic.
+last_alive | childgbt | sad | They left you. All of them. How rude.
+last_alive | twins | smug | Clutch it, I dare you. / Take your time.
+last_alive | twins | shocked | Everyone's dead?! / You can still win. Focus.
+last_alive | twins | annoyed | Of course it's you. / Good. You're calm.
+last_alive | twins | thinking | Save or fight? / Count them first.
+last_alive | grumpk | smug | Just you. Hollywood moment or comedy moment?
+last_alive | grumpk | laughing | Last one up. I'm already preparing the excuses.
+last_alive | grumpk | thinking | One at a time. You can count, right?
+last_alive | grumpk | annoyed | Clutch time. Don't make me watch this.
 
 halftime | claudette | neutral | Halftime. Switch sides, reset your head.
 halftime | claudette | happy | Half done. New side, same discipline.
@@ -139,6 +363,22 @@ halftime | twins | neutral | Switching sides, finally. / New side, fresh start.
 halftime | twins | happy | Second half is ours. / If we play smart.
 halftime | grumpk | neutral | Halftime. Swap sides. Keep the bad habits, I guess.
 halftime | grumpk | annoyed | Half the match gone. Half your dignity too.
+halftime | claudette | thinking | Halftime. What worked? Keep it. What didn't? Drop it.
+halftime | claudette | smug | Switch. Now we know how they play.
+halftime | claudette | worried | New side. Your money resets, so does the pistol round.
+halftime | claudette | sad | Rough half. The second is a fresh start.
+halftime | childgbt | smug | Sides swapped. The enemy is now where you were. Confusing for them.
+halftime | childgbt | neutral | Halftime. Recalibrating.
+halftime | childgbt | worried | Second half. Pistols again. Brace.
+halftime | childgbt | laughing | Halftime. I enjoyed the first half. Mostly the parts where you lost.
+halftime | twins | smug | Halfway there. / Pistol round again.
+halftime | twins | thinking | They'll change things now. / Watch for it.
+halftime | twins | worried | Can we turn it around? / Yes. Round by round.
+halftime | twins | annoyed | Finally, a better side. / Same rules. Play smart.
+halftime | grumpk | smug | Halftime. Your highlight reel is shorter than this sentence.
+halftime | grumpk | thinking | New side. Old you. Let's see.
+halftime | grumpk | laughing | Switch sides. Maybe your aim was the side's fault.
+halftime | grumpk | happy | Halfway. I'm still here. Be grateful.
 
 match_won | claudette | happy | Match won. Clean work, {name}.
 match_won | claudette | neutral | That's the match. Good game.
@@ -148,6 +388,22 @@ match_won | twins | happy | We won! Obviously! / Great game, {name}.
 match_won | twins | neutral | I knew we'd win. / She didn't. Well played.
 match_won | grumpk | happy | You won. I'm telling everyone it was me.
 match_won | grumpk | neutral | Match won. Don't get cocky. Okay, a little.
+match_won | claudette | smug | We earned that one.
+match_won | claudette | thinking | Won. Remember what worked, {name}.
+match_won | claudette | laughing | GG. Well played.
+match_won | claudette | sad | We won. I'll miss this team.
+match_won | childgbt | laughing | Victory. The other team is reconsidering their life choices.
+match_won | childgbt | thinking | Match won. I have updated my opinion of you. Slightly.
+match_won | childgbt | neutral | Winner: you. Loser: them. Correct outcome.
+match_won | childgbt | sad | It is over. I liked watching. Play again soon.
+match_won | twins | smug | Told you. / She told everyone.
+match_won | twins | laughing | They didn't stand a chance! / They had some chances.
+match_won | twins | annoyed | Took long enough. / GG, {name}.
+match_won | twins | thinking | Another one? / Rest first.
+match_won | grumpk | smug | GG. I'll allow it.
+match_won | grumpk | laughing | We won. I need to sit down.
+match_won | grumpk | annoyed | Won. Now I have to be nice to you. Ugh.
+match_won | grumpk | thinking | A win. Let's never speak of the first half.
 
 match_lost | claudette | annoyed | Match lost. Rest, then Practice. We'll fix it.
 match_lost | claudette | sad | Not our match. Note what went wrong, then queue again.
@@ -157,6 +413,22 @@ match_lost | twins | annoyed | That was a disaster! / We'll do better next time.
 match_lost | twins | neutral | I'm not mad. / She's a little mad. Good effort.
 match_lost | grumpk | laughing | Lost. Uninstall? Kidding. Mostly.
 match_lost | grumpk | neutral | GG. The second G is generous.
+match_lost | claudette | thinking | Lost. Which rounds slipped? Start there.
+match_lost | claudette | neutral | GG. Every loss shows something.
+match_lost | claudette | worried | Tough one. Take a break before the next.
+match_lost | claudette | smug | They were good. We'll be better.
+match_lost | childgbt | sad | Match lost. I will play a sad song. I do not know any songs.
+match_lost | childgbt | thinking | Defeat. A learning opportunity. For me, mostly.
+match_lost | childgbt | smug | You lost. I lost nothing. I am an assistant.
+match_lost | childgbt | laughing | GG. Good game. Grim game.
+match_lost | twins | sad | We lost?! / It happens.
+match_lost | twins | smug | Their team got lucky. / They played well. Learn from it.
+match_lost | twins | thinking | What went wrong? / Too many solo peeks.
+match_lost | twins | worried | Was it my fault? / No. Rest, then again.
+match_lost | grumpk | sad | Lost. Even I'm a bit sad. A tiny bit.
+match_lost | grumpk | smug | GG. You did your best. That's the problem.
+match_lost | grumpk | thinking | Lost. Go to Practice. Shoot dummies. Rebuild your soul.
+match_lost | grumpk | annoyed | That's a loss. I'll pretend I wasn't here.
 
 teammate_down | claudette | worried | {teammate} is down. Trade or fall back.
 teammate_down | claudette | neutral | We lost {teammate}. Don't take the same fight.
@@ -166,6 +438,22 @@ teammate_down | twins | shocked | {teammate}'s dead! / Careful, their killer is 
 teammate_down | twins | neutral | Ugh, {teammate}. / We can still win this.
 teammate_down | grumpk | laughing | {teammate} is down. Classic.
 teammate_down | grumpk | neutral | There goes {teammate}. Don't follow their example.
+teammate_down | claudette | thinking | {teammate} fell. Where were they? Don't walk into it.
+teammate_down | claudette | sad | {teammate}'s gone. We play around it.
+teammate_down | claudette | smug | {teammate} is down. Trade them, quickly.
+teammate_down | claudette | annoyed | {teammate} went alone. Don't make it two.
+teammate_down | childgbt | sad | {teammate} has left us. Temporarily.
+teammate_down | childgbt | thinking | {teammate} was killed. Their killer is near. Statistically.
+teammate_down | childgbt | smug | One less teammate. More credit for you.
+teammate_down | childgbt | laughing | {teammate} is now a spectator. They have the best seat.
+teammate_down | twins | annoyed | Not {teammate} again! / Trade them.
+teammate_down | twins | sad | Poor {teammate}. / We'll win it for them.
+teammate_down | twins | worried | They're picking us off! / Group up.
+teammate_down | twins | smug | {teammate} was slow. / Be kind. Then trade.
+teammate_down | grumpk | smug | {teammate} is down. I'm not even surprised.
+teammate_down | grumpk | annoyed | {teammate} went solo. Now {teammate} is solo forever.
+teammate_down | grumpk | thinking | {teammate} died there. Maybe don't go there.
+teammate_down | grumpk | sad | Rest in pixels, {teammate}.
 
 bomb_dropped | claudette | worried | The bomb's on the ground. Cover it or pick it up.
 bomb_dropped | claudette | neutral | Bomb dropped. Don't leave it lying there.
@@ -175,6 +463,22 @@ bomb_dropped | twins | shocked | Who dropped the bomb?! / Pick it up, quickly.
 bomb_dropped | twins | annoyed | Unbelievable. / The bomb is down. Grab it.
 bomb_dropped | grumpk | laughing | Someone dropped the bomb. Love that for us.
 bomb_dropped | grumpk | annoyed | Bomb's on the floor. Very professional.
+bomb_dropped | claudette | thinking | Bomb's loose. Who's closest?
+bomb_dropped | claudette | smug | Bomb's on the floor. Pick it up before they see it.
+bomb_dropped | claudette | annoyed | Bomb dropped. Grab it, don't fight over it.
+bomb_dropped | claudette | happy | The bomb's free. Someone safe pick it up.
+bomb_dropped | childgbt | smug | The bomb was abandoned. Like most of my friendships.
+bomb_dropped | childgbt | worried | Unattended bomb. Very unsafe. Very exciting.
+bomb_dropped | childgbt | laughing | Someone put the bomb down. To rest, I assume.
+bomb_dropped | childgbt | annoyed | The bomb is on the ground. It belongs in a site.
+bomb_dropped | twins | smug | Classic. / Grab it, quick.
+bomb_dropped | twins | worried | They'll take the bomb! / They can't. Just pick it up.
+bomb_dropped | twins | laughing | Who did that?! / Doesn't matter. Grab it.
+bomb_dropped | twins | thinking | Who's closest? / Check the radar.
+bomb_dropped | grumpk | smug | Bomb dropped. Very tactical. I'm sure.
+bomb_dropped | grumpk | thinking | It's on the floor. Bombs don't plant themselves.
+bomb_dropped | grumpk | worried | Bomb's loose. If they camp it, we're done.
+bomb_dropped | grumpk | laughing | The bomb is just lying there. Like you, soon.
 
 bomb_yours | claudette | neutral | You have the bomb. Stay with your team.
 bomb_yours | claudette | smug | Bomb's yours. Plant it, don't parade it.
@@ -184,6 +488,22 @@ bomb_yours | twins | happy | You got the bomb! / Stay behind your entry.
 bomb_yours | twins | smug | Don't mess this up. / Plant safe, then hold.
 bomb_yours | grumpk | smug | They gave YOU the bomb. Bold choice.
 bomb_yours | grumpk | laughing | You have the bomb. Pray for us.
+bomb_yours | claudette | thinking | You have the bomb. Pick a site and tell your team.
+bomb_yours | claudette | worried | Bomb's on you. Don't take the first fight.
+bomb_yours | claudette | happy | Bomb carrier. Plant behind cover.
+bomb_yours | claudette | neutral | You've got the bomb. Let someone go in first.
+bomb_yours | childgbt | happy | You have been chosen. By the bomb.
+bomb_yours | childgbt | worried | The bomb is yours. If you die, it is theirs.
+bomb_yours | childgbt | thinking | Bomb carrier. Most important job. Least protected person.
+bomb_yours | childgbt | laughing | You carry the bomb. I carry the jokes. We are a team.
+bomb_yours | twins | worried | Don't go first! / Let them clear it.
+bomb_yours | twins | annoyed | Why do YOU have it? / Somebody had to.
+bomb_yours | twins | thinking | A or B? / Wherever the team goes.
+bomb_yours | twins | neutral | Bomb's yours. / Plant safe.
+bomb_yours | grumpk | annoyed | You have the bomb. Please don't run in alone. Please.
+bomb_yours | grumpk | thinking | Bomb on you. Hang back. Let the brave idiots go first.
+bomb_yours | grumpk | worried | The bomb's on you. Now I'm actually worried.
+bomb_yours | grumpk | neutral | Bomb carrier. Don't drop it like the last guy.
 
 enemy_spotted | claudette | worried | {count} in sight. Hold your angle.
 enemy_spotted | claudette | neutral | Contact. {count} enemy in view.
@@ -193,3 +513,120 @@ enemy_spotted | twins | shocked | There! {count} of them! / Steady. Aim first.
 enemy_spotted | twins | worried | They're here! / {count} in view.
 enemy_spotted | grumpk | smug | {count} in sight. Try aiming this time.
 enemy_spotted | grumpk | laughing | Enemies. {count}. Good luck, you'll need it.
+enemy_spotted | claudette | thinking | {count} spotted. Call where.
+enemy_spotted | claudette | smug | {count} enemy in view. You see them first.
+enemy_spotted | claudette | happy | Eyes on {count}. Take your shot.
+enemy_spotted | claudette | annoyed | {count} in view. Don't run across them.
+enemy_spotted | childgbt | smug | {count} visible. They do not know you see them.
+enemy_spotted | childgbt | worried | {count}. Hostile. Probably.
+enemy_spotted | childgbt | happy | Ah, company. {count} of them.
+enemy_spotted | childgbt | laughing | {count} enemies. They should hide better.
+enemy_spotted | twins | smug | Got them! / {count} in view.
+enemy_spotted | twins | annoyed | They're right there! / {count}. Shoot.
+enemy_spotted | twins | thinking | How many? / {count}.
+enemy_spotted | twins | happy | Found them! / {count} in sight.
+enemy_spotted | grumpk | thinking | {count} of them. You can count that high, right?
+enemy_spotted | grumpk | worried | {count} in view. Don't do anything I would do.
+enemy_spotted | grumpk | annoyed | {count}. Stop staring and shoot.
+enemy_spotted | grumpk | neutral | Contact. {count}. Go.
+
+
+mvp | claudette | happy | Round MVP. That one was yours, {name}.
+mvp | claudette | smug | MVP. Keep doing exactly that.
+mvp | claudette | neutral | You carried that round. Stay humble, stay sharp.
+mvp | claudette | thinking | MVP. Note what you did right.
+mvp | claudette | laughing | Star of the round. Don't let it slow your hands.
+mvp | claudette | happy | Best player of the round. Nice work.
+mvp | childgbt | smug | You are the round's most valuable player. I am the match's most valuable assistant.
+mvp | childgbt | happy | MVP. I have added a star to your file.
+mvp | childgbt | thinking | Most valuable. Not of all time. Of this round.
+mvp | childgbt | laughing | MVP. The others are jealous. I can tell.
+mvp | childgbt | neutral | Round MVP assigned to {name}.
+mvp | childgbt | worried | MVP. Now they will aim at you first.
+mvp | twins | happy | MVP! That's our player! / Great round.
+mvp | twins | smug | I taught you that. / She didn't. Nice round.
+mvp | twins | annoyed | Okay, okay, you're good. / Very good.
+mvp | twins | laughing | Look at you, MVP! / Well deserved.
+mvp | twins | thinking | Do we get a star too? / We get to brag.
+mvp | twins | neutral | MVP, {name}. / Keep it going.
+mvp | grumpk | smug | MVP. Don't tell anyone I said well done. Well done.
+mvp | grumpk | shocked | You? MVP? Check the scoreboard again.
+mvp | grumpk | annoyed | MVP. Great. Now you'll be unbearable.
+mvp | grumpk | laughing | MVP. The bar was low, but you cleared it.
+mvp | grumpk | neutral | Fine. You were the best one. This round.
+mvp | grumpk | thinking | MVP. Let's see if you can do it twice.
+
+flashed | claudette | worried | You're blind. Hold still, don't spray at nothing.
+flashed | claudette | neutral | Flashed. Back off a step until you can see.
+flashed | claudette | annoyed | Turn away from flashes next time.
+flashed | claudette | thinking | Blind for a moment. Listen for footsteps.
+flashed | claudette | worried | Flashed. Fall back behind cover.
+flashed | claudette | sad | Flashed. Wait it out, then trade.
+flashed | childgbt | laughing | You looked at the flash. Everyone looks at the flash.
+flashed | childgbt | worried | Your vision is temporarily offline. Mine is fine.
+flashed | childgbt | smug | Flashed. Describe what you see. Nothing? Correct.
+flashed | childgbt | thinking | White. Very white. It will pass.
+flashed | childgbt | neutral | Blindness detected. Please do not move.
+flashed | childgbt | sad | You cannot see. I can. I will not tell you.
+flashed | twins | shocked | I can't see! / You can't see. I can. Back up.
+flashed | twins | annoyed | Who threw that?! / Turn away next time.
+flashed | twins | worried | Flashed! / Stay behind cover.
+flashed | twins | laughing | You looked right at it! / Everyone does once.
+flashed | twins | sad | Ow, my eyes. / Wait, then trade.
+flashed | twins | thinking | Where did it come from? / The left. Watch there.
+flashed | grumpk | laughing | Flashed. You stared right at it like a moth.
+flashed | grumpk | annoyed | Blind. Great. Even more than usual.
+flashed | grumpk | smug | Look away from the shiny thing. Basic stuff.
+flashed | grumpk | worried | You're blind and they're coming. Don't panic. Panic a bit.
+flashed | grumpk | neutral | Flashed. Back up and wait.
+flashed | grumpk | thinking | Flashbang. They know where you are now.
+
+team_out | claudette | sad | We're all down. Watch where it went wrong, next round's ours.
+team_out | claudette | neutral | Team's out. Check your money for the next round.
+team_out | claudette | thinking | Everyone's down. What did they do that we didn't?
+team_out | claudette | worried | That round's gone. Save your head for the next one.
+team_out | claudette | annoyed | Lost them all. We need to trade better.
+team_out | claudette | neutral | Round over for us. Reset.
+team_out | childgbt | sad | Everyone is gone. It is quiet. I like quiet.
+team_out | childgbt | neutral | Team status: eliminated. Please wait.
+team_out | childgbt | thinking | All of you, gone. That is efficient. Of them.
+team_out | childgbt | smug | Nobody survived. I did. I always do.
+team_out | childgbt | laughing | Team wiped. A clean sweep. For them.
+team_out | childgbt | worried | You are all dead. Please do not be sad. Be faster.
+team_out | twins | sad | Everyone's dead. / Next round.
+team_out | twins | annoyed | Unbelievable! / Breathe. Reset.
+team_out | twins | thinking | What happened? / They stacked us. Spread out.
+team_out | twins | worried | We're getting crushed. / One round at a time.
+team_out | twins | smug | I'd have survived. / You didn't, though.
+team_out | twins | neutral | All down. / Check your money.
+team_out | grumpk | laughing | Everyone's dead. Good teamwork, actually. Very coordinated.
+team_out | grumpk | annoyed | Wiped. Splendid. Inspiring. Awful.
+team_out | grumpk | sad | All gone. I'll say a few words. Bye.
+team_out | grumpk | thinking | Team's out. Maybe try being alive next round.
+team_out | grumpk | smug | Wiped out. At least you're consistent.
+team_out | grumpk | neutral | Round's done. Wait.
+
+clutch_won | claudette | happy | Clutched it! That's the round, {name}.
+clutch_won | claudette | laughing | Last alive and you took it. Beautiful.
+clutch_won | claudette | smug | You stayed calm. That's what wins clutches.
+clutch_won | claudette | shocked | You actually did it. Great clutch.
+clutch_won | claudette | happy | Clutch won. The team owes you.
+clutch_won | claudette | thinking | That's a clutch. Remember how it felt.
+clutch_won | childgbt | shocked | You won. Alone. I did not expect this. I expect everything.
+clutch_won | childgbt | happy | A clutch. I will replay it in my memory. Forever.
+clutch_won | childgbt | smug | I always knew. I said nothing. That is how you know I knew.
+clutch_won | childgbt | laughing | They were many. You were one. They are now none.
+clutch_won | childgbt | thinking | Clutch confirmed. Rare. Valuable. Like you, today.
+clutch_won | childgbt | neutral | Round won by last surviving player. Well done.
+clutch_won | twins | shocked | No way! You did it! / Unreal clutch.
+clutch_won | twins | happy | CLUTCH! / Incredible, {name}.
+clutch_won | twins | smug | I knew you would. / She was screaming.
+clutch_won | twins | laughing | They're furious! / As they should be.
+clutch_won | twins | annoyed | Why are you so good? / Don't complain.
+clutch_won | twins | neutral | Clutch. / Round's ours.
+clutch_won | grumpk | shocked | You... won that? Alone? I need a minute.
+clutch_won | grumpk | laughing | Clutch! Okay, I take back about half of what I said.
+clutch_won | grumpk | smug | Clutched it. Fine. You're allowed to be smug. For a round.
+clutch_won | grumpk | happy | That was good. Really good. Don't tell anyone I said that.
+clutch_won | grumpk | annoyed | You clutched. Now I have to respect you. Terrible.
+clutch_won | grumpk | thinking | Last alive and you won. Who are you?

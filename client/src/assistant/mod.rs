@@ -38,10 +38,10 @@ pub const OFF: u8 = ASSISTANTS.len() as u8;
 
 /// Every trigger the lines file must cover (checked by a test).
 #[cfg(test)]
-const TRIGGERS: [&str; 21] = [
+const TRIGGERS: [&str; 25] = [
     "greet_first", "greet_back", "hello", "practice_start", "match_start", "buy_low", "buy_rich", "round_won", "round_lost", "you_died", "streak",
     "bomb_planted", "bomb_defused", "last_alive", "halftime", "match_won", "match_lost", "teammate_down",
-    "bomb_dropped", "bomb_yours", "enemy_spotted",
+    "bomb_dropped", "bomb_yours", "enemy_spotted", "mvp", "flashed", "team_out", "clutch_won",
 ];
 
 /// Below this you can't buy a rifle and armor; at or above the other, you're rich.
@@ -66,6 +66,10 @@ pub struct Brain {
     practice_hello: bool,
     streak: u32,
     clutch_said: bool,
+    /// Said this round that the whole team is down.
+    team_out_said: bool,
+    /// Round MVPs on the scoreboard last time we looked (None until the first scoreboard).
+    mvps: Option<u32>,
     /// Last bomb state and visible enemies seen, to notice changes (same data as the HUD/radar).
     last_bomb: Option<net::protocol::BombNet>,
     seen_enemies: Vec<u8>,
@@ -83,6 +87,8 @@ impl Plugin for AssistantPlugin {
             practice_hello: false,
             streak: 0,
             clutch_said: false,
+            team_out_said: false,
+            mvps: None,
             last_bomb: None,
             seen_enemies: Vec::new(),
         })
@@ -123,6 +129,8 @@ fn new_match(mut brain: ResMut<Brain>) {
     brain.practice_hello = false;
     brain.streak = 0;
     brain.clutch_said = false;
+    brain.team_out_said = false;
+    brain.mvps = None;
     brain.last_bomb = None;
     brain.seen_enemies.clear();
 }
@@ -165,6 +173,13 @@ fn in_game(mut news: MessageReader<GameNews>, w: Res<Walker>, settings: Res<Sett
             brain.say("enemy_spotted", Kind::Relay, now(), &settings, &[("count", n)]);
         }
         brain.seen_enemies = visible;
+        // The scoreboard gave you a round MVP star.
+        if let Some(mine) = c.scores.iter().find(|s| Some(s.id) == me).map(|s| s.mvps) {
+            if brain.mvps.is_some_and(|before| mine > before) {
+                brain.say("mvp", Kind::Personal, now(), &settings, &[]);
+            }
+            brain.mvps = Some(mine);
+        }
     }
     for GameNews(e) in news.read() {
         match e {
@@ -174,6 +189,7 @@ fn in_game(mut news: MessageReader<GameNews>, w: Res<Walker>, settings: Res<Sett
                 brain.speaker.new_round();
                 brain.streak = 0;
                 brain.clutch_said = false;
+                brain.team_out_said = false;
                 if c.practice || my_team == Team::Spectator {
                     continue;
                 }
@@ -189,7 +205,12 @@ fn in_game(mut news: MessageReader<GameNews>, w: Res<Walker>, settings: Res<Sett
                 }
             }
             GameEvent::RoundEnd { winner, .. } if my_team != Team::Spectator => {
-                let t = if *winner == my_team { "round_won" } else { "round_lost" };
+                // Won it as the last one standing: a clutch.
+                let t = match *winner == my_team {
+                    true if brain.clutch_said && c.vitals.alive() => "clutch_won",
+                    true => "round_won",
+                    false => "round_lost",
+                };
                 brain.say(t, Kind::Personal, now(), &settings, &[]);
             }
             GameEvent::Kill { killer, victim, .. } => {
@@ -212,7 +233,16 @@ fn in_game(mut news: MessageReader<GameNews>, w: Res<Walker>, settings: Res<Sett
                     brain.clutch_said = true;
                     brain.say("last_alive", Kind::Critical, now(), &settings, &[]);
                 }
+                // The whole team is down (you're watching where the last of you fell).
+                if !c.practice && !brain.team_out_said && my_team != Team::Spectator && !c.vitals.alive() && team_of(*victim) == Some(my_team)
+                    && !c.scores.iter().any(|s| s.team == my_team && s.alive && Some(s.id) != me && s.id != *victim)
+                {
+                    brain.team_out_said = true;
+                    brain.say("team_out", Kind::Personal, now(), &settings, &[]);
+                }
             }
+            // A real white-out (not a glance from behind).
+            GameEvent::Flash { blinded, .. } if blinded.iter().any(|(id, b)| Some(*id) == me && b.hold > 0.5) => brain.say("flashed", Kind::Personal, now(), &settings, &[]),
             GameEvent::BombPlanted { .. } => brain.say("bomb_planted", Kind::Critical, now(), &settings, &[]),
             GameEvent::BombDefused { .. } => brain.say("bomb_defused", Kind::Critical, now(), &settings, &[]),
             GameEvent::SidesSwapped => brain.say("halftime", Kind::Personal, now(), &settings, &[]),
