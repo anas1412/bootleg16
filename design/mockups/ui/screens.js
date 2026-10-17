@@ -227,8 +227,8 @@ const mateTag = (x, y, name, hp, talking, fade = 1) => `<div class="abs mtag" st
 // one plate at the bottom: who it is, their game this match, how to switch.
 function spectate() {
   const corners = hud().replace(/<div class="abs keep"[\s\S]*?<\/div><\/div>\s*<\/div>/, '');
-  // not sent while watching: the crosshair, their ammo
-  return `<style>.stage .xhair, .stage #ammo > :not(.wpn):not(.edge) { display: none !important; }</style>${corners}
+  // hidden while watching: the crosshair
+  return `<style>.stage .xhair { display: none !important; }</style>${corners}
   ${mateTag(1180, 358, 'kova', 64, true)}${mateTag(1490, 410, 'vera', 18, false, .55)}
   <div class="abs spec tune" style="left:50%;bottom:var(--safe);transform:translateX(-50%)">
     <div class="label" style="color:var(--tx2)">Watching</div>
