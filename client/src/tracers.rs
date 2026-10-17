@@ -12,6 +12,8 @@ use bevy::prelude::*;
 const SPEED: f32 = 6000.0;
 const DASH: f32 = 60.0;
 const REACH: f32 = 4096.0;
+/// The shortest dash drawn (units).
+const MIN_DASH: f32 = 2.0;
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct TracerGizmos;
@@ -66,7 +68,9 @@ fn draw(mut tracers: ResMut<Tracers>, time: Res<Time>, mut gizmos: Gizmos<Tracer
     for t in &mut tracers.0 {
         let len = t.from.distance(t.to).max(1.0);
         let age = if hold { (len * 0.5 / SPEED).min(0.05) } else { t.age };
-        if let Some((tail, head)) = dash(age, len) {
+        // (A dash with no length yet, in a shot's first frame, is not drawn: a zero-length line
+        // has no direction and the renderer stretches it across the whole screen.)
+        if let Some((tail, head)) = dash(age, len).filter(|(tail, head)| head - tail >= MIN_DASH) {
             let (a, b) = (t.from.lerp(t.to, tail / len), t.from.lerp(t.to, head / len));
             // the engine's tracer colour: warm yellow
             gizmos.line(a, b, Color::srgba(1.0, 0.85, 0.4, 0.9));
@@ -99,6 +103,12 @@ mod tests {
         // Along +y the right-hand side is +x.
         let s = start([0.0, 0.0, 0.0], [0.0, 1000.0, 0.0]);
         assert!((s[0] - 16.0).abs() < 1e-4 && (s[1] - 2.0).abs() < 1e-4, "{s:?}");
+    }
+
+    #[test]
+    fn a_shots_first_frame_has_no_length_so_nothing_is_drawn_for_it() {
+        let (tail, head) = dash(0.0, 1000.0).unwrap();
+        assert!(head - tail < MIN_DASH, "the dash starts with no length ({tail}..{head})");
     }
 
     #[test]
