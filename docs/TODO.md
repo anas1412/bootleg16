@@ -210,3 +210,9 @@ Priority now: playable online. These wait. Everything below replaces what is sti
 - **3D models:** props via image to 3D (Meshy, Tripo or Hunyuan3D), cleaned in Blender (fewer polygons, UVs, glTF export). Hero weapons and characters need an artist or CC0 packs, not AI meshes (same hitbox, animations, first-person quality). Engine gap: the game loads only GoldSrc `.mdl`; a glTF loader and render path is needed first. Test the pipeline on one prop.
 - **Still Valve's or unverified:** radar images (`overviews/`), anything in the add-on that is Valve's (`cstrike.wad`, `halflife.wad`, `decay.wad`, ...): decide per file; the add-on's author is unknown to us. `dist/gamedata/` stays out of git.
 - **Weapon icons to redo:** Galil, Scout and AWP look generic (see icons section); regenerate with each gun's main feature in the prompt.
+
+## Reported in play (2026-10-17), not fixed yet
+- **Hands:** on some view models a hand is missing (AK-47: the left hand shows after the animation-name fix, the right hand is not confirmed). The add-on models split the arms into several body parts (`leftarm1`, `leftarm2`, `rightarm1`...): check which ones `spawn_skinned` draws and whether some are alternatives.
+- **Tracer lines:** the yellow bullet tracer lines when shooting do not start or end where the shots go (muzzle origin vs the shot's start, and the end point). Check `client/src/` tracer code against the viewmodel muzzle attachment and the server's shot origin.
+- **Collision:** "collision whatsoever" (details not given yet): ask for the places. The world collision is `sim::collision` (BSP hulls); the added map data is Valve's maps unchanged, so suspect model or door collision first.
+- **Animation names:** done with `tools/sequence_names.py` (rules in `tools/sequence_names.txt`); run it again on any new `v_*.mdl` added to `dist/gamedata/models/`.

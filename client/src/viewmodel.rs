@@ -171,7 +171,7 @@ fn update(
         let seq = if id == Id::Glock {
             // CS 1.6 (client.so EV_FireGlock18): every bullet, burst or not, plays `shoot3`;
             // the last round `shoot_empty`. (`shoot`/`shoot2` are the shield versions.)
-            find(&m.model, if empty { &["shoot_empty"] } else { &["shoot3"] })
+            find(&m.model, if empty { &["shoot_empty", "shootlast"] } else { &["shoot3", "shoot1", "shoot"] })
         } else {
             let k = (now * 1000.0) as usize % 3;
             let shoot = names(["shoot1", "shoot2", "shoot3"][k]);

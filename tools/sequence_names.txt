@@ -1,0 +1,24 @@
+# Animation names for the view models (v_*.mdl): what the game asks for on the left of `->`.
+# Used by tools/sequence_names.py, which renames the animations inside our model files so every
+# weapon speaks one set of names. A rule applies only if the new name is not already taken.
+#
+# prefix: a weapon's name in front of the verb ("ak47_idle", "Lynx_stab") is removed
+prefix: ak47_ lynx_ m4a1_ awp_ usp_ glock_ deagle_ famas_ galil_ mac10_ tmp_ mp5_ ump45_ p90_ scout_ knife_
+# word: swapped anywhere in the name
+word: fire -> shoot
+word: unsup -> unsil
+word: deploy_first -> draw
+# whole name
+name: attach -> add_silencer
+name: detach -> detach_silencer
+name: reload_empty -> reload
+name: reload_empty_unsil -> reload_unsil
+name: reload_full -> reload
+name: reload_full_unsil -> reload_unsil
+name: deploy -> draw
+name: deploy2 -> draw2
+name: idle1 -> idle
+name: reload1 -> reload
+# fill: if the model has no `shoot1` / `draw`, the first of these becomes it
+fill: shoot1 <- shoot
+fill: draw <- draw2 draw_first
