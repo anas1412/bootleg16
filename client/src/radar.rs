@@ -33,11 +33,18 @@ struct Overview {
 }
 
 impl Overview {
-    /// World (x, y) to image pixels. 1024 px cover 8192 / zoom units, centred on origin.
+    /// Image pixels per world unit (the 1024 px image covers 10240 / zoom units).
+    fn per_unit(&self) -> f32 {
+        self.zoom / 10.0
+    }
+
+    /// World (x, y) to image pixels, centred on origin. ROTATED 1: image right is world +x,
+    /// image up is world +y. ROTATED 0: turned a quarter, image right is world -y, image up
+    /// is world +x. (Checked by plotting every map's spawns on its overview.)
     fn to_px(&self, x: f32, y: f32) -> Vec2 {
-        let k = self.zoom * 1024.0 / 8192.0;
+        let k = self.per_unit();
         let (dx, dy) = (x - self.origin[0], y - self.origin[1]);
-        let (u, v) = if self.rotated { (dy, dx) } else { (dx, -dy) };
+        let (u, v) = if self.rotated { (dx, -dy) } else { (-dy, -dx) };
         Vec2::new(self.size.x / 2.0 + u * k, self.size.y / 2.0 + v * k)
     }
 }
@@ -157,7 +164,7 @@ fn update(
     let c = &w.client;
     let o = c.me().origin;
     let centre = ov.to_px(o[0], o[1]);
-    let half = SPAN * ov.zoom * 1024.0 / 8192.0 / 2.0;
+    let half = SPAN * ov.per_unit() / 2.0;
     // Crop the overview to the window around you (the image fills the radar).
     for mut img in &mut map {
         let rect = Some(Rect::new(centre.x - half, centre.y - half, centre.x + half, centre.y + half));
@@ -219,5 +226,24 @@ fn update(
         node.left = percent(q.x * 100.0);
         node.top = percent(q.y * 100.0);
         vis.set_if_neq(Visibility::Inherited);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spawns_land_where_the_overview_shows_open_ground() {
+        // de_dust2 (ROTATED 0): the T spawn is south-west in the world, so low and to the right.
+        let ov = Overview { zoom: 1.5, origin: [-223.0, 1097.0], rotated: false, size: Vec2::new(1024.0, 768.0) };
+        let t = ov.to_px(-832.0, -704.0);
+        assert!(t.x > 700.0 && t.y > 400.0, "{t:?}");
+        let ct = ov.to_px(250.0, 2300.0);
+        assert!(ct.x < 400.0 && ct.y < 450.0, "{ct:?}");
+        // de_inferno (ROTATED 1): T at the bottom left.
+        let ov = Overview { zoom: 1.49, origin: [490.0, 1280.0], rotated: true, size: Vec2::new(1024.0, 768.0) };
+        let t = ov.to_px(-1544.0, 264.0);
+        assert!(t.x < 300.0 && t.y > 400.0, "{t:?}");
     }
 }

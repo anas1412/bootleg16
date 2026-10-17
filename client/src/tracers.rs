@@ -12,8 +12,6 @@ use bevy::prelude::*;
 const SPEED: f32 = 6000.0;
 const DASH: f32 = 60.0;
 const REACH: f32 = 4096.0;
-/// The shortest dash drawn (units).
-const MIN_DASH: f32 = 2.0;
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct TracerGizmos;
@@ -57,6 +55,13 @@ fn dash(age: f32, len: f32) -> Option<(f32, f32)> {
     (age * SPEED - DASH < len).then_some((tail, head))
 }
 
+/// Whether a dash is drawn: not while it is still coming out of the start (a short dash right
+/// next to the camera is stretched by perspective into a long false line, and a dash with no
+/// length at all has no direction); once whole, and while it arrives at the end.
+fn shown(tail: f32, head: f32, len: f32) -> bool {
+    head - tail >= DASH - 0.5 || (head >= len - 0.01 && head - tail >= 2.0)
+}
+
 fn draw(mut tracers: ResMut<Tracers>, time: Res<Time>, mut gizmos: Gizmos<TracerGizmos>, mut hold: Local<Option<bool>>) {
     // Screenshot runs hold the latest tracer part-way (they live a fraction of a second).
     let hold = *hold.get_or_insert_with(|| std::env::var_os("BOOTLEG16_SCREENSHOT").is_some());
@@ -68,9 +73,7 @@ fn draw(mut tracers: ResMut<Tracers>, time: Res<Time>, mut gizmos: Gizmos<Tracer
     for t in &mut tracers.0 {
         let len = t.from.distance(t.to).max(1.0);
         let age = if hold { (len * 0.5 / SPEED).min(0.05) } else { t.age };
-        // (A dash with no length yet, in a shot's first frame, is not drawn: a zero-length line
-        // has no direction and the renderer stretches it across the whole screen.)
-        if let Some((tail, head)) = dash(age, len).filter(|(tail, head)| head - tail >= MIN_DASH) {
+        if let Some((tail, head)) = dash(age, len).filter(|&(tail, head)| shown(tail, head, len)) {
             let (a, b) = (t.from.lerp(t.to, tail / len), t.from.lerp(t.to, head / len));
             // the engine's tracer colour: warm yellow
             gizmos.line(a, b, Color::srgba(1.0, 0.85, 0.4, 0.9));
@@ -106,9 +109,16 @@ mod tests {
     }
 
     #[test]
-    fn a_shots_first_frame_has_no_length_so_nothing_is_drawn_for_it() {
-        let (tail, head) = dash(0.0, 1000.0).unwrap();
-        assert!(head - tail < MIN_DASH, "the dash starts with no length ({tail}..{head})");
+    fn a_dash_is_not_drawn_while_it_is_coming_out_of_the_start() {
+        for age in [0.0, 0.0005, 0.002, 0.005, 0.0099] {
+            let (tail, head) = dash(age, 1000.0).unwrap();
+            assert!(!shown(tail, head, 1000.0), "partial dash drawn at {age}: {tail}..{head}");
+        }
+        let (tail, head) = dash(0.02, 1000.0).unwrap();
+        assert!(shown(tail, head, 1000.0), "the whole dash is drawn");
+        // arriving at the end it shrinks, and is still drawn until it is almost gone
+        let (tail, head) = dash(1000.0 / SPEED + 0.004, 1000.0).unwrap();
+        assert!(shown(tail, head, 1000.0));
     }
 
     #[test]
