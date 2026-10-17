@@ -66,6 +66,9 @@ fn cell(layer: usize, mood: Mood) -> Rect {
     Rect::new(x, y, x + 256.0, y + 256.0)
 }
 
+/// The face sheet of the Twins' brother (the portrait turns to him when he speaks).
+pub(super) const BROTHER_FACE: usize = 3;
+
 /// Face sheet for an assistant (0..3); the Twins start with her.
 pub(super) fn face_for(who: usize) -> usize {
     [0, 1, 2, 4][who.min(3)]

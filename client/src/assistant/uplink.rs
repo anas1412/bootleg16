@@ -14,7 +14,7 @@
 //!   says him, his line opens under hers and resolves.
 //! - After the last word a timer line on the bottom edge shrinks to the centre for 4 s; then
 //!   a lower chirp, the light retracts and it all tunes out.
-use super::view::{face_for, portrait, Faces, Rig};
+use super::view::{face_for, portrait, Faces, Rig, BROTHER_FACE};
 use super::{lines::Mood, Brain, ASSISTANTS};
 use crate::menu::AppState;
 use crate::ui::{edge, hud_panel, kit_text, vh, Anim, Covered, Edge, EdgeColor, Kit, UiSound, SAFE, TX1, TX2};
@@ -283,7 +283,7 @@ pub(super) fn animate(
         up.handed = true;
         sounds.write(UiSound::Hand(PITCH[2]));
         for mut r in &mut rigs {
-            r.set(face_for(3), up.mood2);
+            r.set(BROTHER_FACE, up.mood2);
         }
         for mut n in &mut name {
             n.0 = format!("{} · HIM", ASSISTANTS[2].name.to_uppercase());

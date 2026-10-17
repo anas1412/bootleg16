@@ -61,8 +61,6 @@ pub struct Walker {
     drop_held: bool,
     /// Mouse wheel movement not yet turned into a weapon switch.
     wheel: f32,
-    /// Bullet tracers: from, to, seconds left.
-    pub tracers: Vec<([f32; 3], [f32; 3], f32)>,
     /// Events for `effects::grenade_effects` (explosions, flashes).
     pub pending_fx: Vec<net::protocol::GameEvent>,
     /// Sounds to play this frame.
@@ -97,7 +95,6 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, settings: R
         slot_held: 0,
         drop_held: false,
         wheel: 0.0,
-        tracers: Vec::new(),
         pending_fx: Vec::new(),
         cues: Vec::new(),
         smooth: Vec3::ZERO,
@@ -226,6 +223,7 @@ fn walk(
     mut w: ResMut<Walker>,
     shot_assets: Option<Res<ShotAssets>>,
     mut hits: MessageWriter<crate::impacts::Hit>,
+    mut tracers: ResMut<crate::tracers::Tracers>,
 ) {
     // Mouse buttons only count while the mouse is captured (the first click just captures it).
     let captured = cursor.grab_mode != CursorGrabMode::None;
@@ -321,7 +319,7 @@ fn walk(
         // The streak leaves from about where the muzzle is (low and to the right of the eye), not
         // from the eye itself: seen from the eye it would be one flat line across the screen.
         let muzzle = std::array::from_fn(|i| eye[i] + right[i] * 9.0 - up[i] * 8.0 + f[i] * 30.0);
-        w.tracers.push((muzzle, end, crate::effects::TRACER_SECONDS));
+        tracers.shot(muzzle, end);
     }
 }
 

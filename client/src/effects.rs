@@ -1,9 +1,5 @@
 //! Server events turned into things you see and hear: tracers, the kill feed, grenades in
 //! flight, explosions, the flashbang white-out and guns on the ground.
-/// How long a tracer lasts (seconds), and how long its streak is (units).
-pub const TRACER_SECONDS: f32 = 0.08;
-const TRACER_STREAK: f32 = 180.0;
-
 use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::menu::AppState;
@@ -204,7 +200,7 @@ fn grenade_effects(
 pub struct GameNews(pub GameEvent);
 
 #[allow(clippy::too_many_arguments)]
-fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut gizmos: Gizmos, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>) {
+fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut<crate::tracers::Tracers>, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>) {
     let me = w.client.id();
     let predicting = shot_assets.is_some();
     // Where a player is now (for sounds and the direction blood flies).
@@ -225,7 +221,7 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mu
                     w.cues.push(sound::Cue::Impact { at, normal });
                 }
                 if Some(shooter) != me {
-                    w.tracers.push((from, to, TRACER_SECONDS));
+                    tracers.shot(from, to);
                     w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from) });
                     anims.write(PlayerAnim::Shot(shooter, silenced));
                 }
@@ -298,15 +294,4 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mu
             _ => {}
         }
     }
-    let dt = time.delta_secs();
-    // A tracer is a short streak that flies from the muzzle to where the shot ended.
-    for (from, to, left) in &mut w.tracers {
-        let (a, b) = (Vec3::from(map::to_y_up(*from)), Vec3::from(map::to_y_up(*to)));
-        let length = a.distance(b).max(1.0);
-        let head = (1.0 - (*left / TRACER_SECONDS).clamp(0.0, 1.0)).max(0.15);
-        let tail = (head - TRACER_STREAK / length).max(0.0);
-        gizmos.line(a.lerp(b, tail), a.lerp(b, head), Color::srgba(1.0, 0.9, 0.5, 0.8));
-        *left -= dt;
-    }
-    w.tracers.retain(|t| t.2 > 0.0);
 }
