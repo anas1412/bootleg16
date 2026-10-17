@@ -69,15 +69,31 @@ impl Icons {
     }
 }
 
-/// The redrawn weapon pictures that exist (the rest use the sprite sheets).
-fn load_pictures(world: &mut World) -> HashMap<String, (Handle<Image>, f32)> {
+/// A PNG from the game files (add-on first).
+fn read_png(rel: &str) -> Option<Image> {
     use bevy::asset::RenderAssetUsages;
     use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
+    let bytes = crate::gamefiles::paths(rel).iter().find_map(|p| std::fs::read(p).ok())?;
+    Image::from_buffer(&bytes, ImageType::Extension("png"), CompressedImageFormats::NONE, true, ImageSampler::linear(), RenderAssetUsages::default()).ok()
+}
+
+/// HUD icons redrawn as white PNGs (the game tints them); the sprite of the same name is the fallback.
+const HUD_ICONS: [&str; 28] = [
+    "cross", "suit_full", "suithelmet_full", "defuser", "c4", "buyzone", "stopwatch", "d_headshot", "d_skull", "d_knife", "d_glock18", "d_usp", "d_p228", "d_deagle", "d_mac10", "d_tmp", "d_mp5navy", "d_ump45", "d_p90", "d_galil", "d_famas", "d_ak47", "d_m4a1", "d_scout", "d_awp", "d_flashbang", "d_grenade", "d_smoke",
+];
+
+/// The redrawn weapon pictures that exist (the rest use the sprite sheets).
+fn load_pictures(world: &mut World) -> HashMap<String, (Handle<Image>, f32)> {
     let mut images = world.resource_mut::<Assets<Image>>();
     let mut out = HashMap::new();
+    // The HUD's own icons (`gfx/hud/<name>.png`), under the sprite's name.
+    for name in HUD_ICONS {
+        let Some(img) = read_png(&format!("gfx/hud/{name}.png")) else { continue };
+        let aspect = img.width() as f32 / img.height() as f32;
+        out.insert(name.to_string(), (images.add(img), aspect));
+    }
     for name in GUN_ART {
-        let Some(bytes) = crate::gamefiles::paths(&format!("gfx/guns/{name}.png")).iter().find_map(|p| std::fs::read(p).ok()) else { continue };
-        let Ok(img) = Image::from_buffer(&bytes, ImageType::Extension("png"), CompressedImageFormats::NONE, true, ImageSampler::linear(), RenderAssetUsages::default()) else { continue };
+        let Some(img) = read_png(&format!("gfx/guns/{name}.png")) else { continue };
         let aspect = img.width() as f32 / img.height() as f32;
         out.insert(format!("gun_{name}"), (images.add(img), aspect));
     }
@@ -185,7 +201,7 @@ pub fn weapon_icon(id: Id) -> &'static str {
         Id::M249 => "d_m249",
         Id::HeGrenade => "d_grenade",
         Id::Flashbang => "d_flashbang",
-        Id::Smoke => "d_skull",
+        Id::Smoke => "d_smoke",
         Id::C4 => "c4",
     }
 }
