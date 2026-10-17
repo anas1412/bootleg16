@@ -193,3 +193,8 @@ land, and add new ones here instead of leaving them only in chat.
 - Aim checks (`aimcheck.rs`): reaction times are whole ticks (15.6 ms steps at 64) and the flick window (`FLICK_TICKS`, 8 inputs) is twice as long in time at 64. Retune against real players.
 - Lobby: servers at different rates must not share a queue unless the lobby knows each server's rate.
 - Not done: sim and net test loops still count ticks as 128 (`net/tests/`, `sim` tests); only the multiplayer test runs at 64. README/NETWORKING.md need `--tick`.
+
+## Window and settings bugs (reported in play, not investigated)
+- Crash when the window is made big (maximized). Get the panic from the terminal. Suspects: `menu/stage3d.rs` `resize` (render target and mesh rebuilt for the new size), `hud/visor.rs` `follow` (render target resize).
+- Settings: picking an option flips the screen back to the design view, then to the 3D view again. Check what the click does to the menu state or the stage3d camera (UI session owns the menu pages).
+- No fullscreen option (the window is only resizable). Add one to Settings, display section.
