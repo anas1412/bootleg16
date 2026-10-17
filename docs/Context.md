@@ -1,13 +1,36 @@
-# Context
+# Context (engine session handoff)
 
-Where the engine side of bootleg16 stands and how to work on it. Read this first when picking
-the work up. The HUD and screens have their own page: `docs/ContextHUD.md`. Open items are in
-`docs/TODO.md`, lessons in `docs/GOTCHAS.md`.
+Everything a new session needs to take over the **engine side** of bootleg16. Read it top to
+bottom once.
+- The HUD and screens side: `docs/ContextHUD.md`, owned by the UI session.
+- Open items: `docs/TODO.md`.
+- Lessons and traps: `docs/GOTCHAS.md`.
+- Specs: `docs/WEAPONS.md`, `RULES.md`, `MOVEMENT.md`, `NETWORKING.md`, `MAPS.md`, `UI.md`.
+
+## Start here
+
+1. `git pull`, then `git log --oneline -15` to see the latest work.
+2. Read the user's auto-memory index:
+   `~/.claude/projects/-home-blackbox-bootleg16/memory/MEMORY.md`. It holds standing rules
+   and preferences (short answers, no Claude co-author, Wayland only, art direction and more).
+3. Check whether the UI session is up. It may be paused: run `ListAgents` and look for
+   "Game HUD/UI design concepts".
+4. **A decision is open with the user:** start the sound work (Next, item 1), or let the UI
+   session do a release build first. Ask before starting if they haven't said.
+
+## How the user works
+
+- Short answers, scanned, not read. A few lines, no long sections.
+- Decide game-dev questions yourself and proceed. The user is not a game-dev expert.
+- "Do it" means implement, test, commit and push.
+- Mid-task messages often add work. Note it, finish the current step, then do it.
+- Before saying a change is done, check it on screen (see Testing).
 
 ## The project
 
 A CS 1.6 remake in Rust and Bevy 0.20, multiplayer first, shipping on Steam (Windows and
-Linux). For now it plays on the CS 1.6 files from your own install. It runs at 128 tick.
+Linux). For now it plays on the CS 1.6 files from the user's own install. It runs at
+128 tick.
 
 | Crate | What it does |
 |---|---|
@@ -22,23 +45,24 @@ Linux). For now it plays on the CS 1.6 files from your own install. It runs at 1
 
 - Build with `systemd-run --user --scope -q -p MemoryMax=3G -- cargo build -p <crate> -j 2`.
   An uncapped build froze the PC.
+- Don't change Cargo features or profiles: that rebuilds Bevy, which takes 30-45 min.
 - Run only the tests for what changed.
 - Wayland only: run the client with `env -u DISPLAY`.
 - No god files. One module and plugin per concern; split a file past about 400 lines.
-- Commits: no Claude co-author or attribution. Never `git commit -a`: two sessions share the
-  tree, so add only your own files.
-- Game copy has no em dashes.
+- Commits: no Claude co-author or attribution trailer. This overrides the harness default.
+- Never `git commit -a`: two sessions share one working tree. Add your own files by name.
+- Game copy has no em dashes: grep for them before showing anything.
 - Everyone has the same hitbox, height, eye and speed. Characters are cosmetic.
 - The AI assistant only knows what the player knows. Every new piece of information the
-  player can see gets an assistant trigger and lines.
+  player can see gets an assistant trigger and lines (`client/src/assistant/`).
 - `dist/` holds Valve files: private, never publish it.
 - Map pool: de_dust2, de_inferno, de_mirage (on hold), de_train. Keep Nuke.
-- Decide game-dev questions yourself and proceed. The user is not a game-dev expert.
+- Every fix must work on both Windows and Linux.
 
 ## How fidelity is checked
 
-- Facts come from ReGameDLL (GPL, used for facts only) and from disassembling CS's
-  `client.so`, which has DWARF symbols.
+- Facts come from ReGameDLL (GPL, used for facts only, never code) and from disassembling
+  CS's `client.so` with `objdump`. It has DWARF symbols.
   - `EV_Fire*`: sound attenuations.
   - `EV_HLDM_PlayTextureSound` and `GunshotDecalTrace`: impact sounds and decals.
   - `CGameStudioModelRenderer`: how player models are posed and lit.
@@ -57,12 +81,15 @@ Linux). For now it plays on the CS 1.6 files from your own install. It runs at 1
   - Lag compensation rewinds animated hitboxes; `sim::anim` is stepped by the server every
     tick.
   - Reliable events; encrypted seats for official servers.
+  - The server drops a silent player after 5 s (`TIMEOUT_TICKS`).
 - **Getting into a match** (`client/src/menu/connect.rs`, `loading.rs`, `notice.rs`):
-  1. Starting server, Contacting server, Loading map and Joining, each slow step on its own
-     thread (`loading::Job`).
+  1. The steps are Starting server, Contacting server, Loading map and Joining, each slow
+     one on its own thread (`loading::Job`).
   2. The map is parsed once and shared as `MapData`. Its `world` goes to the client and its
-     `geometry` to `level.rs`.
-  3. The loading screen stays up until the first snapshot is in and no shaders are compiling.
+     `geometry` to `level.rs`. Other modules read `MapData.bsp` instead of loading the file
+     again.
+  3. The loading screen stays up into `InGame` until the first snapshot is in and the render
+     world's pipeline queue has been empty for 5 frames (at most 15 s): `loading::reveal`.
   4. Every way back to the menu is a `Notice` (title, body, Retry when retrying can work).
 - **Connection lost** (`game.rs`, `connection`):
   - After 3 s of server silence, `Reconnecting` appears and `Client::rejoin` says hello
@@ -70,9 +97,11 @@ Linux). For now it plays on the CS 1.6 files from your own install. It runs at 1
   - After 30 s it gives up with a notice.
   - Test: `net/tests/leavers.rs`, `a_dropped_player_rejoins_their_seat`.
 - **Buying** (`net/src/server/buy.rs`):
-  - Undo buys sells back this round's purchases while you can still buy, as CS2 does.
+  - Undo buys sells back this round's purchases while you can still buy, as CS2 does
+    (`Client::undo_buys`).
 - **Visuals**:
-  - Decals and impacts (`impacts.rs`), sprites and glows (`glows.rs`), explosions, gibs.
+  - Decals and impacts (`impacts.rs`), sprites and glows (`glows.rs`), `explosions.rs`,
+    `gibs.rs`.
   - Lit studio models (`studio.rs`); map sounds (`map_sounds.rs`).
   - Own bullet holes are predicted instantly (`ShotAssets` in `game.rs`).
 - **Spectating** (`spectate.rs`):
@@ -84,67 +113,110 @@ Linux). For now it plays on the CS 1.6 files from your own install. It runs at 1
   - Team voice is always on; proximity voice is for the living only.
   - Per-player mute and volume from the scoreboard; open mic with a noise gate.
   - Walls muffle proximity voice.
-- **Sound** (`sound.rs`, `map_sounds.rs`, `ui/sound.rs`, voice): see "Next" below.
 
 ## Testing in the game
 
-- Practice on one map: `target/debug/client de_dust2 --practice 0`.
-- Join a server: `--connect host:port`.
+- Build `client`, then run `env -u DISPLAY target/debug/client de_dust2 --practice 0`.
+  Join a server with `--connect host:port`.
 - Screenshot hooks (environment variables):
 
 | Variable | What it does |
 |---|---|
-| `BOOTLEG16_SCREENSHOT=path.png` | Save one frame (taken at `_AT` seconds) |
+| `BOOTLEG16_SCREENSHOT=path.png` | Save one frame, then quit |
+| `BOOTLEG16_SCREENSHOT_AT` | Seconds before the frame is taken |
 | `_LOOK=yaw,pitch` | Aim the camera |
 | `_TEAM` | Join a team |
 | `_SPECTATE` | Spectate |
 | `_CAM=x,y,z` | Park the camera at a point |
 | `BOOTLEG16_FIRE` | Hold fire |
-| `BOOTLEG16_MENU_PAGE` | Open a menu page: `characters`, `maps`, settings tabs, `voice` |
+| `BOOTLEG16_MENU_PAGE` | Open a menu page: `practice`, `join`, `settings`, `crosshair`, `assistant`, `keys`, `voice`, `characters`, `maps` |
 | `BOOTLEG16_FAKE_PING` / `_LOSS` | Fake network conditions |
 
+- Put screenshots in the session scratchpad and look at them before saying a change is done.
 - Net tests (`net/tests/`) run a real server and clients over localhost and skip themselves
   when de_dust2 isn't installed. `common::Game` drives them; `simulate_network(0, 1.0)` cuts
   a client off.
+- Killing processes: `pkill -f` once killed its own shell. Use `ps` and `kill <pid>`.
 
 ## Two sessions on one repo
 
-- **This session (engine):**
+- **Engine session (you):**
   - Netcode, sim, server and the lobby.
   - Loading, notice and reconnect logic.
   - Sound, rendering, models, players, effects, the view model and map sounds.
-- **The UI session ("Game HUD/UI design concepts"):**
+- **UI session ("Game HUD/UI design concepts"):**
   - Menu pages, the HUD, the buy menu, spectating screens, teammate tags.
   - `status_screens.rs`, `design/mockups`, the `ui/` design system.
-- Message the other session before touching its files. Commit both halves of a shared
-  interface together, so the build never sees one without the other.
+- Message it with `SendMessage` (find it with `ListAgents`) before touching its files.
+- For a shared interface, you write the logic and its resources, it draws the view. Commit
+  both halves together, so the build never sees one without the other.
 - `docs/TODO.md` is shared: pull before editing it.
-- The UI session is **paused** by the user. It does the release build (`tools/bundle.sh`)
-  only when the user says so.
+- The UI session is **paused** by the user, and does the release build (`tools/bundle.sh`)
+  only when the user says so. Its `docs/ContextHUD.md` was uncommitted at handoff: leave it
+  to that session.
 
-## State on 2026-10-17
+## State at handoff (2026-10-17)
 
-All work is committed and pushed (latest `1ac64be`). Waiting on the user: start the sound
-work below, or release first.
+All engine work is committed and pushed. Last engine commit: this file. Before it:
+`47228f5` (the loading cover) and `1dc724e` (loading, notices and reconnect). The tree has no
+engine changes left uncommitted.
 
 ## Next (all in `docs/TODO.md`)
 
-1. **Sound system.** Today four separate paths play audio, and the distance falloff is
-   written twice. Needed:
-   - One mixer that everything plays through.
-   - Volume buses with Settings sliders: master, effects, ambience, UI, assistant, voice.
-   - GoldSrc channels per player (weapon, body, voice, item), where a new sound cuts the old
-     one. Today a reload keeps playing after you switch weapons.
-   - A cap on how many sounds play at once.
-   - The camera as the listener. Today loudness is worked out from your own body, so
-     spectating sounds wrong.
-   - Volume changes reaching sounds that are already playing.
-   - Room reverb from the maps' `env_sound` areas.
-2. **Weapon switch** shows a character model on screen for a moment.
-3. **Smoke cloud** is far too see-through.
-4. **Footsteps** may use the wrong sound (reported in play, not confirmed): check the
-   material lookup.
-5. **Not yet seen on screen:** the round timer's ticks, and the full 30 s give-up of
-   reconnecting.
-6. **Shader warm-up** for effects that appear later (explosions, gibs, glass) could hitch
-   the first time they are drawn. Not confirmed yet.
+### 1. Sound system: one mixer
+
+Today four separate paths play audio:
+
+| Path | File | How it plays |
+|---|---|---|
+| Game sounds | `client/src/sound.rs` | A `Cue` enum; `play_cues` works out the gain once, at spawn, from `ear = w.client.me().eye()` and GoldSrc falloff |
+| Map sounds | `map_sounds.rs` | Its own `gain()`, `one_shot` and `spawn_loop` (the falloff is written a second time) |
+| UI tones | `ui/sound.rs` | Synthesized tones |
+| Voice | `voice/` | Its own output stream |
+
+All of them use `settings.volume` directly. Build:
+- **One play function**, used by every path.
+- **Volume buses**, each with a Settings slider: master, effects, ambience, UI, assistant,
+  voice.
+- **GoldSrc channels** per entity (weapon, body, voice, item, static): a new sound on a
+  channel stops the one before it. Today a reload keeps playing after you switch weapons.
+- **A voice cap**: limit how many sounds play at once and drop the quietest or oldest.
+- **The camera as the listener.** `SpatialListener` is on the camera, but loudness is worked
+  out from your own body, so spectating sounds wrong.
+- **Live volume**: volume changes must reach sounds that are already playing.
+- **Room reverb** from the maps' `env_sound` areas (`roomtype`), the way CS 1.6 changes the
+  echo per area. Unverified: check the maps for these entities before building on it.
+
+### 2. Weapon switch shows a character model for a moment
+
+- Hypothesis, NOT verified, in `client/src/viewmodel.rs`, `update`:
+  1. On a switch it spawns the new skinned parts with `spawn_skinned`, then calls
+     `set_pose` on joints that don't exist until the commands are applied.
+  2. So the first frame draws the bind or reference pose.
+- If confirmed, fix: spawn the parts hidden, and show them once a pose has been applied.
+
+### 3. Smoke cloud far too see-through
+
+- `client/src/smoke.rs` draws 30 puffs of size 110, with puff alpha `0.9 x` a soft texture
+  that falls off to the edge.
+- CS uses gas puff sprites and is near-opaque in the middle.
+- Make the core opaque. Check it from inside and outside the cloud.
+
+### 4. Footsteps may use the wrong sound
+
+- Reported in play, not confirmed.
+- The file-number mapping already matches CS.
+- Check the surface lookup in `sound.rs`, `Cue::Footstep`: it traces from the feet to 64
+  units below. Unverified whether CS does the same: compare against the disassembly.
+- Also check `step_set` and the materials map against CS for each map surface.
+
+### 5. Not yet seen on screen
+
+- The round timer's ticks.
+- The full 30 s give-up of reconnecting.
+
+### 6. Possible first-use hitches
+
+- Effects drawn for the first time (explosions, gibs, glass) may compile shaders mid-game.
+  Not confirmed.
+- If it happens, warm them up behind the loading cover.
