@@ -41,6 +41,8 @@ pub struct Sequence {
 #[derive(Clone)]
 pub struct Model {
     data: Vec<u8>,
+    /// The textures when they live in a separate `<name>T.mdl` (player models do this).
+    texture_file: Option<Vec<u8>>,
     pub bones: Vec<Bone>,
     pub hitboxes: Vec<Hitbox>,
     pub sequences: Vec<Sequence>,
@@ -85,7 +87,15 @@ fn bad(what: &str) -> io::Error {
 
 impl Model {
     pub fn load(path: impl AsRef<Path>) -> io::Result<Model> {
-        Self::parse(fs::read(path)?)
+        let path = path.as_ref();
+        let mut model = Self::parse(fs::read(path)?)?;
+        // No textures inside: they are in `<name>T.mdl` beside it (any letter case).
+        if model.header_i32(180) == 0 {
+            let want = format!("{}t.mdl", path.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default());
+            let sibling = path.parent().and_then(|dir| fs::read_dir(dir).ok()).and_then(|entries| entries.flatten().find(|e| e.file_name().to_string_lossy().to_lowercase() == want));
+            model.texture_file = sibling.and_then(|e| fs::read(e.path()).ok());
+        }
+        Ok(model)
     }
 
     pub fn parse(data: Vec<u8>) -> io::Result<Model> {
@@ -153,7 +163,7 @@ impl Model {
                 Some((i32_at(o + 36).ok()?.max(0) as usize, [f32_at(o + 40).ok()?, f32_at(o + 44).ok()?, f32_at(o + 48).ok()?]))
             })
             .collect();
-        Ok(Model { data, bones, hitboxes, sequences, attachments })
+        Ok(Model { data, texture_file: None, bones, hitboxes, sequences, attachments })
     }
 
     pub fn sequence(&self, name: &str) -> Option<usize> {
@@ -368,15 +378,17 @@ impl Model {
 
     /// Decode the textures stored in this file (8-bit with a palette each).
     pub fn textures(&self) -> Vec<ModelTexture> {
-        let (count, index) = (self.header_i32(180), self.header_i32(184));
+        let data = self.texture_file.as_deref().unwrap_or(&self.data);
+        let at = |o: usize| data.get(o..o + 4).map(|b| i32::from_le_bytes(b.try_into().unwrap())).unwrap_or(0).max(0) as usize;
+        let (count, index) = (at(180), at(184));
         (0..count)
             .filter_map(|i| {
                 let o = index + i * 80;
-                let name = crate::texture::cstr(self.data.get(o..o + 64)?);
-                let flags = self.header_i32(o + 64);
-                let (w, h, pix) = (self.header_i32(o + 68), self.header_i32(o + 72), self.header_i32(o + 76));
-                let pixels = self.data.get(pix..pix + w * h)?;
-                let pal = self.data.get(pix + w * h..pix + w * h + 768)?;
+                let name = crate::texture::cstr(data.get(o..o + 64)?);
+                let flags = at(o + 64);
+                let (w, h, pix) = (at(o + 68), at(o + 72), at(o + 76));
+                let pixels = data.get(pix..pix + w * h)?;
+                let pal = data.get(pix + w * h..pix + w * h + 768)?;
                 let masked = flags & 0x40 != 0; // index 255 is transparent
                 let rgba = pixels
                     .iter()

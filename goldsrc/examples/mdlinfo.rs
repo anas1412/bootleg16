@@ -1,18 +1,11 @@
-//! Summarise a model's posed mesh. Usage: mdlinfo <model.mdl> [sequence]
+//! Print a model's bones and animations. Usage: mdlinfo <model.mdl>
+use goldsrc::mdl::Model;
+
 fn main() {
-    let a: Vec<String> = std::env::args().collect();
-    let m = goldsrc::mdl::Model::load(&a[1]).unwrap();
-    let seq = a.get(2).and_then(|s| m.sequence(s)).unwrap_or(0);
-    let parts = m.posed_mesh(&m.pose(seq, 0, 0.5));
-    let tris: usize = parts.iter().map(|p| p.indices.len() / 3).sum();
-    let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
-    for p in &parts {
-        for v in &p.positions {
-            for i in 0..3 {
-                lo[i] = lo[i].min(v[i]);
-                hi[i] = hi[i].max(v[i]);
-            }
-        }
+    let path = std::env::args().nth(1).expect("usage: mdlinfo <model.mdl>");
+    let m = Model::load(&path).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+    println!("{} bones, {} animations", m.bones.len(), m.sequences.len());
+    for (i, s) in m.sequences.iter().enumerate() {
+        println!("  {i:2} {:20} {:5.1} fps, {:3} frames, {} blends", s.name, s.fps, s.frames, s.blends);
     }
-    println!("{} textures, {} parts, {} triangles, bounds {:?} .. {:?}", m.textures().len(), parts.len(), tris, lo, hi);
 }

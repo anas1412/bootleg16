@@ -247,6 +247,12 @@ fn walk(
     let held = slot;
     let mut slot = if slot == w.slot_held { 0 } else { slot };
     w.slot_held = held;
+    // Screenshot runs: `BOOTLEG16_SLOT=3` picks that weapon slot (3 = knife).
+    if auto {
+        if let Some(n) = std::env::var("BOOTLEG16_SLOT").ok().and_then(|v| v.parse().ok()) {
+            slot = n;
+        }
+    }
     if slot == 0 && w.wheel.abs() >= 1.0 {
         slot = if w.wheel > 0.0 { sim::pmove::SLOT_PREV } else { sim::pmove::SLOT_NEXT };
         w.wheel = 0.0;

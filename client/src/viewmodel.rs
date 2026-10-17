@@ -56,6 +56,9 @@ pub struct ViewModel {
     /// Animation frame reached last update (for firing animation sound events once).
     last_frame: f32,
     last_fov: u8,
+    /// Updates left before a just-spawned model is shown: its bones exist from the next frame,
+    /// and until a pose lands it would show in its rest pose (huge arms round the camera).
+    reveal: u8,
 }
 
 #[derive(Component)]
@@ -135,9 +138,10 @@ fn update(
             // The parts hang off the view model camera, which only sees their layer.
             let skin = m.spawn_skinned(&mut commands, *camera, Some(to_camera()), &mut meshes, &mut bindposes, &mut materials);
             for e in &skin.parts {
-                commands.entity(*e).insert(RenderLayers::layer(LAYER));
+                commands.entity(*e).insert((RenderLayers::layer(LAYER), Visibility::Hidden));
             }
             vm.skin = Some(skin);
+            vm.reveal = 3;
             // The old weapon's animation number means nothing to this model (fewer animations).
             vm.seq = 0;
             vm.started = now;
@@ -257,9 +261,19 @@ fn update(
 
     // Pose the bones (the GPU moves the vertices).
     let pose = m.model.pose_at(vm.seq, frame, 0.0);
+    let mut reveal = vm.reveal;
     if let Some(skin) = &vm.skin {
         set_pose(&skin.joints, &pose, &mut bones);
+        if reveal > 0 {
+            reveal -= 1;
+            if reveal == 0 {
+                for e in &skin.parts {
+                    commands.entity(*e).insert(Visibility::Inherited);
+                }
+            }
+        }
     }
+    vm.reveal = reveal;
     // Muzzle flash at the muzzle, facing us, a random turn each shot.
     let flash = *vm.flash.get_or_insert_with(|| {
         let e = crate::muzzle::spawn(&mut commands, &flash_look);

@@ -160,6 +160,9 @@ impl Probe {
     }
 }
 
+/// The least ambient light (GoldSrc 0..128) on the weapon you hold.
+const VIEW_MIN_AMBIENT: f32 = 72.0;
+
 /// Every lit model part gets the light where its parent stands (a few traces per model).
 fn light_models(
     probe: Res<Probe>,
@@ -172,14 +175,19 @@ fn light_models(
     for (mat, parent) in &parts {
         let p = parent.parent();
         let light = *cache.entry(p).or_insert_with(|| {
-            let origin = match parents.get(p) {
-                Ok((_, true)) | Err(_) => w.client.me().origin,
-                Ok((tf, false)) => {
-                    let v = tf.translation();
-                    [v.x, -v.z, v.y] // back from Y-up to GoldSrc axes
-                }
+            let mine = matches!(parents.get(p), Ok((_, true)) | Err(_));
+            let origin = if mine {
+                w.client.me().origin
+            } else {
+                let v = parents.get(p).map(|(tf, _)| tf.translation()).unwrap_or_default();
+                [v.x, -v.z, v.y] // back from Y-up to GoldSrc axes
             };
-            probe.light(&w.client.world, origin)
+            let mut light = probe.light(&w.client.world, origin);
+            // The weapon in your hands never goes black in a dark corner (its textures are dark already).
+            if mine {
+                light.levels.x = light.levels.x.max(VIEW_MIN_AMBIENT);
+            }
+            light
         });
         if let Some(mut m) = materials.get_mut(&mat.0) {
             m.extension.light = light;
