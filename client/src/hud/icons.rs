@@ -61,7 +61,7 @@ impl Icons {
 }
 
 /// Weapons with buy menu art (`sprites/weapon_<name>.txt`).
-const GUN_ART: [&str; 17] = ["glock18", "usp", "deagle", "mac10", "tmp", "mp5navy", "ump45", "p90", "galil", "famas", "ak47", "m4a1", "scout", "awp", "flashbang", "hegrenade", "smokegrenade"];
+const GUN_ART: [&str; 18] = ["glock18", "usp", "p228", "deagle", "mac10", "tmp", "mp5navy", "ump45", "p90", "galil", "famas", "ak47", "m4a1", "scout", "awp", "flashbang", "hegrenade", "smokegrenade"];
 
 /// Make the gun pictures usable as buy menu art. Valve's sheets have a striped panel behind
 /// every gun: keep only the bright lines of the gun. Redrawn sheets (the add-on's) are the gun
@@ -111,6 +111,7 @@ pub fn gun_art(id: Id) -> Option<&'static str> {
     Some(match id {
         Id::Glock => "gun_glock18",
         Id::Usp => "gun_usp",
+        Id::P228 => "gun_p228",
         Id::Deagle => "gun_deagle",
         Id::Mac10 => "gun_mac10",
         Id::Tmp => "gun_tmp",

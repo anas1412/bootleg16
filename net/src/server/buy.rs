@@ -17,7 +17,7 @@ pub fn price(item: BuyItem) -> Option<i32> {
 pub fn allowed(team: Team, item: BuyItem) -> bool {
     use Id::*;
     match item {
-        BuyItem::Weapon(Glock | Usp | Deagle | Mp5 | Ump45 | P90 | Scout | Awp | HeGrenade | Flashbang | Smoke) => true,
+        BuyItem::Weapon(Glock | Usp | P228 | Deagle | Mp5 | Ump45 | P90 | Scout | Awp | HeGrenade | Flashbang | Smoke) => true,
         BuyItem::Weapon(Mac10 | Galil | Ak47) => team == Team::T,
         BuyItem::Weapon(Tmp | Famas | M4a1) | BuyItem::DefuseKit => team == Team::Ct,
         BuyItem::Weapon(_) => false,
@@ -195,5 +195,16 @@ impl Server {
             };
             c.purchases.push(Purchase { cost, undo });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn both_sides_can_buy_the_p228_for_600() {
+        assert!(allowed(Team::T, BuyItem::Weapon(Id::P228)) && allowed(Team::Ct, BuyItem::Weapon(Id::P228)));
+        assert_eq!(price(BuyItem::Weapon(Id::P228)), Some(600));
     }
 }

@@ -50,7 +50,7 @@ fn layout(ct: bool) -> Vec<Entry> {
         equipment.push(("Defuse Kit", DefuseKit));
     }
     vec![
-        Entry("Pistols", vec![("Glock-18", Weapon(Glock)), ("USP", Weapon(Usp)), ("Desert Eagle", Weapon(Deagle))]),
+        Entry("Pistols", vec![("Glock-18", Weapon(Glock)), ("USP", Weapon(Usp)), ("P228", Weapon(P228)), ("Desert Eagle", Weapon(Deagle))]),
         Entry("SMGs", vec![side(("MAC-10", Mac10), ("TMP", Tmp)), ("MP5", Weapon(Mp5)), ("UMP45", Weapon(Ump45)), ("P90", Weapon(P90))]),
         Entry(
             "Rifles",
@@ -179,7 +179,8 @@ fn buy_menu(
         menu.0 = None;
     }
     if auto && menu.0.is_none() {
-        menu.0 = Some(Some(2)); // screenshot check: show the rifles page
+        // Screenshot check: `BOOTLEG16_MENU=<page>` (0 pistols .. 3 equipment; default rifles).
+        menu.0 = Some(Some(std::env::var("BOOTLEG16_MENU").ok().and_then(|v| v.parse().ok()).unwrap_or(2)));
     }
     // Free the mouse while buying; take it back when done.
     if menu.0.is_some() && !was_open {
