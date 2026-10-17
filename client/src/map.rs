@@ -125,9 +125,10 @@ pub fn load(bsp: &Bsp, search: &[&Path]) -> MapGeometry {
         .textures
         .iter()
         .map(|t| {
-            t.pixels
-                .clone()
-                .or_else(|| wads.iter().find_map(|w| w.texture(&t.name)))
+            // Our texture files first: a map's own copy (many carry one) is only the fallback.
+            wads.iter()
+                .find_map(|w| w.texture(&t.name))
+                .or_else(|| t.pixels.clone())
                 .unwrap_or_else(|| checkerboard(&t.name))
         })
         .collect();
