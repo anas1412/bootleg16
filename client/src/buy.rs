@@ -5,7 +5,7 @@
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
 use crate::hud::{gun_art, Icons};
-use crate::ui::{clickable_keep_border, kit_text, nav, primary_button, primary_off, vh, Anim, Kit, NavItem, UiAction, UiActions, AMBER, BAD, BG1, CT_COLOR, LINE, OK, TX1, TX2, TX3, T_COLOR};
+use crate::ui::{chip, clickable_keep_border, kit_text, nav, primary_button, primary_off, vh, Anim, Kit, NavItem, UiAction, UiActions, AMBER, BAD, BG1, CT_COLOR, LINE, OK, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use net::protocol::{BuyItem, Team};
@@ -13,6 +13,8 @@ use net::server::buy::price;
 
 /// Teammates with less than this show red in the buy menu: they can't buy a rifle (an AK-47).
 const RIFLE: i32 = 2700;
+/// Two clicks on a card within this many seconds buy it.
+const DOUBLE_CLICK: f32 = 0.4;
 
 pub struct BuyPlugin;
 
@@ -86,6 +88,7 @@ fn buy_menu(
     roots: Query<Entity, With<BuyRoot>>,
     mut hints: MessageWriter<crate::hud::Hint>,
     (binds, mouse): (Res<crate::binds::Binds>, Res<ButtonInput<MouseButton>>),
+    (time, mut last_click): (Res<Time>, Local<Option<(usize, f32)>>),
 ) {
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
     if auto && std::env::var_os("BOOTLEG16_MENU").is_none() {
@@ -127,9 +130,14 @@ fn buy_menu(
             },
         });
     }
+    let mut buy_now = false;
     actions.0.retain(|a| match a {
         UiAction::CloseBuy => {
             menu.0 = None;
+            false
+        }
+        UiAction::UndoBuys => {
+            w.client.undo_buys();
             false
         }
         UiAction::BuyCategory(i) => {
@@ -141,6 +149,14 @@ fn buy_menu(
         }
         UiAction::SelectBuy(i) => {
             menu.1 = *i;
+            // a second click on the same card soon after buys it
+            let now = time.elapsed_secs();
+            if last_click.is_some_and(|(j, at)| j == *i && now - at < DOUBLE_CLICK) {
+                *last_click = None;
+                buy_now = true;
+            } else {
+                *last_click = Some((*i, now));
+            }
             false
         }
         UiAction::Buy(item) => {
@@ -151,6 +167,14 @@ fn buy_menu(
         _ => true,
     });
     // Buy time over, left the buy zone, died: the menu goes away.
+    if buy_now {
+        if let Some(Some(cat)) = menu.0 {
+            if let Some((_, item)) = layout.get(cat).and_then(|Entry(_, items)| items.get(menu.1)) {
+                w.client.buy(*item);
+                menu.0 = None;
+            }
+        }
+    }
     if !can_buy && !auto {
         menu.0 = None;
     }
@@ -261,6 +285,12 @@ fn buy_menu(
                 let nums: Vec<String> = (1..=layout.len()).map(|i| format!("{i:02}")).collect();
                 nav(col, &kit, "buy.cat", layout.iter().enumerate().map(|(i, e)| NavItem { num: &nums[i], label: e.0, jp: "", action: UiAction::BuyCategory(i), selected: i == cat }).collect(), true);
                 col.spawn((kit_text("1-9 · BUY    ENTER · BUY SELECTED    0 · CLOSE", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), padding: UiRect::left(vh(16.0)), ..default() }));
+                // sell back this round's buys (the server refunds only what's unused)
+                if !free {
+                    col.spawn(Node { margin: UiRect { top: vh(24.0), left: vh(16.0), ..default() }, ..default() }).with_children(|r| {
+                        chip(r, &kit, "Undo buys", UiAction::UndoBuys, false);
+                    });
+                }
             });
             // Cards, two columns.
             root.spawn(abs(Node { left: vh(496.0), width: vh(820.0), top: vh(top), flex_wrap: FlexWrap::Wrap, column_gap: vh(16.0), row_gap: vh(16.0), align_content: AlignContent::FlexStart, ..default() })).with_children(|grid| {

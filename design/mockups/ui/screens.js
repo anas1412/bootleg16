@@ -314,7 +314,9 @@ function buy() {
       <div><div class="label" style="color:var(--t-color)">Buy · Strays · 0:14 left</div><div class="ptitle"><div class="row"><span class="h2">Armory</span><span class="jp">武器庫</span></div></div></div>
       <div class="bteam"><div class="label">Team</div><div class="row">${[['kova', 4350], ['vera', 1200], ['rook', 800, 1]].map(([n, m, dead]) => `<div class="bt${m < 2700 ? ' low' : ''}${dead ? ' dead' : ''}"><span>${n}</span><b>$${m}</b></div>`).join('')}</div></div>
       <div style="margin-left:48px;text-align:right"><div class="label">Funds</div><div style="font:700 44px var(--f-num);margin-top:4px"><span style="color:var(--ok)">$</span>${FUNDS}</div></div></div>
-    <div class="abs tune" style="left:var(--margin);top:240px;width:360px;--i:1">${ui.nav(BUY.map((c, i) => [String(i + 1).padStart(2, '0'), c[0], '', i === cat]), 'compact buycats')}</div>
+    <div class="abs tune" style="left:var(--margin);top:240px;width:360px;--i:1">${ui.nav(BUY.map((c, i) => [String(i + 1).padStart(2, '0'), c[0], '', i === cat]), 'compact buycats')}
+      <div class="label" style="margin:24px 0 0 16px;color:var(--tx3)">1-9 · buy    Enter · buy selected    0 · close</div>
+      <button class="chip" style="margin:24px 0 0 16px">Undo buys</button></div>
     <div id="cards" class="abs" style="left:496px;top:240px;width:820px;display:grid;grid-template-columns:1fr 1fr;gap:16px">${buyCards(cat, sel)}</div>
     <div class="abs panel tune" style="left:1356px;right:var(--margin);top:240px;bottom:96px;--i:3"><div id="details" class="abs" style="inset:0;padding:32px">${buyDetails(cat, sel)}</div></div>`;
 }

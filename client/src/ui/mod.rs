@@ -78,6 +78,8 @@ pub enum UiAction {
     /// Select a card in the open buy category (the details panel shows it).
     SelectBuy(usize),
     CloseBuy,
+    /// Sell back everything bought this round (while you may still buy).
+    UndoBuys,
     Voice(crate::voice::VoiceAction),
     Lobby(crate::play::LobbyAction),
 }
