@@ -223,6 +223,7 @@ fn walk(
     mut w: ResMut<Walker>,
     shot_assets: Option<Res<ShotAssets>>,
     mut hits: MessageWriter<crate::impacts::Hit>,
+    mut tracers: ResMut<crate::tracers::Tracers>,
 ) {
     // Mouse buttons only count while the mouse is captured (the first click just captures it).
     let captured = cursor.grab_mode != CursorGrabMode::None;
@@ -297,16 +298,18 @@ fn walk(
         w.cues.push(sound::Cue::Footstep { feet, who: None, step });
     }
     // Our own shots show at once (predicted, traced like the server does: same spread seed,
-    // penetration and players in the way); other players' come from server events. Your own
-    // shots have no tracer (from your own eyes it never looks right: the flash, the hole and
-    // the sound show the shot); other players' do (`tracers`).
+    // penetration and players in the way); other players' come from server events. Tracers
+    // (`tracers`) start at the barrel.
     use sim::weapons::bullets::{fire_bullet, fire_pellets, view_vectors, Target};
     let me_id = w.client.id().unwrap_or(u8::MAX);
     let targets: Vec<Target> = w.client.others().iter().filter(|o| o.alive).map(|o| Target { id: o.id, origin: o.origin, yaw: o.yaw, pitch: o.pitch, crouched: o.crouched, weapon: o.weapon, anim: None }).collect();
     for shot in fired.shots {
         let eye = w.client.me().eye();
-        let (f, _, _) = view_vectors(shot.angles[0], shot.angles[1]);
+        let (f, right, up) = view_vectors(shot.angles[0], shot.angles[1]);
         let mut end = w.client.world.trace_line(eye, std::array::from_fn(|i| eye[i] + f[i] * 8192.0)).end;
+        // Where the crosshair points (the view includes the recoil kick): the tracer goes there,
+        // not along the bullet's random spread, so a spray never throws streaks off to the side.
+        let crosshair = end;
         if let Some(a) = &shot_assets {
             let r = if shot.pellets.is_some() { fire_pellets(&w.client.world, &a.0.hitboxes, eye, &shot, me_id, &targets) } else { fire_bullet(&w.client.world, &a.0.materials, &a.0.hitboxes, eye, &shot, me_id, &targets) };
             for i in r.impacts.iter().filter(|i| !i.sky) {
@@ -316,6 +319,13 @@ fn walk(
             if let Some(i) = r.impacts.first() {
                 end = i.point;
             }
+        }
+        // The tracer: from the barrel to where the shot ended. The view model camera has the
+        // world camera's field of view, so the model's muzzle (camera space: x right, y up,
+        // -z forward) maps straight onto the world.
+        if let Some(m) = vm.muzzle {
+            let muzzle = std::array::from_fn(|i| eye[i] + right[i] * m.x + up[i] * m.y - f[i] * m.z);
+            tracers.shot(muzzle, crosshair);
         }
     }
 }

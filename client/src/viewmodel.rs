@@ -61,6 +61,9 @@ pub struct ViewModel {
     reveal: u8,
     /// Where this weapon sits (see `placement_transform`).
     placement: Transform,
+    /// The muzzle in camera space (x right, y up, -z forward), when the model has one: your
+    /// shot's tracer starts there.
+    pub muzzle: Option<Vec3>,
 }
 
 #[derive(Component)]
@@ -126,6 +129,12 @@ fn placement_transform(id: Id) -> Transform {
     // Camera space: x right, y up, looking down -z.
     t.translation = Vec3::new(offset.x, offset.y, -offset.z);
     t
+}
+
+/// Where the muzzle is (GoldSrc model space): the attachment point furthest forward (models
+/// from different makers order their attachments differently; the other is the ejection port).
+fn muzzle_at(model: &goldsrc::mdl::Model, pose: &[goldsrc::mdl::BoneTransform]) -> Option<[f32; 3]> {
+    (0..model.attachments.len()).filter_map(|i| model.attachment(i, pose)).max_by(|a, b| a[0].total_cmp(&b[0]))
 }
 
 fn find(model: &goldsrc::mdl::Model, names: &[&str]) -> Option<usize> {
@@ -308,6 +317,7 @@ fn update(
         }
     }
     vm.reveal = reveal;
+    vm.muzzle = muzzle_at(&m.model, &pose).map(|at| vm.placement.transform_point(Vec3::from(crate::map::to_y_up(at))));
     // Muzzle flash at the muzzle, facing us, a random turn each shot.
     let flash = *vm.flash.get_or_insert_with(|| {
         let e = crate::muzzle::spawn(&mut commands, &flash_look);
@@ -316,7 +326,7 @@ fn update(
         e
     });
     let lit = now < vm.flash_until && alive;
-    if let (true, Some(at)) = (lit, m.model.attachment(0, &pose)) {
+    if let (true, Some(at)) = (lit, muzzle_at(&m.model, &pose)) {
         if let Ok(mut t) = bones.get_mut(flash) {
             t.translation = vm.placement.transform_point(Vec3::from(crate::map::to_y_up(at)));
             t.rotation = Quat::from_rotation_z((now * 9973.0).fract() * std::f32::consts::TAU);

@@ -15,6 +15,9 @@ fn main() {
             }
         }
         let name = std::path::Path::new(&path).file_stem().unwrap().to_string_lossy().into_owned();
+        let pose = m.pose(idle, 0, 0.0);
+        let atts: Vec<String> = (0..m.attachments.len()).filter_map(|i| m.attachment(i, &pose)).map(|a| format!("({:.1},{:.1},{:.1})", a[0], a[1], a[2])).collect();
+        println!("{name:14} attachments {}", atts.join(" "));
         println!("{name:14} x {:6.1}..{:6.1}  y {:6.1}..{:6.1}  z {:6.1}..{:6.1}", lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]);
     }
 }
