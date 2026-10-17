@@ -356,7 +356,10 @@ fn escape(keys: Res<ButtonInput<KeyCode>>, binds: Res<crate::binds::Binds>, st: 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(AppState::Menu), spawn)
         .add_systems(OnExit(AppState::Menu), |mut commands: Commands| commands.remove_resource::<Stage>())
-        .add_systems(Update, (escape, route, animate, resize).run_if(in_state(AppState::Menu)))
+        .add_systems(Update, (escape, animate, resize).run_if(in_state(AppState::Menu)))
+        // A rebuilt page is routed to its side's camera in the same frame it appears: routed a
+        // frame later it would show flat for one frame (a snap to straight, then back into 3D).
+        .add_systems(Update, route.after(crate::menu_pages::rebuild_menu).run_if(in_state(AppState::Menu)))
         .add_systems(First, carry.in_set(PickingSystems::Input).run_if(in_state(AppState::Menu)));
 }
 
