@@ -4,12 +4,13 @@ use super::*;
 impl Server {
     /// Dropped guns fall and slide to a stop; walking over one picks it up if that slot is free.
     pub(super) fn ground_step(&mut self) {
+        let dt = self.rate.tick();
         for g in &mut self.ground {
             if g.velocity == [0.0; 3] {
                 continue;
             }
-            g.velocity[2] -= self.vars.gravity * TICK;
-            let end = std::array::from_fn(|i| g.origin[i] + g.velocity[i] * TICK);
+            g.velocity[2] -= self.vars.gravity * dt;
+            let end = std::array::from_fn(|i| g.origin[i] + g.velocity[i] * dt);
             let t = self.world.trace_line(g.origin, end);
             g.origin = t.end;
             if t.fraction < 1.0 {

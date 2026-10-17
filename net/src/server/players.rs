@@ -12,7 +12,7 @@ impl Server {
         let mut bomb_drops = Vec::new();
         let limits: HashMap<u8, sim::player::Limits> = self.clients.values().map(|c| (c.id, self.limits(c.id))).collect();
         for c in self.clients.values_mut() {
-            c.budget = (c.budget + 1.0).min(MAX_INPUT_BUDGET);
+            c.budget = (c.budget + 1.0).min(self.rate.secs(MAX_INPUT_BUDGET_SECS) as f32);
             c.used = false;
             while c.budget >= 1.0 {
                 let Some((seq, TimedInput { input, view_tick })) = c.queue.pop_front() else { break };
@@ -25,8 +25,8 @@ impl Server {
                 if !c.vitals.alive() {
                     continue; // the dead don't move (their inputs are still acknowledged)
                 }
-                let cmd_time = seq as f64 * TICK as f64;
-                let (ev, fired) = player::step(&mut c.state, &input, TICK, cmd_time, player::seed(c.id, seq), limits[&c.id], &self.world, &self.vars);
+                let cmd_time = seq as f64 * self.rate.tick() as f64;
+                let (ev, fired) = player::step(&mut c.state, &input, self.rate.tick(), cmd_time, player::seed(c.id, seq), limits[&c.id], &self.world, &self.vars);
                 if fired.planted {
                     planted.push((c.id, c.state.movement.origin));
                 }
@@ -37,7 +37,7 @@ impl Server {
                     self.events.push(GameEvent::Footstep { player: c.id, at: c.state.movement.origin, step });
                 }
                 if ev.fall_damage > 0.0 && c.vitals.hurt(ev.fall_damage, 0.0) {
-                    c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
+                    c.respawn_at = Some(tick + if c.bot { self.rate.secs(DUMMY_RESPAWN_SECS) } else { self.rate.secs(self.rules.respawn_secs) });
                     self.events.push(GameEvent::Kill { killer: c.id, victim: c.id, weapon: None, headshot: false });
                 }
                 if let Some(gun) = fired.dropped {
@@ -49,18 +49,18 @@ impl Server {
                         origin: eye,
                         velocity: std::array::from_fn(|i| f[i] * 400.0 + v[i]),
                         dropper: c.id,
-                        dropper_wait_until: tick + REPICK_TICKS,
+                        dropper_wait_until: tick + self.rate.secs(REPICK_SECS),
                     });
                 }
                 if !fired.shots.is_empty() || fired.swing.is_some() {
-                    c.anim.shot(tick as f32 * TICK);
+                    c.anim.shot(tick as f32 * self.rate.tick());
                 }
                 if !fired.shots.is_empty() || fired.swing.is_some() || fired.throw.is_some() {
                     pending.push(Pending { shooter: c.id, eye: c.state.movement.eye(), yaw: input.yaw, velocity: c.state.movement.velocity, fired, view_tick });
                 }
             }
             c.backlog = if c.queue.len() > BACKLOG_INPUTS { c.backlog + 1 } else { 0 };
-            if c.backlog > BACKLOG_TICKS {
+            if c.backlog > self.rate.secs(BACKLOG_SECS) {
                 // Stale movement: skip it (the client's prediction corrects once).
                 while c.queue.len() > 1 {
                     c.queue.pop_front();
@@ -86,13 +86,13 @@ impl Server {
                 c.state.loadout.refill_ammo(false);
             }
         }
-        self.world.update(TICK, &actors);
+        self.world.update(self.rate.tick(), &actors);
         // Animate everyone as clients draw them (their hitboxes follow it).
-        let now = tick as f32 * TICK;
+        let now = tick as f32 * self.rate.tick();
         let model = self.assets.hitboxes.model().clone();
         for c in self.clients.values_mut().filter(|c| c.vitals.alive()) {
             let d = c.drive();
-            c.anim.step(&model, &d, now, TICK);
+            c.anim.step(&model, &d, now, self.rate.tick());
         }
         for name in self.world.doors.take_fired() {
             self.events.push(GameEvent::Fired { name });

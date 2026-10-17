@@ -73,14 +73,14 @@ fn read_item<T: for<'a> Deserialize<'a>>(input: &mut impl Read) -> Option<T> {
 
 impl Recorder {
     /// Start a recording in `dir`, named after the time, server and map.
-    pub fn start(dir: &Path, map: &str, map_hash: u64, server: &str) -> std::io::Result<Recorder> {
+    pub fn start(dir: &Path, map: &str, map_hash: u64, server: &str, rate: crate::tick::TickRate) -> std::io::Result<Recorder> {
         std::fs::create_dir_all(dir)?;
         let started = crate::crypto::now();
         let clean = |s: &str| s.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect::<String>();
         let path = dir.join(format!("{started}-{}-{}.bdem", clean(server), clean(map)));
         let file = std::fs::File::create(&path)?;
         let mut out = GzEncoder::new(BufWriter::new(file), Compression::fast());
-        let header = Header { version: DEMO_VERSION, protocol: PROTOCOL_VERSION, map: map.into(), map_hash, tick_rate: crate::protocol::TICK_RATE, started, server: server.into() };
+        let header = Header { version: DEMO_VERSION, protocol: PROTOCOL_VERSION, map: map.into(), map_hash, tick_rate: rate.hz(), started, server: server.into() };
         write_item(&mut out, &header)?;
         Ok(Recorder { out, path })
     }

@@ -7,7 +7,7 @@ use std::net::IpAddr;
 
 /// Bigger datagrams are never ours (a snapshot-sized input packet is a few hundred bytes).
 pub(super) const MAX_PACKET: usize = 1400;
-/// Packets per second: per player (inputs at 128/s, voice, a little spare; an IP with
+/// Packets per second: per player (inputs at the tick rate, voice, a little spare; an IP with
 /// several players gets that much per player) / per IP for everyone else.
 const PLAYER_RATE: f32 = 600.0;
 const STRANGER_RATE: f32 = 20.0;
@@ -23,12 +23,13 @@ pub(super) struct Guard {
     /// flood of made-up addresses (filling the strangers' table) can't touch players.
     players: crate::secure::Buckets<IpAddr>,
     strangers: crate::secure::Buckets<IpAddr>,
+    hz: f64,
 }
 
 impl Guard {
-    pub(super) fn new() -> Guard {
+    pub(super) fn new(rate: crate::tick::TickRate) -> Guard {
         // From the OS random source: nobody can work out the cookies (and fake addresses).
-        Guard { cookies: crate::secure::Cookies::new(), players: crate::secure::Buckets::new(usize::MAX), strangers: crate::secure::Buckets::new(MAX_TRACKED) }
+        Guard { cookies: crate::secure::Cookies::new(), players: crate::secure::Buckets::new(usize::MAX), strangers: crate::secure::Buckets::new(MAX_TRACKED), hz: rate.hz() as f64 }
     }
 
     /// May this packet be looked at? `players`: how many players are in the game from this
@@ -37,7 +38,7 @@ impl Guard {
         if len > MAX_PACKET {
             return false;
         }
-        let now = tick as f64 / TICK_RATE as f64;
+        let now = tick as f64 / self.hz;
         if players > 0 {
             self.players.allow(from.ip(), PLAYER_RATE * players as f32, now)
         } else {
@@ -47,18 +48,18 @@ impl Guard {
 
     /// Forget IPs that have been quiet for a few seconds.
     pub(super) fn tidy(&mut self, tick: u32) {
-        let now = tick as f64 / TICK_RATE as f64;
+        let now = tick as f64 / self.hz;
         self.players.tidy(now, 5.0);
         self.strangers.tidy(now, 5.0);
     }
 
     /// The join cookie for an address now (stateless: nothing is stored).
     pub(super) fn cookie(&self, addr: SocketAddr, tick: u32) -> u64 {
-        self.cookies.make(addr, (tick / TICK_RATE) as u64)
+        self.cookies.make(addr, (tick as f64 / self.hz) as u64)
     }
 
     pub(super) fn cookie_ok(&self, addr: SocketAddr, tick: u32, cookie: u64) -> bool {
-        self.cookies.check(addr, (tick / TICK_RATE) as u64, cookie)
+        self.cookies.check(addr, (tick as f64 / self.hz) as u64, cookie)
     }
 }
 
@@ -68,11 +69,12 @@ mod tests {
 
     #[test]
     fn players_behind_one_ip_each_get_a_budget_and_joins_still_get_through() {
-        let mut g = Guard::new();
+        let rate = crate::tick::TickRate::default();
+        let mut g = Guard::new(rate);
         let ip = |port| SocketAddr::from(([10, 0, 0, 1], port));
         // Five players behind one router, 128 inputs a second each, for a second.
         let mut dropped = 0;
-        for tick in 0..TICK_RATE {
+        for tick in 0..rate.hz() {
             for p in 0..5 {
                 if !g.allow(ip(1000 + p), 100, 5, tick) {
                     dropped += 1;
@@ -81,6 +83,6 @@ mod tests {
         }
         assert_eq!(dropped, 0);
         // A friend joining from the same router isn't starved by them.
-        assert!(g.allow(ip(2000), 100, 0, TICK_RATE));
+        assert!(g.allow(ip(2000), 100, 0, rate.hz()));
     }
 }

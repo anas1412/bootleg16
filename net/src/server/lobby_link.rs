@@ -26,7 +26,7 @@ impl Server {
             }
             self.lookup = None;
         }
-        if self.lookup.is_none() && self.tick % (60 * TICK_RATE) < HEARTBEAT_EVERY {
+        if self.lookup.is_none() && self.tick % (60 * self.rate.hz()) < self.rate.secs(HEARTBEAT_SECS) {
             self.look_up_lobby();
         }
         let cfg = &self.round.cfg;

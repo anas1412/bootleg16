@@ -2,7 +2,7 @@
 //! (on this machine), and the game connects to it as a spectator and sees the match as it was:
 //! everyone, everywhere, every event. `server --play <file>` runs it.
 use crate::demo::{Frame, Reader};
-use crate::protocol::{decode, encode, ClientMsg, GameEvent, ServerMsg, SNAPSHOT_EVERY, TICK};
+use crate::protocol::{decode, encode, ClientMsg, GameEvent, ServerMsg};
 use crate::socket::Socket;
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
@@ -60,6 +60,11 @@ impl Replay {
         }
     }
 
+    /// The rate the recording was made at (it replays at that speed).
+    fn rate(&self) -> crate::tick::TickRate {
+        crate::tick::TickRate::new(self.reader.header.tick_rate).unwrap_or_default()
+    }
+
     /// One server tick: welcome viewers; every snapshot interval, the next frame(s) to all.
     pub fn step(&mut self, tick: u32) {
         self.socket.tick();
@@ -77,7 +82,7 @@ impl Replay {
             }
         }
         self.viewers.retain(|_, t| t.elapsed() < Duration::from_secs(10));
-        if tick % SNAPSHOT_EVERY != 0 || self.done {
+        if tick % self.rate().snapshot_every() != 0 || self.done {
             return;
         }
         let mut frame = None;
@@ -124,7 +129,7 @@ impl Replay {
 
     /// Play to the end at the tick rate.
     pub fn run(&mut self) {
-        let tick_len = Duration::from_secs_f64(TICK as f64);
+        let tick_len = Duration::from_secs_f64(self.rate().tick() as f64);
         let mut next = Instant::now();
         let mut tick = 0u32;
         while !self.done {

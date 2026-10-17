@@ -9,16 +9,12 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 31;
+pub const PROTOCOL_VERSION: u32 = 32;
 pub const DEFAULT_PORT: u16 = 27015;
-pub const TICK_RATE: u32 = 128;
-pub const TICK: f32 = 1.0 / TICK_RATE as f32;
-/// Snapshots go out every this many ticks (64 per second at 128 tick).
-pub const SNAPSHOT_EVERY: u32 = 2;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
 /// Dropped after this long without a packet.
-pub const TIMEOUT_TICKS: u32 = 5 * TICK_RATE;
+pub const TIMEOUT_SECS: f32 = 5.0;
 pub const MAX_PLAYERS: usize = 32;
 /// Minimum padding of an info request (see `ClientMsg::Info`).
 pub const INFO_PAD: usize = 96;
@@ -137,7 +133,7 @@ pub struct TimedInput {
 }
 
 /// Lag compensation never rewinds further than this (CS default `sv_maxunlag` 0.5 s).
-pub const MAX_UNLAG_TICKS: u32 = TICK_RATE / 2;
+pub const MAX_UNLAG_SECS: f32 = 0.5;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PlayerNet {

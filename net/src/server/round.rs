@@ -49,7 +49,7 @@ impl Server {
             }
             _ if !both => {
                 // A side emptied: wait for players again.
-                self.round = crate::rounds::Match::new(self.round.cfg.clone(), TICK_RATE);
+                self.round = crate::rounds::Match::new(self.round.cfg.clone(), self.rate.hz());
                 self.bomb = Bomb::None;
                 for c in self.clients.values_mut().filter(|c| c.team != Team::Spectator && !c.vitals.alive()) {
                     c.respawn_at = Some(tick);
@@ -210,7 +210,7 @@ impl Server {
     pub(super) fn round_net(&self) -> RoundNet {
         let left = match self.round.phase {
             Phase::Warmup => 0.0,
-            _ => self.round.phase_end.saturating_sub(self.tick) as f32 * TICK,
+            _ => self.round.phase_end.saturating_sub(self.tick) as f32 * self.rate.tick(),
         };
         RoundNet {
             phase: if self.rounds_on() { self.round.phase } else { Phase::Warmup },

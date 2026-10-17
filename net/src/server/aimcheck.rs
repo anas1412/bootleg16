@@ -25,7 +25,7 @@ const FLICK_DEGREES: f32 = 25.0;
 const FLICK_TICKS: usize = 8;
 /// Out of plain sight this long before coming back counts as a new engagement (peeking back
 /// and forth is one fight, not many instant "reactions").
-const SAME_FIGHT_TICKS: u32 = TICK_RATE / 2;
+const SAME_FIGHT_SECS: f32 = 0.5;
 /// Share of hits that were flicks, over at least `MIN_HITS`, that is flagged.
 const FLICK_SHARE: f32 = 0.35;
 const MIN_HITS: u32 = 20;
@@ -82,7 +82,7 @@ pub struct AimSummary {
 impl Server {
     pub fn aim_summary(&self, id: u8) -> Option<AimSummary> {
         let a = &self.clients.values().find(|c| c.id == id)?.aim;
-        let fast = a.reactions.iter().filter(|r| **r * 1000 / TICK_RATE < FAST_MS).count();
+        let fast = a.reactions.iter().filter(|r| **r * 1000 / self.rate.hz() < FAST_MS).count();
         Some(AimSummary { hits: a.hits, headshots: a.headshots, flick_hits: a.flick_hits, fights: a.reactions.len(), fast })
     }
 
@@ -102,8 +102,9 @@ impl Server {
                 }
             }
         }
+        let same_fight = self.rate.secs(SAME_FIGHT_SECS);
         let s = &mut self.sightings.since;
-        s.retain(|_, (_, _, last)| tick - *last < SAME_FIGHT_TICKS);
+        s.retain(|_, (_, _, last)| tick - *last < same_fight);
         for k in plain {
             s.entry(k).or_insert((tick, false, tick)).2 = tick;
         }
@@ -149,11 +150,12 @@ impl Server {
 
     /// Flag what adds up to inhuman (once a match each).
     fn judge(&mut self, shooter: u8) {
+        let hz = self.rate.hz();
         let Some(c) = self.clients.values_mut().find(|c| c.id == shooter) else { return };
         let aim = &mut c.aim;
         let mut flags: Vec<String> = Vec::new();
         if !aim.flagged_reaction && aim.reactions.len() >= MIN_ENGAGEMENTS {
-            let fast = aim.reactions.iter().filter(|r| **r * 1000 / TICK_RATE < FAST_MS).count();
+            let fast = aim.reactions.iter().filter(|r| **r * 1000 / hz < FAST_MS).count();
             let fast_share = fast as f32 / aim.reactions.len() as f32;
             let head_share = aim.headshots as f32 / aim.hits as f32;
             if fast_share >= FAST_SHARE {

@@ -112,6 +112,7 @@ pub(super) fn advance(
     steam: Option<Res<crate::steam::Steam>>,
     mut next: ResMut<NextState<AppState>>,
     time: Res<Time>,
+    mut fixed: ResMut<Time<Fixed>>,
 ) {
     loading.elapsed += time.delta_secs();
     match &mut *work {
@@ -143,6 +144,8 @@ pub(super) fn advance(
             *waited += time.delta_secs();
             match client.status {
                 net::client::Status::Connected { .. } => {
+                    // Predict at the server's step size, or it corrects us all the time.
+                    fixed.set_timestep_hz(client.rate().hz() as f64);
                     let map = client.map.clone().unwrap_or_default();
                     let hash = client.map_hash;
                     loading.map = Some(map.clone());

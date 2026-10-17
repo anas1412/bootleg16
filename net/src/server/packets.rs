@@ -38,12 +38,12 @@ impl Server {
             }
             self.joining = None;
         }
-        if tick % TICK_RATE == 0 {
+        if tick % self.rate.hz() == 0 {
             let clients: std::collections::HashSet<SocketAddr> = self.clients.keys().copied().collect();
             self.socket.keep_channels(|a| clients.contains(a));
             // Deathmatch seats: kept while their player is here, else for a minute.
             let here: std::collections::HashSet<u64> = self.clients.values().map(|c| c.ticket).collect();
-            self.seats.retain(|t, (_, at)| here.contains(t) || tick - *at < 60 * TICK_RATE);
+            self.seats.retain(|t, (_, at)| here.contains(t) || tick - *at < 60 * self.rate.hz());
         }
     }
 }

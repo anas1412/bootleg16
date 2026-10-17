@@ -52,7 +52,7 @@ impl Server {
             return;
         }
         let c = self.clients.get_mut(&from).unwrap();
-        let now = c.last_run as f64 * TICK as f64;
+        let now = c.last_run as f64 * self.rate.tick() as f64;
         let id = c.id;
         for p in std::mem::take(&mut c.purchases).into_iter().rev() {
             let l = &mut c.state.loadout;
@@ -127,7 +127,7 @@ impl Server {
         let free = self.rules.free_play() || self.round.phase == Phase::Warmup;
         let tick = self.tick;
         let c = self.clients.get_mut(&from).unwrap();
-        let now = c.last_run as f64 * TICK as f64;
+        let now = c.last_run as f64 * self.rate.tick() as f64;
         // What it costs; None = nothing to buy (already have it).
         let cost = match item {
             BuyItem::Kevlar if c.vitals.armor >= combat::MAX_ARMOR => None,
@@ -158,7 +158,7 @@ impl Server {
                     if let Some(dropped) = l.drop_active(now) {
                         let o = c.state.movement.origin;
                         old = Some(dropped);
-                        self.ground.push(GroundGun { gun: dropped, origin: o, velocity: [0.0, 0.0, -1.0], dropper: c.id, dropper_wait_until: tick + REPICK_TICKS });
+                        self.ground.push(GroundGun { gun: dropped, origin: o, velocity: [0.0, 0.0, -1.0], dropper: c.id, dropper_wait_until: tick + self.rate.secs(REPICK_SECS) });
                     }
                 }
                 c.state.loadout.give(id, now)

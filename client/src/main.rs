@@ -90,8 +90,9 @@ fn main() {
         // GoldSrc lighting is fully baked into lightmaps; no extra ambient.
         .insert_resource(GlobalAmbientLight { brightness: 0.0, ..default() })
         .insert_resource(ClearColor(Color::srgb(0.45, 0.6, 0.8)))
-        // The movement simulation runs at a fixed 128 ticks per second, like the server.
-        .insert_resource(Time::<Fixed>::from_hz(128.0))
+        // The simulation steps at the server's tick rate: this is only the default until its
+        // Welcome says (`menu::connect`).
+        .insert_resource(Time::<Fixed>::from_hz(net::tick::DEFAULT_TICK_RATE as f64))
         .insert_resource(models::ModelCache::new(game_dir()))
         .insert_resource(sound::Sounds::new(game_dir()))
         .init_state::<menu::AppState>()

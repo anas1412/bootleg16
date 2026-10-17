@@ -77,7 +77,7 @@ impl Server {
         self.clients.retain(|_, c| c.bot);
         let knife = if setup.knife_round { Knife::Pending } else { Knife::Done };
         self.reserved = Some(Reserved { setup, knife, since: self.tick, last_seen: self.tick, votes: HashMap::new(), saved: HashMap::new(), a_side: Team::T, left_at: HashMap::new(), vote: None, voted_in_round: [None; 2], empty_since: None, reports: Vec::new(), winner: None, kicked: Vec::new(), kick_called: HashMap::new() });
-        self.round = crate::rounds::Match::new(self.round.cfg.clone(), TICK_RATE);
+        self.round = crate::rounds::Match::new(self.round.cfg.clone(), self.rate.hz());
         self.start_recording();
     }
 
@@ -140,13 +140,13 @@ impl Server {
         // Nobody from the match here for a while (never came, or all left): free the server.
         if here > 0 {
             r.last_seen = tick;
-        } else if tick - r.last_seen > WAIT_SECONDS * TICK_RATE {
+        } else if tick - r.last_seen > WAIT_SECONDS * self.rate.hz() {
             self.finish_reserved();
             return false;
         }
         let r = self.reserved.as_ref().unwrap();
         let expected = r.setup.players.len();
-        let waited = tick - r.since > WAIT_SECONDS * TICK_RATE;
+        let waited = tick - r.since > WAIT_SECONDS * self.rate.hz();
         match r.knife {
             Knife::Pending if self.round.phase == Phase::Warmup => {
                 if here >= expected || (waited && here > 0) {
@@ -167,7 +167,7 @@ impl Server {
                     // Time up: whoever has more standing (a tie goes to the terrorists).
                     let winners = if t == 0 { Team::Ct } else if ct == 0 || t >= ct { Team::T } else { Team::Ct };
                     self.events.push(GameEvent::KnifeWon { winners });
-                    let until = tick + VOTE_SECONDS * TICK_RATE;
+                    let until = tick + VOTE_SECONDS * self.rate.hz();
                     self.round.phase = Phase::Over;
                     self.round.phase_end = until;
                     let r = self.reserved.as_mut().unwrap();
@@ -199,7 +199,7 @@ impl Server {
         let tick = self.tick;
         self.round.phase = Phase::Freeze;
         self.round.round = 0;
-        self.round.phase_end = tick + 3 * TICK_RATE;
+        self.round.phase_end = tick + 3 * self.rate.hz();
         self.round.buy_end = 0;
         self.reserved.as_mut().unwrap().knife = Knife::Fighting;
         self.new_round(false, Some(0));
@@ -251,7 +251,7 @@ impl Server {
             self.socket.send(a, encode(&ServerMsg::MatchEnded));
         }
         self.clients.retain(|_, c| c.bot);
-        self.round = crate::rounds::Match::new(self.round.cfg.clone(), TICK_RATE);
+        self.round = crate::rounds::Match::new(self.round.cfg.clone(), self.rate.hz());
     }
 
     /// The knife round / side vote, for the HUD.
@@ -259,7 +259,7 @@ impl Server {
         match self.reserved.as_ref().map(|r| r.knife) {
             Some(Knife::Pending) => Stage::Waiting,
             Some(Knife::Fighting) => Stage::Knife,
-            Some(Knife::Vote { winners, until }) => Stage::SideVote { winners, left: until.saturating_sub(self.tick) as f32 * TICK },
+            Some(Knife::Vote { winners, until }) => Stage::SideVote { winners, left: until.saturating_sub(self.tick) as f32 * self.rate.tick() },
             _ => Stage::Match,
         }
     }

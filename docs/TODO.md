@@ -188,3 +188,8 @@ land, and add new ones here instead of leaving them only in chat.
       pick e.g. Oxidestrike/Fuseline), legal check before selling
 
   - Own player/weapon models later (Blender + Blender MCP, glTF; 1 weapon end to end first); keep the CS 1.6 models until the game is finished (decided 2026-10-16)
+## Tick rate (64 or 128)
+- Done: per-server rate (`tick_rate` in server.cfg, `server --tick 64`), clients follow the Welcome, snapshots stay 64/s, demos and replays use the recording's own rate. Protocol v32.
+- Aim checks (`aimcheck.rs`): reaction times are whole ticks (15.6 ms steps at 64) and the flick window (`FLICK_TICKS`, 8 inputs) is twice as long in time at 64. Retune against real players.
+- Lobby: servers at different rates must not share a queue unless the lobby knows each server's rate.
+- Not done: sim and net test loops still count ticks as 128 (`net/tests/`, `sim` tests); only the multiplayer test runs at 64. README/NETWORKING.md need `--tick`.

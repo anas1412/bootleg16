@@ -83,6 +83,11 @@ fn flat(a: [f32; 3], b: [f32; 3]) -> f32 {
 }
 
 impl Bot {
+    /// Seconds as ticks at the server's rate (never 0: it is a divisor).
+    fn secs(&self, s: f32) -> u32 {
+        self.client.rate().secs(s).max(1)
+    }
+
     /// Remember gunfire from enemies (the server only sends what we could hear).
     pub(super) fn hear(&mut self, events: &[GameEvent]) {
         let team = self.client.team();
@@ -90,7 +95,7 @@ impl Bot {
             if let GameEvent::Shot { shooter, from, .. } = e {
                 let enemy = self.client.others().iter().any(|o| o.id == *shooter && o.team != team);
                 if enemy {
-                    self.brain.noise = Some((*from, self.brain.t + 5 * 128));
+                    self.brain.noise = Some((*from, self.brain.t + self.secs(5.0)));
                 }
             }
         }
@@ -155,7 +160,7 @@ impl Bot {
         // Where to be, and what to do there.
         let (yaw_hold, _) = look(eye, if team == Team::T { self.map.spawns.1 } else { self.map.spawns.0 });
         match self.mode {
-            Mode::Hold => return Input { yaw: yaw_hold + ((t / 256) as f32 * 40.0) % 90.0 - 45.0, ..input },
+            Mode::Hold => return Input { yaw: yaw_hold + ((t / self.secs(2.0)) as f32 * 40.0) % 90.0 - 45.0, ..input },
             Mode::Goto(p) | Mode::Rush(p) => {
                 let at = self.place(p);
                 return if flat(me.origin, at) < 48.0 { input } else { self.walk(input, at) };
@@ -169,7 +174,7 @@ impl Bot {
                 return self.walk(input, at);
             }
             let me = self.client.me().origin;
-            let arrived = self.brain.hunt.is_none_or(|h| flat(me, h) < 100.0) || self.brain.t % (128 * 20) == 0;
+            let arrived = self.brain.hunt.is_none_or(|h| flat(me, h) < 100.0) || self.brain.t % self.secs(20.0) == 0;
             if arrived {
                 let n = self.map.nav.points.len().max(1);
                 self.brain.hunt = Some(self.map.nav.points[(self.brain.rand() * n as f32) as usize % n]);
@@ -260,7 +265,7 @@ impl Bot {
         if flat(me, at) > 250.0 {
             return self.walk(input, at);
         }
-        let sweep = ((self.brain.t / 192) % 3) as f32 * 35.0 - 35.0;
+        let sweep = ((self.brain.t / self.secs(1.5)) % 3) as f32 * 35.0 - 35.0;
         Input { yaw: out + sweep, ..input }
     }
 
@@ -279,7 +284,7 @@ impl Bot {
         let eye = me.eye();
         let range = dist(eye, head);
         let aimbot = self.mode == Mode::Aimbot;
-        let tracked = (t - since) as f32 / 128.0;
+        let tracked = (t - since) as f32 / self.client.rate().hz() as f32;
         let err = if aimbot { 0.0 } else { self.profile.aim_error / (1.0 + tracked * 4.0) };
         let (yaw, pitch) = look(eye, head);
         input.yaw = yaw + (self.brain.rand() - 0.5) * err;
@@ -292,7 +297,7 @@ impl Bot {
         }
         let tap = if range > 800.0 { 1 } else { 4 };
         // (An aimbot fires the moment it's on target and taps, keeping its shots on the head.)
-        input.attack = self.mode == Mode::Spray || (reacted && if aimbot { t % 12 == 0 } else { t % 24 < tap });
+        input.attack = self.mode == Mode::Spray || (reacted && if aimbot { t % self.secs(0.09375) == 0 } else { t % self.secs(0.1875) < tap });
         input.reload = self.client.state.loadout.active_gun().is_some_and(|g| g.clip == 0);
         input.crouch = range > 800.0;
         if let Mode::Rush(p) = self.mode {
@@ -322,7 +327,7 @@ impl Bot {
         let nav = &self.map.nav;
         let t = self.brain.t;
         let to = nav.nearest(goal);
-        let stuck = t % 64 == 0 && (me.velocity[0].powi(2) + me.velocity[1].powi(2)).sqrt() < 30.0;
+        let stuck = t % self.secs(0.5) == 0 && (me.velocity[0].powi(2) + me.velocity[1].powi(2)).sqrt() < 30.0;
         let mut give_up = false;
         if stuck {
             self.brain.stuck_on += 1;
@@ -333,7 +338,7 @@ impl Bot {
                 self.brain.stuck_on = 0;
                 give_up = true;
             }
-        } else if t % 64 == 0 {
+        } else if t % self.secs(0.5) == 0 {
             self.brain.stuck_on = 0;
         }
         if to != self.brain.path_to || self.brain.path_at >= self.brain.path.len() || t >= self.brain.replan || give_up {
@@ -343,12 +348,12 @@ impl Bot {
                 _ => Vec::new(),
             };
             self.brain.path_at = 1;
-            self.brain.replan = t + 512;
+            self.brain.replan = t + self.secs(4.0);
         }
         let Some(&next) = self.brain.path.get(self.brain.path_at) else {
             // Nowhere to go from here: towards the goal, and turn now and then.
             let (yaw, _) = look(me.origin, goal);
-            return Input { yaw: yaw + ((t / 128) % 4) as f32 * 90.0, forward: 400.0, ..input };
+            return Input { yaw: yaw + ((t / self.secs(1.0)) % 4) as f32 * 90.0, forward: 400.0, ..input };
         };
         let p = nav.points[next as usize];
         if flat(me.origin, p) < 24.0 {
@@ -362,8 +367,8 @@ impl Bot {
         // the air for the extra height. Bunny hoppers jump all the time.
         let climb = p[2] - me.origin[2] > 18.0 && flat(me.origin, p) < 64.0;
         let bhop = self.mode == Mode::Bhop && me.on_ground;
-        input.jump = ((climb || self.brain.stuck_on > 0) && t % 16 == 0) || (bhop && t % 2 == 0);
-        input.use_key = self.brain.stuck_on > 0 && t % 32 < 2;
+        input.jump = ((climb || self.brain.stuck_on > 0) && t % self.secs(0.125) == 0) || (bhop && t % 2 == 0);
+        input.use_key = self.brain.stuck_on > 0 && t % self.secs(0.25) < 2;
         input.crouch = climb && !me.on_ground;
         input
     }

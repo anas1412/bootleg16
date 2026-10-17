@@ -5,7 +5,7 @@ use super::*;
 use std::collections::HashSet;
 
 /// Keep sending someone this long after they went out of sight (no flicker at corners).
-const GRACE_TICKS: u32 = TICK_RATE / 4;
+const GRACE_SECS: f32 = 0.25;
 /// The target's box is grown by this much sideways and their (and your) position is pushed
 /// ahead along the velocity by `LOOKAHEAD` seconds, so someone stepping round a corner is
 /// already there when they come into view, even with some ping.
@@ -45,7 +45,7 @@ impl Server {
         if dist(a, b) < SMOKE_SEE_NEAR {
             return false;
         }
-        let now = self.tick as f64 * TICK as f64;
+        let now = self.tick as f64 * self.rate.tick() as f64;
         self.smokes.iter().any(|(at, until)| {
             let age = sim::grenades::SMOKE_SECONDS - (until - now);
             age > 1.0 && until - now > 2.0 && through_sphere(a, b, [at[0], at[1], at[2] + SMOKE_LIFT], SMOKE_RADIUS)
@@ -106,7 +106,7 @@ impl Server {
             if visible {
                 seen.push(t.id);
                 out.insert(t.id);
-            } else if self.last_seen.get(&(viewer, t.id)).is_some_and(|s| tick - s < GRACE_TICKS) {
+            } else if self.last_seen.get(&(viewer, t.id)).is_some_and(|s| tick - s < self.rate.secs(GRACE_SECS)) {
                 out.insert(t.id);
             }
         }

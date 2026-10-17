@@ -42,7 +42,7 @@ impl Server {
 
     /// Pop a smoke cloud here (tests, admin).
     pub fn add_smoke(&mut self, at: [f32; 3]) {
-        let now = self.tick as f64 * TICK as f64;
+        let now = self.tick as f64 * self.rate.tick() as f64;
         self.smokes.push((at, now + sim::grenades::SMOKE_SECONDS));
     }
 

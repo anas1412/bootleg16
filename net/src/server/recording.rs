@@ -3,7 +3,7 @@
 use super::*;
 
 /// The scoreboard goes into the recording this often (in snapshots: once a second).
-const SCORES_EVERY: u32 = TICK_RATE / SNAPSHOT_EVERY;
+const SCORES_EVERY: u32 = crate::tick::SNAPSHOT_RATE;
 
 impl Server {
     /// Start recording this match (if recordings are on: `demos` in the config).
@@ -14,7 +14,7 @@ impl Server {
         }
         let dir = std::path::PathBuf::from(&cfg.demos);
         crate::demo::prune(&dir, cfg.demo_days as u64);
-        match crate::demo::Recorder::start(&dir, &self.map, self.map_hash, &cfg.name) {
+        match crate::demo::Recorder::start(&dir, &self.map, self.map_hash, &cfg.name, self.rate) {
             Ok(r) => self.recorder = Some(r),
             Err(e) => println!("can't record to {}: {e}", dir.display()),
         }
@@ -39,7 +39,7 @@ impl Server {
         if self.recorder.is_none() {
             return;
         }
-        let scores = (self.tick / SNAPSHOT_EVERY % SCORES_EVERY == 0).then(|| {
+        let scores = (self.tick / self.rate.snapshot_every() % SCORES_EVERY == 0).then(|| {
             self.clients.values().filter(|c| !c.bot).map(|c| c.score()).collect()
         });
         let frame = crate::demo::Frame {

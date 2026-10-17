@@ -5,9 +5,9 @@ impl Server {
     /// Fly grenades and set off the ones that are due.
     pub(super) fn grenades_step(&mut self) {
         use sim::grenades::{self, Kind};
-        let now = self.tick as f64 * TICK as f64;
+        let now = self.tick as f64 * self.rate.tick() as f64;
         for g in &mut self.grenades {
-            if g.physics(TICK, &self.world, self.vars.gravity) {
+            if g.physics(self.rate.tick(), &self.world, self.vars.gravity) {
                 self.events.push(GameEvent::GrenadeBounce { kind: g.kind, at: g.origin });
             }
         }
@@ -42,7 +42,7 @@ impl Server {
                         let killed = c.vitals.hurt(health, armor);
                         self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion, at: None });
                         if killed {
-                            c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
+                            c.respawn_at = Some(tick + if c.bot { self.rate.secs(DUMMY_RESPAWN_SECS) } else { self.rate.secs(self.rules.respawn_secs) });
                             self.events.push(GameEvent::Kill { killer: g.owner, victim: c.id, weapon: Some(Id::HeGrenade), headshot: false });
                         }
                     }
@@ -70,7 +70,7 @@ impl Server {
     /// Trace a player's shots/swing against everyone else as the shooter saw them.
     pub(super) fn resolve(&mut self, p: Pending) {
         if let Some((kind, angles)) = p.fired.throw {
-            let now = self.tick as f64 * TICK as f64;
+            let now = self.tick as f64 * self.rate.tick() as f64;
             self.grenades.push(sim::grenades::throw(kind, p.shooter, p.eye, angles[0], angles[1], p.velocity, now));
         }
         let targets: Vec<Target> = self.rewind(p.view_tick).into_iter().filter(|t| t.id != p.shooter).collect();
@@ -111,7 +111,7 @@ impl Server {
                 hits.push((victim, dmg * combat::hitgroup_multiplier(group), group, Id::Knife, None));
             }
             if let Some(c) = self.clients.values_mut().find(|c| c.id == p.shooter) {
-                c.state.loadout.knife_result(swing.stab, hit.is_some(), c.last_run as f64 * TICK as f64);
+                c.state.loadout.knife_result(swing.stab, hit.is_some(), c.last_run as f64 * self.rate.tick() as f64);
             }
         }
         let tick = self.tick;
@@ -144,7 +144,7 @@ impl Server {
             };
             let roll = ((tick.wrapping_mul(2_654_435_761) ^ victim as u32) % 2001) as f32 / 1000.0 - 1.0;
             player::hit_by(&mut c.state, weapon, group, damage, unarmored, roll);
-            c.anim.hurt(group, tick as f32 * TICK);
+            c.anim.hurt(group, tick as f32 * self.rate.tick());
             if Some(c.team) != shooter_team {
                 dealt.push((p.shooter, health.min(c.vitals.health)));
                 c.stats.hurt_by.push((p.shooter, health.min(c.vitals.health)));
@@ -152,7 +152,7 @@ impl Server {
             let killed = c.vitals.hurt(health, armor);
             self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group, sound, at });
             if killed {
-                c.respawn_at = Some(tick + if c.bot { DUMMY_RESPAWN_TICKS } else { self.rules.respawn_ticks });
+                c.respawn_at = Some(tick + if c.bot { self.rate.secs(DUMMY_RESPAWN_SECS) } else { self.rate.secs(self.rules.respawn_secs) });
                 self.events.push(GameEvent::Kill { killer: p.shooter, victim, weapon: Some(weapon), headshot: group == HitGroup::Head });
             }
         }

@@ -8,7 +8,9 @@ use std::net::{SocketAddr, UdpSocket};
 pub struct Socket {
     udp: UdpSocket,
     /// One-way delay applied to both sends and receives.
-    delay_ticks: u32,
+    /// Fake one-way delay, kept in ms: ticks differ with the rate.
+    delay_ms: u32,
+    hz: u32,
     /// Chance (0..1) to drop each packet in each direction.
     loss: f32,
     now: u64,
@@ -23,7 +25,7 @@ impl Socket {
     pub fn bind(addr: SocketAddr) -> std::io::Result<Socket> {
         let udp = UdpSocket::bind(addr)?;
         udp.set_nonblocking(true)?;
-        Ok(Socket { udp, delay_ticks: 0, loss: 0.0, now: 0, outgoing: VecDeque::new(), incoming: VecDeque::new(), rng: 0x9e37_79b9_7f4a_7c15, channels: HashMap::new() })
+        Ok(Socket { udp, delay_ms: 0, hz: crate::tick::DEFAULT_TICK_RATE, loss: 0.0, now: 0, outgoing: VecDeque::new(), incoming: VecDeque::new(), rng: 0x9e37_79b9_7f4a_7c15, channels: HashMap::new() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -32,8 +34,17 @@ impl Socket {
 
     /// Simulate a connection with `ping_ms` round trip and `loss` packet loss.
     pub fn set_conditions(&mut self, ping_ms: u32, loss: f32) {
-        self.delay_ticks = ping_ms * crate::protocol::TICK_RATE / 2000;
+        self.delay_ms = ping_ms / 2;
         self.loss = loss;
+    }
+
+    /// The tick rate the delay is counted in.
+    pub fn set_rate(&mut self, rate: crate::tick::TickRate) {
+        self.hz = rate.hz();
+    }
+
+    fn delay_ticks(&self) -> u32 {
+        self.delay_ms * self.hz / 1000
     }
 
     fn dropped(&mut self) -> bool {
@@ -74,10 +85,10 @@ impl Socket {
         if self.dropped() {
             return;
         }
-        if self.delay_ticks == 0 {
+        if self.delay_ticks() == 0 {
             let _ = self.udp.send_to(&bytes, to);
         } else {
-            self.outgoing.push_back((self.now + self.delay_ticks as u64, to, bytes));
+            self.outgoing.push_back((self.now + self.delay_ticks() as u64, to, bytes));
         }
     }
 
@@ -102,7 +113,7 @@ impl Socket {
             if self.dropped() {
                 continue;
             }
-            self.incoming.push_back((self.now + self.delay_ticks as u64, from, buf[..n].to_vec()));
+            self.incoming.push_back((self.now + self.delay_ticks() as u64, from, buf[..n].to_vec()));
         }
         let mut out = Vec::new();
         while self.incoming.front().is_some_and(|p| p.0 <= self.now) {

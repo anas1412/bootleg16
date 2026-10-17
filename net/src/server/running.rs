@@ -28,7 +28,7 @@ impl Server {
     /// Draining and done: no match, and no booking can still be on its way (a few seconds
     /// since the lobby heard we're busy).
     pub fn drained(&self) -> bool {
-        self.draining.is_some_and(|since| !self.is_reserved() && self.tick - since > 2 * TICK_RATE)
+        self.draining.is_some_and(|since| !self.is_reserved() && self.tick - since > 2 * self.rate.hz())
     }
 
     /// Start draining (see `run_draining`).
@@ -37,7 +37,7 @@ impl Server {
     }
 
     pub(super) fn run_while(&mut self, mut go_on: impl FnMut(&mut Self) -> bool) {
-        let tick = Duration::from_secs_f64(1.0 / TICK_RATE as f64);
+        let tick = Duration::from_secs_f64(1.0 / self.rate.hz() as f64);
         let mut next = Instant::now();
         while go_on(self) {
             self.step();

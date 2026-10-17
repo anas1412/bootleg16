@@ -7,8 +7,8 @@ use super::*;
 pub struct Rules {
     /// Practice room: everything below is set for practising.
     pub practice: bool,
-    /// Ticks before a dead player comes back.
-    pub respawn_ticks: u32,
+    /// Seconds before a dead player comes back.
+    pub respawn_secs: f32,
     /// Reserve ammo is topped up all the time (you still reload).
     pub infinite_ammo: bool,
     /// Practice only: standing dummies on the other team to shoot at.
@@ -22,17 +22,17 @@ pub struct Rules {
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { practice: false, respawn_ticks: 3 * TICK_RATE, infinite_ammo: false, dummies: 0, deathmatch: false, kill_limit: 100 }
+        Rules { practice: false, respawn_secs: 3.0, infinite_ammo: false, dummies: 0, deathmatch: false, kill_limit: 100 }
     }
 }
 
 impl Rules {
     pub fn practice(dummies: u8) -> Rules {
-        Rules { practice: true, respawn_ticks: TICK_RATE / 2, infinite_ammo: true, dummies, ..Rules::default() }
+        Rules { practice: true, respawn_secs: 0.5, infinite_ammo: true, dummies, ..Rules::default() }
     }
 
     pub fn deathmatch() -> Rules {
-        Rules { deathmatch: true, respawn_ticks: TICK_RATE, ..Rules::default() }
+        Rules { deathmatch: true, respawn_secs: 1.0, ..Rules::default() }
     }
 
     /// No rounds: practice and deathmatch (buy anywhere, come back after dying).

@@ -9,11 +9,11 @@ use sim::weapons::{Fired, Loadout};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 
-/// Other players are drawn this many ticks in the past, between two snapshots
-/// (2 snapshot intervals = ~31 ms), so they move smoothly even with lost packets.
-const INTERP_TICKS: f32 = (SNAPSHOT_EVERY * 2) as f32;
-/// Re-send Hello this often while connecting.
-const HELLO_EVERY: u32 = TICK_RATE / 4;
+/// Other players are drawn this many snapshot intervals in the past (2 = ~31 ms), so they
+/// move smoothly even with lost packets.
+const INTERP_SNAPSHOTS: u32 = 2;
+/// Re-send Hello this often (seconds) while connecting.
+const HELLO_SECS: f32 = 0.25;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Status {
@@ -63,6 +63,8 @@ pub struct Client {
     server: SocketAddr,
     name: String,
     pub status: Status,
+    /// The server's tick rate (from its Welcome; 128 until then).
+    rate: crate::tick::TickRate,
     pub reject_reason: Option<String>,
     /// Collision world (doors follow the server).
     pub world: World,
@@ -137,6 +139,7 @@ impl Client {
             server,
             name: name.to_string(),
             status: Status::Connecting,
+            rate: Default::default(),
             reject_reason: None,
             world,
             vars: MoveVars::default(),
@@ -180,6 +183,11 @@ impl Client {
     /// Fake network conditions (round-trip ping in ms, loss 0..1).
     pub fn simulate_network(&mut self, ping_ms: u32, loss: f32) {
         self.socket.set_conditions(ping_ms, loss);
+    }
+
+    /// How many steps a second the server (and so this client) runs.
+    pub fn rate(&self) -> crate::tick::TickRate {
+        self.rate
     }
 
     /// Our predicted player.
@@ -237,7 +245,7 @@ impl Client {
         }
 
         let Status::Connected { .. } = self.status else {
-            if self.status == Status::Connecting && self.ticks % HELLO_EVERY == 1 {
+            if self.status == Status::Connecting && self.ticks % self.rate.secs(HELLO_SECS) == 1 {
                 let hello = ClientMsg::Hello { version: PROTOCOL_VERSION, name: self.name.clone(), cookie: self.cookie, ticket: self.ticket };
                 self.socket.send(self.server, encode(&hello));
             }
@@ -251,7 +259,7 @@ impl Client {
         self.history.push_back((self.seq, TimedInput { input, view_tick: self.render_tick }));
         let result = match self.id() {
             Some(id) if self.vitals.alive() => {
-                player::step(&mut self.state, &input, TICK, self.seq as f64 * TICK as f64, player::seed(id, self.seq), self.me_info.limits, &self.world, &self.vars)
+                player::step(&mut self.state, &input, self.rate.tick(), self.seq as f64 * self.rate.tick() as f64, player::seed(id, self.seq), self.me_info.limits, &self.world, &self.vars)
             }
             _ => Default::default(),
         };
@@ -261,10 +269,10 @@ impl Client {
         let msg = ClientMsg::Inputs { first_seq, inputs: recent.iter().map(|(_, i)| *i).collect(), events: self.reliable_seen, snap: self.latest_tick };
         self.socket.send(self.server, encode(&msg));
 
-        // Advance the clock others are drawn at, staying INTERP_TICKS behind the newest snapshot.
+        // Advance the clock others are drawn at, staying INTERP_SNAPSHOTS behind the newest snapshot.
         self.render_tick += 1.0;
-        let target = self.latest_tick as f32 - INTERP_TICKS;
-        if (self.render_tick - target).abs() > TICK_RATE as f32 / 4.0 {
+        let target = self.latest_tick as f32 - (self.rate.snapshot_every() * INTERP_SNAPSHOTS) as f32;
+        if (self.render_tick - target).abs() > self.rate.hz() as f32 / 4.0 {
             self.render_tick = target; // way off (just connected, or a long stall): jump
         } else {
             self.render_tick += (target - self.render_tick) * 0.05; // gently drift back in line
@@ -274,8 +282,13 @@ impl Client {
 
     fn handle(&mut self, msg: ServerMsg) {
         match msg {
-            ServerMsg::Welcome { id, map, map_hash, practice, .. } => {
+            ServerMsg::Welcome { id, map, map_hash, practice, tick_rate } => {
                 if self.status == Status::Connecting {
+                    // The server decides the step size; prediction needs the same one.
+                    if let Some(rate) = crate::tick::TickRate::new(tick_rate) {
+                        self.rate = rate;
+                        self.socket.set_rate(rate);
+                    }
                     self.status = Status::Connected { id };
                     self.practice = practice;
                     self.map = Some(map);
@@ -332,7 +345,7 @@ impl Client {
                 // Correct our prediction: take the server's state, replay what it hasn't run yet.
                 if let Some((movement, vitals)) = you {
                     // Our last input went out at `seq`; the server had run up to `ack`.
-                    let sample = self.seq.saturating_sub(ack) as f32 * TICK * 1000.0;
+                    let sample = self.seq.saturating_sub(ack) as f32 * self.rate.tick() * 1000.0;
                     self.ping_ms = if self.ping_ms == 0.0 { sample } else { self.ping_ms * 0.9 + sample * 0.1 };
                     while self.history.front().is_some_and(|(s, _)| *s <= ack) {
                         self.history.pop_front();
@@ -342,8 +355,8 @@ impl Client {
                     self.state = PlayerState { movement, loadout };
                     if self.vitals.alive() {
                         for (seq, timed) in &self.history {
-                            let cmd_time = *seq as f64 * TICK as f64;
-                            player::step(&mut self.state, &timed.input, TICK, cmd_time, player::seed(id, *seq), self.me_info.limits, &self.world, &self.vars);
+                            let cmd_time = *seq as f64 * self.rate.tick() as f64;
+                            player::step(&mut self.state, &timed.input, self.rate.tick(), cmd_time, player::seed(id, *seq), self.me_info.limits, &self.world, &self.vars);
                         }
                     }
                     let now = self.state.movement.origin;
@@ -369,7 +382,7 @@ impl Client {
 
     /// Our own command clock (input number x tick), which weapon timers use.
     pub fn cmd_time(&self) -> f64 {
-        self.seq as f64 * TICK as f64
+        self.seq as f64 * self.rate.tick() as f64
     }
 
     /// Server time other players are currently drawn at (sent with each input).
@@ -442,7 +455,7 @@ impl Client {
         let Some(want) = self.wanted_looks else { return };
         if self.scores.iter().any(|s| Some(s.id) == self.id() && s.looks == want) {
             self.wanted_looks = None;
-        } else if self.ticks % (TICK_RATE / 2) == 0 {
+        } else if self.ticks % (self.rate.hz() / 2) == 0 {
             self.socket.send(self.server, encode(&ClientMsg::Looks { t: want[0], ct: want[1] }));
         }
     }
@@ -456,7 +469,7 @@ impl Client {
         };
         if done {
             self.wanted_team = None;
-        } else if self.ticks % (TICK_RATE / 4) == 0 {
+        } else if self.ticks % (self.rate.hz() / 4) == 0 {
             self.socket.send(self.server, encode(&ClientMsg::JoinTeam { team: want }));
         }
     }
@@ -520,7 +533,7 @@ impl Client {
 
     /// Seconds since the server was last heard from.
     pub fn silence(&self) -> f32 {
-        (self.ticks - self.heard) as f32 * TICK
+        (self.ticks - self.heard) as f32 * self.rate.tick()
     }
 
     /// Join the same server again after losing it (same seat if we have a ticket): hello

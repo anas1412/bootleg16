@@ -51,6 +51,8 @@ pub struct MatchConfig {
     /// recordings are kept.
     pub demos: String,
     pub demo_days: u32,
+    /// Simulation steps a second: 128 (default) or 64 (about twice the matches per core).
+    pub tick_rate: crate::tick::TickRate,
 }
 
 impl Default for MatchConfig {
@@ -80,6 +82,7 @@ impl Default for MatchConfig {
             deathmatch: false,
             demos: String::new(),
             demo_days: 14,
+            tick_rate: Default::default(),
         }
     }
 }
@@ -134,6 +137,7 @@ impl MatchConfig {
                 "max_players" => c.max_players = v.parse().map_err(|_| bad())?,
                 "demos" => c.demos = v.to_string(),
                 "demo_days" => c.demo_days = v.parse().map_err(|_| bad())?,
+                "tick_rate" => c.tick_rate = v.parse().ok().and_then(crate::tick::TickRate::new).ok_or_else(bad)?,
                 "mode" => {
                     c.deathmatch = match v {
                         "match" => false,

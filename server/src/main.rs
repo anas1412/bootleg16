@@ -1,4 +1,4 @@
-//! Dedicated server. Usage: `server [map] [port] [--config server.cfg] [--give ak47,awp]`
+//! Dedicated server. Usage: `server [map] [port] [--config server.cfg] [--give ak47,awp] [--tick 64]`
 //! (defaults: de_dust2, 27015). Match rules come from the config file (see `config/server.cfg`);
 //! without `--config`, `server.cfg` in the current directory is used if it exists.
 //! Reads the map from the CS 1.6 install in `BOOTLEG16_DIR` (default: Steam's).
@@ -19,6 +19,7 @@ fn main() {
     let mut give = Vec::new();
     let mut practice: Option<u8> = None;
     let mut config: Option<PathBuf> = None;
+    let mut tick: Option<u32> = None;
     let all: Vec<String> = std::env::args().collect();
     if let Some(i) = all.iter().position(|a| a == "--play") {
         return play(&all, i);
@@ -38,6 +39,9 @@ fn main() {
     while let Some(a) = args.next() {
         if a == "--practice" {
             practice = Some(args.next().and_then(|n| n.parse().ok()).unwrap_or(5));
+        } else if a == "--tick" {
+            tick = args.next().and_then(|n| n.parse().ok());
+            assert!(tick.is_some(), "--tick 64 or --tick 128");
         } else if a == "--config" {
             config = args.next().map(PathBuf::from);
         } else if a == "--give" {
@@ -66,10 +70,13 @@ fn main() {
         println!("match rules from {}", path.display());
         server.set_config(cfg);
     }
+    if let Some(hz) = tick {
+        server.set_rate(net::tick::TickRate::new(hz).unwrap_or_else(|| panic!("--tick must be 64 or 128")));
+    }
     if let Some(n) = practice {
         server.set_rules(net::server::Rules::practice(n));
     }
-    println!("bootleg16 server: {map} on {} at {} tick", server.local_addr(), net::protocol::TICK_RATE);
+    println!("bootleg16 server: {map} on {} at {} tick", server.local_addr(), server.tick_rate().hz());
     // SIGTERM / Ctrl-C (docker stop, updates): finish the current match, then exit.
     on_stop_signal();
     server.run_draining(&STOP);

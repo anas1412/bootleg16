@@ -62,14 +62,14 @@ impl Server {
                     }
                 }
                 let id = self.clients[&from].id;
-                self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), map_hash: self.map_hash, tick_rate: TICK_RATE, practice: self.rules.free_play() }));
+                self.socket.send(from, encode(&ServerMsg::Welcome { id, map: self.map.clone(), map_hash: self.map_hash, tick_rate: self.rate.hz(), practice: self.rules.free_play() }));
             }
             ClientMsg::Inputs { first_seq, inputs, events, snap } => {
                 let Some(c) = self.clients.get_mut(&from) else { return };
                 c.last_heard = self.tick;
                 // Ping, as the server sees it: from sending a snapshot to hearing it arrived.
                 if snap > c.snap_ack && snap <= self.tick {
-                    let ms = (self.tick - snap) as f32 * 1000.0 / TICK_RATE as f32;
+                    let ms = (self.tick - snap) as f32 * 1000.0 / self.rate.hz() as f32;
                     c.stats.ping = if c.stats.ping == 0.0 { ms } else { c.stats.ping * 0.9 + ms * 0.1 };
                 }
                 c.snap_ack = c.snap_ack.max(snap);
@@ -84,7 +84,7 @@ impl Server {
                     }
                 }
                 // Never let a client queue up more than a second of movement.
-                while c.queue.len() > TICK_RATE as usize {
+                while c.queue.len() > self.rate.hz() as usize {
                     c.queue.pop_front();
                 }
             }

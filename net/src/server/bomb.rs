@@ -68,7 +68,7 @@ impl Server {
                 data::Slot::Secondary => l.secondary.is_some(),
                 _ => true,
             });
-            l.switch_to(best.unwrap_or(data::Slot::Knife), c.last_run as f64 * TICK as f64);
+            l.switch_to(best.unwrap_or(data::Slot::Knife), c.last_run as f64 * self.rate.tick() as f64);
         }
         let at = c.state.movement.origin;
         self.bomb = Bomb::Dropped(self.floor_under(at));
@@ -76,7 +76,7 @@ impl Server {
 
     pub(super) fn bomb_planted(&mut self, by: u8, at: [f32; 3]) {
         let at = self.floor_under(at);
-        let explode = self.tick + (self.round.cfg.c4_timer * TICK_RATE as f32) as u32;
+        let explode = self.tick + (self.round.cfg.c4_timer * self.rate.hz() as f32) as u32;
         self.bomb = Bomb::Planted { at, explode, defuse: None };
         self.planter = Some(by);
         self.events.push(GameEvent::BombPlanted { by, at });
@@ -139,7 +139,7 @@ impl Server {
                     None => {
                         if let Some(c) = self.clients.values().filter(|c| still(c)).min_by_key(|c| c.id) {
                             let secs = if c.defuse_kit { self.round.cfg.defuse_kit_time } else { self.round.cfg.defuse_time };
-                            let done = tick + (secs * TICK_RATE as f32) as u32;
+                            let done = tick + (secs * self.rate.hz() as f32) as u32;
                             self.events.push(GameEvent::Defusing { by: c.id, kit: c.defuse_kit });
                             self.bomb = Bomb::Planted { at, explode, defuse: Some((c.id, done)) };
                         }
@@ -184,8 +184,8 @@ impl Server {
             Bomb::Dropped(at) => BombNet::Dropped(at),
             Bomb::Planted { at, explode, defuse } => BombNet::Planted {
                 at,
-                left: explode.saturating_sub(now) as f32 * TICK,
-                defuse: defuse.map(|(id, done)| (id, done.saturating_sub(now) as f32 * TICK)),
+                left: explode.saturating_sub(now) as f32 * self.rate.tick(),
+                defuse: defuse.map(|(id, done)| (id, done.saturating_sub(now) as f32 * self.rate.tick())),
             },
             _ => BombNet::None,
         }

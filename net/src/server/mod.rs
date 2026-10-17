@@ -17,8 +17,8 @@ mod reserve;
 mod report;
 mod sealed;
 
-/// Ticks between heartbeats to the lobby.
-const HEARTBEAT_EVERY: u32 = crate::lobby::HEARTBEAT_SECONDS as u32 * TICK_RATE;
+/// Seconds between heartbeats to the lobby.
+const HEARTBEAT_SECS: f32 = crate::lobby::HEARTBEAT_SECONDS as f32;
 mod round;
 mod recording;
 mod running;
@@ -51,18 +51,18 @@ use std::time::{Duration, Instant};
 
 /// Inputs a client may bank while its packets are delayed. Anything sent faster
 /// than real time beyond this is thrown away, which stops speed hacks.
-const MAX_INPUT_BUDGET: f32 = 16.0;
+const MAX_INPUT_BUDGET_SECS: f32 = 0.125;
 /// Inputs left waiting after a tick that count as a backlog, and how many ticks in a row a
 /// backlog may last before the oldest are dropped (else a burst after a client hitch, e.g.
 /// loading the map, turns into permanent input lag: the budget only allows real time).
 const BACKLOG_INPUTS: usize = 4;
-const BACKLOG_TICKS: u32 = TICK_RATE / 4;
+const BACKLOG_SECS: f32 = 0.25;
 /// Reliable events kept per client while unacknowledged.
 const MAX_OUTBOX: usize = 64;
 
 
 /// Dummies stay down a little longer so you see them fall.
-const DUMMY_RESPAWN_TICKS: u32 = 2 * TICK_RATE;
+const DUMMY_RESPAWN_SECS: f32 = 2.0;
 
 /// Knife reach (slash / stab) and damage.
 const SLASH_RANGE: f32 = 48.0;
@@ -83,7 +83,7 @@ struct GroundGun {
 }
 
 /// Seconds before the dropper can pick their own gun back up.
-const REPICK_TICKS: u32 = TICK_RATE / 2;
+const REPICK_SECS: f32 = 0.5;
 
 /// A player's scoreboard numbers beyond kills and deaths.
 #[derive(Default)]
@@ -182,6 +182,7 @@ pub struct Server {
     spawns_t: Vec<[f32; 3]>,
     spawns_ct: Vec<[f32; 3]>,
     rules: Rules,
+    rate: crate::tick::TickRate,
     tick: u32,
     /// The last second of positions, newest last.
     history: VecDeque<PastPositions>,
@@ -233,6 +234,7 @@ pub struct Server {
 
 impl Server {
     pub fn new(bind: SocketAddr, map: &str, bsp: &Bsp, assets: Assets) -> std::io::Result<Server> {
+        let rate = crate::tick::TickRate::default();
         let zones = sim::zones::Zones::from_bsp(bsp);
         let (spawns_t, spawns_ct) = (zones.spawns(sim::zones::Side::T), zones.spawns(sim::zones::Side::Ct));
         Ok(Server {
@@ -254,13 +256,14 @@ impl Server {
             smokes: Vec::new(),
             ground: Vec::new(),
             kills_settled: 0,
-            round: Match::new(MatchConfig::default(), TICK_RATE),
+            round: Match::new(MatchConfig::default(), rate.hz()),
+            rate,
             bomb: Bomb::None,
             planter: None,
             last_seen: HashMap::new(),
             pieces: breakables::Pieces::from_bsp(bsp),
             snapshot_bytes: 0,
-            guard: guard::Guard::new(),
+            guard: guard::Guard::new(rate),
             reserved: None,
             draining: None,
             lobbies: Vec::new(),
@@ -276,6 +279,13 @@ impl Server {
         })
     }
 
+    /// How many steps a second this server runs (before it starts; clients follow it).
+    pub fn set_rate(&mut self, rate: crate::tick::TickRate) {
+        self.rate = rate;
+        self.guard = guard::Guard::new(rate);
+        self.round = Match::new(self.round.cfg.clone(), rate.hz());
+    }
+
     /// Match settings (server config file). Restarts the match.
     pub fn set_config(&mut self, cfg: MatchConfig) {
         self.lobbies = crate::config::addresses(&cfg.lobby, false);
@@ -283,7 +293,8 @@ impl Server {
         if cfg.deathmatch {
             self.rules = Rules::deathmatch();
         }
-        self.round = Match::new(cfg, TICK_RATE);
+        self.set_rate(cfg.tick_rate);
+        self.round = Match::new(cfg, self.rate.hz());
         self.look_up_lobby();
     }
 
@@ -295,6 +306,10 @@ impl Server {
     /// Weapons every player gets on (re)spawn, on top of the starting pistol.
     pub fn set_give(&mut self, weapons: Vec<Id>) {
         self.give = weapons;
+    }
+
+    pub fn tick_rate(&self) -> crate::tick::TickRate {
+        self.rate
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -373,12 +388,13 @@ impl Server {
     }
 
     /// Everyone alive as a client saw them at `view_tick` (interpolated, like the
-    /// client draws them), capped at `MAX_UNLAG_TICKS` into the past.
+    /// client draws them), capped at `MAX_UNLAG_SECS` into the past.
     pub fn rewind(&self, view_tick: f32) -> Vec<Target> {
-        let oldest = self.tick.saturating_sub(MAX_UNLAG_TICKS) as f32;
+        let oldest = self.tick.saturating_sub(self.rate.secs(MAX_UNLAG_SECS)) as f32;
         let t = view_tick.clamp(oldest, self.tick as f32);
         // Only the ticks that went out as snapshots: that's exactly what clients blend between.
-        let sent: Vec<&PastPositions> = self.history.iter().filter(|h| h.tick % SNAPSHOT_EVERY == 0).collect();
+        let every = self.rate.snapshot_every();
+        let sent: Vec<&PastPositions> = self.history.iter().filter(|h| h.tick % every == 0).collect();
         let pair = sent.iter().zip(sent.iter().skip(1)).find(|(a, b)| a.tick as f32 <= t && t <= b.tick as f32);
         let Some((a, b)) = pair else {
             return self.history.back().map(|h| h.players.clone()).unwrap_or_default();
@@ -399,7 +415,7 @@ impl Server {
         self.socket.tick();
         let tick = self.tick;
         self.read_packets();
-        if tick % TICK_RATE == 0 {
+        if tick % self.rate.hz() == 0 {
             self.guard.tidy(tick);
         }
 
@@ -440,17 +456,18 @@ impl Server {
                 .filter(|c| c.vitals.alive())
                 .map(|c| {
                     let origin = c.state.movement.origin.map(|v| (v * 8.0).round() / 8.0);
-                    let anim = Some((c.anim.clone(), c.drive(), self.tick as f32 * TICK));
+                    let anim = Some((c.anim.clone(), c.drive(), self.tick as f32 * self.rate.tick()));
                     Target { id: c.id, origin, yaw: c.view.0, pitch: c.view.1, crouched: c.state.movement.crouched, weapon: c.state.loadout.active_id(), anim }
                 })
                 .collect(),
         });
-        while self.history.len() > TICK_RATE as usize {
+        while self.history.len() > self.rate.hz() as usize {
             self.history.pop_front();
         }
 
         let tick = self.tick;
-        let gone: Vec<SocketAddr> = self.clients.iter().filter(|(_, c)| !c.bot && tick - c.last_heard >= TIMEOUT_TICKS).map(|(a, _)| *a).collect();
+        let timeout = self.rate.secs(TIMEOUT_SECS);
+        let gone: Vec<SocketAddr> = self.clients.iter().filter(|(_, c)| !c.bot && tick - c.last_heard >= timeout).map(|(a, _)| *a).collect();
         for a in gone {
             if let Some(c) = self.clients.remove(&a) {
                 self.remember(&c);

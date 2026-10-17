@@ -4,12 +4,12 @@ use super::*;
 
 /// Snapshots kept per client as baselines (half a second: confirmations older than that, from
 /// a bad connection, get full snapshots).
-const SENT_KEPT: usize = (TICK_RATE / SNAPSHOT_EVERY / 2) as usize;
+const SENT_KEPT: usize = (crate::tick::SNAPSHOT_RATE / 2) as usize;
 
 impl Server {
     pub(super) fn send_updates(&mut self) {
         let tick = self.tick;
-        if self.tick % (TICK_RATE / 4) == 0 {
+        if self.tick % (self.rate.hz() / 4) == 0 {
             let mut scores: Vec<Score> = self.clients.values().map(|c| c.score()).collect();
             scores.sort_by_key(|s| (-s.kills, s.deaths));
             // Money only for your own team (spectators: nobody's).
@@ -30,10 +30,10 @@ impl Server {
                 self.socket.send(a, history.clone());
             }
         }
-        if self.tick % HEARTBEAT_EVERY == 1 {
+        if self.tick % self.rate.secs(HEARTBEAT_SECS) == 1 {
             self.heartbeat();
         }
-        if self.tick % SNAPSHOT_EVERY == 0 {
+        if self.tick % self.rate.snapshot_every() == 0 {
             let players: Vec<PlayerNet> = self
                 .clients
                 .values()
@@ -46,7 +46,7 @@ impl Server {
             let doors = self.world.doors.net_state();
             let events = std::mem::take(&mut self.events);
             self.kills_settled = 0;
-            let now = self.tick as f64 * TICK as f64;
+            let now = self.tick as f64 * self.rate.tick() as f64;
             let grenades: Vec<_> = self.grenades.iter().map(|g| (g.kind, g.origin)).collect();
             let smokes: Vec<SmokeNet> = self.smokes.iter().map(|s| SmokeNet { at: s.0, left: (s.1 - now) as f32 }).collect();
             let ground: Vec<(Id, [f32; 3])> = self.ground.iter().map(|g| (g.gun.id, g.origin)).collect();

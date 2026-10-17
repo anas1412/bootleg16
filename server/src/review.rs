@@ -52,7 +52,9 @@ pub fn find(path: &str, n: usize, demos: &Path) -> (std::path::PathBuf, u32) {
         panic!("{} isn't here: copy it from {}'s demos folder", file.display(), r["server"].as_str().unwrap_or("the game server"));
     }
     let tick = r["tick"].as_u64().unwrap_or(0) as u32;
-    (file, tick.saturating_sub(LEAD_SECONDS * net::protocol::TICK_RATE))
+    // The report's tick is in the recording's own ticks (its header says how many a second).
+    let hz = net::demo::Reader::open(&file).map_or(net::tick::DEFAULT_TICK_RATE, |r| r.header.tick_rate);
+    (file, tick.saturating_sub(LEAD_SECONDS * hz))
 }
 
 #[cfg(test)]
@@ -67,7 +69,7 @@ mod tests {
         std::fs::write(&reports, format!("{line}\nnot json\n")).unwrap();
         let (file, from) = super::find(reports.to_str().unwrap(), 1, &dir);
         assert_eq!(file, dir.join("m.bdem"), "stays inside the demos folder");
-        assert_eq!(from, 5000 - 10 * net::protocol::TICK_RATE);
+        assert_eq!(from, 5000 - 10 * net::tick::DEFAULT_TICK_RATE);
         super::list(reports.to_str().unwrap());
         let _ = std::fs::remove_dir_all(&dir);
     }

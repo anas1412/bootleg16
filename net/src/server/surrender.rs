@@ -33,7 +33,7 @@ impl Server {
         let Some(r) = &self.reserved else { return false };
         r.left_at.iter().any(|(ticket, since)| {
             let group = r.setup.players.iter().find(|(t, _)| t == ticket).map(|(_, g)| *g);
-            let gone = r.kicked.contains(ticket) || self.tick - since > ABANDON_SECONDS * TICK_RATE;
+            let gone = r.kicked.contains(ticket) || self.tick - since > ABANDON_SECONDS * self.rate.hz();
             group.is_some_and(|g| self.team_for(g) == team) && gone
         })
     }
@@ -57,7 +57,7 @@ impl Server {
             return;
         }
         r.voted_in_round[(team == Team::Ct) as usize] = Some(round);
-        r.vote = Some(Vote { kind: VoteKind::Surrender, team, yes: vec![id], no: Vec::new(), until: tick + VOTE_SECONDS * TICK_RATE });
+        r.vote = Some(Vote { kind: VoteKind::Surrender, team, yes: vec![id], no: Vec::new(), until: tick + VOTE_SECONDS * self.rate.hz() });
     }
 
     /// A player asks their team to vote a teammate out (one vote at a time, one call per
@@ -72,7 +72,7 @@ impl Server {
             return;
         }
         r.kick_called.insert(id, round);
-        r.vote = Some(Vote { kind: VoteKind::Kick(target, ticket), team, yes: vec![id], no: Vec::new(), until: tick + VOTE_SECONDS * TICK_RATE });
+        r.vote = Some(Vote { kind: VoteKind::Kick(target, ticket), team, yes: vec![id], no: Vec::new(), until: tick + VOTE_SECONDS * self.rate.hz() });
     }
 
     pub(super) fn surrender_vote(&mut self, from: SocketAddr, yes: bool) {
@@ -99,7 +99,7 @@ impl Server {
     pub(super) fn vote_net(&self) -> Option<VoteNet> {
         let v = self.reserved.as_ref()?.vote.as_ref()?;
         let kick = if let VoteKind::Kick(t, _) = v.kind { Some(t) } else { None };
-        Some(VoteNet { team: v.team, kick, yes: v.yes.len() as u8, no: v.no.len() as u8, needed: self.needed(v.team, v.kind) as u8, left: v.until.saturating_sub(self.tick) as f32 * TICK })
+        Some(VoteNet { team: v.team, kick, yes: v.yes.len() as u8, no: v.no.len() as u8, needed: self.needed(v.team, v.kind) as u8, left: v.until.saturating_sub(self.tick) as f32 * self.rate.tick() })
     }
 
     /// Once a tick in a reserved match: count the vote, and pause while a side is empty.
@@ -132,7 +132,7 @@ impl Server {
         match (started, empty) {
             (true, Some(team)) => {
                 let since = *self.reserved.as_mut().unwrap().empty_since.get_or_insert(tick);
-                if tick - since > ABANDON_SECONDS * TICK_RATE {
+                if tick - since > ABANDON_SECONDS * self.rate.hz() {
                     self.reserved.as_mut().unwrap().empty_since = None;
                     self.end_match(crate::rounds::other(team));
                 } else {

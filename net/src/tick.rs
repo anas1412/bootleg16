@@ -7,6 +7,8 @@
 /// Rates a server may run at.
 pub const TICK_RATES: [u32; 2] = [64, 128];
 pub const DEFAULT_TICK_RATE: u32 = 128;
+/// Snapshots per second, whatever the tick rate (bandwidth and interpolation stay the same).
+pub const SNAPSHOT_RATE: u32 = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TickRate(u32);
@@ -25,6 +27,11 @@ impl TickRate {
     /// Length of one step, in seconds.
     pub fn tick(self) -> f32 {
         1.0 / self.0 as f32
+    }
+
+    /// Ticks between snapshots.
+    pub fn snapshot_every(self) -> u32 {
+        self.0 / SNAPSHOT_RATE
     }
 
     /// Whole ticks in `seconds`, rounded to the nearest tick.

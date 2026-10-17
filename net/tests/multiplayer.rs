@@ -54,6 +54,18 @@ fn two_clients_on_lan() {
 }
 
 #[test]
+fn a_64_tick_server_makes_clients_step_at_64() {
+    let Some(bsp) = dust2() else { return };
+    let rate = net::tick::TickRate::new(64).unwrap();
+    let cfg = net::config::MatchConfig { freeze_time: 0.0, buy_time: 1e6, round_time: 1e6, start_money: 16_000, friendly_fire: true, tick_rate: rate, ..Default::default() };
+    let mut g = setup_with(&bsp, 0, 0.0, cfg);
+    g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
+    assert_eq!((g.server.tick_rate(), g.a.rate(), g.b.rate()), (rate, rate, rate), "clients follow the server's Welcome");
+    // Prediction and the server agree to the unit, so both use the same step size.
+    run_and_check(&mut g, "lan at 64", 0.05);
+}
+
+#[test]
 fn two_clients_at_100ms_ping_with_5_percent_loss() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 100, 0.05);
