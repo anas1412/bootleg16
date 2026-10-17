@@ -173,7 +173,7 @@ fn status(
     mut armor: Single<&mut Count, (With<ArmorNumber>, Without<HealthNumber>)>,
     mut hm: Single<&mut Meter, (With<HealthMeter>, Without<ArmorMeter>)>,
     mut am: Single<&mut Meter, (With<ArmorMeter>, Without<HealthMeter>)>,
-    mut icon: Single<&mut ImageNode, With<WeaponIcon>>,
+    mut icon: Single<(&mut ImageNode, &mut Node), (With<WeaponIcon>, Without<AmmoPart>)>,
     mut alive_only: Query<&mut Visibility, With<AliveOnly>>,
     covered: Res<crate::ui::Covered>,
     bursting: Query<(), (With<VitalsPanel>, With<crate::ui::Anim>)>,
@@ -204,11 +204,13 @@ fn status(
     hm.color = if low { BAD } else { TX1 };
     armor.target = v.armor;
     am.value = v.armor / 100.0;
-    // (magazine, reserve) of the gun in hand: yours, or the watched teammate's.
+    // (magazine, reserve) of the gun in hand: yours, or the watched teammate's. The knife
+    // never runs out: 1 / 1.
     let ammo = match &watched {
         Some(t) => t.mate.and_then(|m| m.ammo).map(|(c, r)| (c as u32, r as u32)),
         None => l.active_gun().map(|g| (g.clip, g.reserve)),
     };
+    let ammo = ammo.or((weapon == sim::weapons::Id::Knife).then_some((1, 1)));
     for mut n in &mut ammo_parts {
         let d = if watched.is_some() && ammo.is_none() { Display::None } else { Display::Flex };
         if n.display != d {
@@ -236,9 +238,16 @@ fn status(
         }
     }
     // Swap the weapon silhouette when the weapon changes.
-    let (wanted, _) = icons::icons_rect(&icons, weapon_icon(weapon));
-    if icon.rect != wanted {
-        icon.rect = wanted;
+    let (image, rect, aspect) = icons.pick(weapon_icon(weapon));
+    let (node, layout) = &mut *icon;
+    if node.image != image {
+        node.image = image;
+    }
+    if node.rect != rect {
+        node.rect = rect;
+    }
+    if layout.aspect_ratio != Some(aspect) {
+        layout.aspect_ratio = Some(aspect);
     }
 }
 

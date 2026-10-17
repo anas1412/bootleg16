@@ -57,15 +57,19 @@ impl Icons {
     /// The named icon (`d_ak47`, `cross`...) `height` tall at 1080p, tinted `color`.
     /// An empty node when the game files don't have it.
     pub fn node(&self, name: &str, height: f32, color: Color) -> impl Bundle {
+        let (image, rect, aspect) = self.pick(name);
+        (ImageNode { image, rect, color, ..default() }, Node { height: vh(height), aspect_ratio: Some(aspect), ..default() })
+    }
+
+    /// The picture, the part of it to show (sprite sheets) and its aspect ratio.
+    pub(super) fn pick(&self, name: &str) -> (Handle<Image>, Option<Rect>, f32) {
         if let Some((image, aspect)) = self.pictures.get(name) {
-            return (ImageNode { image: image.clone(), color, ..default() }, Node { height: vh(height), aspect_ratio: Some(*aspect), ..default() });
+            return (image.clone(), None, *aspect);
         }
-        let found = self.table.get(name).and_then(|e| Some((e, self.sheets.get(&e.sprite)?)));
-        let (image, rect, aspect) = match found {
+        match self.table.get(name).and_then(|e| Some((e, self.sheets.get(&e.sprite)?))) {
             Some((e, img)) => (img.clone(), Some(Rect::new(e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32)), e.w as f32 / e.h as f32),
             None => (Handle::default(), None, 1.0),
-        };
-        (ImageNode { image, rect, color, ..default() }, Node { height: vh(height), aspect_ratio: Some(aspect), ..default() })
+        }
     }
 }
 
@@ -206,8 +210,4 @@ pub fn weapon_icon(id: Id) -> &'static str {
     }
 }
 
-/// The sheet rectangle of a named icon.
-pub(super) fn icons_rect(icons: &Icons, name: &str) -> (Option<Rect>, f32) {
-    icons.table.get(name).map(|e| (Some(Rect::new(e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32)), e.w as f32 / e.h as f32)).unwrap_or((None, 1.0))
-}
 
