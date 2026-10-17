@@ -88,7 +88,8 @@ pub fn rebuild_menu(
         crate::found::notes(root, &kit, &lobby, steam, 80.0 + 68.0 + 16.0);
     });
     commands.spawn((MenuRoot, Layer::Left, DespawnOnExit(AppState::Menu), full.clone())).with_children(|root| {
-        let mut list = root.spawn(abs(Node { left: vh(80.0), top: vh(200.0), width: vh(560.0), flex_direction: FlexDirection::Column, ..default() }));
+        // 160 from the top: seven items and an error line still clear the wordmark
+        let mut list = root.spawn(abs(Node { left: vh(80.0), top: vh(160.0), width: vh(560.0), flex_direction: FlexDirection::Column, ..default() }));
         if tune_frame {
             list.insert(Anim::stagger(0));
         }

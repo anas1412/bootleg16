@@ -135,13 +135,14 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Scoreboard columns for them (K D A ADR HS% MVP $ PING)
 - [x] Round history from the server (`ServerMsg::History`, `Client::round_history`); the scoreboard
       should switch to it (UI session)
-- [ ] ⚠ Not yet seen on screen in a real match: low-health heartbeat, reload line, money
-      delta, timer ticks, vote panel, voted out / surrendered / kill limit announcements
-      (checked: hit wash and meter trail with net/examples/shooter and friendly fire on, the
-      uplink, voice rows, status icons, match found, Practice)
+- [x] Seen on screen (faked moments in screenshot runs): low-health heartbeat, reload line, money
+      delta, vote panel, voted out announcement; also hit wash, meter trail, uplink, voice rows,
+      status icons, match found, Practice
+- [ ] ⚠ Timer ticks: not yet seen on screen
+- [x] AI assistant lines: 6 per trigger per assistant (601), incl. mvp, flashed, team_out, clutch_won
 - [ ] AI assistant: generated lines through OpenCode, free models first (plan in design notes)
-- [ ] Main menu character card + character select (waits for the new models)
-- [ ] Map pool screen (waits for the new maps)
+- [x] Character select and map pool screens on the main menu (CS 1.6 class portraits and radars for now)
+- [ ] Character select and map pool with our own models and maps (when they exist)
 
 ## Later (after milestone 1)
 
