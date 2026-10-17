@@ -77,7 +77,7 @@ impl Sounds {
         if let Some(h) = self.cache.get(file) {
             return h.clone();
         }
-        let h = self.dirs.iter().find_map(|d| std::fs::read(d.join(file)).ok()).map(|bytes| assets.add(AudioSource { bytes: bytes.into() }));
+        let h = self.dirs.iter().find_map(|d| std::fs::read(d.join(net::gamefiles::clean(file))).ok()).map(|bytes| assets.add(AudioSource { bytes: bytes.into() }));
         if h.is_none() {
             warn!("missing sound {file}");
         }

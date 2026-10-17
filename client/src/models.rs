@@ -151,7 +151,7 @@ impl ModelCache {
         if let Some(m) = self.models.get(file) {
             return m.clone();
         }
-        let loaded = self.dirs.iter().find_map(|d| Model::load(d.join(file)).ok()).map(|model| {
+        let loaded = self.dirs.iter().find_map(|d| Model::load(d.join(net::gamefiles::clean(file))).ok()).map(|model| {
             let mats = model
                 .textures()
                 .into_iter()
