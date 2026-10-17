@@ -179,6 +179,7 @@ fn status(
     bursting: Query<(), (With<VitalsPanel>, With<crate::ui::Anim>)>,
     watch: Res<crate::spectate::Watch>,
     mut ammo_parts: Query<&mut Node, With<AmmoPart>>,
+    reconnecting: Option<Res<crate::game::Reconnecting>>,
 ) {
     let mut v = w.client.vitals;
     let l = &w.client.state.loadout;
@@ -222,6 +223,7 @@ fn status(
             Field::Weapon => sim::weapons::def(weapon).name.to_uppercase(),
             Field::Grenades => [("HE", he), ("FLASH", fl), ("SMOKE", sm)].iter().filter(|(_, n)| *n > 0).map(|(name, n)| if *n > 1 { format!("{name} x{n}") } else { name.to_string() }).collect::<Vec<_>>().join("   "),
             Field::Notice => match w.client.team() {
+                _ if reconnecting.is_some() => String::new(), // the reconnecting panel says it
                 _ if w.client.id().is_none() => "Connecting...".into(),
                 _ if watched.is_some() => String::new(), // the spectate plate says who
                 Team::Spectator => "Spectating  ·  press M to choose a team".into(),
