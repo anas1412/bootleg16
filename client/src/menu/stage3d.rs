@@ -368,7 +368,7 @@ mod tests {
     fn swing_lands_with_an_overshoot_and_settles() {
         let t = Tween { from: 0.0, to: 1.0, start: 0.0, dur: 1.0, back: true, then: None };
         assert!(t.at(0.0).abs() < 1e-5);
-        assert!((0.3..0.95).any(|x| t.at(x) > 1.0));
+        assert!((30..95).any(|i| t.at(i as f32 / 100.0) > 1.0));
         assert!((t.at(1.0) - 1.0).abs() < 1e-5);
         let f = Tween { from: 1.0, to: 0.0, start: 0.0, dur: 0.5, back: false, then: None };
         assert!((0..=50).map(|i| f.at(i as f32 / 100.0)).all(|v| (0.0..=1.0).contains(&v)));
