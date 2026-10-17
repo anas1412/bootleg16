@@ -92,17 +92,11 @@ fn fire_sound(id: Id, silenced: bool) -> &'static [&'static str] {
     use Id::*;
     match id {
         Ak47 => &["weapons/ak47-1.wav", "weapons/ak47-2.wav"],
-        Aug => &["weapons/aug-1.wav"],
         Awp => &["weapons/awp1.wav"],
         Deagle => &["weapons/deagle-1.wav", "weapons/deagle-2.wav"],
-        Elite => &["weapons/elite_fire.wav"],
-        FiveSeven => &["weapons/fiveseven-1.wav"],
         Famas => &["weapons/famas-1.wav", "weapons/famas-2.wav"],
-        G3sg1 => &["weapons/g3sg1-1.wav"],
         Galil => &["weapons/galil-1.wav", "weapons/galil-2.wav"],
         Glock => &["weapons/glock18-1.wav", "weapons/glock18-2.wav"],
-        M249 => &["weapons/m249-1.wav", "weapons/m249-2.wav"],
-        M3 => &["weapons/m3-1.wav"],
         M4a1 if silenced => &["weapons/m4a1-1.wav"],
         M4a1 => &["weapons/m4a1_unsil-1.wav", "weapons/m4a1_unsil-2.wav"],
         Mac10 => &["weapons/mac10-1.wav"],
@@ -110,13 +104,10 @@ fn fire_sound(id: Id, silenced: bool) -> &'static [&'static str] {
         P228 => &["weapons/p228-1.wav"],
         P90 => &["weapons/p90-1.wav"],
         Scout => &["weapons/scout_fire-1.wav"],
-        Sg550 => &["weapons/sg550-1.wav"],
-        Sg552 => &["weapons/sg552-1.wav", "weapons/sg552-2.wav"],
         Tmp => &["weapons/tmp-1.wav", "weapons/tmp-2.wav"],
         Ump45 => &["weapons/ump45-1.wav"],
         Usp if silenced => &["weapons/usp1.wav", "weapons/usp2.wav"],
         Usp => &["weapons/usp_unsil-1.wav"],
-        Xm1014 => &["weapons/xm1014-1.wav"],
         _ => &[],
     }
 }

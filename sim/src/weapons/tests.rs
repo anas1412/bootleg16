@@ -188,31 +188,6 @@ fn awp_unscopes_on_fire_and_rescopes() {
 }
 
 #[test]
-fn shotgun_reloads_shell_by_shell_and_firing_interrupts() {
-    let mut s = Sim::with(Id::M3);
-    s.hold(1.0, attack); // 2 shots: at 0 and 0.875 s
-    let clip = s.gun().clip;
-    assert_eq!(clip, 6);
-    s.idle(1.0); // reload is ignored until the pump cycle is over
-    s.step(|c| c.reload = true);
-    s.idle(0.9);
-    assert_eq!(s.gun().clip, 6, "first shell lands 0.55 + 0.45 s after the start");
-    s.idle(0.15);
-    assert_eq!(s.gun().clip, 7);
-    s.idle(0.45);
-    assert_eq!((s.gun().clip, s.gun().reserve), (8, 30));
-    // Firing interrupts: start again, shoot during the reload.
-    s.hold(0.3, attack);
-    s.idle(1.0);
-    s.step(|c| c.reload = true);
-    s.idle(0.6);
-    let before = s.gun().clip;
-    assert_eq!(s.step(attack).shots.len(), 1, "can fire after 0.55 s");
-    s.idle(1.0);
-    assert_eq!(s.gun().clip, before - 1, "the interrupted reload stopped");
-}
-
-#[test]
 fn spread_offsets_are_triangular_and_bounded() {
     let (mut sum, mut sumsq) = (0.0f64, 0.0f64);
     for seed in 0..20000u64 {

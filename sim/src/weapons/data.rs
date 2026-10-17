@@ -9,10 +9,6 @@ pub enum Id {
     Usp,
     P228,
     Deagle,
-    FiveSeven,
-    Elite,
-    M3,
-    Xm1014,
     Mac10,
     Tmp,
     Mp5,
@@ -22,13 +18,8 @@ pub enum Id {
     Famas,
     Ak47,
     M4a1,
-    Sg552,
-    Aug,
     Scout,
     Awp,
-    G3sg1,
-    Sg550,
-    M249,
     HeGrenade,
     Flashbang,
     Smoke,
@@ -71,17 +62,7 @@ pub enum Spread {
     /// Pistols: `k*(1-acc)` for air, moving (any speed), crouched, standing.
     Pistol { air: f32, moving: f32, duck: f32, stand: f32 },
     /// Snipers: flat values (speed thresholds tested in order), plus `unscoped` when not zoomed.
-    Sniper { air: f32, moving: &'static [(f32, f32)], duck: f32, stand: f32, unscoped: f32, rule: SniperRule },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SniperRule {
-    /// AWP, Scout: accuracy unused.
-    Flat,
-    /// G3SG1: the whole value (with the unscoped add) times `(1-acc)`, acc updated first.
-    G3,
-    /// SG550: air/duck/stand times `(1-acc)` (acc before the update), moving flat.
-    Sg550,
+    Sniper { air: f32, moving: &'static [(f32, f32)], duck: f32, stand: f32, unscoped: f32 },
 }
 
 /// How accuracy changes as you shoot.
@@ -316,78 +297,6 @@ pub static WEAPONS: &[Def] = &[
         }),
     },
     Def {
-        id: Id::FiveSeven,
-        name: "fiveseven",
-        slot: Slot::Secondary,
-        price: 750,
-        kind: Kind::Gun(Gun {
-            clip: 20,
-            reserve: 100,
-            distance: 4096.0,
-            bullet: B57,
-            reload: 2.7,
-            armor_factor: 1.5,
-            modes: &[one(20, 0.885, 0.15, pistol_spread(1.5, 0.255, 0.075, 0.15))],
-            accuracy: pistol_acc(0.275, 0.25, 0.725, 0.92),
-            recoil: Recoil::Flat(2.0),
-            semi_auto: true,
-            ..BASE
-        }),
-    },
-    Def {
-        id: Id::Elite,
-        name: "elite",
-        slot: Slot::Secondary,
-        price: 800,
-        kind: Kind::Gun(Gun {
-            clip: 30,
-            reserve: 120,
-            reload: 4.5,
-            armor_factor: 1.05,
-            modes: &[one(36, 0.75, 0.075, pistol_spread(1.3, 0.175, 0.08, 0.1))],
-            accuracy: pistol_acc(0.325, 0.275, 0.55, 0.88),
-            recoil: Recoil::Flat(2.0),
-            semi_auto: true,
-            ..BASE
-        }),
-    },
-    Def {
-        id: Id::M3,
-        name: "m3",
-        slot: Slot::Primary,
-        price: 1700,
-        kind: Kind::Gun(Gun {
-            clip: 8,
-            reserve: 32,
-            penetration: 0,
-            distance: 3000.0,
-            speed: 230.0,
-            scoped_speed: 230.0,
-            modes: &[one(20, 1.0, 0.875, Spread::Smg { air: 0.0, fast: None, still: 0.0 })],
-            recoil: Recoil::Shotgun { ground: (4, 6), air: (8, 11) },
-            pellets: Some(Pellets { count: 9, cone: 0.0675, range: 3000.0, damage: 20.0, shell_time: 0.45 }),
-            ..BASE
-        }),
-    },
-    Def {
-        id: Id::Xm1014,
-        name: "xm1014",
-        slot: Slot::Primary,
-        price: 3000,
-        kind: Kind::Gun(Gun {
-            clip: 7,
-            reserve: 32,
-            penetration: 0,
-            distance: 3048.0,
-            speed: 240.0,
-            scoped_speed: 240.0,
-            modes: &[one(20, 1.0, 0.25, Spread::Smg { air: 0.0, fast: None, still: 0.0 })],
-            recoil: Recoil::Shotgun { ground: (3, 5), air: (7, 10) },
-            pellets: Some(Pellets { count: 6, cone: 0.0725, range: 3048.0, damage: 20.0, shell_time: 0.3 }),
-            ..BASE
-        }),
-    },
-    Def {
         id: Id::Mac10,
         name: "mac10",
         slot: Slot::Primary,
@@ -597,54 +506,6 @@ pub static WEAPONS: &[Def] = &[
         }),
     },
     Def {
-        id: Id::Sg552,
-        name: "sg552",
-        slot: Slot::Primary,
-        price: 3500,
-        kind: Kind::Gun(Gun {
-            penetration: 2,
-            bullet: B556,
-            reload: 3.0,
-            speed: 235.0,
-            scoped_speed: 200.0,
-            armor_factor: 1.4,
-            modes: &[one(33, 0.955, 0.0825, rifle((0.035, 0.45), (0.035, 0.075), (0.0, 0.02)))],
-            secondary: Secondary::Zoom(&[55]),
-            zoomed_cycle: Some(0.135),
-            accuracy: auto(3, 220, 0.3, 1.0, 0.2, 0.2),
-            recoil: Recoil::Kick {
-                smg_order: false,
-                sets: [
-                    [1.0, 0.45, 0.28, 0.04, 4.25, 2.5, 7.0],
-                    [1.25, 0.45, 0.22, 0.18, 6.0, 4.0, 5.0],
-                    [0.6, 0.35, 0.2, 0.0125, 3.7, 2.0, 10.0],
-                    [0.625, 0.375, 0.25, 0.0125, 4.0, 2.25, 9.0],
-                ],
-            },
-            ..BASE
-        }),
-    },
-    Def {
-        id: Id::Aug,
-        name: "aug",
-        slot: Slot::Primary,
-        price: 3500,
-        kind: Kind::Gun(Gun {
-            penetration: 2,
-            bullet: B556,
-            reload: 3.3,
-            speed: 240.0,
-            scoped_speed: 240.0,
-            armor_factor: 1.4,
-            modes: &[one(32, 0.96, 0.0825, rifle((0.035, 0.4), (0.035, 0.07), (0.0, 0.02)))],
-            secondary: Secondary::Zoom(&[55]),
-            zoomed_cycle: Some(0.135),
-            accuracy: auto(3, 215, 0.3, 1.0, 0.2, 0.0),
-            recoil: Recoil::Kick { smg_order: false, sets: FAMAS_KICK },
-            ..BASE
-        }),
-    },
-    Def {
         id: Id::Scout,
         name: "scout",
         slot: Slot::Primary,
@@ -658,7 +519,7 @@ pub static WEAPONS: &[Def] = &[
             speed: 260.0,
             scoped_speed: 220.0,
             armor_factor: 1.7,
-            modes: &[one(75, 0.98, 1.25, Spread::Sniper { air: 0.2, moving: &[(170.0, 0.075)], duck: 0.0, stand: 0.007, unscoped: 0.025, rule: SniperRule::Flat })],
+            modes: &[one(75, 0.98, 1.25, Spread::Sniper { air: 0.2, moving: &[(170.0, 0.075)], duck: 0.0, stand: 0.007, unscoped: 0.025 })],
             secondary: Secondary::Zoom(&[40, 15]),
             unscope_on_fire: true,
             recoil: Recoil::Flat(2.0),
@@ -684,79 +545,11 @@ pub static WEAPONS: &[Def] = &[
                 115,
                 0.99,
                 1.45,
-                Spread::Sniper { air: 0.85, moving: &[(140.0, 0.25), (10.0, 0.1)], duck: 0.0, stand: 0.001, unscoped: 0.08, rule: SniperRule::Flat },
+                Spread::Sniper { air: 0.85, moving: &[(140.0, 0.25), (10.0, 0.1)], duck: 0.0, stand: 0.001, unscoped: 0.08 },
             )],
             secondary: Secondary::Zoom(&[40, 10]),
             unscope_on_fire: true,
             recoil: Recoil::Flat(2.0),
-            ..BASE
-        }),
-    },
-    Def {
-        id: Id::G3sg1,
-        name: "g3sg1",
-        slot: Slot::Primary,
-        price: 5000,
-        kind: Kind::Gun(Gun {
-            clip: 20,
-            penetration: 3,
-            bullet: B762,
-            reload: 3.5,
-            speed: 210.0,
-            scoped_speed: 150.0,
-            armor_factor: 1.65,
-            modes: &[one(80, 0.98, 0.25, Spread::Sniper { air: 0.45, moving: &[(0.0, 0.15)], duck: 0.035, stand: 0.055, unscoped: 0.025, rule: SniperRule::G3 })],
-            secondary: Secondary::Zoom(&[40, 15]),
-            accuracy: Accuracy::SniperTime { base: 0.55, k: 0.3, cap: 0.98, initial: 0.2, on_reload: Some(0.2), first_shot: Some(0.98) },
-            recoil: Recoil::AutoSniper { lo: 0.75, hi: 1.75 },
-            ..BASE
-        }),
-    },
-    Def {
-        id: Id::Sg550,
-        name: "sg550",
-        slot: Slot::Primary,
-        price: 4200,
-        kind: Kind::Gun(Gun {
-            penetration: 2,
-            bullet: B556,
-            reload: 3.35,
-            speed: 210.0,
-            scoped_speed: 150.0,
-            armor_factor: 1.45,
-            modes: &[one(70, 0.98, 0.25, Spread::Sniper { air: 0.45, moving: &[(0.0, 0.15)], duck: 0.04, stand: 0.05, unscoped: 0.025, rule: SniperRule::Sg550 })],
-            secondary: Secondary::Zoom(&[40, 15]),
-            // The original never initialises SG550 accuracy (0 until the second shot).
-            accuracy: Accuracy::SniperTime { base: 0.65, k: 0.35, cap: 0.98, initial: 0.0, on_reload: None, first_shot: None },
-            recoil: Recoil::AutoSniper { lo: 0.75, hi: 1.25 },
-            ..BASE
-        }),
-    },
-    Def {
-        id: Id::M249,
-        name: "m249",
-        slot: Slot::Primary,
-        price: 5750,
-        kind: Kind::Gun(Gun {
-            clip: 100,
-            reserve: 200,
-            penetration: 2,
-            bullet: B556,
-            reload: 4.7,
-            speed: 220.0,
-            scoped_speed: 220.0,
-            armor_factor: 1.5,
-            modes: &[one(32, 0.97, 0.1, rifle((0.045, 0.5), (0.045, 0.095), (0.0, 0.03)))],
-            accuracy: auto(3, 175, 0.4, 0.9, 0.2, 0.2),
-            recoil: Recoil::Kick {
-                smg_order: true,
-                sets: [
-                    [1.1, 0.5, 0.3, 0.06, 4.0, 3.0, 8.0],
-                    [1.8, 0.65, 0.45, 0.125, 5.0, 3.5, 8.0],
-                    [0.75, 0.325, 0.25, 0.025, 3.5, 2.5, 9.0],
-                    [0.8, 0.35, 0.3, 0.03, 3.75, 3.0, 9.0],
-                ],
-            },
             ..BASE
         }),
     },
@@ -808,16 +601,16 @@ pub fn fire_attenuation(id: Id, silenced: bool) -> f32 {
     use Id::*;
     match id {
         Awp => 0.28,
-        Ak47 | G3sg1 | Galil | Sg550 | Sg552 => 0.4,
-        Aug | Famas | M3 => 0.48,
+        Ak47 | Galil => 0.4,
+        Famas => 0.48,
         M4a1 if silenced => 1.4,
-        M4a1 | M249 | Xm1014 => 0.52,
+        M4a1 => 0.52,
         Deagle => 0.6,
         Mp5 | P90 | Ump45 => 0.64,
         Mac10 => 0.72,
         Scout | Tmp => 1.6,
         Usp if silenced => 2.0,
-        _ => 0.8, // Glock, USP, P228, Five-seveN, Elites
+        _ => 0.8, // Glock, USP, P228
     }
 }
 
@@ -826,14 +619,11 @@ pub fn anim_ext(id: Id) -> &'static str {
     use Id::*;
     match id {
         Knife => "knife",
-        Glock | Usp | P228 | Deagle | FiveSeven => "onehanded",
-        Elite => "dualpistols",
-        M3 | Xm1014 => "shotgun",
+        Glock | Usp | P228 | Deagle => "onehanded",
         Mac10 | Tmp | Mp5 | Ump45 | P90 => "mp5",
         Galil | Ak47 => "ak47",
-        Famas | M4a1 | Sg552 | Aug => "carbine",
-        Scout | Awp | G3sg1 | Sg550 => "rifle",
-        M249 => "m249",
+        Famas | M4a1 => "carbine",
+        Scout | Awp => "rifle",
         HeGrenade | Flashbang | Smoke => "grenade",
         C4 => "c4",
     }

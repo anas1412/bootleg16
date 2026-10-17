@@ -17,15 +17,8 @@ pub(super) fn fire(g: &mut GunState, gd: &data::Gun, c: &Context, out: &mut Fire
         }
         let since_last = if g.last_fire > 0.0 { Some((c.now - g.last_fire) as f32) } else { None };
 
-        // Spread from the accuracy left by the previous shot (G3SG1 updates first).
-        let mut acc_before = g.accuracy;
-        if let (Accuracy::SniperTime { base, k, cap, first_shot, .. }, Spread::Sniper { rule: SniperRule::G3, .. }) = (gd.accuracy, mode.spread) {
-            g.accuracy = match since_last {
-                Some(dt) => (dt * k + base).min(cap),
-                None => first_shot.unwrap_or(g.accuracy),
-            };
-            acc_before = g.accuracy;
-        }
+        // Spread from the accuracy left by the previous shot.
+        let acc_before = g.accuracy;
         let spread = spread(&mode.spread, acc_before, c, g.zoom > 0);
 
         // Accuracy for the next shot.
@@ -45,7 +38,7 @@ pub(super) fn fire(g: &mut GunState, gd: &data::Gun, c: &Context, out: &mut Fire
                     g.accuracy = (g.accuracy - (k - dt) * s).clamp(lo, hi);
                 }
             }
-            Accuracy::SniperTime { base, k, cap, .. } if !matches!(mode.spread, Spread::Sniper { rule: SniperRule::G3, .. }) => {
+            Accuracy::SniperTime { base, k, cap, .. } => {
                 if let Some(dt) = since_last {
                     g.accuracy = (dt * k + base).min(cap);
                 }
@@ -55,7 +48,6 @@ pub(super) fn fire(g: &mut GunState, gd: &data::Gun, c: &Context, out: &mut Fire
         g.last_fire = c.now;
 
         g.clip -= 1;
-        let side_offset = if g.id == Id::Elite { if g.clip % 2 == 0 { -5.0 } else { 5.0 } } else { 0.0 };
         out.shots.push(Shot {
             weapon: g.id,
             damage: mode.damage,
@@ -65,7 +57,6 @@ pub(super) fn fire(g: &mut GunState, gd: &data::Gun, c: &Context, out: &mut Fire
             bullet: gd.bullet,
             spread,
             angles: [c.pitch + punch[0], c.yaw + punch[1]],
-            side_offset,
             seed: c.seed,
             pellets: gd.pellets,
             silenced: matches!(g.id, Id::M4a1 | Id::Usp) && g.mode == 1,
@@ -163,23 +154,18 @@ pub(super) fn spread(s: &Spread, acc: f32, c: &Context, zoomed: bool) -> f32 {
             };
             k * (1.0 - acc)
         }
-        Spread::Sniper { air: a, moving, duck, stand, unscoped, rule } => {
+        Spread::Sniper { air: a, moving, duck, stand, unscoped } => {
             let moving_value = moving.iter().find(|(speed, _)| c.speed_2d > *speed).map(|(_, v)| *v);
-            let (base, uses_acc) = if air {
-                (a, true)
+            let base = if air {
+                a
             } else if let Some(v) = moving_value {
-                (v, false)
+                v
             } else if c.crouched {
-                (duck, true)
+                duck
             } else {
-                (stand, true)
+                stand
             };
-            let extra = if zoomed { 0.0 } else { unscoped };
-            match rule {
-                SniperRule::Flat => base + extra,
-                SniperRule::G3 => (base + extra) * (1.0 - acc),
-                SniperRule::Sg550 => (if uses_acc { base * (1.0 - acc) } else { base }) + extra,
-            }
+            base + if zoomed { 0.0 } else { unscoped }
         }
     }
 }

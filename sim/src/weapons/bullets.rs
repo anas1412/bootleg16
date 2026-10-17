@@ -83,7 +83,7 @@ fn nearest(world: &World, hitboxes: &Hitboxes, src: Vec3, end: Vec3, targets: &[
 /// One `FireBullets3` bullet. `eye` is the shooter's eye; `shooter` is never hit.
 pub fn fire_bullet(world: &World, materials: &Materials, hitboxes: &Hitboxes, eye: Vec3, shot: &Shot, shooter: u8, targets: &[Target]) -> ShotResult {
     let (fwd, right, up) = view_vectors(shot.angles[0], shot.angles[1]);
-    let mut src = add(eye, scale(right, shot.side_offset));
+    let mut src = eye;
     // Triangular spread on each axis (sum of two uniforms), not normalised.
     let x = rand01(shot.seed, 0) - 0.5 + rand01(shot.seed, 1) - 0.5;
     let y = rand01(shot.seed, 2) - 0.5 + rand01(shot.seed, 3) - 0.5;

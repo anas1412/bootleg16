@@ -96,7 +96,7 @@ fn scope_image(n: u32) -> Image {
 
 /// Snipers only have a crosshair when scoped (in the scope itself).
 fn is_sniper(id: Id) -> bool {
-    matches!(id, Id::Awp | Id::Scout | Id::G3sg1 | Id::Sg550)
+    matches!(id, Id::Awp | Id::Scout)
 }
 
 pub(super) fn crosshair(

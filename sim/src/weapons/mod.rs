@@ -8,7 +8,7 @@ mod firing;
 mod update;
 
 pub use data::{def, gun, Id, Slot};
-use data::{Accuracy, Kind, Recoil, Secondary, SniperRule, Spread};
+use data::{Accuracy, Kind, Recoil, Secondary, Spread};
 use firing::{fire, shotgun_reload_step, spread, start_reload};
 use serde::{Deserialize, Serialize};
 
@@ -144,8 +144,6 @@ pub struct Shot {
     pub spread: f32,
     /// View angles + punch at the moment of the shot (pitch, yaw), degrees.
     pub angles: [f32; 2],
-    /// Sideways offset of the muzzle (Elite alternates guns), units.
-    pub side_offset: f32,
     pub seed: u64,
     pub pellets: Option<data::Pellets>,
     /// M4A1/USP with the silencer on (quieter, different sound).

@@ -24,6 +24,7 @@ def main(src, out):
     # White over green: red and blue stay low only where the green shows.
     bg = np.median(np.minimum(im[:20, :20, 0], im[:20, :20, 2]))
     alpha = np.clip((np.minimum(im[..., 0], im[..., 2]) - bg) / (255 - bg), 0, 1)
+    alpha[alpha < 0.08] = 0  # the green is not perfectly flat: no faint boxes behind icons
     rgba = np.zeros(im.shape[:2] + (4,), np.uint8)
     rgba[..., :3] = 255
     rgba[..., 3] = np.round(alpha * 255)

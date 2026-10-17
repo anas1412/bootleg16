@@ -74,13 +74,13 @@ pub fn tagging(p: &mut Player, dt: f32) {
 }
 
 /// What a bullet hit does to the victim, as CS 1.6 (`TakeDamage`, `TraceAttack`, `ShouldDoLargeFlinch`):
-/// slowdown 0.65 for a "large flinch" (standing, not a leg hit, from a rifle, sniper, M3 or
+/// slowdown 0.65 for a "large flinch" (standing, not a leg hit, from a rifle, sniper or
 /// Deagle), else 0.5; and the view kicked up when the hit part had no armor.
 /// `roll` is a random number in -1..1 for the head-shot tilt.
 pub fn hit_by(s: &mut PlayerState, weapon: crate::weapons::Id, group: crate::hitbox::HitGroup, damage: f32, unarmored: bool, roll: f32) {
     use crate::hitbox::HitGroup::*;
     use crate::weapons::Id::*;
-    let large_gun = matches!(weapon, Scout | Aug | Sg550 | Galil | Famas | Awp | M3 | M4a1 | G3sg1 | Deagle | Sg552 | Ak47);
+    let large_gun = matches!(weapon, Scout | Galil | Famas | Awp | M4a1 | Deagle | Ak47);
     let large = !s.movement.crouched && !matches!(group, LeftLeg | RightLeg) && large_gun;
     s.movement.velocity_modifier = if large { 0.65 } else { 0.5 };
     if !unarmored {

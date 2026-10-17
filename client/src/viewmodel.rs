@@ -15,7 +15,7 @@ const LAYER: usize = 1;
 /// Things that happened to our weapon this frame (from our own predicted inputs).
 #[derive(Default)]
 pub struct Cues {
-    pub shots: Vec<f32>, // side offset per shot (Elite left/right)
+    pub shots: usize,
     /// The last shot was silenced (no muzzle flash).
     pub silenced: bool,
     pub swing: Option<bool>, // stab?
@@ -24,7 +24,7 @@ pub struct Cues {
 
 impl Cues {
     pub fn add(&mut self, f: &Fired) {
-        self.shots.extend(f.shots.iter().map(|s| s.side_offset));
+        self.shots += f.shots.len();
         if let Some(s) = f.shots.last() {
             self.silenced = s.silenced;
         }
@@ -53,7 +53,6 @@ pub struct ViewModel {
     /// Muzzle flash quad (child of the view model camera), until when it shows, and which muzzle.
     flash: Option<Entity>,
     flash_until: f32,
-    flash_muzzle: usize,
     /// Animation frame reached last update (for firing animation sound events once).
     last_frame: f32,
     last_fov: u8,
@@ -159,16 +158,12 @@ fn update(
     // What happened this frame decides the animation.
     let cues = std::mem::take(&mut vm.cues);
     let reloading = gun.is_some_and(|g| g.reloading || g.loading_shells());
-    if let Some(side) = cues.shots.last() {
+    if cues.shots > 0 {
         if crate::muzzle::flashes(id, cues.silenced) {
             vm.flash_until = now + crate::muzzle::FLASH_SECONDS;
-            // Dual Elites: the left or right gun's muzzle.
-            vm.flash_muzzle = if id == Id::Elite && *side > 0.0 { 1 } else { 0 };
         }
         let empty = gun.is_some_and(|g| g.clip == 0);
-        let seq = if id == Id::Elite {
-            find(&m.model, if *side < 0.0 { &["shoot_left1"] } else { &["shoot_right1"] })
-        } else if id == Id::Glock {
+        let seq = if id == Id::Glock {
             // CS 1.6 (client.so EV_FireGlock18): every bullet, burst or not, plays `shoot3`;
             // the last round `shoot_empty`. (`shoot`/`shoot2` are the shield versions.)
             find(&m.model, if empty { &["shoot_empty"] } else { &["shoot3"] })
@@ -268,7 +263,7 @@ fn update(
         e
     });
     let lit = now < vm.flash_until && alive;
-    if let (true, Some(at)) = (lit, m.model.attachment(vm.flash_muzzle, &pose)) {
+    if let (true, Some(at)) = (lit, m.model.attachment(0, &pose)) {
         if let Ok(mut t) = bones.get_mut(flash) {
             t.translation = to_camera().transform_point(Vec3::from(crate::map::to_y_up(at)));
             t.rotation = Quat::from_rotation_z((now * 9973.0).fract() * std::f32::consts::TAU);
@@ -279,7 +274,7 @@ fn update(
         v.set_if_neq(if lit { Visibility::Inherited } else { Visibility::Hidden });
     }
     // Hidden while dead (unless watching a teammate through their eyes) or through a sniper scope.
-    let scoped = gun.is_some_and(|g| g.fov() < 90) && matches!(id, Id::Awp | Id::Scout | Id::G3sg1 | Id::Sg550);
+    let scoped = gun.is_some_and(|g| g.fov() < 90) && matches!(id, Id::Awp | Id::Scout);
     let show = alive && !scoped && !w.noclip;
     for e in vm.skin.iter().flat_map(|s| &s.parts) {
         if let Ok(mut v) = vis.get_mut(*e) {
