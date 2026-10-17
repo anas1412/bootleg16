@@ -13,18 +13,24 @@ use std::collections::HashMap;
 pub struct Icons {
     table: HashMap<String, HudEntry>,
     sheets: HashMap<String, Handle<Image>>,
+    /// Redrawn weapon pictures (`gfx/guns/<name>.png`, full colour): the picture and its aspect.
+    pictures: HashMap<String, (Handle<Image>, f32)>,
 }
 
 impl FromWorld for Icons {
     fn from_world(world: &mut World) -> Self {
+        let pictures = load_pictures(world);
         // Add-on first, then cstrike, then valve (per file).
         let dirs = crate::gamefiles::paths("sprites");
         let read = |file: &str| dirs.iter().find_map(|d| std::fs::read_to_string(d.join(file)).ok());
-        let Some(text) = read("hud.txt") else { return Icons { table: HashMap::new(), sheets: HashMap::new() } };
+        let Some(text) = read("hud.txt") else { return Icons { table: HashMap::new(), sheets: HashMap::new(), pictures } };
         let mut table = hud_table(&text);
         // Buy menu art: each `weapon_<name>.txt`'s big "weapon" picture, as `gun_<name>`.
         let mut guns = Vec::new();
         for name in GUN_ART {
+            if pictures.contains_key(&format!("gun_{name}")) {
+                continue;
+            }
             if let Some(e) = read(&format!("weapon_{name}.txt")).and_then(|t| hud_table(&t).remove("weapon")) {
                 guns.push(e.clone());
                 table.insert(format!("gun_{name}"), e);
@@ -43,7 +49,7 @@ impl FromWorld for Icons {
                 sheets.insert(e.sprite.clone(), images.add(rgba_image(s.width, s.height, s.rgba, false, TextureFormat::Rgba8UnormSrgb)));
             }
         }
-        Icons { table, sheets }
+        Icons { table, sheets, pictures }
     }
 }
 
@@ -51,6 +57,9 @@ impl Icons {
     /// The named icon (`d_ak47`, `cross`...) `height` tall at 1080p, tinted `color`.
     /// An empty node when the game files don't have it.
     pub fn node(&self, name: &str, height: f32, color: Color) -> impl Bundle {
+        if let Some((image, aspect)) = self.pictures.get(name) {
+            return (ImageNode { image: image.clone(), color, ..default() }, Node { height: vh(height), aspect_ratio: Some(*aspect), ..default() });
+        }
         let found = self.table.get(name).and_then(|e| Some((e, self.sheets.get(&e.sprite)?)));
         let (image, rect, aspect) = match found {
             Some((e, img)) => (img.clone(), Some(Rect::new(e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32)), e.w as f32 / e.h as f32),
@@ -58,6 +67,21 @@ impl Icons {
         };
         (ImageNode { image, rect, color, ..default() }, Node { height: vh(height), aspect_ratio: Some(aspect), ..default() })
     }
+}
+
+/// The redrawn weapon pictures that exist (the rest use the sprite sheets).
+fn load_pictures(world: &mut World) -> HashMap<String, (Handle<Image>, f32)> {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
+    let mut images = world.resource_mut::<Assets<Image>>();
+    let mut out = HashMap::new();
+    for name in GUN_ART {
+        let Some(bytes) = crate::gamefiles::paths(&format!("gfx/guns/{name}.png")).iter().find_map(|p| std::fs::read(p).ok()) else { continue };
+        let Ok(img) = Image::from_buffer(&bytes, ImageType::Extension("png"), CompressedImageFormats::NONE, true, ImageSampler::linear(), RenderAssetUsages::default()) else { continue };
+        let aspect = img.width() as f32 / img.height() as f32;
+        out.insert(format!("gun_{name}"), (images.add(img), aspect));
+    }
+    out
 }
 
 /// Weapons with buy menu art (`sprites/weapon_<name>.txt`).
