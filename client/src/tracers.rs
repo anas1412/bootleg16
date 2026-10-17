@@ -1,18 +1,17 @@
-//! Bullet tracers, in one place. A shot (yours, predicted in `game`; anyone else's, from the
-//! server in `effects`) calls `Tracers::shot` with where the muzzle is and where the shot ended;
-//! a short bright streak flies that way. A shot that ends far off (the sky) is drawn only for
-//! its first stretch and fades, so it never races away across the map.
+//! Bullet tracers, as CS 1.6 draws them (`EV_HLDM_CheckTracer` in client.so, read from the
+//! disassembly): the tracer starts at the shooter's eye + 2 units forward + 16 to the right +
+//! (0, 0, -4), not at the gun model, and flies straight to where the bullet ended; the engine's
+//! tracer is a short bright dash at 6000 units a second. Your shots (predicted in `game`) and
+//! everyone else's (from the server in `effects`) both call `Tracers::shot`.
 use crate::map::to_y_up;
 use bevy::gizmos::config::{GizmoConfig, GizmoConfigGroup, GizmoLineConfig};
 use bevy::prelude::*;
 
-/// How far a tracer reaches (units), how fast it flies (units a second), and how long its dash
-/// is. A shot that ends farther off is drawn only this far, fading. The dash is short and
-/// leaves the gun at once: a tracer stays where it was fired while you turn, so a long line
-/// anchored at the gun would sweep across the screen.
-const REACH: f32 = 1400.0;
-const SPEED: f32 = 30000.0;
-const DASH: f32 = 110.0;
+/// Dash speed (the engine's `tracerspeed`), dash length, and how far a tracer is followed
+/// (units; a longer shot is drawn only this far).
+const SPEED: f32 = 6000.0;
+const DASH: f32 = 60.0;
+const REACH: f32 = 4096.0;
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct TracerGizmos;
@@ -21,54 +20,60 @@ struct Tracer {
     from: Vec3,
     to: Vec3,
     age: f32,
-    /// Cut short (the shot went on): fades out instead of ending in a hit.
-    fades: bool,
 }
 
 #[derive(Resource, Default)]
 pub struct Tracers(Vec<Tracer>);
 
+/// Where a player's tracer starts (GoldSrc coordinates), CS's offsets from the eye along the
+/// shot: 2 forward, 16 right, 4 down.
+pub fn start(eye: [f32; 3], end: [f32; 3]) -> [f32; 3] {
+    let d = [end[0] - eye[0], end[1] - eye[1], end[2] - eye[2]];
+    let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-3);
+    let f = [d[0] / len, d[1] / len, d[2] / len];
+    // right = forward x up (GoldSrc: z is up), flat
+    let flat = (f[0] * f[0] + f[1] * f[1]).sqrt().max(1e-3);
+    let right = [f[1] / flat, -f[0] / flat, 0.0];
+    [eye[0] + 2.0 * f[0] + 16.0 * right[0], eye[1] + 2.0 * f[1] + 16.0 * right[1], eye[2] + 2.0 * f[2] - 4.0]
+}
+
 impl Tracers {
-    /// A shot from the muzzle to where it ended (GoldSrc coordinates).
-    pub fn shot(&mut self, from: [f32; 3], to: [f32; 3]) {
-        let (a, b) = (Vec3::from(to_y_up(from)), Vec3::from(to_y_up(to)));
+    /// A shot by someone whose eye is at `eye` (GoldSrc coordinates), ending at `end`.
+    pub fn shot(&mut self, eye: [f32; 3], end: [f32; 3]) {
+        let (a, b) = (Vec3::from(to_y_up(start(eye, end))), Vec3::from(to_y_up(end)));
         let len = a.distance(b);
-        let (to, fades) = if len > REACH { (a + (b - a) / len * REACH, true) } else { (b, false) };
-        self.0.push(Tracer { from: a, to, age: 0.0, fades });
+        let to = if len > REACH { a + (b - a) / len * REACH } else { b };
+        self.0.push(Tracer { from: a, to, age: 0.0 });
     }
 }
 
-/// The dash at `age` on a path of `len`: (tail, head, fade), distances from the muzzle; None
-/// once it is gone.
-fn streak(age: f32, len: f32, fades: bool) -> Option<(f32, f32, f32)> {
+/// The dash at `age` on a path of `len`: (tail, head) distances from the start; None once it
+/// has arrived.
+fn dash(age: f32, len: f32) -> Option<(f32, f32)> {
     let head = (age * SPEED).min(len);
-    let tail = (head - DASH).max(0.0).max(if head >= len { (age * SPEED - DASH).min(len) } else { 0.0 });
-    if tail >= len {
-        return None;
-    }
-    Some((tail, head, if fades { (1.0 - tail / len).clamp(0.0, 1.0) } else { 1.0 }))
+    let tail = (head - DASH).max(0.0);
+    (age * SPEED - DASH < len).then_some((tail, head))
 }
 
 fn draw(mut tracers: ResMut<Tracers>, time: Res<Time>, mut gizmos: Gizmos<TracerGizmos>, mut hold: Local<Option<bool>>) {
-    // Screenshot runs hold a tracer a moment after it leaves the gun (it lives under a tenth of a second).
+    // Screenshot runs hold the latest tracer part-way (they live a fraction of a second).
     let hold = *hold.get_or_insert_with(|| std::env::var_os("BOOTLEG16_SCREENSHOT").is_some());
-    let dt = if hold { 0.0 } else { time.delta_secs() };
-    // (held screenshots show only the latest tracer: they would pile up, as nothing expires)
     if hold && tracers.0.len() > 1 {
         let last = tracers.0.pop().unwrap();
         tracers.0 = vec![last];
     }
+    let dt = if hold { 0.0 } else { time.delta_secs() };
     for t in &mut tracers.0 {
         let len = t.from.distance(t.to).max(1.0);
-        let age = if hold { 0.03 } else { t.age };
-        let Some((tail, head, fade)) = streak(age, len, t.fades) else { continue };
-        let (a, b) = (t.from.lerp(t.to, tail / len), t.from.lerp(t.to, head / len));
-        // A warm line with a white core.
-        gizmos.line(a, b, Color::srgba(1.0, 0.75, 0.3, 0.85 * fade));
-        gizmos.line(a.lerp(b, 0.25), b, Color::srgba(1.0, 1.0, 0.9, fade));
+        let age = if hold { (len * 0.5 / SPEED).min(0.05) } else { t.age };
+        if let Some((tail, head)) = dash(age, len) {
+            let (a, b) = (t.from.lerp(t.to, tail / len), t.from.lerp(t.to, head / len));
+            // the engine's tracer colour: warm yellow
+            gizmos.line(a, b, Color::srgba(1.0, 0.85, 0.4, 0.9));
+        }
         t.age += dt;
     }
-    tracers.0.retain(|t| hold || streak(t.age, t.from.distance(t.to).max(1.0), t.fades).is_some());
+    tracers.0.retain(|t| hold || dash(t.age, t.from.distance(t.to).max(1.0)).is_some());
 }
 
 pub struct TracerPlugin;
@@ -77,7 +82,7 @@ impl Plugin for TracerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Tracers>()
             .init_gizmo_group::<TracerGizmos>()
-            .insert_gizmo_config(TracerGizmos, GizmoConfig { line: GizmoLineConfig { width: 3.0, ..default() }, ..default() })
+            .insert_gizmo_config(TracerGizmos, GizmoConfig { line: GizmoLineConfig { width: 2.5, ..default() }, ..default() })
             .add_systems(Update, draw);
     }
 }
@@ -87,21 +92,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_tracer_is_gone_within_a_tenth_of_a_second_whatever_its_length() {
-        for len in [1.0, 50.0, 400.0, REACH] {
-            assert!(streak(0.0, len, false).is_some(), "it starts at the gun ({len})");
-            assert!(streak(0.1, len, len >= REACH).is_none(), "gone after 0.1 s ({len})");
-        }
+    fn the_start_is_cs_offsets_from_the_eye_along_the_shot() {
+        // Shooting along +x from the origin: 2 ahead, 16 to the right (-y in GoldSrc), 4 down.
+        let s = start([0.0, 0.0, 0.0], [1000.0, 0.0, 0.0]);
+        assert!((s[0] - 2.0).abs() < 1e-4 && (s[1] + 16.0).abs() < 1e-4 && (s[2] + 4.0).abs() < 1e-4, "{s:?}");
+        // Along +y the right-hand side is +x.
+        let s = start([0.0, 0.0, 0.0], [0.0, 1000.0, 0.0]);
+        assert!((s[0] - 16.0).abs() < 1e-4 && (s[1] - 2.0).abs() < 1e-4, "{s:?}");
     }
 
     #[test]
-    fn the_dash_is_never_longer_than_its_length_and_leaves_the_gun_at_once() {
-        for age in [0.0, 0.002, 0.01, 0.03, 0.05] {
-            if let Some((tail, head, _)) = streak(age, 1000.0, false) {
-                assert!(head - tail <= DASH + 0.01, "dash {} at {age}", head - tail);
-            }
-        }
-        let (tail, head, _) = streak(0.01, 1000.0, false).unwrap();
-        assert!(head > 250.0 && tail > 100.0, "{tail} {head}: already out of the gun");
+    fn the_dash_flies_from_the_start_to_the_end_and_is_gone() {
+        assert!(dash(0.0, 1000.0).is_some());
+        let (tail, head) = dash(0.05, 1000.0).unwrap();
+        assert!((head - 300.0).abs() < 0.5 && (head - tail - DASH).abs() < 0.5);
+        assert!(dash(1000.0 / SPEED + 0.02, 1000.0).is_none());
     }
 }

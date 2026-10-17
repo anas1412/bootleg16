@@ -61,9 +61,6 @@ pub struct ViewModel {
     reveal: u8,
     /// Where this weapon sits (see `placement_transform`).
     placement: Transform,
-    /// The muzzle in camera space (x right, y up, -z forward), when the model has one: your
-    /// shot's tracer starts there.
-    pub muzzle: Option<Vec3>,
 }
 
 #[derive(Component)]
@@ -317,7 +314,6 @@ fn update(
         }
     }
     vm.reveal = reveal;
-    vm.muzzle = muzzle_at(&m.model, &pose).map(|at| vm.placement.transform_point(Vec3::from(crate::map::to_y_up(at))));
     // Muzzle flash at the muzzle, facing us, a random turn each shot.
     let flash = *vm.flash.get_or_insert_with(|| {
         let e = crate::muzzle::spawn(&mut commands, &flash_look);
