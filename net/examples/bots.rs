@@ -27,12 +27,12 @@ fn main() {
     // Deathmatch: take seats on the deathmatch server instead of queueing for matches.
     let deathmatch = args.iter().any(|a| a == "--deathmatch");
     let difficulty = args.iter().position(|a| a == "--difficulty").and_then(|i| args.get(i + 1)).and_then(|d| Profile::parse(d)).unwrap_or(net::bot::Difficulty::Normal);
-    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or_else(|_| format!("{}/.steam/steam/steamapps/common/Half-Life", std::env::var("HOME").unwrap_or_default()));
+    let dir = net::gamefiles::data_dir().to_string_lossy().into_owned();
     // Each map's navigation, worked out the first time a match is on it.
     let mut maps: std::collections::HashMap<String, std::sync::Arc<BotMap>> = std::collections::HashMap::new();
     let mut load = |name: &str| -> Option<std::sync::Arc<BotMap>> {
         if !maps.contains_key(name) {
-            let bsp = goldsrc::bsp::Bsp::load(format!("{dir}/cstrike/maps/{name}.bsp")).ok()?;
+            let bsp = goldsrc::bsp::Bsp::load(format!("{dir}/maps/{name}.bsp")).ok()?;
             maps.insert(name.to_string(), BotMap::new(bsp, name));
         }
         maps.get(name).cloned()

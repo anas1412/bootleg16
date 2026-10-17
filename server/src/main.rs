@@ -54,10 +54,8 @@ fn main() {
     }
     let map = positional.first().cloned().unwrap_or_else(|| "de_dust2".into());
     let port: u16 = positional.get(1).and_then(|p| p.parse().ok()).unwrap_or(net::protocol::DEFAULT_PORT);
-    let dir = std::env::var_os("BOOTLEG16_DIR").map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".steam/steam/steamapps/common/Half-Life")
-    });
-    let path = dir.join("cstrike/maps").join(format!("{map}.bsp"));
+    let dir = net::gamefiles::data_dir();
+    let path = dir.join("maps").join(format!("{map}.bsp"));
     let bsp = goldsrc::bsp::Bsp::load(&path).unwrap_or_else(|e| panic!("loading {}: {e}", path.display()));
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let assets = net::server::Assets::load(&dir).unwrap_or_else(|e| panic!("loading game files: {e}"));

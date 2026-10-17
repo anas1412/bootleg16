@@ -1,13 +1,13 @@
 //! For every map, resolve each texture from the map itself or its WADs; report misses.
-//! Usage: texcheck <game root containing cstrike/ and valve/>
+//! Usage: texcheck <game data folder (maps/ and the .wad files)>
 use goldsrc::{bsp::Bsp, wad::Wad};
 use std::{collections::HashMap, path::Path};
 
 fn main() {
-    let root = std::env::args().nth(1).expect("usage: texcheck <Half-Life dir>");
+    let root = std::env::args().nth(1).expect("usage: texcheck <game data dir>");
     let root = Path::new(&root);
     let mut wads: HashMap<String, Option<Wad>> = HashMap::new();
-    let mut maps: Vec<_> = std::fs::read_dir(root.join("cstrike/maps")).unwrap().flatten().map(|e| e.path())
+    let mut maps: Vec<_> = std::fs::read_dir(root.join("maps")).unwrap().flatten().map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|e| e == "bsp")).collect();
     maps.sort();
     let mut total_missing = 0;
@@ -16,7 +16,7 @@ fn main() {
         let names = bsp.wad_names();
         for n in &names {
             wads.entry(n.to_ascii_lowercase()).or_insert_with(|| {
-                ["cstrike", "valve"].iter().find_map(|d| Wad::load(root.join(d).join(n)).ok())
+                Wad::load(root.join(n)).ok()
             });
         }
         let missing: Vec<_> = bsp.textures.iter()

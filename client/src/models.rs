@@ -137,7 +137,7 @@ fn bone_transform(b: &BoneTransform) -> Transform {
 /// Models loaded on first use and kept (missing files are remembered as missing).
 #[derive(Resource)]
 pub struct ModelCache {
-    /// The add-on's models, the mod's, then Half-Life's (like GoldSrc: gibs live there).
+    /// The game data folder's models.
     dirs: Vec<PathBuf>,
     models: HashMap<String, Option<Arc<Loaded>>>,
 }

@@ -113,8 +113,8 @@ fn checkerboard(name: &str) -> Texture {
     Texture { name: name.to_string(), width: 8, height: 8, rgba }
 }
 
-/// A loaded map's geometry and its WADs. `search` lists game directories (e.g. cstrike,
-/// valve) to look in for the WAD files the map names.
+/// A loaded map's geometry and its WADs. `search` lists the directories to look in for the
+/// WAD files the map names.
 pub fn load(bsp: &Bsp, search: &[&Path]) -> MapGeometry {
     let wads: Vec<Wad> = bsp
         .wad_names()

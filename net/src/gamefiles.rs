@@ -1,12 +1,20 @@
-//! Where game files are looked up: the add-on (`cstrike_addon/` next to the install's
-//! `cstrike/`, or `BOOTLEG16_ADDON`). Textures, models, sounds and sprites come only from
-//! there; Valve's own folders (`cstrike/`, `valve/`) are not read, except for the maps.
+//! Our own game data: textures, models, sounds, sprites, maps and radar overviews live in one
+//! folder (`data/` beside the executable; in the repo, the private `dist/gamedata/`). Set
+//! `BOOTLEG16_DIR` to use another. Nothing is read from anywhere else.
 use std::path::{Path, PathBuf};
 
-/// The folders to look in (just the add-on, when it exists).
+/// The game data folder.
+pub fn data_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("BOOTLEG16_DIR") {
+        return dir.into();
+    }
+    let beside_exe = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("data"))).filter(|p| p.is_dir());
+    beside_exe.unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/gamedata"))
+}
+
+/// The folders to look in (just the data folder, when it exists).
 pub fn roots(game: &Path) -> Vec<PathBuf> {
-    let addon = std::env::var_os("BOOTLEG16_ADDON").map(PathBuf::from).unwrap_or_else(|| game.join("cstrike_addon"));
-    Some(addon).filter(|p| p.is_dir()).into_iter().collect()
+    Some(game.to_path_buf()).filter(|p| p.is_dir()).into_iter().collect()
 }
 
 /// `rel` under each root, in lookup order.

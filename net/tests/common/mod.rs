@@ -9,24 +9,23 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 pub fn game_dir() -> Option<String> {
-    let home = std::env::var("HOME").ok()?;
-    Some(std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life")))
+    Some(net::gamefiles::data_dir().to_string_lossy().into_owned())
 }
 
 pub fn map(name: &str) -> Option<Bsp> {
-    Bsp::load(format!("{}/cstrike/maps/{name}.bsp", game_dir()?)).ok()
+    Bsp::load(format!("{}/maps/{name}.bsp", game_dir()?)).ok()
 }
 
 pub fn dust2() -> Option<Bsp> {
-    Bsp::load(format!("{}/cstrike/maps/de_dust2.bsp", game_dir()?)).ok()
+    Bsp::load(format!("{}/maps/de_dust2.bsp", game_dir()?)).ok()
 }
 
 pub fn assets() -> net::server::Assets {
     let dir = game_dir().unwrap();
-    let model = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")).expect("player model");
+    let model = goldsrc::mdl::Model::load(format!("{dir}/models/player/arctic/arctic.mdl")).expect("player model");
     net::server::Assets {
         hitboxes: sim::hitbox::Hitboxes::from_model(&model, "carbine").unwrap(),
-        materials: goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!("{dir}/cstrike/sound/materials.txt")).unwrap_or_default()),
+        materials: goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!("{dir}/sound/materials.txt")).unwrap_or_default()),
     }
 }
 

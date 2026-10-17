@@ -46,7 +46,7 @@ pub enum Cue {
 
 #[derive(Resource)]
 pub struct Sounds {
-    /// Where sounds are looked for: the mod's, then Half-Life's (like GoldSrc).
+    /// Where sounds are looked for (the game data folder).
     dirs: Vec<PathBuf>,
     cache: HashMap<String, Option<Handle<AudioSource>>>,
     materials: Materials,

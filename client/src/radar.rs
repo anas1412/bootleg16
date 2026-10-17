@@ -97,7 +97,7 @@ fn parse_txt(text: &str) -> Option<(f32, [f32; 2], bool)> {
 
 fn spawn(mut commands: Commands, config: Res<GameConfig>, w: Option<Res<Walker>>, mut images: ResMut<Assets<Image>>) {
     let map = w.as_ref().and_then(|w| w.client.map.clone()).unwrap_or_else(|| config.map.clone());
-    let dir = crate::game_dir().join("cstrike/overviews");
+    let dir = crate::game_dir().join("overviews");
     let img = std::fs::read(dir.join(format!("{map}.bmp"))).ok().and_then(|d| load_bmp(&d));
     let txt = std::fs::read_to_string(dir.join(format!("{map}.txt"))).ok().and_then(|t| parse_txt(&t));
     let (Some((iw, ih, rgba)), Some((zoom, origin, rotated))) = (img, txt) else { return };

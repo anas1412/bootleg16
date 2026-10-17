@@ -3,7 +3,7 @@
 use super::*;
 
 impl Server {
-    /// Where the server finds maps (`cstrike/maps/<name>.bsp` under this folder). Without it,
+    /// Where the server finds maps (`maps/<name>.bsp` under this folder). Without it,
     /// it stays on the map it started with.
     pub fn set_game_dir(&mut self, dir: std::path::PathBuf) {
         self.maps = crate::config::pool_maps_in(&dir);
@@ -28,7 +28,7 @@ impl Server {
         if !self.maps.iter().any(|m| m == name) {
             return Err(format!("{name} isn't on this server"));
         }
-        let bsp = Bsp::load(dir.join(format!("cstrike/maps/{name}.bsp"))).map_err(|e| format!("{name}: {e}"))?;
+        let bsp = Bsp::load(dir.join(format!("maps/{name}.bsp"))).map_err(|e| format!("{name}: {e}"))?;
         let zones = sim::zones::Zones::from_bsp(&bsp);
         self.spawns_t = zones.spawns(sim::zones::Side::T);
         self.spawns_ct = zones.spawns(sim::zones::Side::Ct);

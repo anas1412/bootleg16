@@ -8,8 +8,8 @@ const DT: f32 = 1.0 / 128.0;
 
 fn load(map: &str) -> Option<Bsp> {
     let home = std::env::var("HOME").ok()?;
-    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
-    Bsp::load(format!("{dir}/cstrike/maps/{map}.bsp")).ok()
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{}/../dist/gamedata", env!("CARGO_MANIFEST_DIR")));
+    Bsp::load(format!("{dir}/maps/{map}.bsp")).ok()
 }
 
 fn vec3(s: &str) -> [f32; 3] {
@@ -174,8 +174,8 @@ fn bullets_hit_floor_walls_and_sky_on_dust2() {
 #[test]
 fn hitboxes_from_the_real_player_model() {
     let Some(home) = std::env::var("HOME").ok() else { return };
-    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
-    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")) else { return };
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{}/../dist/gamedata", env!("CARGO_MANIFEST_DIR")));
+    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/models/player/arctic/arctic.mdl")) else { return };
     use sim::hitbox::{HitGroup, Hitboxes};
     let hb = Hitboxes::from_model(&model, "carbine").expect("aim sequences");
     // Twisting turns the head round the vertical axis, not off it.
@@ -234,8 +234,8 @@ fn bullets_know_what_texture_they_hit() {
     // Every texture name the trace can return comes from the map's own texture list.
     assert!(bsp.textures.iter().any(|t| t.name == floor), "{floor}");
     let mats = goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!(
-        "{}/.steam/steam/steamapps/common/Half-Life/cstrike/sound/materials.txt",
-        std::env::var("HOME").unwrap()
+        "{}/../dist/gamedata/sound/materials.txt",
+        env!("CARGO_MANIFEST_DIR")
     )).unwrap_or_default());
     eprintln!("dust2 T spawn floor: {floor} -> material {}", mats.kind(floor));
 }
@@ -249,9 +249,9 @@ mod shooting {
     fn setup() -> Option<(World, Hitboxes, goldsrc::materials::Materials, [f32; 3])> {
         let bsp = load("de_dust2")?;
         let home = std::env::var("HOME").ok()?;
-        let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
-        let model = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")).ok()?;
-        let mats = goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!("{dir}/cstrike/sound/materials.txt")).ok()?);
+        let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{}/../dist/gamedata", env!("CARGO_MANIFEST_DIR")));
+        let model = goldsrc::mdl::Model::load(format!("{dir}/models/player/arctic/arctic.mdl")).ok()?;
+        let mats = goldsrc::materials::Materials::parse(&std::fs::read_to_string(format!("{dir}/sound/materials.txt")).ok()?);
         let world = World::from_bsp(&bsp);
         // Stand on the floor at the first T spawn.
         let s = bsp.entity_list().iter().find(|e| e.get("classname").map(String::as_str) == Some("info_player_deathmatch")).map(|e| vec3(&e["origin"]))?;
@@ -275,7 +275,7 @@ mod shooting {
 
     fn ak_shot(pitch: f32, yaw: f32) -> Shot {
         let g = gun(Id::Ak47).unwrap();
-        Shot { weapon: Id::Ak47, damage: 36, range_mod: 0.98, penetration: g.penetration, distance: g.distance, bullet: g.bullet, spread: 0.0, angles: [pitch, yaw], side_offset: 0.0, seed: 1, pellets: None, silenced: false }
+        Shot { weapon: Id::Ak47, damage: 36, range_mod: 0.98, penetration: g.penetration, distance: g.distance, bullet: g.bullet, spread: 0.0, angles: [pitch, yaw], seed: 1, pellets: None, silenced: false }
     }
 
     #[test]
@@ -380,8 +380,8 @@ fn knife_line_first_then_a_crouch_box_sweep() {
     use sim::weapons::Id;
     let Some(bsp) = load("de_dust2") else { return };
     let home = std::env::var("HOME").unwrap();
-    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
-    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")) else { return };
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{}/../dist/gamedata", env!("CARGO_MANIFEST_DIR")));
+    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/models/player/arctic/arctic.mdl")) else { return };
     let hb = Hitboxes::from_model(&model, "carbine").unwrap();
     let world = World::from_bsp(&bsp);
     let s = bsp.entity_list().iter().find(|e| e.get("classname").map(String::as_str) == Some("info_player_deathmatch")).map(|e| vec3(&e["origin"])).unwrap();
@@ -409,8 +409,8 @@ fn bullets_read_the_texture_of_the_glass_they_hit() {
     let Some(bsp) = load("de_nuke") else { return };
     let world = World::from_bsp(&bsp);
     let home = std::env::var("HOME").unwrap();
-    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
-    let Ok(text) = std::fs::read_to_string(format!("{dir}/cstrike/sound/materials.txt")) else { return };
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{}/../dist/gamedata", env!("CARGO_MANIFEST_DIR")));
+    let Ok(text) = std::fs::read_to_string(format!("{dir}/sound/materials.txt")) else { return };
     let mats = goldsrc::materials::Materials::parse(&text);
     let d = world.doors.doors.iter().find(|d| d.name.as_deref() == Some("GlassDoor1")).unwrap();
     let (lo, hi) = d.bounds();
@@ -439,8 +439,8 @@ fn animated_hitboxes_follow_the_model() {
     use sim::hitbox::{HitGroup, Hitboxes};
     use sim::weapons::Id;
     let Some(home) = std::env::var("HOME").ok() else { return };
-    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{home}/.steam/steam/steamapps/common/Half-Life"));
-    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/cstrike/models/player/arctic/arctic.mdl")) else { return };
+    let dir = std::env::var("BOOTLEG16_DIR").unwrap_or(format!("{}/../dist/gamedata", env!("CARGO_MANIFEST_DIR")));
+    let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/models/player/arctic/arctic.mdl")) else { return };
     let hb = Hitboxes::from_model(&model, "carbine").unwrap();
     // Standing at the origin, looking at the shooter (who stands 200 units east, looking west).
     let drive = |origin: [f32; 3]| Drive { origin, yaw: 0.0, pitch: 0.0, crouched: false, airborne: false, reloading: false, weapon: Id::M4a1 };

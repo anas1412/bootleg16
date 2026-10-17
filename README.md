@@ -2,7 +2,7 @@
 
 Counter-Strike 1.6 rebuilt in Rust with Bevy: CS 1.6 movement, guns and economy in a modern competitive setup. 5 v 5 matches in CS2's format on official servers, matchmaking with parties, custom games with a knife round and map vetoes, deathmatch for warming up, Steam sign-in, voice chat, match recordings and server-side anti-cheat.
 
-It reads the maps, models and sounds from your own CS 1.6 install; no game files are in this repository. Own maps, characters and a new name come later (see `docs/TODO.md`).
+It reads its maps, models, sounds and textures from one game data folder; no game files are in this repository (`dist/` is private and git ignores it). Own maps, characters and a new name come later (see `docs/TODO.md`).
 
 ## What's where
 
@@ -21,7 +21,7 @@ It reads the maps, models and sounds from your own CS 1.6 install; no game files
 
 ## Building and running
 
-You need Rust (stable), a CS 1.6 install (Steam's default folder, or set `BOOTLEG16_DIR` to the folder that has `cstrike/` in it), and Linux with Wayland and Vulkan.
+You need Rust (stable), the game data folder (`dist/gamedata/` in the repo, `data/` next to a built game, or set `BOOTLEG16_DIR`; it has `maps/`, `models/`, `sound/`, `sprites/`, `gfx/` and the `.wad` files), and Linux with Wayland and Vulkan.
 
 ```bash
 cargo run -p client
@@ -33,7 +33,7 @@ That opens the main menu; **Practice > Solo** plays offline straight away. Devel
 cargo build --release -p client --no-default-features --features steam
 ```
 
-Tests (run the ones for what you changed; they skip themselves without CS 1.6 installed):
+Tests (run the ones for what you changed; they skip themselves without the game data folder):
 
 ```bash
 cargo test -p net -p sim
@@ -53,7 +53,7 @@ All of it runs in Docker. On the main machine:
 ./host.sh
 ```
 
-That starts the lobby and one game server per CPU core, so one match per core. The first run copies the 3 game files the servers need from your CS 1.6 install, makes the secret token, and finds the public IP. It remembers everything in `hosting/`, so later runs bring the same setup back up, and Docker restarts it all after a reboot.
+That starts the lobby and one game server per CPU core, so one match per core. The first run copies the few game files the servers need from the game data folder, makes the secret token, and finds the public IP. It remembers everything in `hosting/`, so later runs bring the same setup back up, and Docker restarts it all after a reboot.
 
 **More capacity:** on each extra machine (it needs the repo and Docker), run the line the first machine printed:
 
@@ -162,7 +162,7 @@ BOOTLEG16_LOBBY=203.0.113.7:27010 cargo build --release -p client --no-default-f
 
 Ship `libsteam_api.so` (it lands next to the game in `target/release/`) with the game.
 
-Use a domain name instead of an IP if you have one (`play.example.com:27010`), so the lobby can move to a new machine without a new build. Players still need their own CS 1.6 install for now (maps and models come from it).
+Use a domain name instead of an IP if you have one (`play.example.com:27010`), so the lobby can move to a new machine without a new build. Players need the game data folder next to the game (`data/`).
 
 ## Steam
 

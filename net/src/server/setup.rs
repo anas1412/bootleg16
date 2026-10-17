@@ -48,7 +48,7 @@ pub struct Assets {
 }
 
 impl Assets {
-    /// From a Half-Life install (the directory containing `cstrike/`).
+    /// From the game data folder.
     pub fn load(game_dir: &std::path::Path) -> Result<Assets, String> {
         let mdl = crate::gamefiles::paths(game_dir, "models/player/arctic/arctic.mdl").into_iter().find(|p| p.exists()).ok_or("the add-on (cstrike_addon) is missing: no player model")?;
         let model = goldsrc::mdl::Model::load(&mdl).map_err(|e| format!("{}: {e}", mdl.display()))?;

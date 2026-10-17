@@ -167,9 +167,9 @@ pub const MAP_POOL: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"]
 /// only gets a map all its players reported having.
 pub const STOCK_MAPS: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"];
 
-/// The pool maps in a game folder (`cstrike/maps/<name>.bsp`).
+/// The pool maps in a game folder (`maps/<name>.bsp`).
 pub fn pool_maps_in(game_dir: &std::path::Path) -> Vec<String> {
-    MAP_POOL.iter().filter(|m| game_dir.join(format!("cstrike/maps/{m}.bsp")).exists()).map(|m| m.to_string()).collect()
+    MAP_POOL.iter().filter(|m| game_dir.join(format!("maps/{m}.bsp")).exists()).map(|m| m.to_string()).collect()
 }
 
 /// The addresses in a comma-separated list ("host:port, host:port"). `look_up`: names too

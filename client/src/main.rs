@@ -3,7 +3,7 @@
 //!
 //! Usage: `client [map] [--connect host:port] [--name name] [--give ak47,awp] [--practice N]`
 //! (any argument skips the menu). The game directory comes from `BOOTLEG16_DIR`
-//! (default: the Steam Half-Life install).
+//! (default: `data/` beside the executable, else `dist/gamedata/` in the repo).
 //! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.
 //! `BOOTLEG16_SCREENSHOT=path.png` saves one frame (after `BOOTLEG16_SCREENSHOT_AT` seconds,
 //! default 2) and exits; such runs ignore mouse and keyboard (used for automated checks).
@@ -74,9 +74,7 @@ use bevy::{
 use std::path::PathBuf;
 
 fn game_dir() -> PathBuf {
-    std::env::var_os("BOOTLEG16_DIR").map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".steam/steam/steamapps/common/Half-Life")
-    })
+    net::gamefiles::data_dir()
 }
 
 fn main() {

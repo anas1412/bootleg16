@@ -80,7 +80,7 @@ pub(super) fn start_connecting(mut commands: Commands, config: Res<GameConfig>) 
             let (map, give) = (config.map.clone(), config.give.clone());
             Job::spawn(move || {
                 let root = game_dir();
-                let bsp = goldsrc::bsp::Bsp::load(&root.join("cstrike/maps").join(format!("{map}.bsp"))).map_err(|e| Notice::error("Map missing", format!("Can't load {map} ({e}).")))?;
+                let bsp = goldsrc::bsp::Bsp::load(&root.join("maps").join(format!("{map}.bsp"))).map_err(|e| Notice::error("Map missing", format!("Can't load {map} ({e}).")))?;
                 let assets = net::server::Assets::load(&root).map_err(|e| Notice::error("Game files missing", format!("{e}. Verify your game files.")))?;
                 let mut server = net::Server::new(([127, 0, 0, 1], 0).into(), &map, &bsp, assets).map_err(|e| Notice::error("Couldn't start the game", format!("The built-in server didn't start ({e}).")).with_retry())?;
                 server.set_give(give);

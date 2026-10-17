@@ -208,7 +208,7 @@ mod tests {
     /// A door drawn with `door_transform` must sit exactly where its collision is.
     #[test]
     fn rendered_door_matches_collision_on_inferno() {
-        let path = crate::game_dir().join("cstrike/maps/de_inferno.bsp");
+        let path = crate::game_dir().join("maps/de_inferno.bsp");
         let Ok(bsp) = goldsrc::bsp::Bsp::load(&path) else { return };
         let mut doors = sim::doors::Doors::from_bsp(&bsp);
         let actor = sim::doors::Actor { mins: [0.0; 3], maxs: [0.0; 3], eye: [0.0; 3], forward: [1.0, 0.0, 0.0], using: false };

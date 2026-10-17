@@ -72,7 +72,7 @@ Linux). For now it plays on the CS 1.6 files from the user's own install. It run
   - Models are lit by `studio.wesl`: ambient plus shade, with the sun from `light_environment`.
 - Additive sprites are uploaded as `Rgba8Unorm`, because GoldSrc adds them in display space.
   Each frame is placed by its origin.
-- Assets are looked up in `cstrike/` first, then `valve/`, like the engine.
+- Assets come from one game data folder (`net::gamefiles`): `data/` next to the executable, in the repo the private `dist/gamedata/` (git ignores `dist/`), or `BOOTLEG16_DIR`. It has `maps/`, `overviews/`, `models/`, `sound/`, `sprites/`, `gfx/` and the `.wad` files. Nothing is read from a Half-Life or CS install any more.
 
 ## Main systems and where they live
 

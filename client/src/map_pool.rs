@@ -26,7 +26,7 @@ impl Plugin for MapPoolPlugin {
 }
 
 fn load(mut pool: ResMut<Pool>, mut images: ResMut<Assets<Image>>) {
-    let dir = crate::game_dir().join("cstrike");
+    let dir = crate::game_dir();
     pool.0 = net::config::MAP_POOL
         .iter()
         .map(|&name| {

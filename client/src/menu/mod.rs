@@ -111,7 +111,7 @@ fn from_command_line(mut commands: Commands, mut settings: ResMut<Settings>, mut
 const POOL: [&str; 4] = ["de_dust2", "de_inferno", "de_mirage", "de_train"];
 
 fn maps_installed() -> Vec<String> {
-    let dir = game_dir().join("cstrike/maps");
+    let dir = game_dir().join("maps");
     POOL.iter().filter(|m| dir.join(format!("{m}.bsp")).exists()).map(|m| m.to_string()).collect()
 }
 

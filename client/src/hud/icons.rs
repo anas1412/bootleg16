@@ -20,7 +20,7 @@ pub struct Icons {
 impl FromWorld for Icons {
     fn from_world(world: &mut World) -> Self {
         let pictures = load_pictures(world);
-        // Add-on first, then cstrike, then valve (per file).
+        // From the game data folder.
         let dirs = crate::gamefiles::paths("sprites");
         let read = |file: &str| dirs.iter().find_map(|d| std::fs::read_to_string(d.join(file)).ok());
         let Some(text) = read("hud.txt") else { return Icons { table: HashMap::new(), sheets: HashMap::new(), pictures } };

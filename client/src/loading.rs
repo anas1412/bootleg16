@@ -90,7 +90,7 @@ impl Progress {
 pub fn load_map(name: String, server_hash: u64, progress: Progress) -> Result<MapData, crate::notice::Notice> {
     use crate::notice::Notice;
     let root = crate::game_dir();
-    let bsp = goldsrc::bsp::Bsp::load(&root.join("cstrike/maps").join(format!("{name}.bsp"))).map_err(|e| Notice::error("Map missing", format!("You don't have {name} ({e}).")))?;
+    let bsp = goldsrc::bsp::Bsp::load(&root.join("maps").join(format!("{name}.bsp"))).map_err(|e| Notice::error("Map missing", format!("You don't have {name} ({e}).")))?;
     // Same map name isn't enough: a changed file would mean different walls on our side.
     if bsp.hash != server_hash {
         return Err(Notice::error("Map mismatch", format!("Your {name} is different from the server's (another version, or modified). Verify your game files.")));

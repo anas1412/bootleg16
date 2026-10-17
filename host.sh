@@ -71,15 +71,15 @@ DM="${DM:-$([ "$LOBBY" = here ] && echo 1 || echo 0)}"
 # Ports: match servers from 27015, then the deathmatch ones.
 last=$((27014 + SERVERS + DM))
 
-# The few game files the servers read, copied from your own CS 1.6 install (never shipped).
-game="${BOOTLEG16_DIR:-$HOME/.steam/steam/steamapps/common/Half-Life}"
+# The few game files the servers read, copied from the game data folder (never shipped).
+game="${BOOTLEG16_DIR:-dist/gamedata}"
 # The map pool too (de_dust2 is needed; the others are played if they're there).
 for m in de_inferno de_nuke de_train; do
-  [ -f "hosting/game/cstrike/maps/$m.bsp" ] || { [ -f "$game/cstrike/maps/$m.bsp" ] && mkdir -p hosting/game/cstrike/maps && cp "$game/cstrike/maps/$m.bsp" hosting/game/cstrike/maps/; } || true
+  [ -f "hosting/game/maps/$m.bsp" ] || { [ -f "$game/maps/$m.bsp" ] && mkdir -p hosting/game/maps && cp "$game/maps/$m.bsp" hosting/game/maps/; } || true
 done
-for f in cstrike/maps/de_dust2.bsp cstrike/models/player/arctic/arctic.mdl cstrike/sound/materials.txt; do
+for f in maps/de_dust2.bsp models/player/arctic/arctic.mdl sound/materials.txt; do
   if [ ! -f "hosting/game/$f" ]; then
-    [ -f "$game/$f" ] || { echo "Missing $f. Set BOOTLEG16_DIR to your Half-Life folder (the one with cstrike/ in it), or copy hosting/game/ from a machine that has it."; exit 1; }
+    [ -f "$game/$f" ] || { echo "Missing $f. Set BOOTLEG16_DIR to the game data folder (the one with maps/ in it), or copy hosting/game/ from a machine that has it."; exit 1; }
     mkdir -p "hosting/game/$(dirname "$f")"
     cp "$game/$f" "hosting/game/$f"
   fi

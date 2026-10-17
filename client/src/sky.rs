@@ -16,7 +16,7 @@ impl Plugin for SkyPlugin {
 /// GoldSrc's six faces, in the engine's order (gl_warp.c): rt +X, lf -X, bk +Y, ft -Y, up +Z, dn -Z.
 const FACES: [&str; 6] = ["rt", "lf", "bk", "ft", "up", "dn"];
 
-/// Read one face, case-insensitively (maps say "Des", files are "Desbk.tga"), add-on, cstrike, valve.
+/// Read one face, case-insensitively (maps say "Des", files are "Desbk.tga"), from the game data folder.
 fn face(sky: &str, suffix: &str) -> Option<goldsrc::tga::Tga> {
     let want = format!("{sky}{suffix}.tga").to_ascii_lowercase();
     for dir in crate::gamefiles::paths("gfx/env") {
