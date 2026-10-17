@@ -306,7 +306,7 @@ fn walk(
     let targets: Vec<Target> = w.client.others().iter().filter(|o| o.alive).map(|o| Target { id: o.id, origin: o.origin, yaw: o.yaw, pitch: o.pitch, crouched: o.crouched, weapon: o.weapon, anim: None }).collect();
     for shot in fired.shots {
         let eye = w.client.me().eye();
-        let (f, _, _) = view_vectors(shot.angles[0], shot.angles[1]);
+        let (f, right, up) = view_vectors(shot.angles[0], shot.angles[1]);
         let mut end = w.client.world.trace_line(eye, std::array::from_fn(|i| eye[i] + f[i] * 8192.0)).end;
         if let Some(a) = &shot_assets {
             let r = if shot.pellets.is_some() { fire_pellets(&w.client.world, &a.0.hitboxes, eye, &shot, me_id, &targets) } else { fire_bullet(&w.client.world, &a.0.materials, &a.0.hitboxes, eye, &shot, me_id, &targets) };
@@ -318,7 +318,10 @@ fn walk(
                 end = i.point;
             }
         }
-        w.tracers.push((eye, end, 0.08));
+        // The streak leaves from about where the muzzle is (low and to the right of the eye), not
+        // from the eye itself: seen from the eye it would be one flat line across the screen.
+        let muzzle = std::array::from_fn(|i| eye[i] + right[i] * 9.0 - up[i] * 8.0 + f[i] * 30.0);
+        w.tracers.push((muzzle, end, crate::effects::TRACER_SECONDS));
     }
 }
 

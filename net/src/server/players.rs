@@ -71,6 +71,13 @@ impl Server {
                 actors.push(actor(&c.state.movement, c.view, c.used));
             }
         }
+        // Players are solid to each other; bots hold their ground and the humans are pushed out.
+        let hull = |m: &sim::pmove::Player| if m.crouched { sim::collision::Hull::Crouched } else { sim::collision::Hull::Standing };
+        let boxes: Vec<(u8, [f32; 3], sim::collision::Hull)> = self.clients.values().filter(|c| c.vitals.alive() && c.team != Team::Spectator).map(|c| (c.id, c.state.movement.origin, hull(&c.state.movement))).collect();
+        for c in self.clients.values_mut().filter(|c| c.vitals.alive() && c.team != Team::Spectator && !c.bot) {
+            let others: Vec<_> = boxes.iter().filter(|b| b.0 != c.id).map(|b| (b.1, b.2)).collect();
+            c.state.movement.origin = sim::crowd::push_out(&self.world, hull(&c.state.movement), c.state.movement.origin, &others);
+        }
         for p in pending {
             self.resolve(p);
         }

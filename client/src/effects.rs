@@ -1,5 +1,9 @@
 //! Server events turned into things you see and hear: tracers, the kill feed, grenades in
 //! flight, explosions, the flashbang white-out and guns on the ground.
+/// How long a tracer lasts (seconds), and how long its streak is (units).
+pub const TRACER_SECONDS: f32 = 0.08;
+const TRACER_STREAK: f32 = 180.0;
+
 use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::menu::AppState;
@@ -221,7 +225,7 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mu
                     w.cues.push(sound::Cue::Impact { at, normal });
                 }
                 if Some(shooter) != me {
-                    w.tracers.push((from, to, 0.08));
+                    w.tracers.push((from, to, TRACER_SECONDS));
                     w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from) });
                     anims.write(PlayerAnim::Shot(shooter, silenced));
                 }
@@ -295,8 +299,13 @@ fn events(time: Res<Time>, mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mu
         }
     }
     let dt = time.delta_secs();
+    // A tracer is a short streak that flies from the muzzle to where the shot ended.
     for (from, to, left) in &mut w.tracers {
-        gizmos.line(Vec3::from(map::to_y_up(*from)), Vec3::from(map::to_y_up(*to)), Color::srgba(1.0, 0.9, 0.5, 0.8));
+        let (a, b) = (Vec3::from(map::to_y_up(*from)), Vec3::from(map::to_y_up(*to)));
+        let length = a.distance(b).max(1.0);
+        let head = (1.0 - (*left / TRACER_SECONDS).clamp(0.0, 1.0)).max(0.15);
+        let tail = (head - TRACER_STREAK / length).max(0.0);
+        gizmos.line(a.lerp(b, tail), a.lerp(b, head), Color::srgba(1.0, 0.9, 0.5, 0.8));
         *left -= dt;
     }
     w.tracers.retain(|t| t.2 > 0.0);

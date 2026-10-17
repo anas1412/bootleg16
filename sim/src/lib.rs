@@ -3,6 +3,7 @@ pub mod anim;
 pub mod breakables;
 pub mod collision;
 pub mod combat;
+pub mod crowd;
 pub mod doors;
 pub mod grenades;
 pub mod hitbox;

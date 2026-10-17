@@ -158,7 +158,7 @@ impl ModelCache {
                 .map(|t| {
                     let mut rgba = t.rgba;
                     crate::level::tex_gamma(&mut rgba);
-                    let image = images.add(rgba_image(t.width, t.height, rgba, false, TextureFormat::Rgba8UnormSrgb));
+                    let image = images.add(rgba_image(t.width, t.height, rgba, true, TextureFormat::Rgba8UnormSrgb));
                     materials.add(crate::studio::material(image))
                 })
                 .collect();

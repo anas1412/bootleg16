@@ -257,9 +257,12 @@ impl Client {
         // Predict: run the input now, keep it until the server confirms it.
         self.seq += 1;
         self.history.push_back((self.seq, TimedInput { input, view_tick: self.render_tick }));
+        let crowd = self.crowd();
         let result = match self.id() {
             Some(id) if self.vitals.alive() => {
-                player::step(&mut self.state, &input, self.rate.tick(), self.seq as f64 * self.rate.tick() as f64, player::seed(id, self.seq), self.me_info.limits, &self.world, &self.vars)
+                let r = player::step(&mut self.state, &input, self.rate.tick(), self.seq as f64 * self.rate.tick() as f64, player::seed(id, self.seq), self.me_info.limits, &self.world, &self.vars);
+                keep_apart(&mut self.state, &self.world, &crowd);
+                r
             }
             _ => Default::default(),
         };
@@ -354,9 +357,11 @@ impl Client {
                     self.vitals = vitals;
                     self.state = PlayerState { movement, loadout };
                     if self.vitals.alive() {
+                        let crowd = self.crowd();
                         for (seq, timed) in &self.history {
                             let cmd_time = *seq as f64 * self.rate.tick() as f64;
                             player::step(&mut self.state, &timed.input, self.rate.tick(), cmd_time, player::seed(id, *seq), self.me_info.limits, &self.world, &self.vars);
+                            keep_apart(&mut self.state, &self.world, &crowd);
                         }
                     }
                     let now = self.state.movement.origin;
@@ -398,6 +403,11 @@ impl Client {
     }
 
     /// Everyone else, interpolated between the two snapshots around `render_tick`.
+    /// The other living players' boxes (what we can't stand inside).
+    fn crowd(&self) -> Vec<([f32; 3], sim::collision::Hull)> {
+        self.others().iter().filter(|o| o.alive).map(|o| (o.origin, if o.crouched { sim::collision::Hull::Crouched } else { sim::collision::Hull::Standing })).collect()
+    }
+
     pub fn others(&self) -> Vec<Remote> {
         let me = self.id();
         let rt = self.render_tick;
@@ -551,4 +561,10 @@ impl Client {
     pub fn disconnect(&mut self) {
         self.socket.send(self.server, encode(&ClientMsg::Bye));
     }
+}
+
+/// Players are solid to each other (the same rule as the server: `sim::crowd`).
+fn keep_apart(state: &mut PlayerState, world: &World, crowd: &[([f32; 3], sim::collision::Hull)]) {
+    let hull = if state.movement.crouched { sim::collision::Hull::Crouched } else { sim::collision::Hull::Standing };
+    state.movement.origin = sim::crowd::push_out(world, hull, state.movement.origin, crowd);
 }
