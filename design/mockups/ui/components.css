@@ -295,3 +295,26 @@
 .bt b { font: 700 20px var(--f-num); color: var(--tx1); }
 .bt.low b { color: var(--bad); }
 .bt.dead { opacity: .45; }
+
+/* Loading: centred on black, the map big, four steps, one bar. */
+.ld { left: 0; right: 0; top: 380px; display: flex; flex-direction: column; align-items: center; }
+.ld-map { font-size: 120px; margin-top: 12px; text-transform: uppercase; }
+.ld-steps { display: flex; gap: 32px; margin-top: 40px; }
+.ld-step { display: flex; align-items: center; gap: 10px; font: 600 15px var(--f-text); letter-spacing: .12em; text-transform: uppercase; color: var(--tx3); }
+.ld-step i { width: 8px; height: 8px; rotate: 45deg; box-shadow: inset 0 0 0 1px currentColor; }
+.ld-step.done { color: var(--tx2); } .ld-step.done i { background: var(--tx2); }
+.ld-step.now { color: var(--amber); } .ld-step.now i { background: var(--amber); animation: ld-pulse 1.2s var(--ease-out) infinite; }
+@keyframes ld-pulse { 50% { opacity: .35; } }
+.ld-bar { width: 640px; height: 4px; margin-top: 32px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
+.ld-bar i { display: block; height: 100%; background: var(--amber); transition: width 300ms var(--ease-out); }
+.ld-pct { margin-top: 10px; font: 700 16px var(--f-num); color: var(--tx2); }
+/* Notice: the match-found box, a title, one or two lines, Retry and Back. */
+.nt { width: 720px; }
+.nt-title { font-size: 72px; margin-top: 12px; }
+.nt-body { margin-top: 16px; max-width: 560px; font: 600 18px/1.45 var(--f-text); color: var(--tx2); }
+.nt-actions { margin-top: 36px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* Reconnecting: under the score, like a vote. */
+.rc { position: relative; width: 420px; padding: 16px 24px 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.rc-line { font: 600 20px var(--f-text); color: var(--tx1); } .rc-line b { font-family: var(--f-num); }
+.rc-bar { width: 100%; height: 3px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
+.rc-bar i { display: block; height: 100%; background: var(--bad); }

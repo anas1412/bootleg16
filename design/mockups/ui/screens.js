@@ -41,6 +41,18 @@ const SCREENS = {
     name: 'Reconnect', note: 'Your match is still on (a crash, or you left): the way back sits under your name on every page until the match ends.',
     menu: 'Practice', page: () => SCREENS.practice.page(), extra: () => ui.rejoin(164),
   },
+  loading: {
+    name: 'Loading', note: 'Joining a match or starting Practice: the map, the four steps with the current one in amber, real progress. Esc goes back to the menu.',
+    html: () => loading(2, .62),
+  },
+  notice: {
+    name: 'Notice', note: 'Any error or message, over the menu: what happened in one line, what to do in the next. Retry only when it can work; Esc closes.',
+    menu: 'Practice', page: () => SCREENS.practice.page(), extra: () => notice('Connection lost', 'The server stopped answering. Your match is still on, so you can go back in.', true),
+  },
+  reconnecting: {
+    name: 'Reconnecting', game: 'de_dust_ct.jpg', note: 'The server went quiet in a match: after 3 s this sits under the score while the game holds. Gone when it answers; after 30 s you leave with a notice.',
+    html: () => hud() + `<div class="abs" style="left:50%;top:150px;transform:translateX(-50%)">${reconnecting(9, 30)}</div>`,
+  },
   settings: {
     name: 'Settings', note: 'The AI assistant only speaks in matches; here you pick it by its face.',
     menu: 'Settings', page: () => `${ui.pageTitle('Saved as you change them', 'Settings', '設定')}
@@ -381,5 +393,39 @@ function system() {
     <div style="margin-top:12px">${line('320 ms', 'tune in: split channels settle clean')}${line('240 ms', 'hover burst, then clean')}${line('40 ms', 'stagger between siblings')}${line('220 ms', 'blur, dim and one sweep behind menus')}${line('180 ms', 'tune out when closing')}</div>
     <div class="label" style="margin-top:32px">Layers</div>
     <div style="margin-top:12px">${line('20', 'Esc menu, team pick')}${line('7', 'Buy, scoreboard')}${line('6', 'AI assistant')}${line('5', 'Scrim: dim and blur')}${line('0', 'HUD')}</div>
+  </div>`;
+}
+
+// Loading (game: status_screens.rs): the map, the steps, real progress, Esc to cancel.
+const STEPS = ['Starting server', 'Contacting server', 'Loading map', 'Joining'];
+function loading(step, progress) {
+  const rows = STEPS.map((t, i) => `<div class="ld-step${i < step ? ' done' : ''}${i === step ? ' now' : ''}"><i></i><span>${t}</span></div>`).join('');
+  return `<div class="abs ld tune">
+    <div class="label">Practice · solo</div>
+    <div class="display ld-map">de_dust2</div>
+    <div class="ld-steps">${rows}</div>
+    <div class="ld-bar"><i style="width:${progress * 100}%"></i></div>
+    <div class="ld-pct">${Math.round(progress * 100)}%</div>
+  </div>
+  <div class="abs" style="left:var(--margin);bottom:48px"><span class="chip" style="gap:12px">Cancel <b class="key" style="margin:0">Esc</b></span></div>`;
+}
+
+// A notice (game: status_screens.rs, crate::notice::Notice): over the menu, blurred behind.
+function notice(title, body, retry, info) {
+  return `<div class="mf tune" style="--i:0"><div class="mf-box nt">
+    <div class="label" style="color:${info ? 'var(--tx2)' : 'var(--bad)'}">${info ? 'Notice' : 'Error'}</div>
+    <div class="display nt-title">${title}</div>
+    <div class="nt-body">${body}</div>
+    <div class="nt-actions">${retry ? ui.primary('Retry', 'Enter') : ui.primary('Back', 'Enter')}${retry ? `<span class="chip" style="gap:12px">Back <b class="key" style="margin:0">Esc</b></span>` : ''}</div>
+  </div></div>`;
+}
+
+// The server went quiet mid-match (game: crate::game::Reconnecting).
+function reconnecting(since, giveUp) {
+  return `<div class="panel hud rc tune"><i class="edge" style="background:var(--bad)"></i>
+    <div class="label" style="color:var(--bad)">Connection interrupted</div>
+    <div class="rc-line">Reconnecting <b>${since} s</b></div>
+    <div class="rc-bar"><i style="width:${(1 - since / giveUp) * 100}%"></i></div>
+    <div class="label" style="color:var(--tx3)">Esc · leave match</div>
   </div>`;
 }
