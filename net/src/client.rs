@@ -513,6 +513,11 @@ impl Client {
         self.server
     }
 
+    /// A snapshot has arrived (we know where we are).
+    pub fn has_snapshot(&self) -> bool {
+        self.latest_tick > 0
+    }
+
     /// Seconds since the server was last heard from.
     pub fn silence(&self) -> f32 {
         (self.ticks - self.heard) as f32 * TICK

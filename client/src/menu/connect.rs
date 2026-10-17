@@ -48,6 +48,8 @@ pub(super) enum Work {
     Server(Job<Result<SocketAddr, Notice>>),
     Hello { waited: f32 },
     Map(Job<Result<MapData, Notice>>, Progress),
+    /// Map loaded: waiting for the first snapshot, so the game opens where we are.
+    Joining { waited: f32 },
 }
 
 /// Start: the built-in server, or look the address up.
@@ -182,7 +184,17 @@ pub(super) fn advance(
             commands.insert_resource(map);
             loading.step = Step::Joining;
             loading.progress = 0.95;
-            next.set(AppState::InGame);
+            *work = Work::Joining { waited: 0.0 };
+        }
+        Work::Joining { waited } => {
+            let Some(client) = pending.as_ref().and_then(|p| p.0.as_ref()) else { return };
+            *waited += time.delta_secs();
+            if client.has_snapshot() {
+                loading.progress = 1.0;
+                next.set(AppState::InGame);
+            } else if *waited > 10.0 {
+                fail(&mut commands, &mut next, Notice::error("Can't reach the server", "The server stopped answering while you joined.").with_retry());
+            }
         }
     }
 }
@@ -206,11 +218,12 @@ pub(super) fn cancel(keys: Res<ButtonInput<KeyCode>>, mut actions: ResMut<UiActi
 /// Leaving the loading screen: drop the steps; a cancelled join says goodbye.
 pub(super) fn stop_loading(mut commands: Commands, mut pending: Option<ResMut<PendingClient>>, server: Option<Res<LocalServer>>, state: Res<State<AppState>>) {
     commands.remove_resource::<Work>();
-    commands.remove_resource::<Loading>();
-    // (the state is already the new one here)
+    // (the state is already the new one here; into the game the screen stays up a moment,
+    // `loading::reveal`)
     if *state.get() == AppState::InGame {
         return;
     }
+    commands.remove_resource::<Loading>();
     if let Some(c) = pending.as_mut().and_then(|p| p.0.as_mut()) {
         c.disconnect();
     }
@@ -232,4 +245,5 @@ pub(super) fn leave_game(mut commands: Commands, walker: Option<ResMut<Walker>>,
     commands.remove_resource::<Walker>();
     commands.remove_resource::<LocalServer>();
     commands.remove_resource::<MapData>();
+    commands.remove_resource::<Loading>(); // left while still covered
 }

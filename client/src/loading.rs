@@ -102,3 +102,40 @@ pub fn load_map(name: String, server_hash: u64, progress: Progress) -> Result<Ma
     progress.set(1.0);
     Ok(MapData { bsp, world: Some(world), geometry: Some(geometry) })
 }
+
+/// The game opens behind the loading screen, which stays until the first frames are drawn
+/// with every shader ready (Bevy compiles pipelines in the background: without this the map
+/// shows up a moment after the HUD, sky first).
+pub struct LoadingPlugin;
+
+impl Plugin for LoadingPlugin {
+    fn build(&self, app: &mut App) {
+        let waiting = Waiting::default();
+        app.insert_resource(waiting.clone()).add_systems(Update, reveal.run_if(in_state(crate::menu::AppState::InGame)).run_if(resource_exists::<Loading>));
+        if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render.insert_resource(waiting).add_systems(bevy::render::Render, count_waiting);
+        }
+    }
+}
+
+/// Pipelines still compiling (from the render world).
+#[derive(Resource, Clone, Default)]
+struct Waiting(Arc<AtomicU32>);
+
+fn count_waiting(cache: Res<bevy::render::render_resource::PipelineCache>, waiting: Res<Waiting>) {
+    waiting.0.store(cache.waiting_pipelines().count() as u32, Ordering::Relaxed);
+}
+
+/// In the game, still covered: lift the cover once nothing has been compiling for a few frames
+/// (15 s at most: never stuck behind it).
+fn reveal(mut commands: Commands, mut loading: ResMut<Loading>, waiting: Res<Waiting>, time: Res<Time>, mut frames: Local<u32>, mut quiet: Local<u32>, mut covered: Local<f32>) {
+    loading.elapsed += time.delta_secs();
+    *covered += time.delta_secs();
+    *frames += 1;
+    *quiet = if waiting.0.load(Ordering::Relaxed) == 0 { *quiet + 1 } else { 0 };
+    loading.progress = 0.95 + 0.05 * (*quiet as f32 / 5.0).min(1.0);
+    if (*frames >= 5 && *quiet >= 5) || *covered > 15.0 {
+        commands.remove_resource::<Loading>();
+        (*frames, *quiet, *covered) = (0, 0, 0.0);
+    }
+}

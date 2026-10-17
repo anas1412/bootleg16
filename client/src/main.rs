@@ -110,7 +110,7 @@ fn main() {
             killfeed::KillFeedPlugin,
             round_hud::RoundHudPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (bomb::BombPlugin, characters::CharactersPlugin, map_pool::MapPoolPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, status_screens::StatusScreensPlugin),
+            (bomb::BombPlugin, characters::CharactersPlugin, map_pool::MapPoolPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, status_screens::StatusScreensPlugin, loading::LoadingPlugin),
             (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
         .add_systems(Update, screenshot)
