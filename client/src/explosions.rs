@@ -44,7 +44,7 @@ struct Sprites {
 /// `additive`: GoldSrc adds these on screen (display values), so their texels are used as they
 /// are (no sRGB decode): a dim fire frame still brightens a bright wall the way it does in CS.
 fn frames(name: &str, additive: bool, images: &mut Assets<Image>) -> Frames {
-    let s = ["cstrike", "valve"].iter().find_map(|d| goldsrc::spr::Sprite::load(crate::game_dir().join(d).join("sprites").join(name)).ok());
+    let s = crate::gamefiles::paths(&format!("sprites/{name}")).iter().find_map(|p| goldsrc::spr::Sprite::load(p).ok());
     let format = if additive { TextureFormat::Rgba8Unorm } else { TextureFormat::Rgba8UnormSrgb };
     match s {
         Some(s) => Frames {

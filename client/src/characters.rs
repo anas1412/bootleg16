@@ -25,8 +25,7 @@ impl Plugin for CharactersPlugin {
 fn load(mut portraits: ResMut<Portraits>, mut images: ResMut<Assets<Image>>) {
     for (side, list) in [T_CLASSES, CT_CLASSES].iter().enumerate() {
         for (i, (file, _)) in list.iter().enumerate() {
-            let path = crate::game_dir().join("cstrike/gfx/vgui").join(format!("{file}.tga"));
-            portraits.0[side][i] = std::fs::read(path).ok().and_then(|d| goldsrc::tga::decode(&d)).map(|t| images.add(crate::level::rgba_image(t.width, t.height, t.rgba, false, TextureFormat::Rgba8UnormSrgb)));
+            portraits.0[side][i] = crate::gamefiles::paths(&format!("gfx/vgui/{file}.tga")).iter().find_map(|p| std::fs::read(p).ok()).and_then(|d| goldsrc::tga::decode(&d)).map(|t| images.add(crate::level::rgba_image(t.width, t.height, t.rgba, false, TextureFormat::Rgba8UnormSrgb)));
         }
     }
 }

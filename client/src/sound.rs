@@ -47,7 +47,7 @@ pub enum Cue {
 #[derive(Resource)]
 pub struct Sounds {
     /// Where sounds are looked for: the mod's, then Half-Life's (like GoldSrc).
-    dirs: [PathBuf; 2],
+    dirs: Vec<PathBuf>,
     cache: HashMap<String, Option<Handle<AudioSource>>>,
     materials: Materials,
     /// Cheap per-sound randomness (pitch, variant picks); doesn't need to be deterministic.
@@ -57,9 +57,9 @@ pub struct Sounds {
 }
 
 impl Sounds {
-    pub fn new(game_dir: PathBuf) -> Sounds {
-        let materials = std::fs::read_to_string(game_dir.join("cstrike/sound/materials.txt")).map(|t| Materials::parse(&t)).unwrap_or_default();
-        Sounds { dirs: [game_dir.join("cstrike/sound"), game_dir.join("valve/sound")], cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new() }
+    pub fn new() -> Sounds {
+        let materials = crate::gamefiles::paths("sound/materials.txt").iter().find_map(|p| std::fs::read_to_string(p).ok()).ok_or(()).map(|t| Materials::parse(&t)).unwrap_or_default();
+        Sounds { dirs: crate::gamefiles::paths("sound"), cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new() }
     }
 
     fn rand(&mut self) -> f32 {

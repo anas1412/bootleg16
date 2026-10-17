@@ -50,11 +50,11 @@ pub struct Assets {
 impl Assets {
     /// From a Half-Life install (the directory containing `cstrike/`).
     pub fn load(game_dir: &std::path::Path) -> Result<Assets, String> {
-        let mdl = game_dir.join("cstrike/models/player/arctic/arctic.mdl");
+        let mdl = crate::gamefiles::paths(game_dir, "models/player/arctic/arctic.mdl").into_iter().find(|p| p.exists()).unwrap_or_else(|| game_dir.join("cstrike/models/player/arctic/arctic.mdl"));
         let model = goldsrc::mdl::Model::load(&mdl).map_err(|e| format!("{}: {e}", mdl.display()))?;
         let hitboxes = Hitboxes::from_model(&model, "carbine").ok_or("player model has no aim animations")?;
         // materials.txt is optional: without it every surface counts as concrete.
-        let materials = std::fs::read_to_string(game_dir.join("cstrike/sound/materials.txt")).map(|t| Materials::parse(&t)).unwrap_or_default();
+        let materials = crate::gamefiles::paths(game_dir, "sound/materials.txt").iter().find_map(|p| std::fs::read_to_string(p).ok()).ok_or(()).map(|t| Materials::parse(&t)).unwrap_or_default();
         Ok(Assets { hitboxes, materials })
     }
 }

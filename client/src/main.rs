@@ -19,6 +19,7 @@
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead);
 //! `BOOTLEG16_SPECTATE=front` watches them from the front.
 mod binds;
+mod gamefiles;
 mod bomb;
 mod assistant;
 mod buy;
@@ -93,8 +94,8 @@ fn main() {
         // The simulation steps at the server's tick rate: this is only the default until its
         // Welcome says (`menu::connect`).
         .insert_resource(Time::<Fixed>::from_hz(net::tick::DEFAULT_TICK_RATE as f64))
-        .insert_resource(models::ModelCache::new(game_dir()))
-        .insert_resource(sound::Sounds::new(game_dir()))
+        .insert_resource(models::ModelCache::new())
+        .insert_resource(sound::Sounds::new())
         .init_state::<menu::AppState>()
         .add_plugins((
             menu::MenuPlugin,

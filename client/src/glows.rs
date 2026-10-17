@@ -38,7 +38,7 @@ fn spawn(mut commands: Commands, map: Res<crate::loading::MapData>, mut meshes: 
     for e in bsp.entity_list().iter().filter(|e| e.get("classname").map(String::as_str) == Some("env_glow")) {
         let Some(file) = e.get("model") else { continue };
         let sprite = sprites.entry(file.clone()).or_insert_with(|| {
-            ["cstrike", "valve"].iter().find_map(|d| goldsrc::spr::Sprite::load(crate::game_dir().join(d).join(file)).ok()).map(|s| {
+            crate::gamefiles::paths(file).iter().find_map(|p| goldsrc::spr::Sprite::load(p).ok()).map(|s| {
                 // Additive: the colours themselves are the glow.
                 let rgba = s.colors.chunks(3).flat_map(|c| [c[0], c[1], c[2], 255]).collect();
                 (s.width as f32, images.add(rgba_image(s.width, s.height, rgba, false, TextureFormat::Rgba8UnormSrgb)))

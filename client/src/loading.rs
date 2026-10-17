@@ -98,7 +98,8 @@ pub fn load_map(name: String, server_hash: u64, progress: Progress) -> Result<Ma
     progress.set(0.3);
     let world = sim::collision::World::from_bsp(&bsp);
     progress.set(0.5);
-    let geometry = crate::map::load(&bsp, &[&root.join("cstrike"), &root.join("valve")]);
+    let roots = crate::gamefiles::roots();
+    let geometry = crate::map::load(&bsp, &roots.iter().map(|r| r.as_path()).collect::<Vec<_>>());
     progress.set(1.0);
     Ok(MapData { bsp, world: Some(world), geometry: Some(geometry) })
 }

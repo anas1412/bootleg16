@@ -8,7 +8,7 @@ use crate::killfeed::{Kill, KillFeed};
 use crate::round_hud::RoundNews;
 use crate::models::Parts;
 use crate::players::PlayerAnim;
-use crate::{game_dir, map, models, sound};
+use crate::{map, models, sound};
 use bevy::{
     prelude::*,
     render::render_resource::TextureFormat,
@@ -47,7 +47,9 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
     let grenades = ["w_hegrenade", "w_flashbang", "w_smokegrenade"]
         .iter()
         .map(|name| {
-            goldsrc::mdl::Model::load(game_dir().join(format!("cstrike/models/{name}.mdl")))
+            crate::gamefiles::paths(&format!("models/{name}.mdl"))
+                .iter()
+                .find_map(|p| goldsrc::mdl::Model::load(p).ok())
                 .map(|m| model_parts(&m, 0, &mut meshes, &mut materials, &mut images))
                 .unwrap_or_default()
         })

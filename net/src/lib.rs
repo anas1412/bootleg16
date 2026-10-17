@@ -17,6 +17,7 @@ pub mod replay;
 pub mod rounds;
 pub mod secure;
 pub mod server;
+pub mod gamefiles;
 pub mod tick;
 mod socket;
 

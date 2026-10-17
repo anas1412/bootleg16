@@ -87,7 +87,7 @@ fn decal_transform(at: Vec3, normal: Vec3, size: Vec2) -> Transform {
 
 fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>, mut images: ResMut<Assets<Image>>) {
     let solid = |c: Color| StandardMaterial { base_color: c, unlit: true, ..default() };
-    let wad = ["cstrike", "valve"].iter().find_map(|d| goldsrc::wad::Wad::load(crate::game_dir().join(d).join("decals.wad")).ok());
+    let wad = crate::gamefiles::paths("decals.wad").iter().find_map(|p| goldsrc::wad::Wad::load(p).ok());
     commands.insert_resource(Looks {
         quad: meshes.add(Rectangle::new(1.0, 1.0)),
         ball: meshes.add(Sphere::new(1.0).mesh().ico(1).unwrap()),

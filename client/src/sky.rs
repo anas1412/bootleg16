@@ -1,7 +1,6 @@
 //! The map's skybox (worldspawn `skyname`, six TGAs in gfx/env) instead of a flat colour.
 use crate::game::FlyCam;
 use crate::menu::AppState;
-use crate::game_dir;
 use bevy::light::Skybox;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension};
@@ -17,11 +16,11 @@ impl Plugin for SkyPlugin {
 /// GoldSrc's six faces, in the engine's order (gl_warp.c): rt +X, lf -X, bk +Y, ft -Y, up +Z, dn -Z.
 const FACES: [&str; 6] = ["rt", "lf", "bk", "ft", "up", "dn"];
 
-/// Read one face, case-insensitively (maps say "Des", files are "Desbk.tga"), cstrike first.
+/// Read one face, case-insensitively (maps say "Des", files are "Desbk.tga"), add-on, cstrike, valve.
 fn face(sky: &str, suffix: &str) -> Option<goldsrc::tga::Tga> {
     let want = format!("{sky}{suffix}.tga").to_ascii_lowercase();
-    for dir in ["cstrike/gfx/env", "valve/gfx/env"] {
-        let Ok(entries) = std::fs::read_dir(game_dir().join(dir)) else { continue };
+    for dir in crate::gamefiles::paths("gfx/env") {
+        let Ok(entries) = std::fs::read_dir(dir) else { continue };
         for e in entries.flatten() {
             if e.file_name().to_string_lossy().to_ascii_lowercase() == want {
                 return goldsrc::tga::decode(&std::fs::read(e.path()).ok()?);
