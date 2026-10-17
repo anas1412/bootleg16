@@ -65,6 +65,8 @@ fn spawn_overlay(mut commands: Commands, mut flash: ResMut<Flash>) {
         Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), ..default() },
         BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.0)),
         GlobalZIndex(10),
+        // over the menus too: clicks must go through it (it blocked the buy menu)
+        Pickable::IGNORE,
         DespawnOnExit(AppState::InGame),
     ));
 }
