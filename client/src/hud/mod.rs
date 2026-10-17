@@ -13,7 +13,7 @@ pub use crate::ui::SAFE;
 pub use crosshair::{draw as draw_crosshair, CROSSHAIR_COLORS, STATIC_GAP};
 pub use hint::Hint;
 pub use visor::Visor;
-pub use icons::{gun_art, weapon_icon, Icons};
+pub use icons::{weapon_icon, Icons};
 
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;

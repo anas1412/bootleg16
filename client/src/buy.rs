@@ -4,7 +4,7 @@
 //! are topped up every round.
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
-use crate::hud::{gun_art, Icons};
+use crate::hud::{weapon_icon, Icons};
 use crate::ui::{chip, clickable_keep_border, kit_text, nav, primary_button, primary_off, vh, Anim, Kit, NavItem, UiAction, UiActions, AMBER, BAD, BG1, CT_COLOR, LINE, OK, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
@@ -355,14 +355,14 @@ fn buy_menu(
 /// The picture for an item: gun art, or the HUD icon for armor and the kit.
 fn item_art(p: &mut ChildSpawnerCommands, icons: &Icons, item: BuyItem, height: f32, color: Color) {
     let name = match item {
-        BuyItem::Weapon(id) => gun_art(id),
+        BuyItem::Weapon(id) => Some(weapon_icon(id)),
         BuyItem::Kevlar => Some("suit_full"),
         BuyItem::KevlarHelmet => Some("suithelmet_full"),
         BuyItem::DefuseKit => Some("defuser"),
     };
     let h = if matches!(item, BuyItem::Weapon(_)) { height } else { height * 0.8 };
     if let Some(n) = name {
-        p.spawn((icons.node(n, h, color), Pickable::IGNORE));
+        p.spawn((icons.node_in(n, h, 3.8, color), Pickable::IGNORE));
     }
 }
 
