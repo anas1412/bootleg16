@@ -17,13 +17,15 @@ pub struct Icons {
 
 impl FromWorld for Icons {
     fn from_world(world: &mut World) -> Self {
-        let dir = crate::game_dir().join("cstrike/sprites");
-        let Ok(text) = std::fs::read_to_string(dir.join("hud.txt")) else { return Icons { table: HashMap::new(), sheets: HashMap::new() } };
+        // Add-on first, then cstrike, then valve (per file).
+        let dirs = crate::gamefiles::paths("sprites");
+        let read = |file: &str| dirs.iter().find_map(|d| std::fs::read_to_string(d.join(file)).ok());
+        let Some(text) = read("hud.txt") else { return Icons { table: HashMap::new(), sheets: HashMap::new() } };
         let mut table = hud_table(&text);
         // Buy menu art: each `weapon_<name>.txt`'s big "weapon" picture, as `gun_<name>`.
         let mut guns = Vec::new();
         for name in GUN_ART {
-            if let Some(e) = std::fs::read_to_string(dir.join(format!("weapon_{name}.txt"))).ok().and_then(|t| hud_table(&t).remove("weapon")) {
+            if let Some(e) = read(&format!("weapon_{name}.txt")).and_then(|t| hud_table(&t).remove("weapon")) {
                 guns.push(e.clone());
                 table.insert(format!("gun_{name}"), e);
             }
@@ -34,7 +36,7 @@ impl FromWorld for Icons {
             if sheets.contains_key(&e.sprite) {
                 continue;
             }
-            if let Ok(mut s) = Sprite::load(dir.join(format!("{}.spr", e.sprite))) {
+            if let Ok(mut s) = dirs.iter().find_map(|d| Sprite::load(d.join(format!("{}.spr", e.sprite))).ok()).ok_or(()) {
                 if guns.iter().any(|g| g.sprite == e.sprite) {
                     clean_gun_sheet(&mut s, &guns);
                 }
