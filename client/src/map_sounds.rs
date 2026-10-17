@@ -5,7 +5,7 @@ use crate::effects::GameNews;
 use crate::game::{Frame, Walker};
 use crate::impacts::Hit;
 use crate::map;
-use crate::menu::{AppState, GameConfig, Settings};
+use crate::menu::{AppState, Settings};
 use crate::sound::{Sounds, ATTN_NORM};
 use bevy::audio::{PlaybackSettings, Volume};
 use bevy::prelude::*;
@@ -80,9 +80,8 @@ struct Placed {
     attn: f32,
 }
 
-fn load(mut commands: Commands, config: Res<GameConfig>) {
-    let path = crate::game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
-    let Ok(bsp) = goldsrc::bsp::Bsp::load(&path) else { return };
+fn load(mut commands: Commands, map: Res<crate::loading::MapData>) {
+    let bsp = &map.bsp;
     let num = |e: &std::collections::HashMap<String, String>, k: &str| e.get(k).and_then(|v| v.parse::<f32>().ok());
     let origin = |e: &std::collections::HashMap<String, String>| {
         let v: Vec<f32> = e.get("origin").map(|o| o.split_whitespace().filter_map(|x| x.parse().ok()).collect()).unwrap_or_default();

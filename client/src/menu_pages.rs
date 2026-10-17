@@ -5,7 +5,7 @@
 //! slide and values roll (`UiMemory`). Play is a full screen of its own.
 use crate::assistant::{ASSISTANTS, OFF};
 use crate::menu::{AppState, MenuDirty, MenuRoot, MenuState, Page, Settings};
-use crate::ui::{chips, kit_text, nav, page_title, primary_button, setting_row, stepper, vh, Anim, Choice, Kit, NavItem, UiAction, UiMemory, AMBER, AMBER_INK, BAD, T_OUT, TX1, TX2, TX3};
+use crate::ui::{chips, kit_text, nav, page_title, primary_button, setting_row, stepper, vh, Anim, Choice, Kit, NavItem, UiAction, UiMemory, AMBER, AMBER_INK, T_OUT, TX1, TX2, TX3};
 use bevy::prelude::*;
 use bevy::text::LineHeight;
 
@@ -104,9 +104,6 @@ pub fn rebuild_menu(
                 item("06", "Voice", "音声", UiAction::Page(Page::Voice), st.page == Page::Voice),
                 item("07", "Quit", "終了", UiAction::Quit, false),
             ], false);
-            if let Some(e) = &st.error {
-                col.spawn((kit_text(e, 16.0, BAD, &kit.text), Node { margin: UiRect::top(vh(24.0)), ..default() }));
-            }
         });
         // Bottom left: the wordmark. The amber 16 block spans BOOTLEG's cap height exactly
         // (cap top to baseline), the 16 inside it with equal space on all sides.

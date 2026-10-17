@@ -3,7 +3,7 @@
 //! surrender vote once a teammate abandoned (F3 calls it, F1 / F2 answer), and back to the
 //! menu when the match is over.
 use crate::game::{Frame, Walker};
-use crate::menu::{AppState, MenuError};
+use crate::menu::AppState;
 use crate::ui::{hud_panel, kit_text, vh, Kit, AMBER, TX1};
 use bevy::prelude::*;
 use net::protocol::{Stage, Team};
@@ -85,7 +85,7 @@ fn vote(mut w: ResMut<Walker>, keys: Res<ButtonInput<KeyCode>>, mouse: Res<Butto
 
 fn ended(mut commands: Commands, w: Res<Walker>, mut next: ResMut<NextState<AppState>>) {
     if w.client.match_ended {
-        commands.insert_resource(MenuError("Match over. Good games!".into()));
+        commands.insert_resource(crate::notice::Notice::info("Match over", "Good games!"));
         next.set(AppState::Menu);
     }
 }

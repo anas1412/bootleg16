@@ -199,9 +199,8 @@ fn particles(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &mut
 }
 
 /// The map's own decals (`infodecal`: a decals.wad texture stuck on the nearest surface).
-fn map_decals(mut commands: Commands, looks: Res<Looks>, config: Res<crate::menu::GameConfig>, w: Res<Walker>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<StandardMaterial>>) {
-    let path = crate::game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
-    let Ok(bsp) = goldsrc::bsp::Bsp::load(&path) else { return };
+fn map_decals(mut commands: Commands, looks: Res<Looks>, map: Res<crate::loading::MapData>, w: Res<Walker>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+    let bsp = &map.bsp;
     for e in bsp.entity_list().iter().filter(|e| e.get("classname").map(String::as_str) == Some("infodecal")) {
         let Some(name) = e.get("texture") else { continue };
         let Some(set) = Some(load_decals(&looks.wad, &[name.as_str()], &mut images, &mut materials)).filter(|s| !s.is_empty()) else { continue };

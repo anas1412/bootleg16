@@ -34,6 +34,7 @@ mod hud;
 mod impacts;
 mod killfeed;
 mod level;
+mod loading;
 mod map;
 mod map_pool;
 mod map_pick;
@@ -43,6 +44,7 @@ mod menu;
 mod menu_pages;
 mod models;
 mod muzzle;
+mod notice;
 mod overlay;
 mod play;
 mod play_page;
@@ -54,6 +56,7 @@ mod spectate;
 mod sky;
 mod smoke;
 mod sound;
+mod status_screens;
 mod steam;
 mod studio;
 mod teammates;
@@ -107,7 +110,7 @@ fn main() {
             killfeed::KillFeedPlugin,
             round_hud::RoundHudPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (bomb::BombPlugin, characters::CharactersPlugin, map_pool::MapPoolPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin),
+            (bomb::BombPlugin, characters::CharactersPlugin, map_pool::MapPoolPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, status_screens::StatusScreensPlugin),
             (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
         .add_systems(Update, screenshot)

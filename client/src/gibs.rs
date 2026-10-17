@@ -6,7 +6,7 @@
 use crate::effects::GameNews;
 use crate::game::{Frame, Walker};
 use crate::map;
-use crate::menu::{AppState, GameConfig};
+use crate::menu::AppState;
 use crate::models::{self, ModelCache};
 use crate::studio::StudioMaterial;
 use bevy::prelude::*;
@@ -60,9 +60,8 @@ fn gib_model(m: Material) -> &'static str {
     }
 }
 
-fn load(mut commands: Commands, config: Res<GameConfig>) {
-    let path = crate::game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
-    let Ok(bsp) = goldsrc::bsp::Bsp::load(&path) else { return };
+fn load(mut commands: Commands, map: Res<crate::loading::MapData>) {
+    let bsp = &map.bsp;
     let mut boxes = HashMap::new();
     for e in bsp.entity_list() {
         if e.get("classname").map(String::as_str) != Some("func_breakable") {

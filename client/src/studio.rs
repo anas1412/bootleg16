@@ -6,7 +6,7 @@
 //! per-pixel part; this keeps each model's light up to date as it moves.
 use crate::game::{Frame, Walker};
 use crate::map;
-use crate::menu::{AppState, GameConfig};
+use crate::menu::AppState;
 use bevy::asset::embedded_asset;
 use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::prelude::*;
@@ -93,9 +93,8 @@ struct Probe {
     sun: Option<[f32; 3]>,
 }
 
-fn load(mut commands: Commands, config: Res<GameConfig>) {
-    let path = crate::game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
-    let Ok(bsp) = goldsrc::bsp::Bsp::load(&path) else { return };
+fn load(mut commands: Commands, map: Res<crate::loading::MapData>) {
+    let bsp = &map.bsp;
     let dot = |v: [f32; 3], a: &[f32; 4]| v[0] * a[0] + v[1] * a[1] + v[2] * a[2] + a[3];
     let faces = bsp
         .faces

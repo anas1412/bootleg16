@@ -101,3 +101,28 @@ fn a_team_votes_a_teammate_out() {
     run(&mut g, &mut [], 64, &mut ev);
     assert!(g.a.round.vote.is_none() && g.a.id().is_some());
 }
+
+#[test]
+fn a_dropped_player_rejoins_their_seat() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig { round_time: 1e6, ..Default::default() });
+    g.server.reserve(MatchSetup { players: vec![(1, Group::A), (2, Group::B)], knife_round: false, keys: Vec::new(), map: String::new() });
+    g.a.ticket = 1;
+    g.b.ticket = 2;
+    let mut ev = Vec::new();
+    run(&mut g, &mut [], 256, &mut ev);
+    let before = g.server.player_count();
+    // A's network goes dark for 6 s: the server drops them (5 s timeout), A hears nothing.
+    g.a.simulate_network(0, 1.0);
+    run(&mut g, &mut [], 6 * 128, &mut ev);
+    assert_eq!(g.server.player_count(), before - 1, "dropped");
+    assert!(g.a.silence() > 5.0);
+    g.a.simulate_network(0, 0.0);
+    // A rejoins: back in, on their own side.
+    g.a.rejoin();
+    run(&mut g, &mut [], 256, &mut ev);
+    assert!(matches!(g.a.status, net::client::Status::Connected { .. }), "{:?}", g.a.status);
+    assert!(g.a.silence() < 0.1);
+    assert_eq!(g.server.player_count(), before);
+    assert_eq!(g.a.team(), Team::T);
+}

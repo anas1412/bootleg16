@@ -61,6 +61,11 @@ pub enum UiAction {
     Quit,
     Resume,
     Leave,
+    /// Loading screen: give up and go back to the menu.
+    CancelLoading,
+    /// The notice over the menu: join the same match again, or just close it.
+    NoticeRetry,
+    NoticeClose,
     /// Call a surrender vote (a teammate abandoned the match).
     Surrender,
     /// Open (or close) the report menu under a player's scoreboard row.

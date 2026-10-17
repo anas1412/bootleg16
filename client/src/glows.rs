@@ -5,7 +5,7 @@
 use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::map;
-use crate::menu::{AppState, GameConfig};
+use crate::menu::AppState;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 
@@ -27,9 +27,8 @@ struct Glow {
     material: Handle<StandardMaterial>,
 }
 
-fn spawn(mut commands: Commands, config: Res<GameConfig>, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>, mut images: ResMut<Assets<Image>>) {
-    let path = crate::game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
-    let Ok(bsp) = goldsrc::bsp::Bsp::load(&path) else { return };
+fn spawn(mut commands: Commands, map: Res<crate::loading::MapData>, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>, mut images: ResMut<Assets<Image>>) {
+    let bsp = &map.bsp;
     let quad = meshes.add(Rectangle::new(1.0, 1.0));
     let mut sprites = std::collections::HashMap::new();
     let vec3 = |s: Option<&String>| -> [f32; 3] {

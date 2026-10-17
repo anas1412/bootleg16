@@ -80,6 +80,8 @@ pub struct Client {
     /// Server time we are drawing other players at.
     render_tick: f32,
     ticks: u32,
+    /// `ticks` when the server was last heard from.
+    heard: u32,
     /// How far the last correction moved us (for stats and tests).
     pub last_correction: f32,
     /// Corrections not yet taken by the camera (GoldSrc units).
@@ -147,6 +149,7 @@ impl Client {
             latest_tick: 0,
             render_tick: 0.0,
             ticks: 0,
+            heard: 0,
             last_correction: 0.0,
             pending_correction: [0.0; 3],
             events: Vec::new(),
@@ -219,6 +222,7 @@ impl Client {
                 }
                 _ => plain,
             };
+            self.heard = self.ticks;
             match decode::<ServerMsg>(&plain) {
                 Some(msg @ ServerMsg::Snapshot { tick, .. }) => {
                     self.snap_bytes.push_back((tick, plain.to_vec()));
@@ -507,6 +511,23 @@ impl Client {
     /// The server this client talks to.
     pub fn server(&self) -> SocketAddr {
         self.server
+    }
+
+    /// Seconds since the server was last heard from.
+    pub fn silence(&self) -> f32 {
+        (self.ticks - self.heard) as f32 * TICK
+    }
+
+    /// Join the same server again after losing it (same seat if we have a ticket): hello
+    /// until it welcomes us. Its reliable events start over, and an encrypted session gets a
+    /// fresh channel (the server's starts over too once it has dropped us).
+    pub fn rejoin(&mut self) {
+        self.status = Status::Connecting;
+        self.cookie = 0;
+        self.reliable_seen = 0;
+        self.history.clear();
+        let server = self.server;
+        self.socket.keep_channels(|a| *a != server);
     }
 
     pub fn disconnect(&mut self) {

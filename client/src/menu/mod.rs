@@ -39,7 +39,7 @@ pub enum Page {
 #[derive(Resource, Default)]
 pub struct MenuDirty(pub bool);
 
-/// Menu-only state: current page, chosen map, typed party code or address, last error.
+/// Menu-only state: current page, chosen map, typed party code or address.
 #[derive(Resource)]
 pub(crate) struct MenuState {
     pub(crate) page: Page,
@@ -51,7 +51,6 @@ pub(crate) struct MenuState {
     /// Settings page section (`UiAction::SettingsTab`).
     pub(crate) settings_tab: u8,
     pub(crate) address: String,
-    pub(crate) error: Option<String>,
     pub(crate) rebuild: bool,
 }
 
@@ -71,9 +70,14 @@ impl Plugin for MenuPlugin {
             .insert_resource(Settings::load())
             .add_systems(Startup, from_command_line)
             .add_systems(OnEnter(AppState::Menu), enter_menu)
-            .add_systems(Update, (menu_actions, crate::menu_pages::rebuild_menu, type_text).chain().run_if(in_state(AppState::Menu)))
-            .add_systems(OnEnter(AppState::Connecting), (connect::start_connecting, connect::connecting_screen))
-            .add_systems(FixedUpdate, connect::poll_connection.run_if(in_state(AppState::Connecting)))
+            .add_systems(
+                Update,
+                ((crate::notice::keys, crate::notice::actions).chain().run_if(resource_exists::<crate::notice::Notice>), menu_actions, crate::menu_pages::rebuild_menu, type_text).chain().run_if(in_state(AppState::Menu)),
+            )
+            .add_systems(OnEnter(AppState::Connecting), connect::start_connecting)
+            .add_systems(Update, (connect::cancel, connect::advance).chain().run_if(in_state(AppState::Connecting)).run_if(resource_exists::<connect::Work>))
+            .add_systems(FixedUpdate, connect::tick_connection.run_if(in_state(AppState::Connecting)))
+            .add_systems(OnExit(AppState::Connecting), connect::stop_loading)
             .add_systems(Update, (crate::overlay::pause_menu, crate::overlay::in_game_actions).chain().run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
             .add_systems(OnExit(AppState::InGame), connect::leave_game);
     }
@@ -111,7 +115,7 @@ fn maps_installed() -> Vec<String> {
     POOL.iter().filter(|m| dir.join(format!("{m}.bsp")).exists()).map(|m| m.to_string()).collect()
 }
 
-fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, error: Option<Res<MenuError>>) {
+fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>) {
     cursor.grab_mode = CursorGrabMode::None;
     cursor.visible = true;
     let maps = maps_installed();
@@ -141,19 +145,13 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
         deathmatch: false,
         settings_tab,
         address: String::new(),
-        error: error.map(|e| e.0.clone()),
         rebuild: true,
     });
-    commands.remove_resource::<MenuError>();
     // The page colour is the clear colour, so menu parts can tune in and out over it.
     // Flat screens (Play, a match found) over the 3D menu (stage3d), which clears to the page colour.
     // (no MSAA, like the 3D camera under it: cameras sharing a window must agree)
     commands.spawn((Camera2d, Camera { order: 1, clear_color: ClearColorConfig::None, ..default() }, Msaa::Off, IsDefaultUiCamera, DespawnOnExit(AppState::Menu)));
 }
-
-/// Why we ended up back at the menu (shown once).
-#[derive(Resource)]
-pub struct MenuError(pub String);
 
 /// Typing into the party code / address field (Play page) or the name (Settings page).
 /// With Steam your name is your Steam name, so the Settings field is only typed into without it.
@@ -188,10 +186,12 @@ fn menu_actions(
     keys: Res<ButtonInput<KeyCode>>,
     (mut voice, devices): (ResMut<crate::voice::VoiceSettings>, Res<crate::voice::Devices>),
     (mut lobby, steam): (ResMut<crate::play::Lobby>, Option<Res<crate::steam::Steam>>),
-    mut binds: ResMut<crate::binds::Binds>,
+    (mut binds, notice): (ResMut<crate::binds::Binds>, Option<Res<crate::notice::Notice>>),
 ) {
     let ready = lobby.shown.as_ref().and_then(|s| s.ready);
-    if keys.just_pressed(KeyCode::Enter) && ready.is_some_and(|r| !r.you) {
+    if notice.is_some() {
+        // Enter belongs to the notice over the menu
+    } else if keys.just_pressed(KeyCode::Enter) && ready.is_some_and(|r| !r.you) {
         // a match found takes Enter first (the accept button says so)
         actions.0.push(UiAction::Lobby(crate::play::LobbyAction::AcceptMatch));
     } else if keys.just_pressed(KeyCode::Enter) && st.page == Page::Join {
@@ -215,7 +215,6 @@ fn menu_actions(
         match a {
             UiAction::Page(p) => {
                 st.page = p;
-                st.error = None;
             }
             UiAction::PickMap(m) => st.map = m,
             // Characters page: wear this one on that side (the other side keeps its pick).

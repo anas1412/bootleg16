@@ -1,7 +1,7 @@
 //! Drawing the map: textured, lightmapped world geometry and the doors that move with the sim.
 use crate::game::{Frame, Walker};
 use crate::menu::{AppState, GameConfig};
-use crate::{game_dir, map};
+use crate::map;
 use bevy::{
     asset::RenderAssetUsages,
     image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
@@ -78,16 +78,12 @@ pub fn rgba_image(w: u32, h: u32, rgba: Vec<u8>, repeat: bool, format: TextureFo
 fn spawn_level(
     mut commands: Commands,
     config: Res<GameConfig>,
+    mut map_data: ResMut<crate::loading::MapData>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let root = game_dir();
-    let path = root.join("cstrike/maps").join(format!("{}.bsp", config.map));
-    let geo = match map::load(&path, &[&root.join("cstrike"), &root.join("valve")]) {
-        Ok(g) => g,
-        Err(e) => return error!("loading {}: {e}", path.display()),
-    };
+    let Some(geo) = map_data.geometry.take() else { return };
     info!("{}: {} batches, lightmap {:?}", config.map, geo.batches.len(), geo.lightmap_size);
     commands.insert_resource(Spawns(geo.spawns.clone()));
 
@@ -212,7 +208,7 @@ mod tests {
     /// A door drawn with `door_transform` must sit exactly where its collision is.
     #[test]
     fn rendered_door_matches_collision_on_inferno() {
-        let path = game_dir().join("cstrike/maps/de_inferno.bsp");
+        let path = crate::game_dir().join("cstrike/maps/de_inferno.bsp");
         let Ok(bsp) = goldsrc::bsp::Bsp::load(&path) else { return };
         let mut doors = sim::doors::Doors::from_bsp(&bsp);
         let actor = sim::doors::Actor { mins: [0.0; 3], maxs: [0.0; 3], eye: [0.0; 3], forward: [1.0, 0.0, 0.0], using: false };

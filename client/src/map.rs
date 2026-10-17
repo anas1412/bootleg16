@@ -113,10 +113,9 @@ fn checkerboard(name: &str) -> Texture {
     Texture { name: name.to_string(), width: 8, height: 8, rgba }
 }
 
-/// Load a map and its WADs. `search` lists game directories (e.g. cstrike, valve)
-/// to look in for the WAD files the map names.
-pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::error::Error>> {
-    let bsp = Bsp::load(map)?;
+/// A loaded map's geometry and its WADs. `search` lists game directories (e.g. cstrike,
+/// valve) to look in for the WAD files the map names.
+pub fn load(bsp: &Bsp, search: &[&Path]) -> MapGeometry {
     let wads: Vec<Wad> = bsp
         .wad_names()
         .iter()
@@ -268,5 +267,5 @@ pub fn load(map: &Path, search: &[&Path]) -> Result<MapGeometry, Box<dyn std::er
     let movers = mover_models.into_iter().zip(groups.by_ref().take(doors)).collect();
     let pieces = piece_models.into_iter().zip(groups).map(|((m, r), g)| (m, r, g)).collect();
 
-    Ok(MapGeometry { batches, movers, pieces, textures, lightmap_size: (ATLAS_W, ah), lightmap_rgba: atlas.rgba, spawns })
+    MapGeometry { batches, movers, pieces, textures, lightmap_size: (ATLAS_W, ah), lightmap_rgba: atlas.rgba, spawns }
 }

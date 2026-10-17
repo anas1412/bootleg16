@@ -1,6 +1,6 @@
 //! The map's skybox (worldspawn `skyname`, six TGAs in gfx/env) instead of a flat colour.
 use crate::game::FlyCam;
-use crate::menu::{AppState, GameConfig};
+use crate::menu::AppState;
 use crate::game_dir;
 use bevy::light::Skybox;
 use bevy::prelude::*;
@@ -85,11 +85,9 @@ fn cubemap(sky: &str) -> Option<Image> {
 }
 
 /// Once the camera exists: give it the map's sky.
-fn add_sky(mut commands: Commands, cams: Query<Entity, Added<FlyCam>>, config: Res<GameConfig>, mut images: ResMut<Assets<Image>>) {
+fn add_sky(mut commands: Commands, cams: Query<Entity, Added<FlyCam>>, map: Res<crate::loading::MapData>, mut images: ResMut<Assets<Image>>) {
     for cam in &cams {
-        let path = game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
-        let sky = goldsrc::bsp::Bsp::load(&path)
-            .ok()
+        let sky = Some(&map.bsp)
             .and_then(|b| b.entity_list().into_iter().find(|e| e.get("classname").map(String::as_str) == Some("worldspawn"))?.get("skyname").cloned())
             .unwrap_or_else(|| "desert".into());
         match cubemap(&sky) {

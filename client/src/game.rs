@@ -3,8 +3,9 @@
 use crate::binds::{Action, Bind, Binds};
 use crate::buy::BuyMenu;
 use crate::level::Spawns;
-use crate::menu::{overlay_open, AppState, GameConfig, MenuError, Overlay, PendingClient, Settings};
-use crate::{game_dir, map, sound, viewmodel};
+use crate::menu::{overlay_open, AppState, Overlay, PendingClient, Settings};
+use crate::notice::Notice;
+use crate::{map, sound, viewmodel};
 use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
@@ -40,6 +41,8 @@ impl Plugin for GamePlugin {
                 Err(e) => warn!("no hitboxes, own bullet holes come from the server: {e}"),
             })
             .add_systems(OnEnter(AppState::InGame), enter)
+            .add_systems(Update, connection.run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
+            .add_systems(OnExit(AppState::InGame), |mut c: Commands| c.remove_resource::<Reconnecting>())
             .add_systems(FixedUpdate, walk.run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
             .add_systems(Update, (face_spawn, mouse_look, move_camera, grab_cursor).chain().in_set(Frame::Camera));
     }
@@ -80,27 +83,12 @@ pub struct FlyCam {
 }
 
 /// Take over the connection, swap in the real map collision, add the camera.
-fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res<GameConfig>, mut next: ResMut<NextState<AppState>>, settings: Res<crate::menu::Settings>) {
+/// (The loading screen already loaded the map and put its collision in the client.)
+fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, settings: Res<crate::menu::Settings>) {
     let Some(mut client) = pending.0.take() else { return };
     // Your characters (Characters page), sent until the server has them.
     if let Some([t, ct]) = settings.looks {
         client.set_looks(t, ct);
-    }
-    let path = game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
-    match goldsrc::bsp::Bsp::load(&path) {
-        // Same map name isn't enough: a changed file would mean different walls on our side.
-        Ok(bsp) if bsp.hash != client.map_hash => {
-            client.disconnect();
-            commands.insert_resource(MenuError(format!("Your {} is different from the server's (different version or modified). Get the server's map file.", config.map)));
-            next.set(AppState::Menu);
-            return;
-        }
-        Ok(bsp) => client.world = sim::collision::World::from_bsp(&bsp),
-        Err(e) => {
-            commands.insert_resource(MenuError(format!("You don't have {} ({e})", config.map)));
-            next.set(AppState::Menu);
-            return;
-        }
     }
     commands.insert_resource(Walker {
         client,
@@ -138,6 +126,43 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res
         ))
         .id();
     viewmodel::attach(&mut commands, cam);
+}
+
+/// The server has gone quiet: shown after `QUIET` seconds while we try to rejoin (same seat);
+/// after `give_up` we leave with a notice. Esc leaves at once.
+#[derive(Resource)]
+pub struct Reconnecting {
+    /// Seconds since the server was last heard from.
+    pub since: f32,
+    pub give_up: f32,
+}
+
+const QUIET: f32 = 3.0;
+const GIVE_UP: f32 = 30.0;
+
+fn connection(mut commands: Commands, mut w: ResMut<Walker>, keys: Res<ButtonInput<KeyCode>>, reconnecting: Option<ResMut<Reconnecting>>, mut next: ResMut<NextState<AppState>>) {
+    if w.client.status == net::client::Status::Rejected {
+        // e.g. voted out, or the match is gone by the time we're back
+        let why = w.client.reject_reason.clone().unwrap_or_default();
+        commands.insert_resource(Notice::error("Disconnected", why));
+        next.set(AppState::Menu);
+        return;
+    }
+    let since = w.client.silence();
+    match reconnecting {
+        None if since > QUIET => {
+            w.client.rejoin();
+            commands.insert_resource(Reconnecting { since, give_up: GIVE_UP });
+        }
+        None => {}
+        Some(_) if since <= QUIET => commands.remove_resource::<Reconnecting>(),
+        Some(_) if since > GIVE_UP => {
+            commands.insert_resource(Notice::error("Connection lost", "The server stopped answering.").with_retry());
+            next.set(AppState::Menu);
+        }
+        Some(_) if keys.just_pressed(KeyCode::Escape) => next.set(AppState::Menu),
+        Some(mut r) => r.since = since,
+    }
 }
 
 /// On (re)spawning, look the way the spawn point faces, like CS.
