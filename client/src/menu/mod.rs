@@ -31,6 +31,8 @@ pub enum Page {
     Join,
     Settings,
     Voice,
+    Characters,
+    Maps,
 }
 
 /// Set to redraw the menu from outside (e.g. after a voice key was bound).
@@ -127,6 +129,8 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>, er
         Ok("join") => Page::Join,
         Ok("settings" | "crosshair" | "assistant" | "keys") => Page::Settings,
         Ok("voice") => Page::Voice,
+        Ok("characters") => Page::Characters,
+        Ok("maps") => Page::Maps,
         _ => Page::Main,
     };
     commands.insert_resource(MenuState {
@@ -214,6 +218,13 @@ fn menu_actions(
                 st.error = None;
             }
             UiAction::PickMap(m) => st.map = m,
+            // Characters page: wear this one on that side (the other side keeps its pick).
+            UiAction::SetLook(side, i) => {
+                let mut looks = settings.looks.unwrap_or([0, 0]);
+                looks[side.min(1) as usize] = i.min(net::protocol::CLASSES - 1);
+                settings.looks = Some(looks);
+                settings.save();
+            }
             UiAction::PracticeMode(dm) => st.deathmatch = dm,
             UiAction::Dummies(d) => st.dummies = (st.dummies + d).clamp(0, 20),
             UiAction::StartPractice => {

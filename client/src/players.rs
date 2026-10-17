@@ -44,9 +44,6 @@ pub enum PlayerAnim {
     Died(u8),
 }
 
-/// The player model files for each side (CS 1.6 classes).
-const T_MODELS: [&str; 4] = ["terror", "leet", "arctic", "guerilla"];
-const CT_MODELS: [&str; 4] = ["urban", "gsg9", "sas", "gign"];
 /// Corpses kept at once (CS clears them each round).
 const MAX_CORPSES: usize = 16;
 
@@ -62,10 +59,11 @@ struct OtherPlayers {
 }
 
 fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>) {
-    let mut load = |names: &[&str]| -> Vec<_> { names.iter().filter_map(|n| cache.get(&format!("player/{n}/{n}.mdl"), &mut images, &mut materials)).collect() };
-    let mut looks = load(&T_MODELS);
+    // The CS 1.6 classes (characters.rs), in `Score::looks` order.
+    let mut load = |classes: &[(&str, &str)]| -> Vec<_> { classes.iter().filter_map(|(n, _)| cache.get(&format!("player/{n}/{n}.mdl"), &mut images, &mut materials)).collect() };
+    let mut looks = load(&crate::characters::T_CLASSES);
     let t_count = looks.len();
-    looks.extend(load(&CT_MODELS));
+    looks.extend(load(&crate::characters::CT_CLASSES));
     commands.insert_resource(OtherPlayers { looks, t_count, dying: HashSet::new(), last_hit: HashMap::new() });
 }
 

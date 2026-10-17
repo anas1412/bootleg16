@@ -26,6 +26,8 @@ pub fn rebuild_menu(
     mut memory: ResMut<UiMemory>,
     faces: Res<crate::assistant::view::Faces>,
     binds: Res<crate::binds::Binds>,
+    portraits: Res<crate::characters::Portraits>,
+    pool: Res<crate::map_pool::Pool>,
     frames: Query<Entity, With<MenuRoot>>,
     pages: Query<Entity, With<MenuPage>>,
 ) {
@@ -95,9 +97,11 @@ pub fn rebuild_menu(
             nav(col, &kit, "menu.nav", vec![
                 item("01", "Play", "プレイ", UiAction::Page(Page::Join), false),
                 item("02", "Practice", "練習", UiAction::Page(Page::Practice), st.page == Page::Practice),
-                item("03", "Settings", "設定", UiAction::Page(Page::Settings), st.page == Page::Settings),
-                item("04", "Voice", "音声", UiAction::Page(Page::Voice), st.page == Page::Voice),
-                item("05", "Quit", "終了", UiAction::Quit, false),
+                item("03", "Characters", "キャラ", UiAction::Page(Page::Characters), st.page == Page::Characters),
+                item("04", "Maps", "マップ", UiAction::Page(Page::Maps), st.page == Page::Maps),
+                item("05", "Settings", "設定", UiAction::Page(Page::Settings), st.page == Page::Settings),
+                item("06", "Voice", "音声", UiAction::Page(Page::Voice), st.page == Page::Voice),
+                item("07", "Quit", "終了", UiAction::Quit, false),
             ], false);
             if let Some(e) = &st.error {
                 col.spawn((kit_text(e, 16.0, BAD, &kit.text), Node { margin: UiRect::top(vh(24.0)), ..default() }));
@@ -136,6 +140,8 @@ pub fn rebuild_menu(
         Page::Practice => practice(page, &kit, &mut memory, st, &lobby),
         Page::Settings => settings_page(page, &kit, &faces, &mut memory, &settings, steam, &binds, st.settings_tab, tune_page.then_some(delay)),
         Page::Voice => crate::voice::page(page, &kit, &mut memory, &voice, tune_page.then_some(delay)),
+        Page::Characters => crate::characters::page(page, &kit, &settings, &portraits),
+        Page::Maps => crate::map_pool::page(page, &kit, &pool),
     });
 }
 

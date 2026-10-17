@@ -56,6 +56,8 @@ pub enum UiAction {
     CrosshairDot(bool),
     /// HUD curve up or down a step.
     HudCurve(i8),
+    /// Characters page: side (0 terrorists, 1 counter-terrorists), class.
+    SetLook(u8, u8),
     Quit,
     Resume,
     Leave,

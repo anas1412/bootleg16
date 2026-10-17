@@ -54,7 +54,7 @@ struct Dot(usize);
 struct Bomb;
 
 /// 8-bit paletted BMP (what the overviews are) to RGBA, the green background clear.
-fn load_bmp(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+pub(crate) fn load_bmp(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     let u32_at = |o: usize| Some(u32::from_le_bytes(data.get(o..o + 4)?.try_into().ok()?));
     let i32_at = |o: usize| Some(i32::from_le_bytes(data.get(o..o + 4)?.try_into().ok()?));
     if data.get(..2)? != b"BM" || u16::from_le_bytes(data.get(28..30)?.try_into().ok()?) != 8 {
