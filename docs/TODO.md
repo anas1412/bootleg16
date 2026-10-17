@@ -198,3 +198,7 @@ land, and add new ones here instead of leaving them only in chat.
 - Crash when the window is made big (maximized). Get the panic from the terminal. Suspects: `menu/stage3d.rs` `resize` (render target and mesh rebuilt for the new size), `hud/visor.rs` `follow` (render target resize).
 - Settings: picking an option flips the screen back to the design view, then to the 3D view again. Check what the click does to the menu state or the stage3d camera (UI session owns the menu pages).
 - No fullscreen option (the window is only resizable). Add one to Settings, display section.
+
+## Buy menu weapon pictures (add-on art)
+- The add-on's weapon pictures (`640hud*.spr`) have each weapon's name drawn into the image, and some sheets keep Valve's striped panels. `hud/icons.rs` `clean_gun_sheet` strips the stripes and punches out the names, which leaves speckle where the name overlapped the gun. Interim only, not shippable.
+- Proper fix: render the weapon's own `w_*.mdl` (the add-on has them) into a small image per weapon (3D icon, no baked text), like the character stage in `menu/stage3d.rs`. The UI session owns the buy menu: agree the size and style with it first.

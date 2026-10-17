@@ -38,7 +38,7 @@ impl FromWorld for Icons {
             }
             if let Ok(mut s) = dirs.iter().find_map(|d| Sprite::load(d.join(format!("{}.spr", e.sprite))).ok()).ok_or(()) {
                 if guns.iter().any(|g| g.sprite == e.sprite) {
-                    clean_gun_sheet(&mut s, &guns);
+                    clean_gun_sheet(&mut s, &guns.iter().filter(|g| g.sprite == e.sprite).cloned().collect::<Vec<_>>());
                 }
                 sheets.insert(e.sprite.clone(), images.add(rgba_image(s.width, s.height, s.rgba, false, TextureFormat::Rgba8UnormSrgb)));
             }
@@ -63,16 +63,44 @@ impl Icons {
 /// Weapons with buy menu art (`sprites/weapon_<name>.txt`).
 const GUN_ART: [&str; 17] = ["glock18", "usp", "deagle", "mac10", "tmp", "mp5navy", "ump45", "p90", "galil", "famas", "ak47", "m4a1", "scout", "awp", "flashbang", "hegrenade", "smokegrenade"];
 
-/// The big weapon pictures sit on a dim box with the slot number printed bottom left:
-/// drop the box (dark pixels) and the label so only the gun is left.
+/// Make the gun pictures usable as buy menu art. Valve's sheets have a striped panel behind
+/// every gun: keep only the bright lines of the gun. Redrawn sheets (the add-on's) are the gun
+/// on black with its name under it: keep the gun, drop the name and the panel's edge line.
+/// `guns`: this sheet's gun rectangles (sheets can mix both kinds).
 fn clean_gun_sheet(s: &mut Sprite, guns: &[HudEntry]) {
-    for px in s.rgba.chunks_mut(4) {
-        px[3] = ((px[3] as i32 - 195).clamp(0, 60) * 255 / 60) as u8;
-    }
+    let w = s.width;
+    let at = move |x: u32, y: u32| ((y * w + x) * 4 + 3) as usize;
     for g in guns {
-        for y in g.y + 29..(g.y + g.h).min(s.height) {
-            for x in g.x..(g.x + 110).min(s.width) {
-                s.rgba[((y * s.width + x) * 4 + 3) as usize] = 0;
+        let (x1, y1) = ((g.x + g.w).min(s.width), (g.y + g.h).min(s.height));
+        let all = ((x1 - g.x) * (y1 - g.y)).max(1);
+        let lit = (g.y..y1).flat_map(|y| (g.x..x1).map(move |x| (x, y))).filter(|&(x, y)| s.rgba[at(x, y)] > 0).count() as u32;
+        if lit * 2 >= all {
+            for y in g.y..y1 {
+                for x in g.x..x1 {
+                    let i = at(x, y);
+                    s.rgba[i] = ((s.rgba[i] as i32 - 195).clamp(0, 60) * 255 / 60) as u8;
+                }
+            }
+            for y in g.y + 29..y1 {
+                for x in g.x..(g.x + 110).min(s.width) {
+                    s.rgba[at(x, y)] = 0;
+                }
+            }
+        } else {
+            // The name is the near-white text low in the picture (the gun itself is greyer).
+            for y in g.y + 20..y1 {
+                for x in g.x..x1 {
+                    let i = at(x, y);
+                    if s.rgba[i] >= 235 {
+                        s.rgba[i] = 0;
+                    }
+                }
+            }
+            // The panel's edge line sits just outside the rectangle; filtering bleeds it in.
+            for y in g.y..y1 {
+                for x in x1.saturating_sub(3)..(x1 + 3).min(s.width) {
+                    s.rgba[at(x, y)] = 0;
+                }
             }
         }
     }
