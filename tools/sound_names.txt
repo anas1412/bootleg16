@@ -1,0 +1,17 @@
+# Weapon sound folders: one folder per weapon, named for the weapon the game calls it.
+# `old -> new` under sound/weapons/ (names as `clean` makes them: lowercase, underscores).
+# tools/sound_names.py renames the folder and the sound names inside the models that use it.
+awm -> awp
+custom/deagle -> deagle
+92fs -> elite
+famas_f1 -> famas
+mw2019_grenades -> grenades
+slayer5530s_g3sg-1 -> g3sg1
+galil_arm_cod17 -> galil
+fn_m249_minimi -> m249
+mac11 -> mac10
+p226 -> p228
+scout_mw2019 -> scout
+sg522 -> sg552
+glock -> glock18
+m1014 -> xm1014
