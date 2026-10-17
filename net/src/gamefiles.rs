@@ -17,9 +17,15 @@ pub fn roots(game: &Path) -> Vec<PathBuf> {
     Some(game.to_path_buf()).filter(|p| p.is_dir()).into_iter().collect()
 }
 
-/// `rel` under each root, in lookup order. All game file names are lowercase
-/// (`tools/normalize_names.py`), so a request in any case finds the file.
+/// The one naming rule (same as `tools/normalize_names.py`): lowercase, spaces become
+/// underscores, quotes are dropped. Models name their sounds in the old style ("Galil ARM/draw.wav").
+pub fn clean(name: &str) -> String {
+    name.to_lowercase().replace(' ', "_").replace('\'', "")
+}
+
+/// `rel` under each root, in lookup order. All game file names follow `clean`, so a request
+/// in the old style finds the file.
 pub fn paths(game: &Path, rel: &str) -> Vec<PathBuf> {
-    let rel = rel.to_lowercase();
+    let rel = clean(rel);
     roots(game).into_iter().map(|r| r.join(&rel)).collect()
 }
