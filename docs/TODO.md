@@ -117,6 +117,19 @@ land, and add new ones here instead of leaving them only in chat.
       ricochet sounds (`EV_HLDM_PlayTextureSound`/`GunshotDecalTrace`), knife hits, jump/land
 - [x] Gunshot volumes and attenuations from client.so (`EV_Fire*`, `fire_attenuation`); footstep, jump and landing volumes from `PM_UpdateStepSound`/`PM_CheckFalling`, left and right feet
 - [x] Muzzle flash at the model's muzzle attachment (own view model and other players)
+- [ ] One mixer for everything: game sounds, map sounds, UI tones and voice each play their own
+      way now (falloff written twice). One play path, one listener
+- [ ] Volume buses with Settings sliders: master, effects, ambience, UI, assistant, voice
+- [ ] Sound channels as GoldSrc (per player: weapon, body, voice, item): a new sound cuts the old
+      one on its channel (switching weapons mid-reload still plays the reload now)
+- [ ] Voice limit: cap how many sounds play at once, drop the quietest/oldest (a 10-player
+      fight can spawn hundreds now)
+- [ ] Listener is the camera: falloff is worked out from your own body, panning from the camera,
+      so spectating hears from the wrong place
+- [ ] Volume changes reach sounds already playing (only map ambience does now)
+- [ ] Room reverb per area as CS 1.6 (`env_sound` room types in the maps: tunnels, open air)
+- [ ] Footsteps may use the wrong sound (reported in play, not confirmed): check the surface
+      material lookup and the files per material against CS
 
 ### Movement leftovers (`docs/MOVEMENT.md`)
 - [x] Door sounds (`movesnd`/`stopsnd`), button clicks: client/src/map_sounds.rs
@@ -128,6 +141,9 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Translucent brushes (`rendermode` 1/2/3/5 by `renderamt`)
 - [x] Decals, sprites (env_glow, explosions), sparks, muzzle flashes
 - [x] Map props in the pool maps: env_glow, env_spark, infodecal (no env_model/cycler in them)
+- [ ] Switching weapons briefly shows a character model on screen (a third-person model
+      drawn in view for a frame or so)
+- [ ] Smoke grenade cloud is far too transparent: should block sight like CS 1.6's
 
 ### UI (Interference: docs/UI.md, design/mockups/ui is the spec)
 - [x] Scoreboard data: `Score` has assists, MVPs, headshots, damage and rounds (ADR), server-measured
