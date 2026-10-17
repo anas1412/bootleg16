@@ -1,7 +1,7 @@
 //! Loading, notices and reconnecting (design/mockups/ui: Loading, Notice, Reconnecting).
 //! The logic lives in `loading`, `notice` and `game`; these views only read their resources:
 //! each view is up while its resource exists and follows it every frame.
-//! - Loading (AppState::Connecting): the map big, the steps in a row (done, now, next), real
+//! - Loading (Connecting, and into the game until the first frame is drawn): the map big, the steps in a row (done, now, next), real
 //!   progress, Cancel · Esc.
 //! - Notice (menu): over everything, blurred behind: what happened, why, Retry and Back.
 //! - Reconnecting (in a match): under the score while the server is quiet, draining to the
@@ -37,8 +37,9 @@ struct StepRow(usize, Entity);
 
 fn loading(mut commands: Commands, kit: Res<Kit>, state: Option<Res<Loading>>, root: Query<Entity, With<LoadingRoot>>, mut texts: Query<(&LoadingText, &mut Text)>, mut rows: Query<(&StepRow, &mut Node, &Children)>, mut colors: Query<&mut TextColor>, mut fills: Query<&mut BackgroundColor>, mut bar: Query<&mut Meter, With<LoadingBar>>, time: Res<Time>) {
     let Some(l) = state else {
+        // the game is drawn under it by now: tune out over it
         for e in &root {
-            commands.entity(e).despawn();
+            commands.entity(e).remove::<LoadingRoot>().insert(Anim::tune_out());
         }
         return;
     };
@@ -46,7 +47,7 @@ fn loading(mut commands: Commands, kit: Res<Kit>, state: Option<Res<Loading>>, r
     let steps: Vec<Step> = Step::ALL.into_iter().filter(|s| l.practice || *s != Step::StartingServer).collect();
     if root.is_empty() {
         commands
-            .spawn((LoadingRoot, DespawnOnExit(AppState::Connecting), Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), ..default() }, BackgroundColor(BG0), GlobalZIndex(40)))
+            .spawn((LoadingRoot, Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), ..default() }, BackgroundColor(BG0), GlobalZIndex(40)))
             .with_children(|full| {
                 full.spawn((Node { position_type: PositionType::Absolute, left: px(0), right: px(0), top: vh(380.0), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, ..default() }, Anim::tune_in(0.0))).with_children(|c| {
                     c.spawn((LoadingText::What, t(&kit, Type::Label, "", TX2)));
