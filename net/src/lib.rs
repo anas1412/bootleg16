@@ -17,6 +17,7 @@ pub mod replay;
 pub mod rounds;
 pub mod secure;
 pub mod server;
+pub mod tick;
 mod socket;
 
 pub use client::Client;
