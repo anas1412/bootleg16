@@ -57,7 +57,7 @@ struct AliveOnly;
 struct WeaponIcon;
 #[derive(Component)]
 struct NetStats;
-/// The clip and reserve half of the weapon panel (hidden while spectating: their ammo isn't sent).
+/// The clip and reserve half of the weapon panel (hidden when there's no gun in hand).
 #[derive(Component)]
 struct AmmoPart;
 
@@ -182,7 +182,7 @@ fn status(
 ) {
     let mut v = w.client.vitals;
     let l = &w.client.state.loadout;
-    // spectating: the HUD shows the player you watch (health, armor, weapon; their ammo isn't sent)
+    // spectating: the HUD shows the player you watch (health, armor, weapon and ammo)
     let watched = crate::spectate::spectating(&w).then(|| crate::spectate::target(&w, &watch)).flatten().filter(|t| t.mate.is_some());
     if let Some(m) = watched.as_ref().and_then(|t| t.mate) {
         v.health = m.health as f32;
@@ -203,9 +203,13 @@ fn status(
     hm.color = if low { BAD } else { TX1 };
     armor.target = v.armor;
     am.value = v.armor / 100.0;
-    let gun = if watched.is_some() { None } else { l.active_gun() };
+    // (magazine, reserve) of the gun in hand: yours, or the watched teammate's.
+    let ammo = match &watched {
+        Some(t) => t.mate.and_then(|m| m.ammo).map(|(c, r)| (c as u32, r as u32)),
+        None => l.active_gun().map(|g| (g.clip, g.reserve)),
+    };
     for mut n in &mut ammo_parts {
-        let d = if watched.is_some() { Display::None } else { Display::Flex };
+        let d = if watched.is_some() && ammo.is_none() { Display::None } else { Display::Flex };
         if n.display != d {
             n.display = d;
         }
@@ -213,8 +217,8 @@ fn status(
     let [he, fl, sm] = if watched.is_some() { [0; 3] } else { l.grenades };
     for (field, mut t) in &mut fields {
         let s = match field {
-            Field::Clip => gun.map(|g| g.clip.to_string()).unwrap_or_default(),
-            Field::Reserve => gun.map(|g| format!("/ {}", g.reserve)).unwrap_or_default(),
+            Field::Clip => ammo.map(|(c, _)| c.to_string()).unwrap_or_default(),
+            Field::Reserve => ammo.map(|(_, r)| format!("/ {r}")).unwrap_or_default(),
             Field::Weapon => sim::weapons::def(weapon).name.to_uppercase(),
             Field::Grenades => [("HE", he), ("FLASH", fl), ("SMOKE", sm)].iter().filter(|(_, n)| *n > 0).map(|(name, n)| if *n > 1 { format!("{name} x{n}") } else { name.to_string() }).collect::<Vec<_>>().join("   "),
             Field::Notice => match w.client.team() {

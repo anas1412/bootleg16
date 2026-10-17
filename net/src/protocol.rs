@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 28;
+pub const PROTOCOL_VERSION: u32 = 29;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -154,6 +154,8 @@ pub struct Mate {
     pub armor: u8,
     pub helmet: bool,
     pub defuse_kit: bool,
+    /// The gun in hand: rounds in the magazine and in reserve (None: knife, grenade, bomb).
+    pub ammo: Option<(u16, u16)>,
 }
 
 impl PlayerNet {

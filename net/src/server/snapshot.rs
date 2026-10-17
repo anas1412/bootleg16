@@ -39,7 +39,7 @@ impl Server {
                 .values()
                 .map(|c| {
                     let (m, v) = (&c.state.movement, &c.vitals);
-                    let mate = Mate { health: v.health.clamp(0.0, 255.0).ceil() as u8, armor: v.armor.clamp(0.0, 255.0).ceil() as u8, helmet: v.helmet, defuse_kit: c.defuse_kit };
+                    let mate = Mate { health: v.health.clamp(0.0, 255.0).ceil() as u8, armor: v.armor.clamp(0.0, 255.0).ceil() as u8, helmet: v.helmet, defuse_kit: c.defuse_kit, ammo: c.state.loadout.active_gun().map(|g| (g.clip.min(u16::MAX as u32) as u16, g.reserve.min(u16::MAX as u32) as u16)) };
                     PlayerNet::new(c.id, m.origin, c.view.0, c.view.1, m.crouched, v.alive(), !m.on_ground && !m.on_ladder, c.state.loadout.active_gun().is_some_and(|g| g.reloading), c.state.loadout.active_id(), c.team, Some(mate))
                 })
                 .collect();
