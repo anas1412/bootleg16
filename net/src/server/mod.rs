@@ -114,6 +114,8 @@ struct Remote {
     deaths: u32,
     /// Scoreboard stats (see `Score`).
     stats: Stats,
+    /// What they bought this round, oldest first (`buy::undo_buys` sells it back).
+    purchases: Vec<buy::Purchase>,
     /// Their character on each side (`ClientMsg::Looks`); until they say, one picked by id.
     looks: [u8; 2],
     /// How their model is animated (as clients draw it): hitboxes follow it.
@@ -512,6 +514,7 @@ impl Remote {
             stats: Stats::default(),
             anim: sim::anim::Anim::new(0.0),
             looks: [id % CLASSES; 2],
+            purchases: Vec::new(),
             money: 0,
             defuse_kit: false,
             ticket: 0,

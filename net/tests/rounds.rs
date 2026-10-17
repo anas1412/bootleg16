@@ -168,3 +168,38 @@ fn time_running_out_pays_living_terrorists_nothing() {
     assert_eq!(g.server.money(a), Some(t), "the living T gets no loss bonus");
     assert_eq!(g.server.money(b), Some(ct + 3250));
 }
+
+#[test]
+fn everything_bought_this_round_sells_back() {
+    use net::protocol::BuyItem;
+    use sim::weapons::Id;
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, MatchConfig { freeze_time: 3.0, buy_time: 20.0, start_money: 16000, ..quick() });
+    g.connect_as(Some(Team::T), Some(Team::Ct));
+    let a = g.a.id().unwrap();
+    let mut ev = Vec::new();
+    wait(&mut g, 0.5, Input::default(), Input::default(), &mut ev);
+    let money = g.server.money(a).unwrap();
+    for item in [BuyItem::Weapon(Id::Ak47), BuyItem::KevlarHelmet, BuyItem::Weapon(Id::HeGrenade), BuyItem::Weapon(Id::Deagle)] {
+        g.a.buy(item);
+        wait(&mut g, 0.1, Input::default(), Input::default(), &mut ev);
+    }
+    let l = g.server.player_state(a).unwrap().loadout.clone();
+    assert_eq!((l.primary.map(|p| p.id), l.secondary.map(|p| p.id), l.grenades[0]), (Some(Id::Ak47), Some(Id::Deagle), 1), "bought");
+    assert!(g.server.money(a).unwrap() < money);
+    g.a.undo_buys();
+    wait(&mut g, 0.2, Input::default(), Input::default(), &mut ev);
+    let l = g.server.player_state(a).unwrap().loadout.clone();
+    assert_eq!(g.server.money(a), Some(money), "every dollar back");
+    assert_eq!((l.primary.map(|p| p.id), l.secondary.map(|p| p.id), l.grenades[0]), (None, Some(Id::Glock), 0), "the Glock is back off the floor");
+    assert_eq!(g.server.vitals(a).unwrap().armor, 0.0);
+    // A gun that's been fired is yours: no refund.
+    g.a.buy(BuyItem::Weapon(Id::Ak47));
+    wait(&mut g, 1.0, Input::default(), Input::default(), &mut ev);
+    wait(&mut g, 0.3, Input { attack: true, ..Default::default() }, Input::default(), &mut ev);
+    let after = g.server.money(a).unwrap();
+    g.a.undo_buys();
+    wait(&mut g, 0.2, Input::default(), Input::default(), &mut ev);
+    assert_eq!(g.server.money(a), Some(after));
+    assert_eq!(g.server.player_state(a).unwrap().loadout.primary.map(|p| p.id), Some(Id::Ak47));
+}

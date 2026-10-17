@@ -424,6 +424,11 @@ impl Client {
         self.socket.send(self.server, encode(&ClientMsg::JoinTeam { team }));
     }
 
+    /// Sell back everything bought this round (while you may still buy).
+    pub fn undo_buys(&mut self) {
+        self.socket.send(self.server, encode(&ClientMsg::UndoBuys));
+    }
+
     /// Wear these characters (terrorist, counter-terrorist); sent until the scoreboard shows it.
     pub fn set_looks(&mut self, t: u8, ct: u8) {
         self.wanted_looks = Some([t.min(crate::protocol::CLASSES - 1), ct.min(crate::protocol::CLASSES - 1)]);

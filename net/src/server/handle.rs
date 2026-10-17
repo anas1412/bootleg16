@@ -89,6 +89,7 @@ impl Server {
                 }
             }
             ClientMsg::Buy { item } => self.buy(from, item),
+            ClientMsg::UndoBuys => self.undo_buys(from),
             ClientMsg::SideVote { switch } => self.side_vote(from, switch),
             ClientMsg::CallSurrender => self.call_surrender(from),
             ClientMsg::CallKick { player } => self.call_kick(from, player),

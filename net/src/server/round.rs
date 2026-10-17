@@ -151,6 +151,7 @@ impl Server {
         for c in self.clients.values_mut() {
             c.stats.round_kills = 0;
             c.stats.round_damage = 0;
+            c.purchases.clear(); // a new round: last round's buys are yours for good
         }
         self.ground.clear();
         self.grenades.clear();

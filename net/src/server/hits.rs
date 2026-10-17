@@ -188,6 +188,7 @@ impl Server {
             let mut helpers = Vec::new();
             if let Some(v) = self.clients.values_mut().find(|c| c.id == victim) {
                 v.deaths += 1;
+                v.purchases.clear();
                 if !respawns {
                     v.respawn_at = None; // wait for the next round
                 }
