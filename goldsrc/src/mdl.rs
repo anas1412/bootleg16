@@ -215,7 +215,8 @@ impl Model {
             let spine = matches!(self.bones[b].name.as_str(), "Bip01 Spine" | "Bip01 Spine1" | "Bip01 Spine2" | "Bip01 Spine3");
             if spine && ch == 3 { (twist / 4.0).to_radians() } else { 0.0 }
         };
-        let s = &self.sequences[seq];
+        // (A sequence number from another model is clamped, never an out-of-range panic.)
+        let s = &self.sequences[seq.min(self.sequences.len() - 1)];
         let frame = frame.clamp(0.0, (s.frames - 1) as f32);
         let (f0, ft) = (frame.floor() as usize, frame.fract());
         let f1 = (f0 + 1).min(s.frames - 1);

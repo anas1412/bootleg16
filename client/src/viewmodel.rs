@@ -138,6 +138,11 @@ fn update(
                 commands.entity(*e).insert(RenderLayers::layer(LAYER));
             }
             vm.skin = Some(skin);
+            // The old weapon's animation number means nothing to this model (fewer animations).
+            vm.seq = 0;
+            vm.started = now;
+            vm.looping = true;
+            vm.last_frame = -1.0;
             // The Glock picks one of two draws at random (cs.so CGLOCK18::Deploy).
             let draw_name = if id == Id::Glock && (now * 1000.0) as u32 % 2 == 1 { "draw2" } else { "draw" };
             let draw: Vec<String> = names(draw_name).into_iter().chain(["deploy".to_string(), "draw".to_string()]).collect();
