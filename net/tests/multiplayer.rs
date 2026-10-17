@@ -310,3 +310,16 @@ fn kill_feed_survives_packet_loss() {
     assert!(deaths >= 1, "B never died (health {:?})", g.server.vitals(b));
     assert!(kills_a >= 1 && kills_a == kills_b, "kills seen: A {kills_a}, B {kills_b}");
 }
+
+#[test]
+fn characters_picked_show_on_the_scoreboard() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 0, 0.0);
+    g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::Ct));
+    let a = g.a.id().unwrap();
+    g.a.set_looks(2, 9); // 9: no such class, clamped to the last
+    for _ in 0..256 {
+        g.tick(Input::default(), Input::default());
+    }
+    assert_eq!(g.b.scores.iter().find(|s| s.id == a).map(|s| s.looks), Some([2, net::protocol::CLASSES - 1]));
+}

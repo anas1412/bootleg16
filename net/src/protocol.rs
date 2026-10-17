@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 29;
+pub const PROTOCOL_VERSION: u32 = 30;
 pub const DEFAULT_PORT: u16 = 27015;
 pub const TICK_RATE: u32 = 128;
 pub const TICK: f32 = 1.0 / TICK_RATE as f32;
@@ -52,7 +52,12 @@ pub enum ClientMsg {
     /// One 20 ms Opus voice frame while a push-to-talk key is held.
     Voice { channel: VoiceChannel, data: Vec<u8> },
     Bye,
+    /// Which character to wear on each side (terrorists, counter-terrorists; 0..`CLASSES`).
+    Looks { t: u8, ct: u8 },
 }
+
+/// Characters per side (CS 1.6's four classes each).
+pub const CLASSES: u8 = 4;
 
 /// Why a player was reported.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +113,8 @@ pub struct Score {
     pub assists: u32,
     /// Round MVPs (the defuser, the planter whose bomb went off, else the winner with most kills).
     pub mvps: u32,
+    /// The character they wear as a terrorist and as a counter-terrorist.
+    pub looks: [u8; 2],
     /// Kills that were headshots.
     pub headshots: u32,
     /// Health taken off enemies, and rounds played: ADR is `damage / rounds`.

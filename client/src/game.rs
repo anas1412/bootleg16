@@ -80,8 +80,12 @@ pub struct FlyCam {
 }
 
 /// Take over the connection, swap in the real map collision, add the camera.
-fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res<GameConfig>, mut next: ResMut<NextState<AppState>>) {
+fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, config: Res<GameConfig>, mut next: ResMut<NextState<AppState>>, settings: Res<crate::menu::Settings>) {
     let Some(mut client) = pending.0.take() else { return };
+    // Your characters (Characters page), sent until the server has them.
+    if let Some([t, ct]) = settings.looks {
+        client.set_looks(t, ct);
+    }
     let path = game_dir().join("cstrike/maps").join(format!("{}.bsp", config.map));
     match goldsrc::bsp::Bsp::load(&path) {
         // Same map name isn't enough: a changed file would mean different walls on our side.

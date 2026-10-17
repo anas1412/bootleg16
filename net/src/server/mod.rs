@@ -114,6 +114,8 @@ struct Remote {
     deaths: u32,
     /// Scoreboard stats (see `Score`).
     stats: Stats,
+    /// Their character on each side (`ClientMsg::Looks`); until they say, one picked by id.
+    looks: [u8; 2],
     /// How their model is animated (as clients draw it): hitboxes follow it.
     anim: sim::anim::Anim,
     money: i32,
@@ -493,6 +495,7 @@ impl Remote {
             rounds: s.rounds,
             ping: s.ping.round() as u16,
             money: Some(self.money),
+            looks: self.looks,
         }
     }
 
@@ -508,6 +511,7 @@ impl Remote {
             deaths: 0,
             stats: Stats::default(),
             anim: sim::anim::Anim::new(0.0),
+            looks: [id % CLASSES; 2],
             money: 0,
             defuse_kit: false,
             ticket: 0,

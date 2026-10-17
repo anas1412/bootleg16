@@ -70,13 +70,13 @@ fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut
 }
 
 impl OtherPlayers {
-    /// Which look a player gets: by team, varied by id.
-    fn look_for(&self, id: u8, team: Team) -> Option<usize> {
-        let (start, n) = match team {
-            Team::Ct => (self.t_count, self.looks.len() - self.t_count),
-            _ => (0, self.t_count),
+    /// Which look a player gets: the character they picked for their side (`Score::looks`).
+    fn look_for(&self, looks: [u8; 2], team: Team) -> Option<usize> {
+        let (start, n, pick) = match team {
+            Team::Ct => (self.t_count, self.looks.len() - self.t_count, looks[1]),
+            _ => (0, self.t_count, looks[0]),
         };
-        (n > 0).then(|| start + id as usize % n)
+        (n > 0).then(|| start + pick as usize % n)
     }
 }
 
@@ -190,7 +190,9 @@ fn draw_others(
     let all = w.client.others();
     // Dead in the snapshot now: they can be drawn again once they respawn.
     look.dying.retain(|id| all.iter().any(|o| o.id == *id && o.alive));
-    let others: Vec<_> = all.into_iter().filter(|o| o.alive && !look.dying.contains(&o.id)).filter_map(|o| Some((look.look_for(o.id, o.team)?, o))).collect();
+    // Their characters from the scoreboard (until it arrives, varied by id like the server does).
+    let looks_of = |id: u8| w.client.scores.iter().find(|s| s.id == id).map(|s| s.looks).unwrap_or([id % net::protocol::CLASSES; 2]);
+    let others: Vec<_> = all.into_iter().filter(|o| o.alive && !look.dying.contains(&o.id)).filter_map(|o| Some((look.look_for(looks_of(o.id), o.team)?, o))).collect();
     for (e, p) in &drawn {
         if !others.iter().any(|(li, o)| o.id == p.id && *li == p.look && o.weapon == p.weapon) {
             commands.entity(e).despawn();

@@ -128,6 +128,11 @@ impl Server {
                     self.socket.send(from, encode(&info));
                 }
             }
+            ClientMsg::Looks { t, ct } => {
+                if let Some(c) = self.clients.get_mut(&from) {
+                    c.looks = [t.min(CLASSES - 1), ct.min(CLASSES - 1)];
+                }
+            }
             ClientMsg::Bye => {
                 if let Some(c) = self.clients.remove(&from) {
                     self.remember(&c);
