@@ -6,12 +6,13 @@ use crate::map::to_y_up;
 use bevy::gizmos::config::{GizmoConfig, GizmoConfigGroup, GizmoLineConfig};
 use bevy::prelude::*;
 
-/// How far a tracer reaches (units), how fast it flies (units a second), and how long it stays
-/// joined to the gun before the tail leaves (seconds). A shot that ends farther off is drawn
-/// only this far, fading, so it never races across the map.
+/// How far a tracer reaches (units), how fast it flies (units a second), and how long its dash
+/// is. A shot that ends farther off is drawn only this far, fading. The dash is short and
+/// leaves the gun at once: a tracer stays where it was fired while you turn, so a long line
+/// anchored at the gun would sweep across the screen.
 const REACH: f32 = 1400.0;
 const SPEED: f32 = 30000.0;
-const HOLD: f32 = 0.03;
+const DASH: f32 = 110.0;
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct TracerGizmos;
@@ -37,11 +38,11 @@ impl Tracers {
     }
 }
 
-/// The streak at `age` on a path of `len`: (tail, head, fade), distances from the muzzle; None
-/// once it is gone. The head shoots out of the gun, the tail stays a moment, then follows.
+/// The dash at `age` on a path of `len`: (tail, head, fade), distances from the muzzle; None
+/// once it is gone.
 fn streak(age: f32, len: f32, fades: bool) -> Option<(f32, f32, f32)> {
     let head = (age * SPEED).min(len);
-    let tail = ((age - HOLD).max(0.0) * SPEED).min(head);
+    let tail = (head - DASH).max(0.0).max(if head >= len { (age * SPEED - DASH).min(len) } else { 0.0 });
     if tail >= len {
         return None;
     }
@@ -52,6 +53,11 @@ fn draw(mut tracers: ResMut<Tracers>, time: Res<Time>, mut gizmos: Gizmos<Tracer
     // Screenshot runs hold a tracer a moment after it leaves the gun (it lives under a tenth of a second).
     let hold = *hold.get_or_insert_with(|| std::env::var_os("BOOTLEG16_SCREENSHOT").is_some());
     let dt = if hold { 0.0 } else { time.delta_secs() };
+    // (held screenshots show only the latest tracer: they would pile up, as nothing expires)
+    if hold && tracers.0.len() > 1 {
+        let last = tracers.0.pop().unwrap();
+        tracers.0 = vec![last];
+    }
     for t in &mut tracers.0 {
         let len = t.from.distance(t.to).max(1.0);
         let age = if hold { 0.03 } else { t.age };
@@ -89,11 +95,13 @@ mod tests {
     }
 
     #[test]
-    fn the_head_leaves_the_gun_first_and_the_tail_follows() {
+    fn the_dash_is_never_longer_than_its_length_and_leaves_the_gun_at_once() {
+        for age in [0.0, 0.002, 0.01, 0.03, 0.05] {
+            if let Some((tail, head, _)) = streak(age, 1000.0, false) {
+                assert!(head - tail <= DASH + 0.01, "dash {} at {age}", head - tail);
+            }
+        }
         let (tail, head, _) = streak(0.01, 1000.0, false).unwrap();
-        assert_eq!(tail, 0.0);
-        assert!((head - 300.0).abs() < 1.0);
-        let (tail, _, fade) = streak(0.05, 1400.0, true).unwrap();
-        assert!(tail > 0.0 && fade < 1.0);
+        assert!(head > 250.0 && tail > 100.0, "{tail} {head}: already out of the gun");
     }
 }
