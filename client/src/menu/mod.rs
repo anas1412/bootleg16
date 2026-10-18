@@ -265,6 +265,10 @@ fn menu_actions(
                 settings.vsync = v;
                 settings.save();
             }
+            UiAction::SetFullscreen(v) => {
+                settings.fullscreen = v;
+                settings.save();
+            }
             UiAction::SetAssistant(i) => {
                 settings.assistant = i.min(crate::assistant::OFF);
                 settings.save();

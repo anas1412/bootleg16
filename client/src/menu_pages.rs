@@ -289,6 +289,7 @@ fn settings_page(page: &mut ChildSpawnerCommands, kit: &Kit, faces: &crate::assi
             let cap = if s.fps_max == 0 { "Off".to_string() } else { s.fps_max.to_string() };
             ids.push(setting_row(rows, kit, "Frame rate cap", |r| stepper(r, kit, memory, "set.fps", &cap, UiAction::FpsMax(-1), UiAction::FpsMax(1))));
             ids.push(toggle(rows, "VSync", on_off("set.vsync", s.vsync, UiAction::SetVsync)));
+            ids.push(toggle(rows, "Fullscreen", on_off("set.fullscreen", s.fullscreen, UiAction::SetFullscreen)));
             ids.push(setting_row(rows, kit, "Team IDs through walls", |r| {
                 chips(r, kit, "set.ids", ["Off", "Pips", "Pips + names"].into_iter().enumerate().map(|(i, l)| Choice::new(l, UiAction::SetTeamIds(i as u8), s.team_ids == i as u8)).collect());
             }));

@@ -28,6 +28,7 @@ mod characters;
 mod effects;
 mod explosions;
 mod framerate;
+mod window;
 mod game;
 mod gibs;
 mod glows;
@@ -114,7 +115,7 @@ fn main() {
             (bomb::BombPlugin, characters::CharactersPlugin, map_pool::MapPoolPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, status_screens::StatusScreensPlugin, loading::LoadingPlugin),
             (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
-        .add_plugins(tracers::TracerPlugin)
+        .add_plugins((tracers::TracerPlugin, window::WindowPlugin))
         .add_systems(Update, screenshot)
         .run();
 }

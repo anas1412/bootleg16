@@ -194,10 +194,10 @@ land, and add new ones here instead of leaving them only in chat.
 - Lobby: servers at different rates must not share a queue unless the lobby knows each server's rate.
 - Not done: sim and net test loops still count ticks as 128 (`net/tests/`, `sim` tests); only the multiplayer test runs at 64. README/NETWORKING.md need `--tick`.
 
-## Window and settings bugs (reported in play, not investigated)
-- Crash when the window is made big (maximized). Get the panic from the terminal. Suspects: `menu/stage3d.rs` `resize` (render target and mesh rebuilt for the new size), `hud/visor.rs` `follow` (render target resize).
-- Settings: picking an option flips the screen back to the design view, then to the 3D view again. Check what the click does to the menu state or the stage3d camera (UI session owns the menu pages).
-- No fullscreen option (the window is only resizable). Add one to Settings, display section.
+## Window and settings (2026-10-18)
+- Fullscreen: done (Settings, borderless on the current monitor, `client/src/window.rs`).
+- Settings click flipping to the design view then 3D: fixed earlier (`99a4029`, page routed in the same frame).
+- Crash when the window is made big: not reproduced. `BOOTLEG16_RESIZE=w,h` resizes the window 4 s in; menu and game both ran at 2560x1440, 3840x2160 and 5120x2880 with no panic. If it still happens, get the panic text from the terminal and the window size.
 
 ## Buy menu weapon pictures (add-on art)
 - The add-on's weapon pictures (`640hud*.spr`) have each weapon's name drawn into the image, and some sheets keep Valve's striped panels. `hud/icons.rs` `clean_gun_sheet` strips the stripes and punches out the names, which leaves speckle where the name overlapped the gun. Interim only, not shippable.

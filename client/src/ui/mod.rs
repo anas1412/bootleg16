@@ -39,6 +39,7 @@ pub enum UiAction {
     FpsMax(i32),
     SetTeamIds(u8),
     SetVsync(bool),
+    SetFullscreen(bool),
     /// Index into `assistant::ASSISTANTS`, or `assistant::OFF`.
     SetAssistant(u8),
     /// 0 quiet, 1 normal, 2 chatty.
