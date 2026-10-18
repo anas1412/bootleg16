@@ -12,6 +12,10 @@ use bevy::prelude::*;
 const SPEED: f32 = 6000.0;
 const DASH: f32 = 60.0;
 const REACH: f32 = 4096.0;
+/// The first stretch of a path is not drawn, and a shot that ends inside it has no tracer: a
+/// line that close to the camera is stretched across the screen by perspective, and how far
+/// the wall is is what makes it depend on where you stand.
+const NEAR: f32 = 64.0;
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct TracerGizmos;
@@ -42,8 +46,12 @@ impl Tracers {
     pub fn shot(&mut self, eye: [f32; 3], end: [f32; 3]) {
         let (a, b) = (Vec3::from(to_y_up(start(eye, end))), Vec3::from(to_y_up(end)));
         let len = a.distance(b);
-        let to = if len > REACH { a + (b - a) / len * REACH } else { b };
-        self.0.push(Tracer { from: a, to, age: 0.0 });
+        if len < NEAR * 2.0 {
+            return;
+        }
+        let dir = (b - a) / len;
+        let to = if len > REACH { a + dir * REACH } else { b };
+        self.0.push(Tracer { from: a + dir * NEAR, to, age: 0.0 });
     }
 }
 
@@ -106,6 +114,15 @@ mod tests {
         // Along +y the right-hand side is +x.
         let s = start([0.0, 0.0, 0.0], [0.0, 1000.0, 0.0]);
         assert!((s[0] - 16.0).abs() < 1e-4 && (s[1] - 2.0).abs() < 1e-4, "{s:?}");
+    }
+
+    #[test]
+    fn nothing_is_drawn_close_to_the_camera() {
+        let mut t = Tracers::default();
+        t.shot([0.0; 3], [100.0, 0.0, 0.0]);
+        assert!(t.0.is_empty(), "a wall right in front has no tracer");
+        t.shot([0.0; 3], [1000.0, 0.0, 0.0]);
+        assert!(t.0[0].from.distance(Vec3::from(to_y_up(start([0.0; 3], [1000.0, 0.0, 0.0])))) > NEAR - 0.5);
     }
 
     #[test]
