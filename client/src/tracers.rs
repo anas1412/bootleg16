@@ -4,6 +4,7 @@
 //! tracer is a short bright dash at 6000 units a second. Your shots (predicted in `game`) and
 //! everyone else's (from the server in `effects`) both call `Tracers::shot`.
 use crate::map::to_y_up;
+use bevy::camera::visibility::RenderLayers;
 use bevy::gizmos::config::{GizmoConfig, GizmoConfigGroup, GizmoLineConfig};
 use bevy::prelude::*;
 
@@ -16,6 +17,10 @@ const REACH: f32 = 4096.0;
 /// line that close to the camera is stretched across the screen by perspective, and how far
 /// the wall is is what makes it depend on where you stand.
 const NEAR: f32 = 64.0;
+
+/// The layer tracers are drawn on, which only the world camera shows: a 2D camera (the HUD's
+/// visor) on the default layer would draw them flat, one pixel per unit, as sideways dashes.
+pub const LAYER: usize = 2;
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct TracerGizmos;
@@ -98,7 +103,7 @@ impl Plugin for TracerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Tracers>()
             .init_gizmo_group::<TracerGizmos>()
-            .insert_gizmo_config(TracerGizmos, GizmoConfig { line: GizmoLineConfig { width: 2.5, ..default() }, ..default() })
+            .insert_gizmo_config(TracerGizmos, GizmoConfig { line: GizmoLineConfig { width: 2.5, ..default() }, render_layers: RenderLayers::layer(LAYER), ..default() })
             .add_systems(Update, draw);
     }
 }
