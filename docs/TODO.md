@@ -219,6 +219,12 @@ Priority now: playable online. These wait. Everything below replaces what is sti
 - **Collision:** "collision whatsoever" (details not given yet): ask for the places. The world collision is `sim::collision` (BSP hulls); the added map data is Valve's maps unchanged, so suspect model or door collision first.
 - **Animation names:** done with `tools/sequence_names.py` (rules in `tools/sequence_names.txt`); run it again on any new `v_*.mdl` added to `dist/gamedata/models/`.
 
+## Hosting at scale (decided 2026-10-18: later, not now)
+Now: one server box, the game server as a systemd service. Only when we run several hosts or need the pool to grow and shrink on its own:
+- [ ] Kubernetes on each host (k3s), with Agones on top (game server fleets: a Fleet keeps N ready servers, the matchmaker allocates one, crashed servers are replaced, autoscaler keeps a buffer). The server calls the Agones SDK (Ready, Allocated, Shutdown).
+- [ ] k3d only on the dev laptop, to test manifests before they reach a real server. Not on servers.
+- [ ] Decide between Agones and our own small allocator in the lobby (less to learn, but we maintain pool, crash replacement and scaling ourselves).
+
 ## Game data rules (2026-10-17: we are making a game, not a mod)
 - One naming rule: every file and folder name in `dist/gamedata/` is lowercase (`tools/normalize_names.py`); the game lowercases its requests (`net::gamefiles::paths`, map WAD names). Player models carry their own textures (`tools/merge_model_textures.py`); animation names follow `tools/sequence_names.txt`. Run the three tools on any new data.
 - **Rights: the add-on contains sound packs from other games.** Folders under `sound/weapons/` are named for Call of Duty / Modern Warfare 2019 (`galil_arm_cod17`, `mw2019_grenades`, `scout_mw2019`), a Minimi, a FAMAS F1 and a "Slayer5530's G3SG-1" pack. These cannot ship: find which the game uses (`client/src/sound.rs`) and replace them with our own or CC0 sounds; delete the unused ones from the data folder.
