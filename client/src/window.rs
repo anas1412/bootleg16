@@ -11,6 +11,17 @@ use bevy::window::{Monitor, PrimaryMonitor};
 pub const RESOLUTIONS: [(u32, u32); 5] = [(1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160)];
 pub const DEFAULT_RESOLUTION: u8 = 2;
 
+/// The screen's size, once known (the menu lists only the sizes that fit on it).
+static SCREEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The indexes of `RESOLUTIONS` that fit on the screen (all of them until it is known).
+pub fn sizes_for_screen() -> Vec<u8> {
+    let s = SCREEN.load(std::sync::atomic::Ordering::Relaxed);
+    let (sw, sh) = ((s >> 32) as u32, s as u32);
+    let fits: Vec<u8> = (0..RESOLUTIONS.len() as u8).filter(|&i| s == 0 || (RESOLUTIONS[i as usize].0 <= sw && RESOLUTIONS[i as usize].1 <= sh)).collect();
+    if fits.is_empty() { vec![0] } else { fits }
+}
+
 pub struct WindowPlugin;
 
 impl Plugin for WindowPlugin {
@@ -28,11 +39,12 @@ pub fn target(settings: &Settings, screen: Option<(u32, u32)>) -> (bool, (u32, u
 }
 
 /// Alt + Enter switches between the window and borderless, and is remembered.
-fn alt_enter(keys: Res<ButtonInput<KeyCode>>, mut settings: ResMut<Settings>) {
+fn alt_enter(keys: Res<ButtonInput<KeyCode>>, mut settings: ResMut<Settings>, mut dirty: ResMut<crate::menu::MenuDirty>) {
     let alt = keys.any_pressed([KeyCode::AltLeft, KeyCode::AltRight]);
     if alt && keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter]) {
         settings.borderless = !settings.borderless;
         settings.save();
+        dirty.0 = true; // an open Settings page shows the new mode
     }
 }
 
@@ -40,6 +52,9 @@ fn alt_enter(keys: Res<ButtonInput<KeyCode>>, mut settings: ResMut<Settings>) {
 /// you resized by hand is left alone until then.
 fn apply(settings: Res<Settings>, monitor: Option<Single<&Monitor, With<PrimaryMonitor>>>, mut windows: Query<&mut Window>, mut last: Local<Option<(bool, (u32, u32))>>) {
     let screen = monitor.map(|m| (m.physical_width, m.physical_height));
+    if let Some((sw, sh)) = screen {
+        SCREEN.store((sw as u64) << 32 | sh as u64, std::sync::atomic::Ordering::Relaxed);
+    }
     if settings.borderless && screen.is_none() {
         return;
     }
@@ -81,6 +96,13 @@ fn resize_for_test(time: Res<Time>, mut windows: Query<&mut Window>, mut done: L
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_sizes_that_fit_the_screen_are_offered() {
+        SCREEN.store(1920 << 32 | 1080, std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(sizes_for_screen(), vec![0, 1, 2]);
+        SCREEN.store(0, std::sync::atomic::Ordering::Relaxed);
+    }
 
     #[test]
     fn a_window_takes_its_size_and_borderless_takes_the_screen() {

@@ -274,8 +274,8 @@ fn menu_actions(
                 settings.borderless = v;
                 settings.save();
             }
-            UiAction::Resolution(step) => {
-                settings.resolution = (settings.resolution as i32 + step).clamp(0, crate::window::RESOLUTIONS.len() as i32 - 1) as u8;
+            UiAction::SetResolution(i) => {
+                settings.resolution = i.min(crate::window::RESOLUTIONS.len() as u8 - 1);
                 settings.save();
             }
             UiAction::SetAssistant(i) => {

@@ -40,7 +40,7 @@ pub enum UiAction {
     SetTeamIds(u8),
     SetVsync(bool),
     SetBorderless(bool),
-    Resolution(i32),
+    SetResolution(u8),
     /// Index into `assistant::ASSISTANTS`, or `assistant::OFF`.
     SetAssistant(u8),
     /// 0 quiet, 1 normal, 2 chatty.
