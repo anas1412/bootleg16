@@ -23,7 +23,7 @@ opus=$(ldd target/release/client | awk '/libopus/ {print $3}')
 [ -n "$opus" ] && cp "$opus" "$out/bootleg16/"
 cp -r "$game"/. "$out/bootleg16/data/"
 cp packaging/bootleg16.png "$out/bootleg16/"
-cp packaging/linux/install.sh packaging/linux/uninstall.sh "$out/"
+cp packaging/linux/install.sh packaging/linux/uninstall.sh packaging/linux/INSTALL.txt "$out/"
 chmod +x "$out/install.sh" "$out/uninstall.sh" "$out/bootleg16/bootleg16"
 tar czf "dist/$name.tar.gz" -C dist "$name"
 echo "dist/$name.tar.gz ($(du -h "dist/$name.tar.gz" | cut -f1)): unpack and run ./install.sh"

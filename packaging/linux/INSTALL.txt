@@ -1,0 +1,27 @@
+bootleg16: how to install (Linux)
+
+1. Unpack this archive anywhere:
+     tar xzf bootleg16-*-linux.tar.gz
+2. Go into the folder and install (for your user only, no root needed):
+     cd bootleg16-*-linux
+     ./install.sh
+3. Start it from your applications menu ("bootleg16"), or run:
+     bootleg16
+   (If the command is not found, add ~/.local/bin to your PATH.)
+
+Where things go
+  The game and its data:  ~/.local/share/bootleg16
+  The command:            ~/.local/bin/bootleg16
+  The menu entry:         ~/.local/share/applications/bootleg16.desktop
+  Your settings:          ~/.config/bootleg16
+
+Practice (Practice > Solo) works on its own, with no server.
+
+Settings > Display: Windowed or Borderless, and the window size. Alt+Enter switches
+between them.
+
+Remove it:
+  ./uninstall.sh            removes the game
+  ./uninstall.sh --purge    also removes your settings
+
+Needs a Vulkan-capable graphics driver. Wayland and X11 both work.

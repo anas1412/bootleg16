@@ -66,6 +66,7 @@ fn apply(settings: Res<Settings>, monitors: Query<(&Monitor, Has<PrimaryMonitor>
     }
     *last = Some(want);
     let (frame, (w, h)) = want;
+    info!("window: {} {w}x{h} (screen {screen:?})", if frame { "framed" } else { "borderless" });
     for mut win in &mut windows {
         if win.decorations != frame {
             win.decorations = frame;
