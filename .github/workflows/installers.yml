@@ -1,7 +1,7 @@
-# Builds the Linux and Windows installers. Run it from the Actions tab, or push a tag `v*`.
-#
-# The game data is in the repo (gamedata/). The lobby's address goes in the variable
-# BOOTLEG16_LOBBY (host:port).
+# Builds the Linux and Windows installers; a tag `v*` also publishes them as a GitHub release
+# (v0.1.0-alpha -> release 0.1.0-alpha). Run it by hand from the Actions tab to just build.
+# The game data is in the repo (gamedata/). The lobby's address goes in the repository
+# variable BOOTLEG16_LOBBY (host:port); without it the game is built with no lobby address.
 name: installers
 on:
   workflow_dispatch:
@@ -10,13 +10,17 @@ on:
 
 env:
   BOOTLEG16_LOBBY: ${{ vars.BOOTLEG16_LOBBY }}
+  # the version in the installers' names: the tag without its v, else the crate's
+  VERSION: ${{ startsWith(github.ref_name, 'v') && github.ref_name || '' }}
 
 jobs:
   linux:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libopus-dev libwayland-dev libxkbcommon-dev clang mold
+      - name: Version
+        run: echo "VERSION=${VERSION#v}" >> "$GITHUB_ENV"
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libasound2-dev libudev-dev libopus-dev libwayland-dev libxkbcommon-dev clang mold
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p client --no-default-features --features steam
@@ -38,7 +42,24 @@ jobs:
           mkdir -p dist/win/data && cp -r gamedata/. dist/win/data/
           cp target/release/client.exe dist/win/bootleg16.exe
           cp target/release/steam_api64.dll dist/win/ || true
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' client/Cargo.toml | head -n1)
+          version="${VERSION#v}"
+          [ -n "$version" ] || version=$(sed -n 's/^version = "\(.*\)"/\1/p' client/Cargo.toml | head -n1)
           "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DVersion=$version" "/DStage=..\\..\\dist\\win" packaging/windows/bootleg16.iss
       - uses: actions/upload-artifact@v4
         with: { name: bootleg16-windows, path: dist/bootleg16-*-windows-setup.exe }
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: files, merge-multiple: true }
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" files/* --repo "$GITHUB_REPOSITORY" --title "${GITHUB_REF_NAME#v}" --prerelease \
+            --notes "Alpha build. Linux: unpack the .tar.gz and run ./install.sh. Windows: run the setup .exe. Practice (solo, offline) works without a server."

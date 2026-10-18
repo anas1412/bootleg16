@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 game="${BOOTLEG16_DIR:-gamedata}"
-version=$(sed -n 's/^version = "\(.*\)"/\1/p' client/Cargo.toml | head -n1)
+version="${VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' client/Cargo.toml | head -n1)}"
 [ -x target/release/client ] || { echo "Build the release first (see the top of this file)."; exit 1; }
 [ -d "$game/maps" ] || { echo "No game data at $game (set BOOTLEG16_DIR)."; exit 1; }
 name="bootleg16-$version-linux"
