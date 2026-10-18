@@ -1,41 +1,60 @@
-//! The window: fullscreen from the settings (borderless on the current monitor; on by default,
-//! Alt + Enter toggles it), and a test
-//! hook, `BOOTLEG16_RESIZE=w,h`, that resizes the window a few seconds in (to check what a
-//! big window does to the render targets).
+//! The window, as most games do it: a window at a chosen size (Settings, Window size), or
+//! borderless (no frame, the size of the screen, Settings or Alt + Enter). Never the
+//! compositor's own fullscreen mode: on the Intel + NVIDIA laptop that took KWin down (see
+//! docs/GOTCHAS.md). Also a test hook, `BOOTLEG16_RESIZE=w,h` (or `drag`), that resizes the
+//! window a few seconds in.
 use crate::menu::Settings;
 use bevy::prelude::*;
-use bevy::window::{MonitorSelection, WindowMode};
+use bevy::window::{Monitor, PrimaryMonitor};
+
+/// The sizes the window can take, and the one it starts at.
+pub const RESOLUTIONS: [(u32, u32); 5] = [(1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160)];
+pub const DEFAULT_RESOLUTION: u8 = 2;
 
 pub struct WindowPlugin;
 
 impl Plugin for WindowPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (alt_enter, apply_fullscreen, resize_for_test).chain());
+        app.add_systems(Update, (alt_enter, apply, resize_for_test).chain());
     }
 }
 
-/// Alt + Enter switches between fullscreen and a window, and is remembered.
+/// What the window should be: its frame, and its size (the screen's when borderless).
+pub fn target(settings: &Settings, screen: Option<(u32, u32)>) -> (bool, (u32, u32)) {
+    match (settings.borderless, screen) {
+        (true, Some(size)) => (false, size),
+        _ => (true, RESOLUTIONS[settings.resolution as usize]),
+    }
+}
+
+/// Alt + Enter switches between the window and borderless, and is remembered.
 fn alt_enter(keys: Res<ButtonInput<KeyCode>>, mut settings: ResMut<Settings>) {
     let alt = keys.any_pressed([KeyCode::AltLeft, KeyCode::AltRight]);
     if alt && keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter]) {
-        settings.fullscreen = !settings.fullscreen;
+        settings.borderless = !settings.borderless;
         settings.save();
     }
 }
 
-/// (Not before the window has been up a moment: asking at creation can't pick the monitor.)
-fn apply_fullscreen(settings: Res<Settings>, time: Res<Time>, mut windows: Query<&mut Window>) {
-    if time.elapsed_secs() < 1.5 {
+/// Make the window what the settings say, when that changes (and once at the start); a window
+/// you resized by hand is left alone until then.
+fn apply(settings: Res<Settings>, monitor: Option<Single<&Monitor, With<PrimaryMonitor>>>, mut windows: Query<&mut Window>, mut last: Local<Option<(bool, (u32, u32))>>) {
+    let screen = monitor.map(|m| (m.physical_width, m.physical_height));
+    if settings.borderless && screen.is_none() {
         return;
     }
-    let mode = if settings.fullscreen { WindowMode::BorderlessFullscreen(MonitorSelection::Primary) } else { WindowMode::Windowed };
-    for mut w in &mut windows {
-        if w.mode != mode {
-            w.mode = mode;
-            if mode == WindowMode::Windowed {
-                w.resolution.set(1920.0, 1080.0);
-            }
+    let want = target(&settings, screen);
+    if *last == Some(want) {
+        return;
+    }
+    *last = Some(want);
+    let (frame, (w, h)) = want;
+    for mut win in &mut windows {
+        if win.decorations != frame {
+            win.decorations = frame;
         }
+        let scale = win.scale_factor();
+        win.resolution.set(w as f32 / scale, h as f32 / scale);
     }
 }
 
@@ -56,5 +75,22 @@ fn resize_for_test(time: Res<Time>, mut windows: Query<&mut Window>, mut done: L
         for mut win in &mut windows {
             win.resolution.set(w, h);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_window_takes_its_size_and_borderless_takes_the_screen() {
+        let mut s = Settings::default();
+        assert_eq!(target(&s, Some((2560, 1440))), (true, (1920, 1080)));
+        s.resolution = 0;
+        assert_eq!(target(&s, None), (true, (1280, 720)));
+        s.borderless = true;
+        assert_eq!(target(&s, Some((2560, 1440))), (false, (2560, 1440)));
+        // no screen known yet: stay a window rather than guess
+        assert_eq!(target(&s, None).0, true);
     }
 }

@@ -12,8 +12,10 @@ pub struct Settings {
     /// Frame rate cap (0 = none), like CS's fps_max.
     pub fps_max: u32,
     pub vsync: bool,
-    /// Borderless fullscreen on the current monitor.
-    pub fullscreen: bool,
+    /// A borderless window the size of the screen (not the compositor's fullscreen mode).
+    pub borderless: bool,
+    /// The window's size when it is not borderless: an index into `window::RESOLUTIONS`.
+    pub resolution: u8,
     /// CS2 "Show Team ID Through Walls": 0 off, 1 pips, 2 pips and names.
     pub team_ids: u8,
     /// AI assistant: index into `assistant::ASSISTANTS`, or `assistant::OFF`.
@@ -39,7 +41,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, fullscreen: false, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60, looks: None }
+        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, borderless: false, resolution: crate::window::DEFAULT_RESOLUTION, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60, looks: None }
     }
 }
 
@@ -58,7 +60,8 @@ impl Settings {
                     Some(("volume", v)) => s.volume = v.trim().parse().unwrap_or(s.volume),
                     Some(("fps_max", v)) => s.fps_max = v.trim().parse().unwrap_or(s.fps_max),
                     Some(("vsync", v)) => s.vsync = v.trim() == "true",
-                    Some(("fullscreen", v)) => s.fullscreen = v.trim() == "true",
+                    Some(("borderless", v)) => s.borderless = v.trim() == "true",
+                    Some(("resolution", v)) => s.resolution = v.trim().parse::<u8>().unwrap_or(s.resolution).min(crate::window::RESOLUTIONS.len() as u8 - 1),
                     Some(("team_ids", v)) => s.team_ids = v.trim().parse::<u8>().unwrap_or(s.team_ids).min(2),
                     Some(("assistant", v)) => s.assistant = v.trim().parse::<u8>().unwrap_or(s.assistant).min(crate::assistant::OFF),
                     Some(("chattiness", v)) => s.chattiness = v.trim().parse::<u8>().unwrap_or(s.chattiness).min(2),
@@ -88,8 +91,8 @@ impl Settings {
         let _ = std::fs::write(
             p,
             format!(
-                "name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nfullscreen={}\nteam_ids={}\nassistant={}\nchattiness={}\nrelay={}\nassistant_in_round={}\ncrosshair_color={}\ncrosshair_size={}\ncrosshair_dynamic={}\ncrosshair_dot={}\nhud_curve={}\n{}",
-                self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.fullscreen, self.team_ids, self.assistant, self.chattiness, self.relay, self.assistant_in_round, self.crosshair_color, self.crosshair_size, self.crosshair_dynamic, self.crosshair_dot, self.hud_curve,
+                "name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nborderless={}\nresolution={}\nteam_ids={}\nassistant={}\nchattiness={}\nrelay={}\nassistant_in_round={}\ncrosshair_color={}\ncrosshair_size={}\ncrosshair_dynamic={}\ncrosshair_dot={}\nhud_curve={}\n{}",
+                self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.borderless, self.resolution, self.team_ids, self.assistant, self.chattiness, self.relay, self.assistant_in_round, self.crosshair_color, self.crosshair_size, self.crosshair_dynamic, self.crosshair_dot, self.hud_curve,
                 self.looks.map(|[t, ct]| format!("looks={t},{ct}\n")).unwrap_or_default()
             ),
         );

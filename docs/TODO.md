@@ -195,7 +195,7 @@ land, and add new ones here instead of leaving them only in chat.
 - Not done: sim and net test loops still count ticks as 128 (`net/tests/`, `sim` tests); only the multiplayer test runs at 64. README/NETWORKING.md need `--tick`.
 
 ## Window and settings (2026-10-18)
-- Fullscreen: done but OFF by default (it took KDE down on the NVIDIA+Intel laptop, see GOTCHAS). Borderless, Alt+Enter toggles it, Settings has a row (`client/src/window.rs`). Default window 1920x1080.
+- Display: a window at a chosen size (Settings, Window size: 720p to 4K) or borderless (no frame, screen-sized; Settings or Alt+Enter), never the compositor's fullscreen mode (it took KDE down on the NVIDIA+Intel laptop, see GOTCHAS). Borderless is untested on that laptop: default is still a 1920x1080 window until it is, Settings has a row (`client/src/window.rs`). Default window 1920x1080.
 - The crash on a big window was NVIDIA's Vulkan on Wayland ("explicit sync is used, but no buffer is attached", driver 615, KDE): fullscreen or maximizing killed the game. Fixed by setting `__NV_DISABLE_EXPLICIT_SYNC=1` at the start of `main` (Linux). Windows is not affected as far as we know.
 - Hover and clicks dead after a resize: the 3D menu (two 2D cameras drawn into images, shown on tilted surfaces) kept stale UI layout when the images were resized. Removed: the menu is one flat UI again (`menu/stage3d.rs` is gone; Esc back to the main menu lives in `menu/mod.rs`). The Persona-style swing into 3D is dropped for now; bring it back only as something simple that does not render the UI into images.
 - The in-game HUD visor still draws the HUD into an image and bends it (`hud/visor.rs`); it has no hover, so it was not touched. Remove it too if it causes trouble.

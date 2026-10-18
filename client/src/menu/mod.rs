@@ -270,8 +270,12 @@ fn menu_actions(
                 settings.vsync = v;
                 settings.save();
             }
-            UiAction::SetFullscreen(v) => {
-                settings.fullscreen = v;
+            UiAction::SetBorderless(v) => {
+                settings.borderless = v;
+                settings.save();
+            }
+            UiAction::Resolution(step) => {
+                settings.resolution = (settings.resolution as i32 + step).clamp(0, crate::window::RESOLUTIONS.len() as i32 - 1) as u8;
                 settings.save();
             }
             UiAction::SetAssistant(i) => {
