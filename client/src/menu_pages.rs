@@ -77,17 +77,16 @@ pub fn rebuild_menu(
         return;
     }
 
-    // The frame: the left side (list, wordmark) and the right side (your name, invites, the far
-    // 16), each drawn on its own side of the 3D menu (menu::stage3d).
-    use crate::menu::Layer;
-    commands.spawn((MenuRoot, Layer::Right, DespawnOnExit(AppState::Menu), full.clone())).with_children(|root| {
+    // The frame: the right side (your name, invites, the far 16) and the left side (list,
+    // wordmark).
+    commands.spawn((MenuRoot, DespawnOnExit(AppState::Menu), full.clone())).with_children(|root| {
         // the far 16: the wordmark's number, huge and faint behind everything on the right
         root.spawn((abs(Node { right: vh(-60.0), top: vh(-140.0), ..default() }), kit_text("16", 1150.0, TX1.with_alpha(0.007), &kit.display), LineHeight::RelativeToFont(0.8), Pickable::IGNORE));
         // Top right: who you are; under it your running match and invites.
         crate::play::identity(root, &kit, &settings, steam, 80.0);
         crate::found::notes(root, &kit, &lobby, steam, 80.0 + 68.0 + 16.0);
     });
-    commands.spawn((MenuRoot, Layer::Left, DespawnOnExit(AppState::Menu), full.clone())).with_children(|root| {
+    commands.spawn((MenuRoot, DespawnOnExit(AppState::Menu), full.clone())).with_children(|root| {
         // 160 from the top: seven items and an error line still clear the wordmark
         let mut list = root.spawn(abs(Node { left: vh(80.0), top: vh(160.0), width: vh(560.0), flex_direction: FlexDirection::Column, ..default() }));
         if tune_frame {
@@ -129,7 +128,7 @@ pub fn rebuild_menu(
     crate::found::overlay(&mut commands, &kit, &lobby, &mut memory);
 
     // The page.
-    let mut page = commands.spawn((MenuPage, Layer::Right, DespawnOnExit(AppState::Menu), abs(Node { left: vh(720.0), right: vh(96.0), top: vh(200.0), bottom: vh(96.0), flex_direction: FlexDirection::Column, ..default() })));
+    let mut page = commands.spawn((MenuPage, DespawnOnExit(AppState::Menu), abs(Node { left: vh(720.0), right: vh(96.0), top: vh(200.0), bottom: vh(96.0), flex_direction: FlexDirection::Column, ..default() })));
     if tune_page {
         page.insert(tune(2));
     }

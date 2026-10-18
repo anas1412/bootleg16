@@ -80,6 +80,14 @@ fn game_dir() -> PathBuf {
 }
 
 fn main() {
+    // NVIDIA's Vulkan on Wayland (driver 615, KDE) kills the game with "explicit sync is used,
+    // but no buffer is attached" when the window goes fullscreen or is resized; its own switch
+    // turns explicit sync off for the game. Set before anything opens Vulkan; a value the
+    // player set wins.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("__NV_DISABLE_EXPLICIT_SYNC").is_none() {
+        std::env::set_var("__NV_DISABLE_EXPLICIT_SYNC", "1");
+    }
     App::new()
         .add_plugins(
             DefaultPlugins

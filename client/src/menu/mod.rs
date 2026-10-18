@@ -3,11 +3,9 @@
 //! `connect`: starting and joining a match.
 mod connect;
 mod settings;
-mod stage3d;
 
 pub use connect::*;
 pub use settings::Settings;
-pub use stage3d::Layer;
 use crate::ui::{Kit, UiAction, UiActions};
 use crate::game::Walker;
 use crate::game_dir;
@@ -62,7 +60,6 @@ pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         crate::found::plugin(app);
-        stage3d::plugin(app);
         app.add_plugins(crate::play::PlayPlugin)
             .init_resource::<UiActions>()
             .init_resource::<Kit>()
@@ -70,6 +67,7 @@ impl Plugin for MenuPlugin {
             .insert_resource(Settings::load())
             .add_systems(Startup, from_command_line)
             .add_systems(OnEnter(AppState::Menu), enter_menu)
+            .add_systems(Update, escape.run_if(in_state(AppState::Menu)).run_if(resource_exists::<MenuState>))
             .add_systems(
                 Update,
                 ((crate::notice::keys, crate::notice::actions).chain().run_if(resource_exists::<crate::notice::Notice>), menu_actions, crate::menu_pages::rebuild_menu, type_text).chain().run_if(in_state(AppState::Menu)),
@@ -148,9 +146,16 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>) {
         rebuild: true,
     });
     // The page colour is the clear colour, so menu parts can tune in and out over it.
-    // Flat screens (Play, a match found) over the 3D menu (stage3d), which clears to the page colour.
-    // (no MSAA, like the 3D camera under it: cameras sharing a window must agree)
-    commands.spawn((Camera2d, Camera { order: 1, clear_color: ClearColorConfig::None, ..default() }, Msaa::Off, IsDefaultUiCamera, DespawnOnExit(AppState::Menu)));
+    commands.spawn((Camera2d, Camera { clear_color: ClearColorConfig::Custom(crate::ui::BG0), ..default() }, Msaa::Off, IsDefaultUiCamera, DespawnOnExit(AppState::Menu)));
+}
+
+/// Esc closes a page back to the main menu (not while a key is being bound; the Play screen
+/// has its own, `play::back`).
+fn escape(keys: Res<ButtonInput<KeyCode>>, binds: Res<crate::binds::Binds>, mut st: ResMut<MenuState>) {
+    if keys.just_pressed(KeyCode::Escape) && binds.capture.is_none() && !matches!(st.page, Page::Main | Page::Join) {
+        st.page = Page::Main;
+        st.rebuild = true;
+    }
 }
 
 /// Typing into the party code / address field (Play page) or the name (Settings page).

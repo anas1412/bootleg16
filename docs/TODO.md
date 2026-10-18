@@ -195,13 +195,15 @@ land, and add new ones here instead of leaving them only in chat.
 - Not done: sim and net test loops still count ticks as 128 (`net/tests/`, `sim` tests); only the multiplayer test runs at 64. README/NETWORKING.md need `--tick`.
 
 ## Window and settings (2026-10-18)
-- Fullscreen: done (Settings, borderless on the current monitor, `client/src/window.rs`).
-- Settings click flipping to the design view then 3D: fixed earlier (`99a4029`, page routed in the same frame).
-- Crash when the window is made big: not reproduced. `BOOTLEG16_RESIZE=w,h` resizes the window 4 s in; menu and game both ran at 2560x1440, 3840x2160 and 5120x2880 with no panic. If it still happens, get the panic text from the terminal and the window size.
+- Fullscreen: done. Borderless, on by default, Alt+Enter toggles it, Settings has a row (`client/src/window.rs`). Default window 1920x1080.
+- The crash on a big window was NVIDIA's Vulkan on Wayland ("explicit sync is used, but no buffer is attached", driver 615, KDE): fullscreen or maximizing killed the game. Fixed by setting `__NV_DISABLE_EXPLICIT_SYNC=1` at the start of `main` (Linux). Windows is not affected as far as we know.
+- Hover and clicks dead after a resize: the 3D menu (two 2D cameras drawn into images, shown on tilted surfaces) kept stale UI layout when the images were resized. Removed: the menu is one flat UI again (`menu/stage3d.rs` is gone; Esc back to the main menu lives in `menu/mod.rs`). The Persona-style swing into 3D is dropped for now; bring it back only as something simple that does not render the UI into images.
+- The in-game HUD visor still draws the HUD into an image and bends it (`hud/visor.rs`); it has no hover, so it was not touched. Remove it too if it causes trouble.
+- Test hooks: `BOOTLEG16_RESIZE=w,h` (resize 4 s in) or `drag` (a new size every frame).
 
 ## Buy menu weapon pictures (add-on art)
 - The add-on's weapon pictures (`640hud*.spr`) have each weapon's name drawn into the image, and some sheets keep Valve's striped panels. `hud/icons.rs` `clean_gun_sheet` strips the stripes and punches out the names, which leaves speckle where the name overlapped the gun. Interim only, not shippable.
-- Proper fix: render the weapon's own `w_*.mdl` (the add-on has them) into a small image per weapon (3D icon, no baked text), like the character stage in `menu/stage3d.rs`. The UI session owns the buy menu: agree the size and style with it first.
+- Proper fix: render the weapon's own `w_*.mdl` (the add-on has them) into a small image per weapon (3D icon, no baked text). The UI session owns the buy menu: agree the size and style with it first.
 
 ## Future plans: own art and maps (after the game is playable online; decided 2026-10-17)
 Priority now: playable online. These wait. Everything below replaces what is still Valve's or the add-on's.

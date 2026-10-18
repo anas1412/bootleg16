@@ -198,3 +198,9 @@ something surprises you.
   screen that shows only the chips (their hover fades rewrite them) is this kind of bug.
 - Sample a screen several times before trusting it: bugs that depend on frame timing show up
   in some captures only.
+
+## NVIDIA + Wayland: fullscreen or resize kills the game
+`wp_linux_drm_syncobj_surface_v1: error 3: explicit sync is used, but no buffer is attached`, then "Couldn't get swap chain texture: Lost". NVIDIA driver 615 on KDE Wayland, only on the NVIDIA GPU (Intel/Mesa is fine; `WGPU_ADAPTER_NAME=Intel` to compare). `main` sets `__NV_DISABLE_EXPLICIT_SYNC=1` before Vulkan starts. If it comes back on another driver, test with that variable first.
+
+## Rendering the UI into an image and showing it on a surface breaks picking when the image is resized
+The old 3D menu did this; after a resize hovers and clicks stopped working (layout and hit boxes no longer matched the drawn page). Keep menus on the window's own UI camera.
