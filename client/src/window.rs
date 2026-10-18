@@ -7,6 +7,7 @@ use crate::menu::Settings;
 use bevy::prelude::*;
 use bevy::window::{Monitor, PrimaryMonitor};
 
+
 /// The sizes the window can take, and the one it starts at.
 pub const RESOLUTIONS: [(u32, u32); 5] = [(1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160)];
 pub const DEFAULT_RESOLUTION: u8 = 2;
@@ -50,8 +51,9 @@ fn alt_enter(keys: Res<ButtonInput<KeyCode>>, mut settings: ResMut<Settings>, mu
 
 /// Make the window what the settings say, when that changes (and once at the start); a window
 /// you resized by hand is left alone until then.
-fn apply(settings: Res<Settings>, monitor: Option<Single<&Monitor, With<PrimaryMonitor>>>, mut windows: Query<&mut Window>, mut last: Local<Option<(bool, (u32, u32))>>) {
-    let screen = monitor.map(|m| (m.physical_width, m.physical_height));
+fn apply(settings: Res<Settings>, monitors: Query<(&Monitor, Has<PrimaryMonitor>)>, mut windows: Query<&mut Window>, mut last: Local<Option<(bool, (u32, u32))>>) {
+    // (Wayland has no primary monitor: then the biggest one, which on one screen is the screen.)
+    let screen = monitors.iter().max_by_key(|(m, primary)| (*primary, m.physical_width * m.physical_height)).map(|(m, _)| (m.physical_width, m.physical_height));
     if let Some((sw, sh)) = screen {
         SCREEN.store((sw as u64) << 32 | sh as u64, std::sync::atomic::Ordering::Relaxed);
     }
