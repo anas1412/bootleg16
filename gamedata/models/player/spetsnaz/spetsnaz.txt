@@ -1,0 +1,61 @@
+You are reading the accompanying read-me file for Counter-Strike: Source & Beta Player Models ported for Counter-Strike 1.6 and Counter-Strike: Condition Zero. 
+
+The original model was ported from Counter-Strike: Source.
+https://store.steampowered.com/app/240/CounterStrike_Source/
+
+
+Credits: 
+Model				: Valve
+Textures			: Valve, Napoleon
+Animations			: Valve, AI, Napoleon
+Compile				: Napoleon
+
+Email address 		: zarko.dinev@gmail.com 
+Home page			: https://flatline-arena.droppages.com/
+Description			: Counter-Strike 1.6 / Counter-Strike: Condition Zero Player Models
+
+New textures		: yes 
+New model			: yes 
+Overview			: yes
+Other resources		: no
+Mod compatibility	: Half-Life
+Mod Home page		: https://store.steampowered.com/app/70/HalfLife/
+
+Version 			: 2
+
+What has been done	: 
+Improved Hit Boxes 	- no longer misaligned with the meshes 
+UV Chopped Textures - I used a technique I call UV Chopping, to split the UV maps and to separate the large 1024x1024 and 2048x2048 textures into 512x512 textures, thus retaining the original source quality of the textures. 
+Baked Normal Maps 	- I used a technique for backing the normal maps into the defuse maps, thus achieving pseudo normal map effect in Half-Life 1 engine
+Improved Animations - handpicked the animations for better alignment with the game / mod needs
+HQ Overview image 	- I created a stylized  model preview image for easy identification of the models in-game. The theme for the preview is based on FBI / Police case files. 
+
+This pack is redistributed in additional variants you can find on my Gamebanana profile. 
+
+Compiled for Half-Life 						
+Compiled for Opposing Force
+Compiled for The Sven Coop mod 
+Compiled for The Specialists mod			
+Compiled for Flat-Line Arena mod
+Compiled for Action Half-Life mod 
+
+Tools Used:
+MilkShape 3D 1.8.5
+Crowbar 0.71
+Notepad++ 7.8.5
+PhotoFiltre Studio X 10.14.0
+paint.net 4.2.12
+
+Comments:
+All models are property of their respectable owners. I take credit for UV Chopping, Hacking and Compiling the models. 
+
+Important: If you wish to include the models into a model pack, please include this txt file and the bmp preview image alongside the models. 
+
+This model and the rest of the pack are released free of charge and should remain free. 
+If you would like to re-compile the model for something else, please let me know, and I can help and provide approval and / or the compile source files. 
+
+Distribution is permitted only wihout any modifications!
+
+Thanks for reading this file. Go play the game / mod and have fun fragging.
+
+Napoleon was last here: 2021

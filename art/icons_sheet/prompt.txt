@@ -1,0 +1,57 @@
+Attached: one image with game HUD icons (white shapes on black), in a grid of 7 columns x 6 rows
+(42 cells, 37 used, reading left to right, top to bottom). They are low-resolution pixel icons
+from an old game. Redraw ALL of them in a new visual style and return ONE image of exactly the
+same size and the same grid.
+
+BACKGROUND: draw everything on a solid pure green screen, #00FF00 (RGB 0,255,0), one flat
+colour everywhere: no gradients, no shadows, no texture, no checkerboard, no transparency.
+Holes inside a glyph (gaps in a grip, the loop of a trigger guard, cut lines) are the same
+green. The glyphs are pure white and must contain no green. The green is removed afterwards.
+Cells 38 to 42 stay empty: plain green.
+
+STYLE ("interference", futuristic tactical UI)
+- Pure white (#FFFFFF) glyphs only, on the green background. The game tints them with its own
+  colours. No other colours, no gradients, no glow, no shadows, no outlines, no text, no frames
+  around the icon.
+- Clean, flat, sharp geometry. Angular shapes with small chamfered corners instead of round
+  ones. Thin precise cut lines for detail (like a stencil or a technical diagram).
+- Every icon must read clearly when shown only 24 to 36 pixels tall. Few strokes, no tiny
+  detail, generous gaps between parts. Same line weight and same visual weight across all icons.
+- Calm and clean. Nothing decorative that has no purpose.
+- Weapons are simplified side-profile silhouettes with a few cut lines for the key parts
+  (barrel, magazine, grip, stock, scope). Keep each weapon's facing from the input. Every weapon
+  must be recognisable and clearly different in shape from the others.
+
+LAYOUT
+- Keep every icon centred in its own cell, about the same size as the input icon. Do not move,
+  resize, merge or reorder cells. The image will be cut into equal cells.
+
+ORDER (cell number: icon)
+ 1 Health (a medical cross, not the word LIFE)
+ 2 Armor (body vest)
+ 3 Armor with helmet (vest plus helmet)
+ 4 Defuse kit (wire cutters)
+ 5 C4 bomb (block with a detonator, no text)
+ 6 Buy zone (a small crate or shopping mark)
+ 7 Stopwatch (round time ran out)
+ 8 Headshot (head silhouette with a hit mark)
+ 9 Kill mark (an X)
+10 Knife
+11 Glock-18 (pistol)             12 USP (pistol with a suppressor)
+13 P228 (pistol)                 14 Desert Eagle (large pistol)
+15 Five-seveN (pistol)           16 Dual Elites (two pistols side by side)
+17 MAC-10 (compact SMG)          18 TMP (SMG with a long suppressor)
+19 MP5 (SMG)                     20 UMP45 (SMG with folding stock)
+21 P90 (bullpup SMG)             22 M3 (pump shotgun)
+23 XM1014 (auto shotgun)         24 Galil (rifle)
+25 FAMAS (bullpup rifle)         26 AK-47 (rifle)
+27 M4A1 (rifle)                  28 SG552 (rifle with scope)
+29 AUG (bullpup rifle with scope)  30 Scout (sniper rifle)
+31 AWP (long sniper rifle)       32 G3SG1 (long auto sniper)
+33 SG550 (auto sniper)           34 M249 (light machine gun with box magazine)
+35 HE grenade                    36 Flashbang
+37 Smoke grenade (this cell is EMPTY in the input: design it new, a canister grenade in the
+   same family as 35 and 36, with vent lines to show smoke)
+
+Check the result: glyphs pure white, background pure #00FF00, no light green or grey edges,
+nothing cut at a cell edge.

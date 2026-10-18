@@ -1,0 +1,13 @@
+6
+
+// 320x240+		RES Filename	X-pos	Y-pos	X-size	Y-size
+
+weapon			320 320hud1	0	200	80	20
+weapon_s		320 320hud1	0	220	80	20
+ammo			320 640hud7	96	96	24	24
+
+// 640x480+		RES Filename	X-pos	Y-pos	X-size	Y-size
+
+weapon			640 640hud1	0	0	170	45
+weapon_s		640 640hud4	0	0	170	45
+ammo			640 w_view2	108	0	107	24

@@ -1,0 +1,26 @@
+Attached: one image with 18 game weapon pictures (HUD buy-menu art) on a black background,
+laid out in a grid of 3 columns x 6 rows. Each picture has the weapon's name written on it.
+
+Task: return ONE image of exactly the same size and the same grid, cleaned up, with a TRANSPARENT
+background (PNG with real alpha).
+
+For every weapon:
+- Remove the written name completely and repaint what it covered, so the weapon looks whole and
+  natural. No dots, holes, smudges or leftover letters.
+- Remove the black background and any thin edge lines. Transparent behind each weapon.
+- Keep the weapon exactly as drawn: same model, same side view and facing, same proportions,
+  colours and shading. Do not redesign it. Add no hands, shadows, glow, text or frame.
+- Crisp edges, no blur, no JPEG artefacts.
+
+Keep each weapon in its own cell, in the same position and at the same size, so the image can be
+cut into 18 equal cells afterwards. Do not move, resize, merge or reorder them.
+
+Order, left to right, top to bottom:
+ 1 Glock-18      2 USP           3 P228
+ 4 Desert Eagle  5 MAC-10        6 TMP
+ 7 MP5           8 UMP45         9 P90
+10 Galil        11 FAMAS        12 AK-47
+13 M4A1         14 Scout        15 AWP
+16 Flashbang    17 HE grenade   18 Smoke grenade
+
+Check on a dark and a light background: no black fringe, no leftover letters.

@@ -1,0 +1,1297 @@
+//----------------------------------------------------------------------------
+// BotChatter.db
+// Author: Michael S. Booth, Turtle Rock Studios (www.turtlerockstudios.com)
+//
+// This database defines "Places" (phrases that describe a location in the world)
+// and "Chatter" (phrases used for everything else) the bots use to talk via their radio.
+// 
+// Phrases (ie: either Place or Chatter) can contain any number of wav filenames that
+// contain voice recordings saying something appropriate for that phrase's concept.
+// For instance, the Chatter entry for "Affirmative" contains several wav files saying
+// things that mean "yes", such as "affirmative", "yes sir", "roger that", and so on.
+//
+// Some phrases have a "Radio" line. This maps that phrase to a Standard Radio event and
+// is used when the player has restricted the bots to only using Standard Radio messages.
+// In that case, that radio message will be played instead of the normal phrase.
+//
+// The keyword "Important" flags that phrase as being "mission critical", and means it
+// will be spoken if the player has set the bots to "minimal" chatter.
+//
+// "Count" and "Place" qualifiers mean that any subsequent wav files will only be selected
+// if the bot is referring to the given Count or Place.
+//
+//
+// VOICE ACTOR NOTES:
+// Unless otherwise stated, these phrases should be spoken in a terse, matter-of-fact manner.
+// The bots will utter "batches" of phrases to communicate the situation. For example, if a bot
+// discovers many enemies near the bridge, and one of them is carrying the bomb, he will say
+// something like:
+//   "Bridge" ... "There's the bomber" ... "Need help!"  
+//
+//
+// ***NOTE: Total filename length must be less than 64!
+//
+
+
+//
+// Places must be first in this database
+//
+
+Place BombsiteA
+	radio\null.wav
+End
+
+
+
+//-----------------------------------------------------------------------------------------
+//
+// Chatter phrases follow
+//
+
+// one or more enemies have just been sighted for the first time
+Chatter EnemySpotted
+	Radio EVENT_RADIO_ENEMY_SPOTTED
+
+	Count 1
+		radio\test\279.wav
+		radio\test\280.wav
+		radio\test\281.wav
+		radio\test\282.wav
+		radio\test\283.wav
+		radio\test\284.wav
+		radio\test\285.wav
+		radio\test\286.wav
+		radio\test\289.wav
+		radio\test\290.wav
+		radio\test\304.wav
+		radio\test\305.wav
+		radio\test\306.wav
+		radio\test\vbe.wav
+		radio\test\vbn.wav
+		radio\test\vdt.wav
+		radio\test\vdu.wav
+		radio\test\vea.wav
+		radio\test\vme.wav
+		radio\test\vmf.wav
+		radio\test\vmi.wav
+		radio\test\vmt.wav
+		radio\test\vmy.wav
+		radio\test\vmz.wav
+		radio\test\vst.wav
+		radio\test\vta.wav
+		radio\test\vtu.wav
+
+	Count 2
+		radio\test\279.wav
+		radio\test\280.wav
+		radio\test\281.wav
+		radio\test\282.wav
+		radio\test\283.wav
+		radio\test\284.wav
+		radio\test\285.wav
+		radio\test\286.wav
+		radio\test\289.wav
+		radio\test\290.wav
+		radio\test\304.wav
+		radio\test\305.wav
+		radio\test\306.wav
+		radio\test\vbe.wav
+		radio\test\vbn.wav
+		radio\test\vdt.wav
+		radio\test\vdu.wav
+		radio\test\vea.wav
+		radio\test\vme.wav
+		radio\test\vmf.wav
+		radio\test\vmi.wav
+		radio\test\vmt.wav
+		radio\test\vmy.wav
+		radio\test\vmz.wav
+		radio\test\vst.wav
+		radio\test\vta.wav
+		radio\test\vtu.wav
+		radio\test\vdo.wav
+		radio\test\vra.wav
+		radio\test\vrw.wav
+
+	Count 3
+		radio\test\279.wav
+		radio\test\280.wav
+		radio\test\281.wav
+		radio\test\282.wav
+		radio\test\283.wav
+		radio\test\284.wav
+		radio\test\285.wav
+		radio\test\286.wav
+		radio\test\289.wav
+		radio\test\290.wav
+		radio\test\304.wav
+		radio\test\305.wav
+		radio\test\306.wav
+		radio\test\vbe.wav
+		radio\test\vbn.wav
+		radio\test\vdt.wav
+		radio\test\vdu.wav
+		radio\test\vea.wav
+		radio\test\vme.wav
+		radio\test\vmf.wav
+		radio\test\vmi.wav
+		radio\test\vmt.wav
+		radio\test\vmy.wav
+		radio\test\vmz.wav
+		radio\test\vst.wav
+		radio\test\vta.wav
+		radio\test\vtu.wav
+		radio\test\vdo.wav
+		radio\test\vra.wav
+		radio\test\vrw.wav
+		radio\test\vmq.wav
+		radio\test\vmm.wav
+		radio\test\vmn.wav
+
+	Count Many
+		// VOICE NOTE: The bot is scared here - there are a lot of enemies!
+		radio\test\293.wav
+		radio\test\vdf.wav
+		radio\test\259.wav
+		radio\test\297.wav
+		radio\test\336.wav
+		radio\test\vft.wav
+		radio\test\vnb.wav
+		radio\test\vnh.wav
+		radio\test\vnm.wav
+		radio\test\vnn.wav
+		radio\test\vns.wav
+		radio\test\voc.wav
+		radio\test\vri.wav
+		radio\test\vrm.wav
+		radio\test\vrt.wav
+		radio\test\301.wav
+		radio\test\302.wav
+		radio\test\303.wav
+		radio\test\vmq.wav
+		radio\test\vmm.wav
+		radio\test\vmn.wav
+End
+
+// the bot has recently seen an enemy die
+Chatter EnemyDown
+	Radio EVENT_RADIO_ENEMY_DOWN
+
+	radio\test\vwn.wav
+	radio\test\vyi.wav
+	radio\test\vys.wav
+End
+
+// the bot says this when asked to "report in" while he is fighting enemies
+Chatter InCombat
+	Radio EVENT_RADIO_ENEMY_SPOTTED
+
+	radio\test\vdo.wav
+	radio\test\vra.wav
+	radio\test\vrw.wav
+End
+
+// the bot has been asked to "report in" and sees nothing interesting in his area
+Chatter Clear
+	Radio EVENT_RADIO_SECTOR_CLEAR
+
+	radio\test\317.wav
+	radio\test\321.wav
+	radio\test\322.wav
+	radio\test\323.wav
+	radio\test\vbr.wav
+	radio\test\vod.wav
+	radio\test\vca.wav
+	radio\test\vce.wav
+	radio\test\vci.wav
+	radio\test\vjc.wav
+	radio\test\vqb.wav
+	radio\test\vyh.wav
+End
+
+// the bot hasn't seen anything in a long time and is asking his teammates to report in
+Chatter RequestReport
+	Radio EVENT_RADIO_REPORT_IN_TEAM
+
+	radio\test\vmb.wav
+	radio\test\310.wav
+	radio\test\311.wav
+	radio\test\312.wav
+	radio\test\313.wav
+	radio\test\314.wav
+	radio\test\315.wav
+	radio\test\327.wav
+	radio\test\330.wav
+	radio\test\331.wav
+	radio\test\332.wav
+	radio\test\337.wav
+	radio\test\veb.wav
+	radio\test\ved.wav
+	radio\test\vfi.wav
+	radio\test\vfn.wav
+	radio\test\vna.wav
+	radio\test\vnc.wav
+	radio\test\vnd.wav
+	radio\test\vqc.wav
+	radio\test\vqi.wav
+	radio\test\vqs.wav
+	radio\test\vqt.wav
+	radio\test\vrr.wav
+	radio\test\vtb.wav
+	radio\test\vba.wav
+	radio\test\vbd.wav
+	radio\test\vdd.wav
+	radio\test\vmc.wav
+	radio\test\vmd.wav
+	radio\test\voa.wav
+	radio\test\vob.wav
+	radio\test\vog.wav
+	radio\test\vot.wav
+	radio\test\vve.wav
+	radio\test\vvf.wav
+	radio\test\vvh.wav
+	radio\test\vvi.wav
+	radio\test\vvs.wav
+	radio\test\vvw.wav
+End
+
+// the bot has killed the enemy he was fighting
+Chatter KilledMyEnemy
+	Radio EVENT_RADIO_ENEMY_DOWN
+
+	radio\test\vcm.wav
+	radio\test\vct.wav
+	radio\test\vfc.wav
+	radio\test\vfr.wav
+	radio\test\vfw.wav
+	radio\test\vtg.wav
+	radio\test\vyn.wav
+End
+
+// the bot was chasing after his enemy and lost track of him
+// VOICE NOTE: Minor frustration/disappointment/exasperation here
+Chatter LostEnemy
+	radio\test\vth.wav
+End
+
+// the bot is telling his team that the last enemy has been killed
+// VOICE NOTE: Happy/smugness/satisfaction
+Chatter NoEnemiesLeft
+	radio\test\vjz.wav
+End
+
+// the bot is telling his team there is one enemy left
+// VOICE NOTE: Anticipation
+Chatter OneEnemyLeft
+	radio\test\vju.wav
+End
+
+// the bot is telling his team there are two enemies left
+Chatter TwoEnemiesLeft
+	radio\test\vji.wav
+End
+
+// the bot is telling his team there are three enemies left
+Chatter ThreeEnemiesLeft
+	radio\test\vjo.wav
+End
+
+// the bot is in trouble and is asking for help
+// VOICE NOTE: he's trying to keep it together, but he is mortally frightened
+Chatter Help
+	Radio EVENT_RADIO_TAKING_FIRE
+
+	radio\test\259.wav
+	radio\test\297.wav
+	radio\test\336.wav
+	radio\test\vft.wav
+	radio\test\vnb.wav
+	radio\test\vnh.wav
+	radio\test\vnm.wav
+	radio\test\vnn.wav
+	radio\test\vns.wav
+	radio\test\voc.wav
+	radio\test\vri.wav
+	radio\test\vrm.wav
+	radio\test\vrt.wav
+End
+
+// the bot is agreeing with the last radio command
+Chatter Affirmative
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+	radio\test\318.wav
+	radio\test\319.wav
+	radio\test\320.wav
+	radio\test\vco.wav
+	radio\test\vcp.wav
+	radio\test\vcr.wav
+	radio\test\vcw.wav
+	radio\test\vcy.wav
+	radio\test\ven.wav
+	radio\test\vma.wav
+	radio\test\vmo.wav
+	radio\test\vms.wav
+	radio\test\vyh.wav
+End
+
+// the bot has declined the last radio command
+Chatter Negative
+	Radio EVENT_RADIO_NEGATIVE
+
+	Important
+
+	radio\test\vcn.wav 
+	radio\test\vfd.wav 
+	radio\test\vfe.wav
+	radio\test\vtd.wav
+	radio\test\vtf.wav
+	radio\test\vcx.wav
+	radio\test\vyh.wav
+	radio\test\vci.wav
+	radio\test\ves.wav
+End
+
+//-----------------------------------------------------------------------------------------
+//
+// Bomb defuse scenario chatter
+//
+
+// the (CT) bot has checked a bombsite and not found the bomb - he tells his teammates that site is clear
+Chatter BombsiteClear
+	Radio EVENT_RADIO_SECTOR_CLEAR
+
+	Important
+
+	radio\null.wav
+End
+
+// the (CT) bot has begun defusing the bomb
+Chatter DefusingBomb
+	Radio EVENT_RADIO_COVER_ME
+
+	Important
+
+	radio\test\vdc.wav
+	radio\test\vmw.wav
+	radio\test\vdg.wav
+	radio\test\vdh.wav
+End
+
+// the (CT) bot is announcing his intention to guard the dropped bomb
+Chatter GoingToGuardLooseBomb
+	radio\null.wav
+End
+
+// the (CT) bot it telling his team that he is guarding the dropped bomb
+Chatter GuardingLooseBomb
+	Radio EVENT_RADIO_IN_POSITION
+
+	Important
+
+	radio\null.wav
+End
+
+// the (Terrorist) bot is planting the bomb
+Chatter PlantingBomb
+	Radio EVENT_RADIO_COVER_ME
+
+	Important
+
+	// for maps with no places, and also to be occasionally vague about where we're planting
+	Place ANY
+		radio\test\vdc.wav
+		radio\test\vmw.wav
+
+	Place BombsiteA
+		radio\test\vdc.wav
+		radio\test\vmw.wav
+
+	Place BombsiteB
+		radio\test\vdc.wav
+		radio\test\vmw.wav
+
+	Place BombsiteC
+		radio\test\vdc.wav
+		radio\test\vmw.wav
+End
+
+// the (Terrorist) bot is announcing his intention to plant the bomb at a specific bomb site
+Chatter GoingToPlantBomb
+	Radio EVENT_RADIO_FOLLOW_ME
+
+	Important
+
+	// for maps with no places, and to be vague occasionally
+	Place ANY
+		radio\test\vmj.wav
+		radio\test\vof.wav
+
+	Place BombsiteA
+		radio\test\vmj.wav
+		radio\test\vof.wav
+
+	Place BombsiteB
+		radio\test\vmj.wav
+		radio\test\vof.wav
+
+	Place BombsiteC
+		radio\test\vmj.wav
+		radio\test\vof.wav
+End
+
+// the (CT) bot has spotted the bomb carrier
+// VOICE NOTE: Intensity/determination/anger
+Chatter SpottedBomber
+	Radio EVENT_RADIO_ENEMY_SPOTTED
+
+	Important
+
+	radio\test\vsb.wav
+	radio\test\279.wav
+	radio\test\280.wav
+	radio\test\281.wav
+	radio\test\282.wav
+	radio\test\283.wav
+	radio\test\284.wav
+	radio\test\285.wav
+	radio\test\286.wav
+	radio\test\289.wav
+	radio\test\290.wav
+	radio\test\304.wav
+	radio\test\305.wav
+	radio\test\306.wav
+	radio\test\vbe.wav
+	radio\test\vbn.wav
+	radio\test\vdt.wav
+	radio\test\vdu.wav
+	radio\test\vea.wav
+	radio\test\vme.wav
+	radio\test\vmf.wav
+	radio\test\vmi.wav
+	radio\test\vmt.wav
+	radio\test\vmy.wav
+	radio\test\vmz.wav
+	radio\test\vst.wav
+	radio\test\vta.wav
+	radio\test\vtu.wav
+End
+
+// the bot has spotted a dropped bomb on the ground
+Chatter SpottedLooseBomb
+	Important
+
+	radio\test\vsb.wav
+End
+
+// the (CT) bot heard a Terrorist pick up the dropped bomb
+// VOICE NOTE: Anxiety/urgency
+Chatter TheyPickedUpTheBomb
+	Important
+
+	radio\test\256.wav
+	radio\test\257.wav
+	radio\test\258.wav
+	radio\test\260.wav
+	radio\test\299.wav
+	radio\test\300.wav
+	radio\test\316.wav
+	radio\test\328.wav
+	radio\test\329.wav
+	radio\test\333.wav
+	radio\test\334.wav
+	radio\test\335.wav
+	radio\test\vse.wav
+End
+
+// the (CT) bot has found the location of the ticking bomb
+Chatter PlantedBombPlace
+	Radio EVENT_RADIO_NEED_BACKUP
+
+	Important
+
+	// for maps with no places
+	Place UNDEFINED
+		radio\test\vsb.wav
+
+	Place BombsiteA
+		radio\test\vsb.wav
+
+	Place BombsiteB
+		radio\test\vsb.wav
+
+	Place BombsiteC
+		radio\test\vsb.wav
+End
+
+// the bot is asking his teammates where the bomb is
+Chatter WhereIsTheBomb
+	Important
+
+	radio\test\310.wav
+	radio\test\311.wav
+	radio\test\312.wav
+	radio\test\313.wav
+	radio\test\314.wav
+	radio\test\315.wav
+	radio\test\327.wav
+	radio\test\330.wav
+	radio\test\331.wav
+	radio\test\332.wav
+	radio\test\337.wav
+	radio\test\veb.wav
+	radio\test\ved.wav
+	radio\test\vfi.wav
+	radio\test\vfn.wav
+	radio\test\vna.wav
+	radio\test\vnc.wav
+	radio\test\vnd.wav
+	radio\test\vqc.wav
+	radio\test\vqi.wav
+	radio\test\vqs.wav
+	radio\test\vqt.wav
+	radio\test\vrr.wav
+	radio\test\vtb.wav
+End
+
+// the (CT) bot is announcing his intention to guard a bombsite
+Chatter GoingToDefendBombsite
+	Important
+
+	// for maps with no places, or we're just being vague
+	Place ANY
+		radio\null.wav
+
+	Place BombsiteA
+		radio\null.wav
+
+	Place BombsiteB
+		radio\null.wav
+
+	Place BombsiteC
+		radio\null.wav
+End
+
+// the (CT) bot is announcing that he is currently guarding a bombsite
+Chatter DefendingBombsite
+	Important
+
+	// for maps with no places
+	Place UNDEFINED
+		radio\null.wav
+
+	Place BombsiteA
+		radio\null.wav
+
+	Place BombsiteB
+		radio\null.wav
+
+	Place BombsiteC
+		radio\null.wav
+End
+
+// the (CT) bot is announcing that the bombsite is secure and ready for someone to defuse the bomb
+Chatter BombsiteSecure
+	Radio EVENT_RADIO_SECTOR_CLEAR
+
+	Important
+
+	radio\test\269.wav
+	radio\test\vnr.wav
+	radio\test\vnw.wav
+End
+
+// the (CT) bot is encouraging the player to defuse the bomb
+Chatter WaitingForHumanToDefuseBomb
+	radio\test\269.wav
+	radio\test\vnr.wav
+	radio\test\vnw.wav
+End
+
+// the (CT) bot is anxiously encouraging the player to defuse the bomb
+// VOICE NOTE: Very nervous/anxious/worried
+Chatter WaitingForHumanToDefuseBombPanic
+	radio\test\vjk.wav
+	radio\test\293.wav
+	radio\test\vdf.wav
+	radio\test\301.wav
+	radio\test\302.wav
+	radio\test\303.wav
+	radio\test\vef.wav
+	radio\test\vfg.wav
+	radio\test\vfo.wav
+	radio\test\vtm.wav
+End
+
+// when the bomb was defused with less than 2 seconds left
+// VOICE NOTE: Relief/happy
+Chatter BarelyDefused
+	radio\test\vcd.wav
+	radio\test\vtn.wav
+	radio\test\vto.wav
+	radio\test\vwg.wav
+	radio\test\vws.wav
+	radio\test\vyb.wav
+	radio\test\vyc.wav
+	radio\test\vyo.wav
+	radio\test\vyu.wav
+	radio\test\vyy.wav
+End
+
+
+//-----------------------------------------------------------------------------------------
+//
+// Hostage Rescue chatter
+//
+
+// the (Terrorist) bot is announcing his intention to guard the hostages
+Chatter GoingToGuardHostages
+	Important
+
+	radio\test\292.wav
+	radio\test\vba.wav
+	radio\test\vbd.wav
+	radio\test\vdd.wav
+	radio\test\vmc.wav
+	radio\test\vmd.wav
+	radio\test\voa.wav
+	radio\test\vob.wav
+	radio\test\vog.wav
+	radio\test\vot.wav
+	radio\test\vve.wav
+	radio\test\vvf.wav
+	radio\test\vvh.wav
+	radio\test\vvi.wav
+	radio\test\vvs.wav
+	radio\test\vvw.wav
+End
+
+// the (Terrorist) bot is currently guarding some hostages
+Chatter GuardingHostages
+	Important
+
+	radio\null.wav
+End
+
+// the (Terrorist) bot is announcing his intention to guard an escape zone
+Chatter GoingToGuardHostageEscapeZone
+	Important
+
+	radio\null.wav
+End
+
+// the (Terrorist) bot is currently guarding an escape zone
+Chatter GuardingHostageEscapeZone
+	Important
+
+	radio\null.wav
+End
+
+// the (Terrorist) bot is telling his friends that the CT's are taking the hostages right now
+// VOICE NOTE: Anxiety/frustration/anger
+Chatter HostagesBeingTaken
+	Radio EVENT_RADIO_NEED_BACKUP
+
+	Important
+
+	radio\null.wav
+End
+
+// the (Terrorist) bot has just discovered that the hostages are gone
+// VOICE NOTE: Anxiety/frustration/anger
+Chatter HostagesTaken
+	Important
+
+	radio\null.wav
+End
+
+// the (CT) bot is announcing that he is talking to the hostages
+Chatter TalkingToHostages
+	Important
+
+	radio\test\vsh.wav
+End
+
+// the (CT) bot is annoucing that he has the hostages and is taking them to the escape zone
+Chatter EscortingHostages
+	Important
+
+	radio\test\vrh.wav
+End
+
+// the (CT) bot is guarding the hostages and is encouraging the human player to come rescue them
+Chatter WaitingForHumanToRescueHostages
+	Radio EVENT_RADIO_SECTOR_CLEAR
+
+	Important
+
+	radio\test\292.wav
+	radio\test\vba.wav
+	radio\test\vbd.wav
+	radio\test\vdd.wav
+	radio\test\vmc.wav
+	radio\test\vmd.wav
+	radio\test\voa.wav
+	radio\test\vob.wav
+	radio\test\vog.wav
+	radio\test\vot.wav
+	radio\test\vve.wav
+	radio\test\vvf.wav
+	radio\test\vvh.wav
+	radio\test\vvi.wav
+	radio\test\vvs.wav
+	radio\test\vvw.wav
+End
+
+
+//-----------------------------------------------------------------------------------------
+//
+// VIP Scenario chatter
+//
+
+// the (Terrorist) bot has spotted the VIP
+// VOICE NOTE: Intensity/anger/determination
+Chatter SpottedVIP
+	Radio EVENT_RADIO_ENEMY_SPOTTED
+
+	Important
+
+	radio\test\279.wav
+	radio\test\280.wav
+	radio\test\281.wav
+	radio\test\282.wav
+	radio\test\283.wav
+	radio\test\284.wav
+	radio\test\285.wav
+	radio\test\286.wav
+	radio\test\289.wav
+	radio\test\290.wav
+	radio\test\304.wav
+	radio\test\305.wav
+	radio\test\306.wav
+	radio\test\vbe.wav
+	radio\test\vbn.wav
+	radio\test\vdt.wav
+	radio\test\vdu.wav
+	radio\test\vea.wav
+	radio\test\vme.wav
+	radio\test\vmf.wav
+	radio\test\vmi.wav
+	radio\test\vmt.wav
+	radio\test\vmy.wav
+	radio\test\vmz.wav
+	radio\test\vst.wav
+	radio\test\vta.wav
+	radio\test\vtu.wav
+End
+
+// the (Terrorist) bot is announcing his intention to guard an escape zone
+Chatter GoingToGuardVIPEscapeZone
+	Important
+
+	radio\null.wav
+End
+
+// the (Terrorist) bot is guarding an escape zone
+Chatter GuardingVIPEscapeZone
+	Important
+
+	radio\null.wav
+End
+
+
+//-----------------------------------------------------------------------------------------
+
+// the bot was saying something and died in mid-sentance
+// VOICE NOTE: death cry
+Chatter Pain
+	radio\test\338.wav
+	radio\test\341.wav
+	radio\test\342.wav
+	radio\test\vwd.wav
+	radio\test\vwf.wav
+End
+
+// the bot is congratulating his team for winning the round
+Chatter WonRound
+	radio\test\vfu.wav
+	radio\test\vtw.wav
+	radio\test\vwa.wav
+	radio\test\vwc.wav
+	radio\test\vwo.wav
+	radio\test\vwy.wav
+	radio\test\vyj.wav
+	radio\test\vym.wav
+	radio\test\vyq.wav
+	radio\test\vyr.wav
+	radio\test\vyt.wav
+	radio\test\vcd.wav
+	radio\test\vtn.wav
+	radio\test\vto.wav
+	radio\test\vwg.wav
+	radio\test\vws.wav
+	radio\test\vyb.wav
+	radio\test\vyc.wav
+	radio\test\vyo.wav
+	radio\test\vyu.wav
+	radio\test\vyy.wav
+End
+
+// the bot is celebrating because his team crushed the enemies very quickly
+// VOICE NOTE: Hoots and hollers of excitement, bragging, boasting, etc
+Chatter WonRoundQuickly
+	radio\test\vfu.wav
+	radio\test\vtw.wav
+	radio\test\vwa.wav
+	radio\test\vwc.wav
+	radio\test\vwo.wav
+	radio\test\vwy.wav
+	radio\test\vyj.wav
+	radio\test\vym.wav
+	radio\test\vyq.wav
+	radio\test\vyr.wav
+	radio\test\vyt.wav
+	radio\test\vcd.wav
+	radio\test\vtn.wav
+	radio\test\vto.wav
+	radio\test\vwg.wav
+	radio\test\vws.wav
+	radio\test\vyb.wav
+	radio\test\vyc.wav
+	radio\test\vyo.wav
+	radio\test\vyu.wav
+	radio\test\vyy.wav
+End
+
+// the bot won the round and is the last player alive
+// VOICE NOTE: Bragging, boasting, etc
+Chatter LastManStanding
+	radio\test\vfu.wav
+	radio\test\vtw.wav
+	radio\test\vwa.wav
+	radio\test\vwc.wav
+	radio\test\vwo.wav
+	radio\test\vwy.wav
+	radio\test\vyj.wav
+	radio\test\vym.wav
+	radio\test\vyq.wav
+	radio\test\vyr.wav
+	radio\test\vyt.wav
+	radio\test\vcd.wav
+	radio\test\vtn.wav
+	radio\test\vto.wav
+	radio\test\vwg.wav
+	radio\test\vws.wav
+	radio\test\vyb.wav
+	radio\test\vyc.wav
+	radio\test\vyo.wav
+	radio\test\vyu.wav
+	radio\test\vyy.wav
+End
+
+// the bot emits a short, exicited noise because he did something especially good
+// VOICE NOTE: Hoots and hollers of excitement
+Chatter ThrillEmote
+	radio\test\vfu.wav
+	radio\test\vtw.wav
+	radio\test\vwa.wav
+	radio\test\vwc.wav
+	radio\test\vwo.wav
+	radio\test\vwy.wav
+	radio\test\vyj.wav
+	radio\test\vym.wav
+	radio\test\vyq.wav
+	radio\test\vyr.wav
+	radio\test\vyt.wav
+End
+
+// the bot is afraid (usually because he is outnumbered by enemies)
+// VOICE NOTE: Worry/anxiety/fear
+Chatter ScaredEmote
+	radio\test\259.wav
+	radio\test\297.wav
+	radio\test\336.wav
+	radio\test\vft.wav
+	radio\test\vnb.wav
+	radio\test\vnh.wav
+	radio\test\vnm.wav
+	radio\test\vnn.wav
+	radio\test\vns.wav
+	radio\test\voc.wav
+	radio\test\vri.wav
+	radio\test\vrm.wav
+	radio\test\vrt.wav
+End
+
+// the bot is agreeing with a plan someone else announced
+Chatter AgreeWithPlan
+	Important
+
+	radio\test\318.wav
+	radio\test\319.wav
+	radio\test\320.wav
+	radio\test\vco.wav
+	radio\test\vcp.wav
+	radio\test\vcr.wav
+	radio\test\vcw.wav
+	radio\test\vcy.wav
+	radio\test\ven.wav
+	radio\test\vma.wav
+	radio\test\vmo.wav
+	radio\test\vms.wav
+End
+
+// the bot is telling a friend that he will "cover them" and watch their back
+Chatter CoveringFriend
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+	radio\null.wav
+End
+
+// the bot is responding to someone's request for help
+// VOICE NOTE: Confident/assuring
+Chatter OnMyWay
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+	radio\test\vyh.wav
+End
+
+// the bot has decided to hide for a little while, instead of seeking out the enemy
+// VOICE NOTE: Anxiety/worry/cowardice
+Chatter WaitingHere
+	radio\test\vdg.wav
+	radio\test\vdh.wav
+End
+
+// the bot has been in combat for a long time, and can't get away
+// VOICE NOTE: Anxiety/worry/fear
+Chatter PinnedDown
+	Radio EVENT_RADIO_NEED_BACKUP
+
+	radio\test\259.wav
+	radio\test\297.wav
+	radio\test\336.wav
+	radio\test\vft.wav
+	radio\test\vnb.wav
+	radio\test\vnh.wav
+	radio\test\vnm.wav
+	radio\test\vnn.wav
+	radio\test\vns.wav
+	radio\test\voc.wav
+	radio\test\vri.wav
+	radio\test\vrm.wav
+	radio\test\vrt.wav
+End
+
+// the bot heard an enemy noise
+// VOICE NOTE: Said as an undertone/afterthought
+Chatter HeardNoise
+	radio\test\256.wav
+	radio\test\257.wav
+	radio\test\258.wav
+	radio\test\260.wav
+	radio\test\299.wav
+	radio\test\300.wav
+	radio\test\316.wav
+	radio\test\328.wav
+	radio\test\329.wav
+	radio\test\333.wav
+	radio\test\334.wav
+	radio\test\335.wav
+	radio\test\vse.wav
+End
+
+// the bot has been blinded by a Flashbang Grenade
+// VOICE NOTE: Surprise/shock/fear/anxiety
+Chatter Blinded
+	radio\test\flashed1.wav
+End
+
+// the bot is congratulating a friend on a well placed shot
+// VOICE NOTE: upbeat/supportive/impressed
+Chatter NiceShot
+	radio\test\vwn.wav
+	radio\test\vyi.wav
+	radio\test\vys.wav
+	radio\test\vfu.wav
+	radio\test\vtw.wav
+	radio\test\vwa.wav
+	radio\test\vwc.wav
+	radio\test\vwo.wav
+	radio\test\vwy.wav
+	radio\test\vyj.wav
+	radio\test\vym.wav
+	radio\test\vyq.wav
+	radio\test\vyr.wav
+	radio\test\vyt.wav
+End
+
+// the bot is congratulating a human player on a well placed shot
+// VOICE NOTE: upbeat/supportive/impressed
+Chatter NiceShotSir
+	radio\test\vwn.wav
+	radio\test\vyi.wav
+	radio\test\vys.wav
+	radio\test\vfu.wav
+	radio\test\vtw.wav
+	radio\test\vwa.wav
+	radio\test\vwc.wav
+	radio\test\vwo.wav
+	radio\test\vwy.wav
+	radio\test\vyj.wav
+	radio\test\vym.wav
+	radio\test\vyq.wav
+	radio\test\vyr.wav
+	radio\test\vyt.wav
+End
+
+// the bot is congratulating the "commander" in the solo game
+// VOICE NOTE: upbeat/supportive/impressed
+Chatter NiceShotCommander
+	radio\test\vwn.wav
+	radio\test\vyi.wav
+	radio\test\vys.wav
+	radio\test\vfu.wav
+	radio\test\vtw.wav
+	radio\test\vwa.wav
+	radio\test\vwc.wav
+	radio\test\vwo.wav
+	radio\test\vwy.wav
+	radio\test\vyj.wav
+	radio\test\vym.wav
+	radio\test\vyq.wav
+	radio\test\vyr.wav
+	radio\test\vyt.wav
+End
+
+// when the player dies in the solo game
+// VOICE NOTE: Intense/worry/anxiety
+Chatter CommanderDown
+	Radio EVENT_RADIO_REGROUP_TEAM
+
+	Important
+
+	radio\test\vrc.wav
+End
+
+// the bot has decided to follow a human player
+Chatter FollowingSir
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+	radio\null.wav
+End
+
+// the bot has decided to follow the human player in the solo game
+Chatter FollowingCommander
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+	radio\null.wav
+End
+
+// the bot is expressing its shock that a friend has killed another friend (friendly fire)
+// VOICE NOTE: Grief/sadness/worry/astonishment
+Chatter KilledFriend
+	radio\test\261.wav
+	radio\test\339.wav
+	radio\test\vei.wav
+	radio\test\vfl.wav
+	radio\test\vti.wav
+	radio\test\vtr.wav
+	radio\test\vts.wav
+	radio\test\vrc.wav
+	radio\test\301.wav
+	radio\test\302.wav
+	radio\test\303.wav
+	radio\test\vef.wav
+	radio\test\vfg.wav
+	radio\test\vfo.wav
+	radio\test\vtm.wav
+End
+
+// the bot is crying out because he was injured by friendly fire
+// VOICE NOTE: Pain/anger/frustration
+Chatter FriendlyFire
+	Important
+
+	radio\test\Chinese_Insults.wav
+	radio\test\vek.wav
+	radio\test\veu.wav
+	radio\test\vfk.wav
+	radio\test\vfx.wav
+	radio\test\vmx.wav
+	radio\test\vtl.wav
+	radio\test\vtx.wav
+	radio\test\vty.wav
+	radio\test\vtz.wav
+	radio\test\vmp.wav
+	radio\test\301.wav
+	radio\test\302.wav
+	radio\test\303.wav
+	radio\test\vef.wav
+	radio\test\vfg.wav
+	radio\test\vfh.wav
+	radio\test\vtm.wav
+End
+
+
+
+//---------------------------------------------------------------------------------------
+//
+// The items below are not used (yet)
+//
+
+Chatter PepTalk
+	radio\test\vba.wav
+	radio\test\vbd.wav
+	radio\test\vdd.wav
+	radio\test\vmc.wav
+	radio\test\vmd.wav
+	radio\test\voa.wav
+	radio\test\vob.wav
+	radio\test\vog.wav
+	radio\test\vot.wav
+	radio\test\vve.wav
+	radio\test\vvf.wav
+	radio\test\vvh.wav
+	radio\test\vvi.wav
+	radio\test\vvs.wav
+	radio\test\vvw.wav
+End
+
+Chatter OnARollBrag
+	radio\test\vfu.wav
+	radio\test\vtw.wav
+	radio\test\vwa.wav
+	radio\test\vwc.wav
+	radio\test\vwo.wav
+	radio\test\vwy.wav
+	radio\test\vyj.wav
+	radio\test\vym.wav
+	radio\test\vyq.wav
+	radio\test\vyr.wav
+	radio\test\vyt.wav
+End
+
+Chatter TauntCamper
+	radio\null.wav
+End
+
+Chatter PreventEscapeBrag
+	radio\null.wav
+End
+
+Chatter SniperWarning
+	radio\test\vss.wav
+End
+
+Chatter SniperKilled
+	radio\null.wav
+End
+
+// we saw enemies, but now they're all dead
+Chatter ClearedArea
+	radio\test\vjz.wav
+End
+
+Chatter Agree
+	radio\test\318.wav
+	radio\test\319.wav
+	radio\test\320.wav
+	radio\test\vco.wav
+	radio\test\vcp.wav
+	radio\test\vcr.wav
+	radio\test\vcw.wav
+	radio\test\vcy.wav
+	radio\test\ven.wav
+	radio\test\vma.wav
+	radio\test\vmo.wav
+	radio\test\vms.wav
+End
+
+Chatter Disagree
+	radio\test\vyh.wav
+	radio\test\ves.wav
+End
+
+Chatter CoverMe
+	radio\test\vdc.wav
+	radio\test\vmw.wav
+End
+
+Chatter FrustrationEmote
+	radio\null.wav
+End
+
+Chatter FollowingFriend
+	radio\null.wav
+End
+
+Chatter ReportingIn
+	radio\test\vca.wav
+	radio\test\vce.wav
+	radio\test\vci.wav
+	radio\test\vjc.wav
+	radio\test\vqb.wav
+End
+
+Chatter BombTickingDown
+	radio\null.wav
+End
+
+Chatter HostageDown
+	radio\null.wav
+End
+
+Chatter RequestHostageLocation
+	radio\test\310.wav
+	radio\test\311.wav
+	radio\test\312.wav
+	radio\test\313.wav
+	radio\test\314.wav
+	radio\test\315.wav
+	radio\test\327.wav
+	radio\test\330.wav
+	radio\test\331.wav
+	radio\test\332.wav
+	radio\test\337.wav
+	radio\test\veb.wav
+	radio\test\ved.wav
+	radio\test\vfi.wav
+	radio\test\vfn.wav
+	radio\test\vna.wav
+	radio\test\vnc.wav
+	radio\test\vnd.wav
+	radio\test\vqc.wav
+	radio\test\vqi.wav
+	radio\test\vqs.wav
+	radio\test\vqt.wav
+	radio\test\vrr.wav
+	radio\test\vtb.wav
+End
+
+Chatter MeToo
+	radio\test\318.wav
+	radio\test\319.wav
+	radio\test\320.wav
+	radio\test\vco.wav
+	radio\test\vcp.wav
+	radio\test\vcr.wav
+	radio\test\vcw.wav
+	radio\test\vcy.wav
+	radio\test\ven.wav
+	radio\test\vma.wav
+	radio\test\vmo.wav
+	radio\test\vms.wav
+End
+
+
