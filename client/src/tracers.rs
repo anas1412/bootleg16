@@ -7,8 +7,8 @@ use crate::map::to_y_up;
 use bevy::gizmos::config::{GizmoConfig, GizmoConfigGroup, GizmoLineConfig};
 use bevy::prelude::*;
 
-/// Dash speed (the engine's `tracerspeed`), dash length, and how far a tracer is followed
-/// (units; a longer shot is drawn only this far).
+/// Dash speed (the engine's `tracerspeed`), dash length, and the longest shot that gets a tracer
+/// (units; one that ends farther, or in the sky, has none: it would stop in mid air).
 const SPEED: f32 = 6000.0;
 const DASH: f32 = 60.0;
 const REACH: f32 = 4096.0;
@@ -46,11 +46,12 @@ impl Tracers {
     pub fn shot(&mut self, eye: [f32; 3], end: [f32; 3]) {
         let (a, b) = (Vec3::from(to_y_up(start(eye, end))), Vec3::from(to_y_up(end)));
         let len = a.distance(b);
-        if len < NEAR * 2.0 {
+        // Too close: stretched across the screen. Too far: it would stop in mid air, not on a surface.
+        if len < NEAR * 2.0 || len > REACH {
             return;
         }
         let dir = (b - a) / len;
-        let to = if len > REACH { a + dir * REACH } else { b };
+        let to = b;
         self.0.push(Tracer { from: a + dir * NEAR, to, age: 0.0 });
     }
 }

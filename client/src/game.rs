@@ -315,6 +315,7 @@ fn walk(
         let eye = w.client.me().eye();
         let (f, _, _) = view_vectors(shot.angles[0], shot.angles[1]);
         let mut end = w.client.world.trace_line(eye, std::array::from_fn(|i| eye[i] + f[i] * 8192.0)).end;
+        let mut sky = false;
         if let Some(a) = &shot_assets {
             let r = if shot.pellets.is_some() { fire_pellets(&w.client.world, &a.0.hitboxes, eye, &shot, me_id, &targets) } else { fire_bullet(&w.client.world, &a.0.materials, &a.0.hitboxes, eye, &shot, me_id, &targets) };
             for i in r.impacts.iter().filter(|i| !i.sky) {
@@ -323,12 +324,15 @@ fn walk(
             }
             if let Some(i) = r.impacts.first() {
                 end = i.point;
+                sky = i.sky;
             }
         }
         // The tracer: from the barrel to where the shot ended. The view model camera has the
         // world camera's field of view, so the model's muzzle (camera space: x right, y up,
         // -z forward) maps straight onto the world.
-        tracers.shot(eye, end);
+        if !sky {
+            tracers.shot(eye, end);
+        }
     }
 }
 
