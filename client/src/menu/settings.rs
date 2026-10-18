@@ -39,7 +39,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, fullscreen: true, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60, looks: None }
+        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, fullscreen: false, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60, looks: None }
     }
 }
 

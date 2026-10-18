@@ -204,3 +204,6 @@ something surprises you.
 
 ## Rendering the UI into an image and showing it on a surface breaks picking when the image is resized
 The old 3D menu did this; after a resize hovers and clicks stopped working (layout and hit boxes no longer matched the drawn page). Keep menus on the window's own UI camera.
+
+## Fullscreen took KDE down on the hybrid laptop (2026-10-18)
+Journal (`journalctl -b 0`): after the game went fullscreen, `kwin_wayland_wrapper: intel: the execbuf ioctl keeps returning ENOMEM`, then `kwin_wayland` died with SIGABRT and the session restarted (looks like the PC crashed). Earlier, `NVRM: dmaAllocMapping_GM107: can't alloc VA space ... NV_ERR_NO_MEMORY`. Machine: Intel UHD drives the screen (KWin), the GTX 1650 renders (PRIME), NVIDIA 615.78, Mesa 26.2.4. The game itself is small (about 480 MiB VRAM, 875 MB RSS in the menu), so it is the buffer sharing between the two GPUs, not a leak of ours. Windowed has never crashed. So fullscreen is OFF by default for now (Settings row and Alt+Enter still there). Do not test fullscreen on this machine without the user asking. Ideas to try later: run on the Intel GPU for the display test (`WGPU_ADAPTER_NAME=Intel`), `__NV_PRIME_RENDER_OFFLOAD=1`, a newer NVIDIA driver or KWin.
