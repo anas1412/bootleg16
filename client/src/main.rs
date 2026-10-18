@@ -3,7 +3,7 @@
 //!
 //! Usage: `client [map] [--connect host:port] [--name name] [--give ak47,awp] [--practice N]`
 //! (any argument skips the menu). The game directory comes from `BOOTLEG16_DIR`
-//! (default: `data/` beside the executable, else `dist/gamedata/` in the repo).
+//! (default: `data/` beside the executable, else `gamedata/` in the repo).
 //! `BOOTLEG16_FAKE_PING=ms` and `BOOTLEG16_FAKE_LOSS=0.05` simulate a bad connection.
 //! `BOOTLEG16_SCREENSHOT=path.png` saves one frame (after `BOOTLEG16_SCREENSHOT_AT` seconds,
 //! default 2) and exits; such runs ignore mouse and keyboard (used for automated checks).
@@ -91,7 +91,7 @@ fn main() {
     App::new()
         .add_plugins(
             DefaultPlugins
-                .set(WindowPlugin { primary_window: Some(Window { title: "bootleg16".into(), ..default() }), ..default() })
+                .set(WindowPlugin { primary_window: Some(Window { title: "bootleg16".into(), name: Some("bootleg16".into()), ..default() }), ..default() })
                 // Shrink audio space so rodio's 1/d^2 loudness never kicks in: it only pans,
                 // and `sound` applies GoldSrc's own distance falloff.
                 .set(bevy::audio::AudioPlugin { default_spatial_scale: bevy::audio::SpatialScale::new(1.0 / 4096.0), ..default() }),

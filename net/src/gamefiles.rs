@@ -1,6 +1,6 @@
 //! Our own game data: textures, models, sounds, sprites, maps and radar overviews live in one
-//! folder (`data/` beside the executable; in the repo, the private `dist/gamedata/`). Set
-//! `BOOTLEG16_DIR` to use another. Nothing is read from anywhere else.
+//! folder (`data/` beside the executable; in the repo, `gamedata/`). Set `BOOTLEG16_DIR` to use
+//! another. Nothing is read from anywhere else.
 use std::path::{Path, PathBuf};
 
 /// The game data folder.
@@ -9,7 +9,7 @@ pub fn data_dir() -> PathBuf {
         return dir.into();
     }
     let beside_exe = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("data"))).filter(|p| p.is_dir());
-    beside_exe.unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../dist/gamedata"))
+    beside_exe.unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../gamedata"))
 }
 
 /// The folders to look in (just the data folder, when it exists).

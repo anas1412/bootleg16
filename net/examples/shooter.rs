@@ -13,7 +13,7 @@ fn main() {
     let fixed_pitch: Option<f32> = a.get(4).and_then(|x| x.parse().ok());
     let strafe = a.get(5).is_some_and(|x| x == "strafe");
     let home = std::env::var("HOME").unwrap();
-    let bsp = goldsrc::bsp::Bsp::load(format!("{}/../dist/gamedata/maps/de_dust2.bsp", env!("CARGO_MANIFEST_DIR"))).unwrap();
+    let bsp = goldsrc::bsp::Bsp::load(format!("{}/../gamedata/maps/de_dust2.bsp", env!("CARGO_MANIFEST_DIR"))).unwrap();
     let mut c = Client::connect(addr, "shooter", sim::collision::World::from_bsp(&bsp)).unwrap();
     let tick = Duration::from_secs_f64(1.0 / 128.0);
     let start = Instant::now();

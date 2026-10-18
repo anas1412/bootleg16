@@ -10,7 +10,7 @@ fn main() {
     let presses: usize = a.get(2).and_then(|x| x.parse().ok()).unwrap_or(1);
     let pitch: f32 = a.get(3).and_then(|x| x.parse().ok()).unwrap_or(-20.0);
     let home = std::env::var("HOME").unwrap();
-    let bsp = goldsrc::bsp::Bsp::load(format!("{}/../dist/gamedata/maps/de_dust2.bsp", env!("CARGO_MANIFEST_DIR"))).unwrap();
+    let bsp = goldsrc::bsp::Bsp::load(format!("{}/../gamedata/maps/de_dust2.bsp", env!("CARGO_MANIFEST_DIR"))).unwrap();
     let mut c = Client::connect(addr, "thrower", sim::collision::World::from_bsp(&bsp)).unwrap();
     let tick = Duration::from_secs_f64(1.0 / 128.0);
     let start = Instant::now();

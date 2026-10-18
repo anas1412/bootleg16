@@ -72,7 +72,7 @@ DM="${DM:-$([ "$LOBBY" = here ] && echo 1 || echo 0)}"
 last=$((27014 + SERVERS + DM))
 
 # The few game files the servers read, copied from the game data folder (never shipped).
-game="${BOOTLEG16_DIR:-dist/gamedata}"
+game="${BOOTLEG16_DIR:-gamedata}"
 # The map pool too (de_dust2 is needed; the others are played if they're there).
 for m in de_inferno de_nuke de_train; do
   [ -f "hosting/game/maps/$m.bsp" ] || { [ -f "$game/maps/$m.bsp" ] && mkdir -p hosting/game/maps && cp "$game/maps/$m.bsp" hosting/game/maps/; } || true

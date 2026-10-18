@@ -2,7 +2,7 @@
 
 Counter-Strike 1.6 rebuilt in Rust with Bevy: CS 1.6 movement, guns and economy in a modern competitive setup. 5 v 5 matches in CS2's format on official servers, matchmaking with parties, custom games with a knife round and map vetoes, deathmatch for warming up, Steam sign-in, voice chat, match recordings and server-side anti-cheat.
 
-It reads its maps, models, sounds and textures from one game data folder; no game files are in this repository (`dist/` is private and git ignores it). Own maps, characters and a new name come later (see `docs/TODO.md`).
+It reads its maps, models, sounds and textures from one game data folder; the data is in the repository's `gamedata/` folder (part of it is still Valve's: see `docs/TODO.md`; the repository is private). Own maps, characters and a new name come later (see `docs/TODO.md`).
 
 ## What's where
 
@@ -21,7 +21,7 @@ It reads its maps, models, sounds and textures from one game data folder; no gam
 
 ## Building and running
 
-You need Rust (stable), the game data folder (`dist/gamedata/` in the repo, `data/` next to a built game, or set `BOOTLEG16_DIR`; it has `maps/`, `models/`, `sound/`, `sprites/`, `gfx/` and the `.wad` files), and Linux with Wayland and Vulkan.
+You need Rust (stable), the game data folder (`gamedata/` in the repo, `data/` next to a built game, or set `BOOTLEG16_DIR`; it has `maps/`, `models/`, `sound/`, `sprites/`, `gfx/` and the `.wad` files), and Linux with Wayland and Vulkan.
 
 ```bash
 cargo run -p client
@@ -151,6 +151,14 @@ cargo run -p net --example bots -- --order "t plant b; ct hold; 3 bhop"
 ```
 
 An order is `<who> <order>`: who is `all`, `t`, `ct` or a bot number. Orders: `normal`, `afk`, `hold`, `goto a|b|tspawn|ctspawn|x y z`, `rush ...`, `plant a|b|any`, `peaceful`, `spray`, `aimbot`, `grief`, `bhop`, `knife`, `leave`, `rejoin`, `difficulty ...`, `buy <weapon>`. They play like CS 1.6's own bots (whose code CS 1.6 ships without its data files): buy, take the bomb to a site and plant it, pick it up when it's dropped, guard sites, defuse (or run when there's no time), check gunfire they hear, and notice enemies after a reaction time, with aim that improves the longer they track.
+
+## Installing
+
+Installers (they include `gamedata/`, which still has Valve's files: private builds only until that is replaced):
+
+- **Linux:** `cargo build --release -p client --no-default-features --features steam`, then `packaging/linux/build.sh` makes `dist/bootleg16-<version>-linux.tar.gz`. Unpack it and run `./install.sh` (per user, no root: game in `~/.local/share/bootleg16`, a `bootleg16` command, a menu entry; `./uninstall.sh` removes it, `--purge` also your settings).
+- **Windows:** `.github/workflows/installers.yml` builds both installers on GitHub (Actions tab, or push a `v*` tag; needs the variable `BOOTLEG16_LOBBY`). The Windows one is an Inno Setup installer (`packaging/windows/bootleg16.iss`), per user, Start menu entry, uninstaller. Settings live in `%APPDATA%\bootleg16`.
+- **Servers at home, no Docker:** `tools/host-local.sh start` (lobby + a match server + a deathmatch server; `stop`, `status`, `logs`); play against it with `BOOTLEG16_LOBBY=127.0.0.1:27010`.
 
 ## Shipping the game
 

@@ -55,7 +55,7 @@ Linux). For now it plays on the CS 1.6 files from the user's own install. It run
 - Everyone has the same hitbox, height, eye and speed. Characters are cosmetic.
 - The AI assistant only knows what the player knows. Every new piece of information the
   player can see gets an assistant trigger and lines (`client/src/assistant/`).
-- `dist/` holds Valve files: private, never publish it.
+- `gamedata/` is tracked and still holds Valve's files (maps, radar images, texture packs) and an add-on of unknown origin: the repo must stay PRIVATE until they are replaced (docs/TODO.md). `dist/` is only build output (installers, bundles), git-ignored.
 - Map pool: de_dust2, de_inferno, de_mirage (on hold), de_train. Keep Nuke.
 - Every fix must work on both Windows and Linux.
 
@@ -72,7 +72,7 @@ Linux). For now it plays on the CS 1.6 files from the user's own install. It run
   - Models are lit by `studio.wesl`: ambient plus shade, with the sun from `light_environment`.
 - Additive sprites are uploaded as `Rgba8Unorm`, because GoldSrc adds them in display space.
   Each frame is placed by its origin.
-- Assets come from one game data folder (`net::gamefiles`): `data/` next to the executable, in the repo the private `dist/gamedata/` (git ignores `dist/`), or `BOOTLEG16_DIR`. It has `maps/`, `overviews/`, `models/`, `sound/`, `sprites/`, `gfx/` and the `.wad` files. Nothing is read from a Half-Life or CS install any more.
+- Assets come from one game data folder (`net::gamefiles`): `data/` next to the executable, in the repo `gamedata/` (tracked; the repo is private), or `BOOTLEG16_DIR`. It has `maps/`, `overviews/`, `models/`, `sound/`, `sprites/`, `gfx/` and the `.wad` files. Nothing is read from a Half-Life or CS install any more.
 
 ## Main systems and where they live
 

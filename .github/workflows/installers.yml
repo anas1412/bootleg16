@@ -1,0 +1,44 @@
+# Builds the Linux and Windows installers. Run it from the Actions tab, or push a tag `v*`.
+#
+# The game data is in the repo (gamedata/). The lobby's address goes in the variable
+# BOOTLEG16_LOBBY (host:port).
+name: installers
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+env:
+  BOOTLEG16_LOBBY: ${{ vars.BOOTLEG16_LOBBY }}
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libopus-dev libwayland-dev libxkbcommon-dev clang mold
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p client --no-default-features --features steam
+      - run: packaging/linux/build.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: bootleg16-linux, path: dist/bootleg16-*-linux.tar.gz }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: choco install innosetup -y --no-progress
+      - run: cargo build --release -p client --no-default-features --features steam
+      - name: Stage and build the installer
+        shell: bash
+        run: |
+          mkdir -p dist/win/data && cp -r gamedata/. dist/win/data/
+          cp target/release/client.exe dist/win/bootleg16.exe
+          cp target/release/steam_api64.dll dist/win/ || true
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' client/Cargo.toml | head -n1)
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DVersion=$version" "/DStage=..\\..\\dist\\win" packaging/windows/bootleg16.iss
+      - uses: actions/upload-artifact@v4
+        with: { name: bootleg16-windows, path: dist/bootleg16-*-windows-setup.exe }

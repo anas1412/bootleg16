@@ -182,7 +182,7 @@ impl Default for Binds {
 }
 
 fn path() -> PathBuf {
-    PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config/bootleg16")
+    crate::gamefiles::config_dir()
 }
 
 impl Binds {

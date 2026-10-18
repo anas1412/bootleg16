@@ -46,7 +46,7 @@ impl Default for Settings {
 }
 
 pub(crate) fn settings_path() -> PathBuf {
-    PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config/bootleg16/settings.txt")
+    crate::gamefiles::config_dir().join("settings.txt")
 }
 
 impl Settings {

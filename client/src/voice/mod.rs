@@ -75,7 +75,7 @@ const MUFFLED_GAIN: f32 = 0.55;
 const MUFFLE_ALPHA: f32 = 0.145;
 
 fn path() -> PathBuf {
-    PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config/bootleg16/voice.txt")
+    crate::gamefiles::config_dir().join("voice.txt")
 }
 
 impl VoiceSettings {
