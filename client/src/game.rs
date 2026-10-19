@@ -10,7 +10,7 @@ use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
     prelude::*,
-    window::{CursorGrabMode, CursorOptions},
+    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
 };
 
 /// In-game frame order: camera first, then server events, then everything drawn from
@@ -421,10 +421,16 @@ fn move_camera(
     tf.translation += dir.normalize_or_zero() * speed * time.delta_secs();
 }
 
-/// Click to capture the mouse (not while a menu or the buy menu is open). Esc is the pause menu.
-fn grab_cursor(mut cursor: Single<&mut CursorOptions>, mouse: Res<ButtonInput<MouseButton>>, overlay: Option<Res<Overlay>>, buy: Res<BuyMenu>, scores: Res<crate::scoreboard::ScoreMouse>) {
+/// The mouse is captured while you play: on joining, and again whenever nothing needs the
+/// cursor (a menu, the buy menu, the scoreboard's mouse) and the window has focus. A click
+/// also captures it. Esc is the pause menu.
+fn grab_cursor(mut cursor: Single<&mut CursorOptions>, window: Single<&Window, With<PrimaryWindow>>, mouse: Res<ButtonInput<MouseButton>>, overlay: Option<Res<Overlay>>, buy: Res<BuyMenu>, scores: Res<crate::scoreboard::ScoreMouse>) {
     // Automated screenshot runs never take the user's mouse.
-    if mouse.just_pressed(MouseButton::Left) && std::env::var_os("BOOTLEG16_SCREENSHOT").is_none() && !overlay_open(overlay) && !buy.is_open() && !scores.on {
+    if std::env::var_os("BOOTLEG16_SCREENSHOT").is_some() {
+        return;
+    }
+    let wanted = !overlay_open(overlay) && !buy.is_open() && !scores.on;
+    if wanted && cursor.grab_mode == CursorGrabMode::None && (window.focused || mouse.just_pressed(MouseButton::Left)) {
         cursor.grab_mode = CursorGrabMode::Locked;
         cursor.visible = false;
     }
