@@ -6,3 +6,4 @@ hosting/
 design/mockups/ui/assets/
 design/mockups/ui/shots/
 dist/
+.claude/
