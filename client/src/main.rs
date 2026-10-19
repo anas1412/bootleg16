@@ -94,7 +94,11 @@ fn main() {
                 .set(WindowPlugin { primary_window: Some(Window { title: "bootleg16".into(), name: Some("bootleg16".into()), decorations: !menu::Settings::load().borderless, ..default() }), ..default() })
                 // Shrink audio space so rodio's 1/d^2 loudness never kicks in: it only pans,
                 // and `sound` applies GoldSrc's own distance falloff.
-                .set(bevy::audio::AudioPlugin { default_spatial_scale: bevy::audio::SpatialScale::new(1.0 / 4096.0), ..default() }),
+                .set(bevy::audio::AudioPlugin { default_spatial_scale: bevy::audio::SpatialScale::new(1.0 / 4096.0), ..default() })
+                // BOOTLEG16_THREADS=n: how many threads Bevy's task pools use (default: one per core).
+                .set(bevy::app::TaskPoolPlugin {
+                    task_pool_options: std::env::var("BOOTLEG16_THREADS").ok().and_then(|v| v.parse().ok()).map_or_else(Default::default, bevy::app::TaskPoolOptions::with_num_threads),
+                }),
         )
         // GoldSrc lighting is fully baked into lightmaps; no extra ambient.
         .insert_resource(GlobalAmbientLight { brightness: 0.0, ..default() })
