@@ -18,6 +18,9 @@ pub enum UiSound {
     Tick,
     /// A match found: three rising notes.
     Found,
+    /// Freeze time is over, the round is live: two quick rising notes (CS plays a radio
+    /// "Go go go" here; we have no radio).
+    Go,
     /// A status icon appearing (buy zone, kit) or going.
     On,
     Off,
@@ -32,6 +35,7 @@ impl UiSound {
             UiSound::Close(f) => (vec![f * 1.25, f * 0.84], 0.3),
             UiSound::Tick => (vec![1320.0], 0.2),
             UiSound::Found => (vec![660.0, 880.0, 1320.0], 0.5),
+            UiSound::Go => (vec![587.0, 880.0], 0.5),
             UiSound::On => (vec![880.0], 0.18),
             UiSound::Off => (vec![660.0], 0.18),
         }

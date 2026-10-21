@@ -133,6 +133,8 @@ pub fn buy_time(w: &Walker) -> Option<(String, bool)> {
 /// faster as time runs out, red for good at 0. Silent, as in CS. The last ten also swell.
 const WARN: f32 = 30.0;
 const SWELL: f32 = 10.0;
+/// The last seconds of freeze time swell like a round's last ten.
+const FREEZE_SWELL: f32 = 5.0;
 
 /// How long each colour lasts at this many seconds left (CS 1.6's steps).
 fn flip_period(left: f32) -> f32 {
@@ -159,6 +161,8 @@ fn top_bar(
     mut round: Single<&mut Text, With<RoundNo>>,
     mut edge: Single<&mut Edge, With<ClockEdge>>,
     mut last_second: Local<u32>,
+    mut last_phase: Local<Option<Phase>>,
+    mut sounds: MessageWriter<crate::ui::UiSound>,
     mut commands: Commands,
 ) {
     let r = w.client.round;
@@ -190,12 +194,19 @@ fn top_bar(
     }
     edge.alert = urgent || (r.phase == Phase::Live && planted);
     edge.rest = if edge.alert { 1.0 } else { crate::ui::EDGE_REST };
-    // each second in the last ten: the clock swells and splits (no sound, as in CS)
+    // each second in the last ten of a round, and the last five of freeze time: the clock
+    // swells and splits (no sound, as in CS)
     let second = r.left.max(0.0).ceil() as u32;
-    if urgent && r.left <= SWELL && second != *last_second && second > 0 {
+    let freeze_ending = !practice && !dm && r.phase == Phase::Freeze && r.left <= FREEZE_SWELL;
+    if ((urgent && r.left <= SWELL) || freeze_ending) && second != *last_second && second > 0 {
         commands.entity(clock_e).insert(Anim::tick());
     }
     *last_second = second;
+    // freeze time over: go
+    if *last_phase == Some(Phase::Freeze) && r.phase == Phase::Live && !practice && !dm {
+        sounds.write(crate::ui::UiSound::Go);
+    }
+    *last_phase = Some(r.phase);
     let label = match r.phase {
         _ if dm => "DEATHMATCH".into(),
         _ if practice => "PRACTICE".into(),
