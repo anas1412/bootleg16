@@ -212,7 +212,7 @@ fn team_block(col: &mut ChildSpawnerCommands, kit: &Kit, name: &str, jp: &str, c
     header(col, kit);
     if players.is_empty() {
         col.spawn((Node { height: vh(48.0), align_items: AlignItems::Center, padding: UiRect::left(vh(120.0)), border: UiRect::top(px(1)), ..default() }, BorderColor::all(LINE))).with_children(|r| {
-            r.spawn(kit_text("No one on this side yet", 16.0, TX3, &kit.text));
+            r.spawn(kit_text("No one on this side yet", 16.0, TX2, &kit.text));
         });
     }
     for s in players {
