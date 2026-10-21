@@ -32,6 +32,8 @@ impl Plugin for ImpactsPlugin {
 #[derive(Message)]
 pub enum Hit {
     Wall { at: [f32; 3], normal: [f32; 3] },
+    /// A knife struck the wall: just the mark.
+    Mark { at: [f32; 3], normal: [f32; 3] },
     /// `dir`: which way the bullet was going.
     Player { at: [f32; 3], dir: [f32; 3], head: bool },
     /// Sparks (`env_spark`, bullets on metal).
@@ -213,6 +215,10 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
                         DespawnOnExit(AppState::InGame),
                     ));
                 }
+            }
+            Hit::Mark { at, normal } => {
+                let (p, n) = (y_up(at), y_up(normal).normalize_or(Vec3::Y));
+                decal(&mut commands, p, n, &looks.shots, noise(k as u32, salt));
             }
             // CS: a scorch on the floor under an HE (`UTIL_DecalTrace` down).
             Hit::Scorch { at } => {

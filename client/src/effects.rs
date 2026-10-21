@@ -253,8 +253,10 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                 if Some(player) != me && !hit && wall.is_none() {
                     w.cues.push(sound::Cue::KnifeMiss { at: Some(at) });
                 }
-                if let Some(wall) = wall {
-                    w.cues.push(sound::Cue::KnifeWall { at: wall });
+                // and leaves a mark (`DecalGunshot` with the crowbar bullet: the decal only).
+                if let Some((at, normal)) = wall {
+                    w.cues.push(sound::Cue::KnifeWall { at });
+                    hits.write(Hit::Mark { at, normal });
                 }
             }
             GameEvent::Thrown { player, .. } => {

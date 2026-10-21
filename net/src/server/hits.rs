@@ -99,7 +99,7 @@ impl Server {
             let (f, _, _) = bullets::view_vectors(swing.angles[0], swing.angles[1]);
             let end = std::array::from_fn(|i| p.eye[i] + f[i] * range);
             let hit = bullets::trace_melee(&self.world, &self.assets.hitboxes, p.eye, end, p.shooter, &targets);
-            let wall = Some(self.world.trace_line(p.eye, end)).filter(|t| hit.is_none() && t.fraction < 1.0 && !t.hit_sky).map(|t| t.end);
+            let wall = Some(self.world.trace_line(p.eye, end)).filter(|t| hit.is_none() && t.fraction < 1.0 && !t.hit_sky).map(|t| (t.end, t.normal));
             self.events.push(GameEvent::Knife { player: p.shooter, at: p.eye, hit: hit.is_some(), wall });
             if let Some((victim, group)) = hit {
                 let mut dmg = if swing.stab { STAB_DAMAGE } else { SLASH_DAMAGE };
