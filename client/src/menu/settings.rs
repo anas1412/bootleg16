@@ -36,12 +36,13 @@ pub struct Settings {
     pub hud_curve: u8,
     /// Your character as a terrorist and as a counter-terrorist (Characters page); None until
     /// you pick (the server varies them).
-    pub looks: Option<[u8; 2]>,
+    /// The character you wear (a folder in gamedata/characters); None: one by player number.
+    pub character: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, borderless: false, resolution: crate::window::DEFAULT_RESOLUTION, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60, looks: None }
+        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, borderless: false, resolution: crate::window::DEFAULT_RESOLUTION, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60, character: None }
     }
 }
 
@@ -71,12 +72,7 @@ impl Settings {
                     Some(("crosshair_size", v)) => s.crosshair_size = v.trim().parse::<u8>().unwrap_or(1).min(2),
                     Some(("crosshair_dynamic", v)) => s.crosshair_dynamic = v.trim() == "true",
                     Some(("crosshair_dot", v)) => s.crosshair_dot = v.trim() == "true",
-                    Some(("looks", v)) => {
-                        let n: Vec<u8> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
-                        if let [t, ct] = n[..] {
-                            s.looks = Some([t.min(net::protocol::CLASSES - 1), ct.min(net::protocol::CLASSES - 1)]);
-                        }
-                    }
+                    Some(("character", v)) => s.character = Some(v.trim().to_string()).filter(|id| crate::characters::valid_id(id)),
                     Some(("hud_curve", v)) => s.hud_curve = v.trim().parse::<u8>().unwrap_or(60).min(100),
                     _ => {}
                 }
@@ -93,7 +89,7 @@ impl Settings {
             format!(
                 "name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nborderless={}\nresolution={}\nteam_ids={}\nassistant={}\nchattiness={}\nrelay={}\nassistant_in_round={}\ncrosshair_color={}\ncrosshair_size={}\ncrosshair_dynamic={}\ncrosshair_dot={}\nhud_curve={}\n{}",
                 self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.borderless, self.resolution, self.team_ids, self.assistant, self.chattiness, self.relay, self.assistant_in_round, self.crosshair_color, self.crosshair_size, self.crosshair_dynamic, self.crosshair_dot, self.hud_curve,
-                self.looks.map(|[t, ct]| format!("looks={t},{ct}\n")).unwrap_or_default()
+                self.character.as_ref().map(|c| format!("character={c}\n")).unwrap_or_default()
             ),
         );
     }

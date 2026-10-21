@@ -220,11 +220,9 @@ fn menu_actions(
                 st.page = p;
             }
             UiAction::PickMap(m) => st.map = m,
-            // Characters page: wear this one on that side (the other side keeps its pick).
-            UiAction::SetLook(side, i) => {
-                let mut looks = settings.looks.unwrap_or([0, 0]);
-                looks[side.min(1) as usize] = i.min(net::protocol::CLASSES - 1);
-                settings.looks = Some(looks);
+            // Characters page: wear this one (on both sides).
+            UiAction::SetCharacter(id) => {
+                settings.character = Some(id);
                 settings.save();
             }
             UiAction::PracticeMode(dm) => st.deathmatch = dm,

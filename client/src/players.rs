@@ -1,12 +1,13 @@
-//! Other players: their CS model for their team, animated like GoldSrc does it (legs
-//! from a gait sequence, upper body aiming up/down with the weapon's pose), shooting and
-//! flinching when hit, and a corpse playing a death animation when they die.
+//! Other players: their character (`characters`), animated like GoldSrc does it (legs from
+//! a gait sequence, upper body aiming up/down with the weapon's pose), shooting and flinching
+//! when hit, and a corpse playing a death animation when they die. The animation runs on the
+//! CS skeleton the server's hitboxes use (arctic.mdl, never drawn) and each character copies
+//! it (`characters::rig`), so every body moves exactly like its hitboxes.
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
 use crate::{map, models};
 use bevy::prelude::*;
 use bevy::mesh::skinning::SkinnedMeshInverseBindposes;
-use net::protocol::Team;
 use sim::hitbox::HitGroup;
 use sim::weapons::Id;
 use std::collections::{HashMap, HashSet};
@@ -22,7 +23,7 @@ impl Plugin for PlayersPlugin {
                 l.dying.clear();
                 l.last_hit.clear();
             })
-            .add_systems(Update, (clear_corpses, anim_events, draw_others, animate).chain().in_set(Frame::World));
+            .add_systems(Update, (clear_corpses, anim_events, draw_others, animate).chain().in_set(Frame::World).run_if(resource_exists::<OtherPlayers>));
     }
 }
 
@@ -49,32 +50,39 @@ const MAX_CORPSES: usize = 16;
 
 #[derive(Resource)]
 struct OtherPlayers {
-    /// T looks, then CT looks.
-    looks: Vec<Arc<models::Loaded>>,
-    t_count: usize,
+    /// The CS skeleton everyone is animated on (the server's hitbox model).
+    cs: Arc<models::Loaded>,
+    /// Characters, loaded the first time someone wears one (by `Characters` index).
+    looks: Vec<Option<Arc<crate::characters::look::Look>>>,
     /// Died, but the snapshot we draw from may still show them alive: don't redraw them yet.
     dying: HashSet<u8>,
     /// Where each player was last hit (picks the death animation).
     last_hit: HashMap<u8, HitGroup>,
 }
 
-fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>) {
-    // The CS 1.6 classes (characters.rs), in `Score::looks` order.
-    let mut load = |classes: &[(&str, &str)]| -> Vec<_> { classes.iter().filter_map(|(n, _)| cache.get(&format!("player/{n}/{n}.mdl"), &mut images, &mut materials)).collect() };
-    let mut looks = load(&crate::characters::T_CLASSES);
-    let t_count = looks.len();
-    looks.extend(load(&crate::characters::CT_CLASSES));
-    commands.insert_resource(OtherPlayers { looks, t_count, dying: HashSet::new(), last_hit: HashMap::new() });
+fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>, characters: Res<crate::characters::Characters>) {
+    let Some(cs) = cache.get("player/arctic/arctic.mdl", &mut images, &mut materials) else {
+        error!("the game data is missing models/player/arctic/arctic.mdl: players can't be drawn");
+        return;
+    };
+    commands.insert_resource(OtherPlayers { cs, looks: vec![None; characters.0.len()], dying: HashSet::new(), last_hit: HashMap::new() });
 }
 
 impl OtherPlayers {
-    /// Which look a player gets: the character they picked for their side (`Score::looks`).
-    fn look_for(&self, looks: [u8; 2], team: Team) -> Option<usize> {
-        let (start, n, pick) = match team {
-            Team::Ct => (self.t_count, self.looks.len() - self.t_count, looks[1]),
-            _ => (0, self.t_count, looks[0]),
-        };
-        (n > 0).then(|| start + pick as usize % n)
+    /// Character `i`, loaded on first use (None if its files don't load).
+    #[allow(clippy::too_many_arguments)]
+    fn look(&mut self, i: usize, characters: &crate::characters::Characters, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>, images: &mut Assets<Image>, materials: &mut Assets<crate::studio::StudioMaterial>) -> Option<Arc<crate::characters::look::Look>> {
+        if self.looks.get(i)?.is_none() {
+            let entry = characters.0.get(i)?;
+            match crate::characters::look::Look::load(&entry.dir, &self.cs.model, meshes, bindposes, images, materials) {
+                Ok(l) => self.looks[i] = Some(Arc::new(l)),
+                Err(e) => {
+                    error!("character {}: {e}", entry.id);
+                    return None;
+                }
+            }
+        }
+        self.looks[i].clone()
     }
 }
 
@@ -83,6 +91,7 @@ impl OtherPlayers {
 struct OtherPlayer {
     id: u8,
     look: usize,
+    character: Arc<crate::characters::look::Look>,
     weapon: Id,
     body: Vec<Entity>,
     /// The p_ model in their hand and its bones (it borrows the body's pose by bone name).
@@ -98,7 +107,7 @@ struct OtherPlayer {
 /// A dead player playing their death animation (then lying still).
 #[derive(Component)]
 struct Corpse {
-    look: usize,
+    character: Arc<crate::characters::look::Look>,
     body: Vec<Entity>,
     seq: usize,
     started: f32,
@@ -143,7 +152,7 @@ fn anim_events(
                     g.despawn(&mut commands);
                 }
                 commands.entity(p.flash).despawn();
-                let model = &look.looks[p.look].model;
+                let model = &look.cs.model;
                 let name = match look.last_hit.get(&id) {
                     _ if p.crouched => "crouch_die",
                     Some(HitGroup::Head) => "head",
@@ -153,7 +162,7 @@ fn anim_events(
                     _ => ["death1", "death2", "death3", "back", "forward"][(id as usize + now as usize) % 5],
                 };
                 let s = seq(model, name).unwrap_or(0);
-                commands.entity(e).remove::<OtherPlayer>().insert(Corpse { look: p.look, body: p.body.clone(), seq: s, started: now, done: false });
+                commands.entity(e).remove::<OtherPlayer>().insert(Corpse { character: p.character.clone(), body: p.body.clone(), seq: s, started: now, done: false });
                 // Old corpses go first.
                 let mut old: Vec<_> = corpses.iter().map(|(e, c)| (c.started, e)).collect();
                 if old.len() >= MAX_CORPSES {
@@ -184,13 +193,14 @@ fn draw_others(
     mut bindposes: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     flash_look: Res<crate::muzzle::FlashLook>,
     drawn: Query<(Entity, &OtherPlayer)>,
+    characters: Res<crate::characters::Characters>,
 ) {
     let all = w.client.others();
     // Dead in the snapshot now: they can be drawn again once they respawn.
     look.dying.retain(|id| all.iter().any(|o| o.id == *id && o.alive));
-    // Their characters from the scoreboard (until it arrives, varied by id like the server does).
-    let looks_of = |id: u8| w.client.scores.iter().find(|s| s.id == id).map(|s| s.looks).unwrap_or([id % net::protocol::CLASSES; 2]);
-    let others: Vec<_> = all.into_iter().filter(|o| o.alive && !look.dying.contains(&o.id)).filter_map(|o| Some((look.look_for(looks_of(o.id), o.team)?, o))).collect();
+    // Their character, from the scoreboard (not picked, or not installed here: one by player number).
+    let pick = |id: u8| w.client.scores.iter().find(|s| s.id == id).map(|s| s.character.as_str()).unwrap_or("");
+    let others: Vec<_> = all.into_iter().filter(|o| o.alive && !look.dying.contains(&o.id)).filter_map(|o| Some((characters.for_player(pick(o.id), o.id)?, o))).collect();
     for (e, p) in &drawn {
         if !others.iter().any(|(li, o)| o.id == p.id && *li == p.look && o.weapon == p.weapon) {
             commands.entity(e).despawn();
@@ -200,16 +210,16 @@ fn draw_others(
         if drawn.iter().any(|(_, d)| d.id == o.id && d.look == *li && d.weapon == o.weapon) {
             continue;
         }
-        let body = look.looks[*li].clone();
+        let Some(character) = look.look(*li, &characters, &mut meshes, &mut bindposes, &mut images, &mut materials) else { continue };
         let parent = commands.spawn((place(o), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
-        let joints = body.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes, &mut materials).joints;
+        let joints = character.spawn(&mut commands, parent, &mut materials);
         let gun = cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials).map(|wm| {
             let s = wm.spawn_skinned(&mut commands, parent, None, &mut meshes, &mut bindposes, &mut materials);
             (wm, s)
         });
         let flash = crate::muzzle::spawn(&mut commands, &flash_look);
         commands.entity(parent).add_child(flash);
-        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, weapon: o.weapon, body: joints, gun, anim: sim::anim::Anim::new(o.yaw), crouched: o.crouched, flash, flash_until: 0.0 });
+        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, character, weapon: o.weapon, body: joints, gun, anim: sim::anim::Anim::new(o.yaw), crouched: o.crouched, flash, flash_until: 0.0 });
     }
 }
 
@@ -237,14 +247,14 @@ fn animate(
         if let Ok(mut v) = vis.get_mut(e) {
             v.set_if_neq(if in_eye == Some(p.id) { Visibility::Hidden } else { Visibility::Inherited });
         }
-        let model = &look.looks[p.look].model;
+        let model = &look.cs.model;
         p.crouched = o.crouched;
         let d = sim::anim::Drive { origin: o.origin, yaw: o.yaw, pitch: o.pitch, crouched: o.crouched, airborne: o.airborne, reloading: o.reloading, weapon: p.weapon };
         p.anim.step(model, &d, now, dt);
         let posed = p.anim.pose(model, &d, now);
         *tf = Transform::from_translation(Vec3::from(map::to_y_up(o.origin))).with_rotation(Quat::from_rotation_y(posed.yaw.to_radians()));
         let pose = posed.bones;
-        models::set_pose(&p.body, &pose, &mut bones);
+        p.character.set_pose(&p.body, &pose, &mut bones);
         let lit = now < p.flash_until;
         if let Some((wm, g)) = &p.gun {
             let gun_pose = wm.model.borrow_pose(model, &pose);
@@ -268,10 +278,10 @@ fn animate(
         if c.done {
             continue;
         }
-        let model = &look.looks[c.look].model;
+        let model = &look.cs.model;
         let sq = &model.sequences[c.seq];
         let frame = (now - c.started) * sq.fps;
         c.done = frame >= sq.frames as f32 - 1.0;
-        models::set_pose(&c.body, &model.pose_at(c.seq, frame, 0.5), &mut bones);
+        c.character.set_pose(&c.body, &model.pose_at(c.seq, frame, 0.5), &mut bones);
     }
 }

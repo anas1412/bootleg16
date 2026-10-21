@@ -59,7 +59,8 @@ pub enum UiAction {
     /// HUD curve up or down a step.
     HudCurve(i8),
     /// Characters page: side (0 terrorists, 1 counter-terrorists), class.
-    SetLook(u8, u8),
+    /// Characters page: wear this one (its id).
+    SetCharacter(String),
     Quit,
     Resume,
     Leave,
