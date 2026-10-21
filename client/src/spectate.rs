@@ -27,11 +27,21 @@ pub struct Watch {
     pub out: bool,
     /// Where the last of your team went down this round, and which way they faced.
     pub last_down: Option<([f32; 3], f32)>,
+    /// Just died: the camera watches your own body (where, facing, until when) first.
+    pub death_cam: Option<([f32; 3], f32, f32)>,
 }
 
 /// Remember where teammates die (the camera goes there once the whole team is out).
-fn note_downs(mut news: MessageReader<crate::effects::GameNews>, w: Res<Walker>, mut watch: ResMut<Watch>, cam: Single<&crate::game::FlyCam>) {
+/// CS 1.6 (`CBasePlayer::Killed`, `PlayerDeathThink`): after you die the camera circles your
+/// own body until 3 s after the death animation, then goes to your teammates.
+const DEATH_CAM_SECS: f32 = 4.5;
+
+fn note_downs(mut news: MessageReader<crate::effects::GameNews>, w: Res<Walker>, mut watch: ResMut<Watch>, cam: Single<&crate::game::FlyCam>, time: Res<Time>) {
     let mine = w.client.team();
+    let now = time.elapsed_secs();
+    if w.client.vitals.alive() || watch.death_cam.is_some_and(|d| now > d.2) {
+        watch.death_cam = None;
+    }
     for crate::effects::GameNews(e) in news.read() {
         match e {
             net::protocol::GameEvent::RoundStart { .. } => watch.last_down = None,
@@ -44,6 +54,9 @@ fn note_downs(mut news: MessageReader<crate::effects::GameNews>, w: Res<Walker>,
                 if at.is_some() {
                     watch.last_down = at;
                 }
+                if let (Some((o, y)), true) = (at, Some(*victim) == w.client.id()) {
+                    watch.death_cam = Some((o, y, now + DEATH_CAM_SECS));
+                }
             }
             _ => {}
         }
@@ -53,7 +66,7 @@ fn note_downs(mut news: MessageReader<crate::effects::GameNews>, w: Res<Walker>,
 /// The teammate you see through the eyes of (None: not spectating, or nobody left).
 /// `BOOTLEG16_SPECTATE=front` (model checks) watches from in front instead.
 pub fn in_eye(w: &Walker, watch: &Watch) -> Option<net::client::Remote> {
-    if !spectating(w) || std::env::var("BOOTLEG16_SPECTATE").is_ok_and(|v| v == "front") {
+    if !spectating(w) || watch.death_cam.is_some() || std::env::var("BOOTLEG16_SPECTATE").is_ok_and(|v| v == "front") {
         return None;
     }
     target(w, watch)
@@ -139,7 +152,7 @@ fn spawn_plate(mut commands: Commands, kit: Res<Kit>) {
 }
 
 fn plate(w: Res<Walker>, watch: Res<Watch>, covered: Res<crate::ui::Covered>, mut root: Single<&mut Visibility, With<Plate>>, mut texts: Query<(&PlateText, &mut Text, &mut TextColor)>) {
-    let who = spectating(&w).then(|| target(&w, &watch)).flatten().and_then(|t| w.client.scores.iter().find(|s| s.id == t.id));
+    let who = (spectating(&w) && watch.death_cam.is_none()).then(|| target(&w, &watch)).flatten().and_then(|t| w.client.scores.iter().find(|s| s.id == t.id));
     root.set_if_neq(if who.is_some() && !covered.0 { Visibility::Inherited } else { Visibility::Hidden });
     let Some(s) = who else { return };
     for (which, mut t, mut c) in &mut texts {
