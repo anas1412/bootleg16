@@ -91,26 +91,28 @@ impl Sounds {
 fn fire_sound(id: Id, silenced: bool) -> &'static [&'static str] {
     use Id::*;
     match id {
-        Ak47 => &["weapons/ak47-1.wav", "weapons/ak47-2.wav"],
+        Ak47 => &["weapons/ak47-1.wav"],
         Awp => &["weapons/awp1.wav"],
-        Deagle => &["weapons/deagle-1.wav", "weapons/deagle-2.wav"],
+        Deagle => &["weapons/deagle-1.wav"],
         Famas => &["weapons/famas-1.wav", "weapons/famas-2.wav"],
         Galil => &["weapons/galil-1.wav", "weapons/galil-2.wav"],
-        Glock => &["weapons/glock18-1.wav", "weapons/glock18-2.wav"],
+        Glock => &["weapons/glock18-2.wav"],
         M4a1 if silenced => &["weapons/m4a1-1.wav"],
         M4a1 => &["weapons/m4a1_unsil-1.wav", "weapons/m4a1_unsil-2.wav"],
         Mac10 => &["weapons/mac10-1.wav"],
-        Mp5 => &["weapons/mp5-1.wav", "weapons/mp5-2.wav"], // EV_FireMP5N
+        Mp5 => &["weapons/mp5-1.wav"], // EV_FireMP5N
         P228 => &["weapons/p228-1.wav"],
         P90 => &["weapons/p90-1.wav"],
         Scout => &["weapons/scout_fire-1.wav"],
-        Tmp => &["weapons/tmp-1.wav", "weapons/tmp-2.wav"],
+        Tmp => &["weapons/tmp-1.wav"],
         Ump45 => &["weapons/ump45-1.wav"],
-        Usp if silenced => &["weapons/usp1.wav", "weapons/usp2.wav"],
+        Usp if silenced => &["weapons/usp1.wav"],
         Usp => &["weapons/usp_unsil-1.wav"],
         _ => &[],
     }
 }
+
+// (each gun's file, volume 1 and attenuation checked against its `EV_Fire*` in client.so)
 
 /// Footstep sound set (`PM_PlayStepSound`): files 1 and 3 are the right foot, 2 and 4 the left.
 fn step_set(kind: sim::pmove::StepKind, material: char) -> &'static str {
@@ -147,14 +149,16 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
     let ear = w.client.me().eye();
     for cue in cues {
         let mut plays: Vec<Play> = Vec::new();
-        // Gunshot pitch varies a little, like CS (94 + 0..15 %).
+        // Gunshot pitch varies a little, like CS (94 + 0..15 %; the plain USP 87 + 0..18 %).
         let gun_pitch = 0.94 + (sounds.rand() * 16.0).floor() / 100.0;
+        let usp_pitch = 0.87 + (sounds.rand() * 19.0).floor() / 100.0;
         match cue {
             Cue::Shot { weapon, silenced, at } => {
                 let options = fire_sound(weapon, silenced);
                 if !options.is_empty() {
                     let file = sounds.pick(options);
-                    plays.push(Play { file, at, volume: 1.0, attn: sim::weapons::data::fire_attenuation(weapon, silenced), pitch: gun_pitch });
+                    let pitch = if weapon == Id::Usp && !silenced { usp_pitch } else { gun_pitch };
+                    plays.push(Play { file, at, volume: 1.0, attn: sim::weapons::data::fire_attenuation(weapon, silenced), pitch });
                 }
             }
             Cue::Footstep { feet, who, step } => {

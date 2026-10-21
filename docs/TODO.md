@@ -196,7 +196,7 @@ land, and add new ones here instead of leaving them only in chat.
 
 ## Compared with CS 1.6 (decompiled with REA, 2026-10-21)
 - Done: footsteps (`PM_UpdateStepSound`, `PM_PlayStepSound`, `PM_CatagorizeTextureType`), smoke (`CreateSmokePop`, `CreateGasSmoke`, `CPartSmokeGrenade`), view bob and stair smoothing (`V_CalcBob`, `V_CalcNormalRefdef`: we had neither).
-- Decide: the crosshair. CS 1.6's (`CHudAmmo::DrawCrosshair`) is not the real spread: a per-weapon gap that each shot pushes out (capped at 15), shrinking by 1.3% + 0.1 per frame, doubled in the air, x1.5 when moving faster than the weapon's limit, halved crouched; its lines grow with it and it fades to 120 alpha while firing. Ours shows the real spread of the next shot. Pick one (the HUD belongs to the UI session).
+- Decided (2026-10-21): keep our crosshair (the real spread), not CS's. For reference: CS 1.6's (`CHudAmmo::DrawCrosshair`) is not the real spread: a per-weapon gap that each shot pushes out (capped at 15), shrinking by 1.3% + 0.1 per frame, doubled in the air, x1.5 when moving faster than the weapon's limit, halved crouched; its lines grow with it and it fades to 120 alpha while firing. Ours shows the real spread of the next shot. Pick one (the HUD belongs to the UI session).
 - Not seen on screen yet: the new smoke, bob and stair smoothing.
 
 ## Window and settings (2026-10-18)
