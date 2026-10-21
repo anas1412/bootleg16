@@ -215,6 +215,8 @@ fn draw_others(
 
 /// Pose every player's (and corpse's) bones for this frame; the GPU does the rest.
 fn animate(
+    mut commands: Commands,
+    flash_look: Res<crate::muzzle::FlashLook>,
     w: Res<Walker>,
     look: Res<OtherPlayers>,
     time: Res<Time>,
@@ -252,7 +254,9 @@ fn animate(
                 if let Ok(mut t) = bones.get_mut(p.flash) {
                     t.translation = Vec3::from(map::to_y_up(at));
                     t.rotation = tf.rotation.inverse() * cam_rot * Quat::from_rotation_z((now * 7919.0).fract() * std::f32::consts::TAU);
-                    t.scale = Vec3::splat(14.0);
+                    let (material, width) = flash_look.pick(p.weapon, (p.flash_until * 7.31).fract());
+                    t.scale = Vec3::splat(width);
+                    commands.entity(p.flash).insert(MeshMaterial3d(material));
                 }
             }
         }

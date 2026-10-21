@@ -326,7 +326,9 @@ fn update(
         if let Ok(mut t) = bones.get_mut(flash) {
             t.translation = vm.placement.transform_point(Vec3::from(crate::map::to_y_up(at)));
             t.rotation = Quat::from_rotation_z((now * 9973.0).fract() * std::f32::consts::TAU);
-            t.scale = Vec3::splat(9.0);
+            let (material, width) = flash_look.pick(id, (vm.flash_until * 7.31).fract());
+            t.scale = Vec3::splat(width);
+            commands.entity(flash).insert(MeshMaterial3d(material));
         }
     }
     if let Ok(mut v) = vis.get_mut(flash) {
