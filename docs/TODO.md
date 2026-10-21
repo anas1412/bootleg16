@@ -157,8 +157,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] ⚠ Timer ticks: not yet seen on screen
 - [x] AI assistant lines: 6 per trigger per assistant (601), incl. mvp, flashed, team_out, clutch_won
 - [ ] AI assistant: generated lines through OpenCode, free models first (plan in design notes)
-- [x] Character select and map pool screens on the main menu (CS 1.6 class portraits and radars for now)
-- [ ] Character select and map pool with our own models and maps (when they exist)
+- [x] Character select screen on the main menu (CS 1.6 class portraits for now); the Maps page was removed (2026-10-21, no point for it)
+- [ ] Character select with our own models (when they exist)
 
 ## Later (after milestone 1)
 

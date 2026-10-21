@@ -8,7 +8,7 @@
 //! `BOOTLEG16_SCREENSHOT=path.png` saves one frame (after `BOOTLEG16_SCREENSHOT_AT` seconds,
 //! default 2) and exits; such runs ignore mouse and keyboard (used for automated checks).
 //! `BOOTLEG16_TEAM=t|ct|spec` picks the team in such runs (default auto).
-//! `BOOTLEG16_MENU_PAGE=practice|join|settings|crosshair|assistant|voice|characters|maps` opens that menu page
+//! `BOOTLEG16_MENU_PAGE=practice|join|settings|crosshair|assistant|voice|characters` opens that menu page
 //! (crosshair and assistant: Settings sections) in such runs.
 //! `BOOTLEG16_OVERLAY=pause|teams` shows that in-game overlay; `BOOTLEG16_MENU=1` the buy menu.
 //! `BOOTLEG16_SCORES=1` holds the scoreboard open. `BOOTLEG16_FIRE=1` holds fire (bullet holes).
@@ -41,7 +41,6 @@ mod killfeed;
 mod level;
 mod loading;
 mod map;
-mod map_pool;
 mod map_pick;
 mod map_sounds;
 mod match_flow;
@@ -126,7 +125,7 @@ fn main() {
             killfeed::KillFeedPlugin,
             round_hud::RoundHudPlugin,
             // (Bevy takes at most 15 plugins per tuple.)
-            (bomb::BombPlugin, characters::CharactersPlugin, map_pool::MapPoolPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, status_screens::StatusScreensPlugin, loading::LoadingPlugin),
+            (bomb::BombPlugin, characters::CharactersPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, status_screens::StatusScreensPlugin, loading::LoadingPlugin),
             (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
         .add_plugins((tracers::TracerPlugin, window::WindowPlugin, viewbob::ViewBobPlugin, shells::ShellsPlugin))

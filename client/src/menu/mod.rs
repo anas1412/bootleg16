@@ -30,7 +30,6 @@ pub enum Page {
     Settings,
     Voice,
     Characters,
-    Maps,
 }
 
 /// Set to redraw the menu from outside (e.g. after a voice key was bound).
@@ -132,7 +131,6 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>) {
         Ok("settings" | "crosshair" | "assistant" | "keys") => Page::Settings,
         Ok("voice") => Page::Voice,
         Ok("characters") => Page::Characters,
-        Ok("maps") => Page::Maps,
         _ => Page::Main,
     };
     commands.insert_resource(MenuState {

@@ -27,7 +27,6 @@ pub fn rebuild_menu(
     faces: Res<crate::assistant::view::Faces>,
     binds: Res<crate::binds::Binds>,
     portraits: Res<crate::characters::Portraits>,
-    pool: Res<crate::map_pool::Pool>,
     frames: Query<Entity, With<MenuRoot>>,
     pages: Query<Entity, With<MenuPage>>,
 ) {
@@ -98,10 +97,9 @@ pub fn rebuild_menu(
                 item("01", "Play", "プレイ", UiAction::Page(Page::Join), false),
                 item("02", "Practice", "練習", UiAction::Page(Page::Practice), st.page == Page::Practice),
                 item("03", "Characters", "キャラ", UiAction::Page(Page::Characters), st.page == Page::Characters),
-                item("04", "Maps", "マップ", UiAction::Page(Page::Maps), st.page == Page::Maps),
-                item("05", "Settings", "設定", UiAction::Page(Page::Settings), st.page == Page::Settings),
-                item("06", "Voice", "音声", UiAction::Page(Page::Voice), st.page == Page::Voice),
-                item("07", "Quit", "終了", UiAction::Quit, false),
+                item("04", "Settings", "設定", UiAction::Page(Page::Settings), st.page == Page::Settings),
+                item("05", "Voice", "音声", UiAction::Page(Page::Voice), st.page == Page::Voice),
+                item("06", "Quit", "終了", UiAction::Quit, false),
             ], false);
         });
         // Bottom left: the wordmark. The amber 16 block spans BOOTLEG's cap height exactly
@@ -138,7 +136,6 @@ pub fn rebuild_menu(
         Page::Settings => settings_page(page, &kit, &faces, &mut memory, &settings, steam, &binds, st.settings_tab, tune_page.then_some(delay)),
         Page::Voice => crate::voice::page(page, &kit, &mut memory, &voice, tune_page.then_some(delay)),
         Page::Characters => crate::characters::page(page, &kit, &settings, &portraits),
-        Page::Maps => crate::map_pool::page(page, &kit, &pool),
     });
 }
 
