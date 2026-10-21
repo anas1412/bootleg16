@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 39;
+pub const PROTOCOL_VERSION: u32 = 40;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -102,6 +102,8 @@ pub struct Score {
     pub id: u8,
     pub name: String,
     pub kills: i32,
+    /// Deathmatch points (a kill 1, a headshot kill 2).
+    pub points: i32,
     pub deaths: u32,
     pub alive: bool,
     pub team: Team,
@@ -249,6 +251,7 @@ pub enum GameEvent {
     /// This player's team voted them out of the match.
     VotedOut { player: u8 },
     /// Deathmatch: this player reached the kill limit (everyone's score starts over).
+    /// Deathmatch: time ran out and this player had the most points (scores start over).
     KillLimit { player: u8 },
     /// A breakable broke (for its sound and debris; the state itself is `Snapshot::broken`).
     Broke { model: u16, material: sim::breakables::Material, at: [f32; 3] },

@@ -15,14 +15,15 @@ pub struct Rules {
     pub dummies: u8,
     /// Deathmatch: no rounds, timers or bomb; back straight away at a random spawn away from
     /// enemies; buy anything anywhere for free; up to 20 players dropping in any time. When
-    /// someone reaches `kill_limit`, they're announced and everyone's score starts over.
+    /// the time limit ends, the top scorer is announced and everyone's score starts over.
     pub deathmatch: bool,
-    pub kill_limit: i32,
+    /// Deathmatch: seconds a game lasts (CS2: 10 minutes); the top scorer wins, scores start over.
+    pub time_limit: f32,
 }
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { practice: false, respawn_secs: 3.0, infinite_ammo: false, dummies: 0, deathmatch: false, kill_limit: 100 }
+        Rules { practice: false, respawn_secs: 3.0, infinite_ammo: false, dummies: 0, deathmatch: false, time_limit: 600.0 }
     }
 }
 
@@ -32,7 +33,8 @@ impl Rules {
     }
 
     pub fn deathmatch() -> Rules {
-        Rules { deathmatch: true, respawn_secs: 1.0, ..Rules::default() }
+        // CS2 deathmatch: back in 2 s, 10-minute games.
+        Rules { deathmatch: true, respawn_secs: 2.0, ..Rules::default() }
     }
 
     /// No rounds: practice and deathmatch (buy anywhere, come back after dying).

@@ -1,6 +1,7 @@
 //! Deathmatch, the way players get it: ask the lobby for a seat, drop into the deathmatch
 //! server (encrypted, no booking), fight, come back at once at a random spawn, and when
-//! someone reaches the kill limit everyone's score starts over. No seat: no way in.
+//! the game's time runs out (CS2: 10 minutes) the top scorer is announced and everyone's score
+//! starts over. No seat: no way in.
 mod common;
 use common::*;
 use net::bot::{Bot, BotMap, Difficulty, Profile};
@@ -13,7 +14,7 @@ use std::time::{Duration, Instant};
 const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
 #[test]
-fn drop_in_fight_respawn_and_the_kill_limit_resets_scores() {
+fn drop_in_fight_respawn_and_the_time_limit_resets_scores() {
     let Some(bsp) = dust2() else { return };
     let map = BotMap::new(bsp, "de_dust2");
     let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
@@ -21,7 +22,7 @@ fn drop_in_fight_respawn_and_the_kill_limit_resets_scores() {
     std::thread::spawn(move || m.run());
     let mut server = Server::new(SocketAddr::from(LOCAL), "dm", &map.bsp, assets()).unwrap();
     server.set_config(net::config::MatchConfig { lobby: lobby.to_string(), official_token: "tok".into(), deathmatch: true, max_players: 20, ..Default::default() });
-    server.set_rules(Rules { kill_limit: 1, ..Rules::deathmatch() });
+    server.set_rules(Rules { time_limit: 20.0, ..Rules::deathmatch() });
     // Two players ask for deathmatch and get seats on it.
     let mut cs: Vec<LobbyClient> = (0..2).map(|i| LobbyClient::new(lobby, &format!("p{i}")).unwrap()).collect();
     let mut asked = [false; 2];
@@ -52,7 +53,7 @@ fn drop_in_fight_respawn_and_the_kill_limit_resets_scores() {
     let (mut events, mut ticks) = (Vec::new(), 0);
     while !events.iter().any(|e| matches!(e, GameEvent::KillLimit { .. })) {
         ticks += 1;
-        assert!(ticks < 128 * 240, "nobody reached the kill limit ({} events)", events.len());
+        assert!(ticks < 128 * 40, "the game never ended ({} events)", events.len());
         server.step();
         walk_in.tick(sim::pmove::Input::default());
         for b in bots.iter_mut() {
@@ -72,7 +73,9 @@ fn drop_in_fight_respawn_and_the_kill_limit_resets_scores() {
         std::thread::sleep(Duration::from_micros(150));
     }
     assert!(bots.iter().all(|b| b.client.vitals.alive()), "everyone respawned");
-    assert!(bots[0].client.scores.iter().all(|s| s.kills <= 1), "scores started over: {:?}", bots[0].client.scores);
+    assert!(bots[0].client.scores.iter().all(|s| s.kills <= 3 && s.points <= 6), "scores started over: {:?}", bots[0].client.scores);
+    // Everyone spawns with full armor and a helmet (CS2 deathmatch).
+    assert!(bots.iter().all(|b| b.client.vitals.armor > 0.0), "armor on spawn");
 }
 
 #[test]
