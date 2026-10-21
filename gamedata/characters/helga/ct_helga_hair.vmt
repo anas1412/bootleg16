@@ -1,0 +1,12 @@
+"VertexLitGeneric"
+{
+
+	"$baseTexture" "models\player\vad36CSO2\helga\ct_helga_hair"	
+	"$bumpmap" "models\player\vad36CSO2\helga\ct_helga_hair_normal"
+
+	 
+	 $nocull 1
+	 $alphatest 1
+	 
+
+}

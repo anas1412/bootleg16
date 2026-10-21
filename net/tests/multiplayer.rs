@@ -128,7 +128,7 @@ fn ak_kills_another_player_and_everyone_hears_about_it() {
     assert!(matches!(kills[0], net::protocol::GameEvent::Kill { killer, victim, weapon: Some(sim::weapons::Id::Ak47), .. } if killer == a && victim == b));
     // A's own predicted ammo matches the server's.
     let server_clip = g.server.player_state(a).unwrap().loadout.active_gun().unwrap().clip;
-    for _ in 0..64 {
+    for _ in 0..256 {
         g.tick(Input { yaw, pitch, ..Default::default() }, Input::default());
     }
     let server_clip_now = g.server.player_state(a).unwrap().loadout.active_gun().unwrap().clip;
@@ -229,7 +229,7 @@ fn weapon_menu_gives_the_weapon() {
     g.a.buy(net::protocol::BuyItem::Weapon(Id::Awp));
     g.a.buy(net::protocol::BuyItem::Weapon(Id::Flashbang));
     g.a.buy(net::protocol::BuyItem::KevlarHelmet);
-    for _ in 0..64 {
+    for _ in 0..256 {
         g.tick(Input::default(), Input::default());
     }
     let server = &g.server.player_state(g.a.id().unwrap()).unwrap().loadout;
@@ -331,9 +331,16 @@ fn characters_picked_show_on_the_scoreboard() {
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::Ct));
     let a = g.a.id().unwrap();
-    g.a.set_looks(2, 9); // 9: no such class, clamped to the last
+    let seen = |g: &Game| g.b.scores.iter().find(|s| s.id == a).map(|s| s.character.clone());
+    g.a.set_character("helga");
     for _ in 0..256 {
         g.tick(Input::default(), Input::default());
     }
-    assert_eq!(g.b.scores.iter().find(|s| s.id == a).map(|s| s.looks), Some([2, net::protocol::CLASSES - 1]));
+    assert_eq!(seen(&g).as_deref(), Some("helga"));
+    // Not an id (uppercase, a path): the server stores "not picked".
+    g.a.set_character("../Helga");
+    for _ in 0..256 {
+        g.tick(Input::default(), Input::default());
+    }
+    assert_eq!(seen(&g).as_deref(), Some(""));
 }

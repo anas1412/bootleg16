@@ -22,7 +22,7 @@ struct Studio {
     dir: vec4<f32>,
     // Light colour, brightest channel 1.
     color: vec4<f32>,
-    // x: ambient level, y: shade level (GoldSrc 0..255 units).
+    // x: ambient level, y: shade level (GoldSrc 0..255 units), z: glow toward white (0..1).
     levels: vec4<f32>,
 }
 
@@ -63,6 +63,8 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     let lv = light_gamma(illum) * studio.color.rgb;
     let lin = pow(lv, vec3<f32>(2.2));
     out.color = vec4<f32>(pbr_input.material.base_color.rgb * lin, pbr_input.material.base_color.a);
+    // levels.z: a glow toward white (a spawn-protected player)
+    out.color = vec4<f32>(mix(out.color.rgb, vec3<f32>(1.0), studio.levels.z * 0.5), out.color.a);
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 }
     return out;

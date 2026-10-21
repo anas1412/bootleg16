@@ -120,7 +120,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] One mixer for everything: game sounds, map sounds, UI tones and voice each play their own
       way now (falloff written twice). One play path, one listener
 - [ ] Volume buses with Settings sliders: master, effects, ambience, UI, assistant, voice
-- [ ] Sound channels as GoldSrc (per player: weapon, body, voice, item): a new sound cuts the old. Note (2026-10-21, HUD_StudioEvent): CS 1.6 plays the gun model's sounds (event 5004) as one-shots at a place, so a reload sound that has started keeps playing after a switch in CS too; later ones never fire because the animation changed (we do the same)
+- [ ] Sound channels as GoldSrc (per player: weapon, body, voice, item): a new sound cuts the old. Done for gunshots (weapon channel, 2026-10-21); body, voice and item still overlap. Note (2026-10-21, HUD_StudioEvent): CS 1.6 plays the gun model's sounds (event 5004) as one-shots at a place, so a reload sound that has started keeps playing after a switch in CS too; later ones never fire because the animation changed (we do the same)
       one on its channel (switching weapons mid-reload still plays the reload now)
 - [ ] Voice limit: cap how many sounds play at once, drop the quietest/oldest (a 10-player
       fight can spawn hundreds now)

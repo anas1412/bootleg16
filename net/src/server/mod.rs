@@ -63,6 +63,10 @@ const MAX_OUTBOX: usize = 64;
 
 /// Dummies stay down a little longer so you see them fall.
 const DUMMY_RESPAWN_SECS: f32 = 2.0;
+/// Deathmatch spawn protection at most (CS2: until you move or shoot).
+const DM_PROTECT_SECS: f32 = 2.0;
+/// Practice: seconds the bomb's result shows before everyone is back at their spawn.
+const PRACTICE_RESET_SECS: f32 = 3.0;
 
 /// Knife reach (slash / stab) and damage.
 const SLASH_RANGE: f32 = 48.0;
@@ -112,12 +116,16 @@ struct Remote {
     bot: bool,
     kills: i32,
     deaths: u32,
+    /// Deathmatch points: a kill 1, a headshot kill 2 (CS2's are worth more too).
+    points: i32,
+    /// Deathmatch spawn protection: no damage until this tick, or until they move or shoot.
+    protected_until: u32,
     /// Scoreboard stats (see `Score`).
     stats: Stats,
     /// What they bought this round, oldest first (`buy::undo_buys` sells it back).
     purchases: Vec<buy::Purchase>,
     /// Their character on each side (`ClientMsg::Looks`); until they say, one picked by id.
-    looks: [u8; 2],
+    character: String,
     /// How their model is animated (as clients draw it): hitboxes follow it.
     anim: sim::anim::Anim,
     money: i32,
@@ -202,6 +210,10 @@ pub struct Server {
     bomb: Bomb,
     /// Who planted this round's bomb (for the MVP).
     planter: Option<u8>,
+    /// Practice: the tick everyone goes back to their spawn after the bomb decided (0: none).
+    practice_reset: u32,
+    /// Deathmatch: the tick this game ends.
+    dm_end: u32,
     /// Practice: the tick the next bomb is handed out (after one went off or was defused).
     practice_bomb: u32,
     pieces: breakables::Pieces,
@@ -265,6 +277,8 @@ impl Server {
             rate,
             bomb: Bomb::None,
             planter: None,
+            practice_reset: 0,
+            dm_end: 0,
             practice_bomb: 0,
             last_seen: HashMap::new(),
             pieces: breakables::Pieces::from_bsp(bsp),
@@ -293,7 +307,11 @@ impl Server {
     }
 
     /// Match settings (server config file). Restarts the match.
-    pub fn set_config(&mut self, cfg: MatchConfig) {
+    pub fn set_config(&mut self, mut cfg: MatchConfig) {
+        // Deathmatch is the Strays against the Bureau, never teammates hurting each other.
+        if cfg.deathmatch {
+            cfg.friendly_fire = false;
+        }
         self.lobbies = crate::config::addresses(&cfg.lobby, false);
         self.server_key = (!cfg.official_token.is_empty()).then(|| crate::crypto::ServerKey::from_token(&cfg.official_token));
         if cfg.deathmatch {
@@ -431,10 +449,16 @@ impl Server {
             self.clients.iter().filter(|(_, c)| c.team != Team::Spectator && c.respawn_at.is_some_and(|t| t <= tick)).map(|(a, c)| (*a, c.team, c.bot)).collect();
         for (addr, team, bot) in due {
             let state = self.spawn_state(team, bot);
+            let (dm, protect) = (self.rules.deathmatch, tick + self.rate.secs(DM_PROTECT_SECS));
             let c = self.clients.get_mut(&addr).unwrap();
             c.state = state;
             c.vitals = Vitals::default();
             c.respawn_at = None;
+            // CS2 deathmatch: full armor and a helmet, and a moment of protection.
+            if dm {
+                (c.vitals.armor, c.vitals.helmet) = (combat::MAX_ARMOR, true);
+                c.protected_until = protect;
+            }
         }
         // Dummies "send" an input every tick: stand still.
         for c in self.clients.values_mut().filter(|c| c.bot) {
@@ -451,6 +475,8 @@ impl Server {
         self.bomb_step();
         self.settle_deaths();
         self.round_step();
+        self.practice_step();
+        self.deathmatch_step();
 
         // Positions as clients get them (1/8 unit, `PlayerNet`), so lag compensation rewinds to
         // exactly what they were shown.
@@ -509,6 +535,7 @@ impl Remote {
             id: self.id,
             name: self.name.clone(),
             kills: self.kills,
+            points: self.points,
             deaths: self.deaths,
             alive: self.vitals.alive(),
             team: self.team,
@@ -520,7 +547,7 @@ impl Remote {
             rounds: s.rounds,
             ping: s.ping.round() as u16,
             money: Some(self.money),
-            looks: self.looks,
+            character: self.character.clone(),
         }
     }
 
@@ -533,10 +560,12 @@ impl Remote {
             team: Team::Spectator,
             bot: false,
             kills: 0,
+            points: 0,
+            protected_until: 0,
             deaths: 0,
             stats: Stats::default(),
             anim: sim::anim::Anim::new(0.0),
-            looks: [id % CLASSES; 2],
+            character: String::new(),
             purchases: Vec::new(),
             money: 0,
             defuse_kit: false,

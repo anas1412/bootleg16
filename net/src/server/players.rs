@@ -20,6 +20,10 @@ impl Server {
                 c.used |= input.use_key && !c.use_held;
                 c.use_held = input.use_key;
                 c.view = (input.yaw, input.pitch);
+                // Deathmatch spawn protection ends the moment they move or shoot (CS2).
+                if input.attack || input.attack2 || input.jump || input.forward != 0.0 || input.side != 0.0 {
+                    c.protected_until = 0;
+                }
                 c.aim.look(input.yaw, input.pitch);
                 c.last_run = seq;
                 if !c.vitals.alive() {

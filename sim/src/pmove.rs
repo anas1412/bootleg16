@@ -149,6 +149,8 @@ pub struct Events {
     pub landed: bool,
     /// Health to subtract (0 when the fall was safe).
     pub fall_damage: f32,
+    /// A landing loud enough to be heard rolls the view this many degrees (`PM_CheckFalling`).
+    pub land_roll: f32,
     /// A footstep sound plays now (other players hear it).
     pub footstep: Option<Step>,
 }
@@ -330,6 +332,7 @@ pub fn step(p: &mut Player, input: &Input, dt: f32, world: &World, vars: &MoveVa
         if volume > 0.0 {
             ev.footstep = Some(Step { kind: StepKind::Surface, volume: Some(volume), crouched: false });
             p.step_timer = FOOTSTEP_MS;
+            ev.land_roll = p.fall_velocity * 0.013;
         }
         if p.water_level == 0 && p.fall_velocity > SAFE_FALL_SPEED {
             ev.fall_damage = (p.fall_velocity - SAFE_FALL_SPEED) * FALL_DAMAGE_PER_SPEED;
@@ -807,6 +810,18 @@ mod tests {
         assert_eq!(events[0], 0.0);
         assert!((events[1] - 40.0).abs() < 3.0, "{events:?}");
         assert!(events[2] > 100.0, "{events:?}");
+    }
+
+    #[test]
+    fn a_heard_landing_rolls_the_view() {
+        let w = World::flat_floor(0.0);
+        let roll = |height: f32| {
+            let mut p = Player::new([0.0, 0.0, 36.0 + height]);
+            (0..1024).map(|_| step(&mut p, &Input::default(), DT, &w, &MoveVars::default()).land_roll).fold(0.0, f32::max)
+        };
+        // 20 units: too soft to hear, no roll. 300 units: ~693 u/s, 0.013 a unit/s.
+        assert_eq!(roll(20.0), 0.0);
+        assert!((roll(300.0) - 9.0).abs() < 0.5, "{}", roll(300.0));
     }
 
     #[test]

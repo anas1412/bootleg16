@@ -57,7 +57,8 @@ impl Server {
             return;
         }
         match self.bomb {
-            Bomb::Gone if self.practice_bomb == 0 => self.practice_bomb = self.tick + self.rate.secs(3.0),
+            // (just after everyone is back at their spawn: the respawn would take it away)
+            Bomb::Gone if self.practice_bomb == 0 => self.practice_bomb = self.tick + self.rate.secs(super::PRACTICE_RESET_SECS + 0.25),
             Bomb::None | Bomb::Gone if self.tick >= self.practice_bomb => {
                 let Some(c) = self.clients.values_mut().filter(|c| !c.bot && c.vitals.alive() && c.team == Team::T).min_by_key(|c| c.id) else { return };
                 c.state.loadout.give(Id::C4, 0.0);
@@ -199,7 +200,9 @@ impl Server {
         if self.round.phase == Phase::Live {
             self.end_round(winner, reason);
         } else if self.rules.practice {
+            // A mini-round: the result shows, then everyone is back at their spawn.
             self.events.push(GameEvent::RoundEnd { winner, reason });
+            self.practice_reset = self.tick + self.rate.secs(super::PRACTICE_RESET_SECS);
         }
     }
 

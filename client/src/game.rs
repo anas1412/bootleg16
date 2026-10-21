@@ -53,6 +53,8 @@ pub struct Walker {
     pub client: net::Client,
     /// Eye position at the previous tick, for smoothing between ticks.
     prev_eye: [f32; 3],
+    /// The recoil punch before the last tick, so the view kick is drawn smoothly between ticks.
+    prev_punch: [f32; 3],
     /// V detaches the camera for free flight (the player stays put).
     pub noclip: bool,
     /// Weapon slot key held (to send each press once).
@@ -81,15 +83,12 @@ pub struct FlyCam {
 
 /// Take over the connection, swap in the real map collision, add the camera.
 /// (The loading screen already loaded the map and put its collision in the client.)
-fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, settings: Res<crate::menu::Settings>) {
+fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>) {
     let Some(mut client) = pending.0.take() else { return };
-    // Your characters (Characters page), sent until the server has them.
-    if let Some([t, ct]) = settings.looks {
-        client.set_looks(t, ct);
-    }
     commands.insert_resource(Walker {
         client,
         prev_eye: [0.0; 3],
+        prev_punch: [0.0; 3],
         noclip: false,
         slot_held: 0,
         drop_held: false,
@@ -180,6 +179,7 @@ fn mouse_look(
     cursor: Single<&CursorOptions>,
     w: Res<Walker>,
     settings: Res<Settings>,
+    fixed: Res<Time<Fixed>>,
     mut cam: Single<(&mut Transform, &mut FlyCam, &mut Projection)>,
 ) {
     let (ref mut tf, ref mut fc, ref mut proj) = *cam;
@@ -199,7 +199,8 @@ fn mouse_look(
         fc.pitch = (fc.pitch - motion.delta.y * sens).clamp(-1.55, 1.55);
     }
     // Recoil punch moves the view (GoldSrc pitch is positive downwards).
-    let punch = w.client.state.loadout.punch;
+    let (a, now) = (fixed.overstep_fraction(), w.client.state.loadout.punch);
+    let punch: [f32; 3] = std::array::from_fn(|i| w.prev_punch[i] + (now[i] - w.prev_punch[i]) * a);
     tf.rotation = Quat::from_euler(EulerRot::YXZ, fc.yaw + punch[1].to_radians(), fc.pitch - punch[0].to_radians(), punch[2].to_radians());
     // Horizontal FOV (90 = normal) at 4:3, as a vertical FOV.
     if let Projection::Perspective(p) = &mut **proj {
@@ -288,12 +289,13 @@ fn walk(
     // Free flight: keep the connection alive but stand still.
     let input = if w.noclip { sim::pmove::Input { yaw: input.yaw, pitch: input.pitch, ..default() } } else { input };
     w.prev_eye = w.client.me().eye();
+    w.prev_punch = w.client.state.loadout.punch;
     let (events, fired) = w.client.tick(input);
     vm.cues.add(&fired);
     // Our own sounds, predicted: no waiting for the server.
     let pistol = w.client.state.loadout.active == sim::weapons::Slot::Secondary;
     for shot in &fired.shots {
-        w.cues.push(sound::Cue::Shot { weapon: shot.weapon, silenced: shot.silenced, at: None });
+        w.cues.push(sound::Cue::Shot { weapon: shot.weapon, silenced: shot.silenced, at: None, who: None });
     }
     if fired.dry_fire {
         w.cues.push(sound::Cue::DryFire { pistol });
@@ -377,6 +379,7 @@ pub(crate) fn move_camera(
     // with the whole team out, from behind where the last of you went down (spectate.rs).
     if crate::spectate::spectating(&w) && !w.noclip {
         if let Some(o) = crate::spectate::in_eye(&w, &watch) {
+            let o = w.client.others_at(fixed.overstep_fraction()).into_iter().find(|r| r.id == o.id).unwrap_or(o);
             let h = if o.crouched { sim::pmove::VIEW_HEIGHT_CROUCHED } else { sim::pmove::VIEW_HEIGHT_STANDING };
             tf.translation = Vec3::from(map::to_y_up([o.origin[0], o.origin[1], o.origin[2] + h]));
             tf.rotation = Quat::from_euler(EulerRot::YXZ, (o.yaw - 90.0).to_radians(), -o.pitch.to_radians(), 0.0);

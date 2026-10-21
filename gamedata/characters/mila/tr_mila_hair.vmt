@@ -1,0 +1,12 @@
+"VertexLitGeneric"
+{
+	"$baseTexture" "models\player\vad36CSO2\mila\tr_mila_hair"	
+	"$bumpmap" "models\player\vad36CSO2\mila\tr_mila_hair_normal"
+
+    
+	 
+	 $nocull 1
+	 $alphatest 1
+	
+
+}

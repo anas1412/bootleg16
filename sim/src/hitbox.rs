@@ -102,8 +102,8 @@ impl Hitboxes {
     /// player at `origin` facing `yaw` and aiming at `pitch` (GoldSrc degrees), holding `weapon`.
     #[allow(clippy::too_many_arguments)]
     pub fn trace(&self, origin: Vec3, yaw: f32, pitch: f32, crouched: bool, weapon: crate::weapons::Id, start: Vec3, dir: Vec3, max: f32) -> Option<Hit> {
-        // Blend 0.5 + pitch/180 (GoldSrc pitch is down-positive): checked against the drawn model.
-        let step = (((pitch + 90.0) / 180.0) * (PITCH_STEPS - 1) as f32).round().clamp(0.0, (PITCH_STEPS - 1) as f32) as usize;
+        // The aim pitch blend the model is drawn with (`anim::pitch_blend`).
+        let step = (crate::anim::pitch_blend(pitch) * (PITCH_STEPS - 1) as f32).round() as usize;
         let set = self.poses.get(crate::weapons::data::anim_ext(weapon)).unwrap_or(&self.poses[self.fallback]);
         let boxes = &set[crouched as usize][step];
         // Into model space: undo the player's position and yaw.

@@ -27,7 +27,7 @@ impl Server {
                     let wet = self.world.point_contents(blast) == sim::collision::Contents::Water;
                     let mut dealt = Vec::new();
                     for c in self.clients.values_mut().filter(|c| c.vitals.alive() && (ff || c.id == g.owner || Some(c.team) != owner_team)) {
-                        if !grenades::blast_reaches(wet, c.state.movement.water_level) {
+                        if c.protected_until > tick || !grenades::blast_reaches(wet, c.state.movement.water_level) {
                             continue;
                         }
                         let dmg = grenades::he_damage(blast, c.state.movement.origin);
@@ -124,7 +124,7 @@ impl Server {
         let mut dealt = Vec::new();
         for (victim, damage, group, weapon, at) in hits {
             let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { continue };
-            if !c.vitals.alive() || (!ff && Some(c.team) == shooter_team) {
+            if !c.vitals.alive() || (!ff && Some(c.team) == shooter_team) || c.protected_until > tick {
                 continue;
             }
             if weapon != Id::Knife && Some(c.team) != shooter_team {
@@ -222,23 +222,19 @@ impl Server {
             if let Some(k) = self.clients.values_mut().find(|c| c.id == killer) {
                 k.kills += if killer == victim { -1 } else { 1 };
             }
-            self.kill_limit(killer);
+            self.kill_limit(killer, victim, headshot);
             self.drop_on_death(victim);
             self.kills_settled += 1;
         }
     }
 
-    /// Deathmatch: the first to the kill limit is announced, and everyone starts over.
-    fn kill_limit(&mut self, killer: u8) {
-        let limit = self.rules.kill_limit;
-        if !self.rules.deathmatch || !self.clients.values().any(|c| c.id == killer && c.kills >= limit) {
+    /// Deathmatch scoring (CS2: a headshot kill is worth more): a kill 1 point, a headshot 2.
+    fn kill_limit(&mut self, killer: u8, victim: u8, headshot: bool) {
+        if !self.rules.deathmatch || killer == victim {
             return;
         }
-        self.events.push(GameEvent::KillLimit { player: killer });
-        for c in self.clients.values_mut() {
-            c.kills = 0;
-            c.deaths = 0;
-            c.stats = Stats { ping: c.stats.ping, ..Stats::default() };
+        if let Some(k) = self.clients.values_mut().find(|c| c.id == killer) {
+            k.points += if headshot { 2 } else { 1 };
         }
     }
 }

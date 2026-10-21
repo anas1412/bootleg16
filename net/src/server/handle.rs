@@ -129,9 +129,9 @@ impl Server {
                     self.socket.send(from, encode(&info));
                 }
             }
-            ClientMsg::Looks { t, ct } => {
+            ClientMsg::Character { id } => {
                 if let Some(c) = self.clients.get_mut(&from) {
-                    c.looks = [t.min(CLASSES - 1), ct.min(CLASSES - 1)];
+                    c.character = character_id(id);
                 }
             }
             ClientMsg::Bye => {
@@ -141,4 +141,10 @@ impl Server {
             }
         }
     }
+}
+
+/// A character id as the client sent it, or empty if it isn't one: lowercase [a-z0-9_-], at most 32 chars.
+fn character_id(id: String) -> String {
+    let ok = !id.is_empty() && id.len() <= 32 && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-');
+    if ok { id } else { String::new() }
 }

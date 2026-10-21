@@ -127,7 +127,7 @@ fn buy_menu(
     // Number keys (top row or numpad) become the same actions as clicks.
     // Enter buys the selected card.
     if keys.just_pressed(KeyCode::Enter) {
-        if let Some(Some(cat)) = state {
+        if let Some(cat) = state.map(|c| c.unwrap_or(0)) {
             if let Some(Entry(_, items)) = layout.get(cat) {
                 if let Some((_, item)) = items.get(menu.1) {
                     actions.0.push(UiAction::Buy(*item));
@@ -186,7 +186,7 @@ fn buy_menu(
     });
     // Buy time over, left the buy zone, died: the menu goes away.
     if buy_now {
-        if let Some(Some(cat)) = state {
+        if let Some(cat) = state.map(|c| c.unwrap_or(0)) {
             if let Some((_, item)) = layout.get(cat).and_then(|Entry(_, items)| items.get(menu.1)) {
                 w.client.buy(*item);
                 bought.1 = true;

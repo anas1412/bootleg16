@@ -54,6 +54,8 @@ pub struct Remote {
     pub airborne: bool,
     /// Reloading their gun.
     pub reloading: bool,
+    /// Spawn-protected (deathmatch): takes no damage until they move or shoot.
+    pub protected: bool,
     /// Health and kit: teammates only (None for enemies).
     pub mate: Option<crate::protocol::Mate>,
 }
@@ -111,7 +113,7 @@ pub struct Client {
     /// A side we asked for, until the server confirms it.
     wanted_team: Option<Option<Team>>,
     /// Characters we asked for, until the server has them.
-    wanted_looks: Option<[u8; 2]>,
+    wanted_character: Option<String>,
     /// The server's join cookie (0 until it challenges us).
     cookie: u64,
     /// Our seat in a reserved match (0 = none), from the matchmaker.
@@ -176,10 +178,10 @@ impl Client {
             key: None,
             match_ended: false,
             wanted_team: None,
-            wanted_looks: None,
+            wanted_character: None,
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0, stage: Stage::Match, abandoned: [false; 2], vote: None, paused: false },
             bomb: BombNet::None,
-            me_info: Me { money: 0, limits: Default::default(), can_buy: false, buy_left: None, defuse_kit: false },
+            me_info: Me { money: 0, limits: Default::default(), can_buy: false, buy_left: None, defuse_kit: false, protected: false },
         })
     }
 
@@ -256,7 +258,7 @@ impl Client {
         };
 
         self.resend_join();
-        self.resend_looks();
+        self.resend_character();
         // Predict: run the input now, keep it until the server confirms it.
         self.seq += 1;
         self.history.push_back((self.seq, TimedInput { input, view_tick: self.render_tick }));
@@ -413,8 +415,15 @@ impl Client {
     }
 
     pub fn others(&self) -> Vec<Remote> {
+        self.others_at(1.0)
+    }
+
+    /// Everyone else as drawn `frac` (0..1) of the way through the current tick: a tick
+    /// behind and gliding up to `render_tick`, the way your own view glides between ticks
+    /// (so frames between ticks show them moving, and the last one is what a shot is checked at).
+    pub fn others_at(&self, frac: f32) -> Vec<Remote> {
         let me = self.id();
-        let rt = self.render_tick;
+        let rt = self.render_tick - 1.0 + frac.clamp(0.0, 1.0);
         let (Some(newest), Some(_)) = (self.snaps.back(), self.snaps.front()) else { return Vec::new() };
         // Snapshot pair bracketing the render time (or the newest one if we're ahead).
         let pair = self.snaps.iter().zip(self.snaps.iter().skip(1)).find(|(a, b)| a.tick as f32 <= rt && rt <= b.tick as f32);
@@ -435,12 +444,12 @@ impl Client {
                         Some(pa) => pa.yaw() + ((pb.yaw() - pa.yaw() + 540.0).rem_euclid(360.0) - 180.0) * t,
                         None => pb.yaw(),
                     };
-                    out.push(Remote { id: pb.id, origin, crouched: pb.crouched(), alive: pb.alive(), yaw, pitch: pb.pitch(), weapon: pb.weapon, team: pb.team, airborne: pb.airborne(), reloading: pb.reloading(), mate: pb.mate });
+                    out.push(Remote { id: pb.id, origin, crouched: pb.crouched(), alive: pb.alive(), yaw, pitch: pb.pitch(), weapon: pb.weapon, team: pb.team, airborne: pb.airborne(), reloading: pb.reloading(), protected: pb.is_protected(), mate: pb.mate });
                 }
             }
             None => {
                 for p in newest.players.iter().filter(|p| Some(p.id) != me) {
-                    out.push(Remote { id: p.id, origin: p.origin(), crouched: p.crouched(), alive: p.alive(), yaw: p.yaw(), pitch: p.pitch(), weapon: p.weapon, team: p.team, airborne: p.airborne(), reloading: p.reloading(), mate: p.mate });
+                    out.push(Remote { id: p.id, origin: p.origin(), crouched: p.crouched(), alive: p.alive(), yaw: p.yaw(), pitch: p.pitch(), weapon: p.weapon, team: p.team, airborne: p.airborne(), reloading: p.reloading(), protected: p.is_protected(), mate: p.mate });
                 }
             }
         }
@@ -460,17 +469,17 @@ impl Client {
         self.socket.send(self.server, encode(&ClientMsg::UndoBuys));
     }
 
-    /// Wear these characters (terrorist, counter-terrorist); sent until the scoreboard shows it.
-    pub fn set_looks(&mut self, t: u8, ct: u8) {
-        self.wanted_looks = Some([t.min(crate::protocol::CLASSES - 1), ct.min(crate::protocol::CLASSES - 1)]);
+    /// Wear this character (its folder name); sent until the scoreboard shows it.
+    pub fn set_character(&mut self, id: &str) {
+        self.wanted_character = Some(id.to_string());
     }
 
-    fn resend_looks(&mut self) {
-        let Some(want) = self.wanted_looks else { return };
-        if self.scores.iter().any(|s| Some(s.id) == self.id() && s.looks == want) {
-            self.wanted_looks = None;
+    fn resend_character(&mut self) {
+        let Some(want) = &self.wanted_character else { return };
+        if self.scores.iter().any(|s| Some(s.id) == self.id() && &s.character == want) {
+            self.wanted_character = None;
         } else if self.ticks % (self.rate.hz() / 2) == 0 {
-            self.socket.send(self.server, encode(&ClientMsg::Looks { t: want[0], ct: want[1] }));
+            self.socket.send(self.server, encode(&ClientMsg::Character { id: want.clone() }));
         }
     }
 

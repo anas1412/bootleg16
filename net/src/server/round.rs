@@ -207,9 +207,46 @@ impl Server {
         }
     }
 
+    /// Practice: after the bomb decided, everyone goes back to their spawn (a mini-round).
+    pub(super) fn practice_step(&mut self) {
+        if self.practice_reset == 0 || self.tick < self.practice_reset {
+            return;
+        }
+        self.practice_reset = 0;
+        let tick = self.tick;
+        for c in self.clients.values_mut().filter(|c| !c.bot && c.team != Team::Spectator) {
+            c.respawn_at = Some(tick);
+        }
+    }
+
+    /// Deathmatch (CS2): 10-minute games; when one ends the top scorer is announced and
+    /// everyone's score starts over.
+    pub(super) fn deathmatch_step(&mut self) {
+        if !self.rules.deathmatch {
+            return;
+        }
+        if self.dm_end == 0 {
+            self.dm_end = self.tick + self.rate.secs(self.rules.time_limit);
+        }
+        if self.tick < self.dm_end {
+            return;
+        }
+        let best = self.clients.values().filter(|c| c.team != Team::Spectator).max_by_key(|c| (c.points, std::cmp::Reverse(c.id))).map(|c| c.id);
+        if let Some(player) = best {
+            self.events.push(GameEvent::KillLimit { player });
+        }
+        for c in self.clients.values_mut() {
+            (c.kills, c.deaths, c.points) = (0, 0, 0);
+            c.stats = Stats { ping: c.stats.ping, ..Stats::default() };
+        }
+        self.dm_end = self.tick + self.rate.secs(self.rules.time_limit);
+    }
+
     /// The round state for the HUD.
     pub(super) fn round_net(&self) -> RoundNet {
         let left = match self.round.phase {
+            // deathmatch: what's left of this game
+            _ if self.rules.deathmatch => self.dm_end.saturating_sub(self.tick) as f32 * self.rate.tick(),
             Phase::Warmup => 0.0,
             _ => self.round.phase_end.saturating_sub(self.tick) as f32 * self.rate.tick(),
         };

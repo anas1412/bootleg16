@@ -85,11 +85,15 @@ fn spawn(mut commands: Commands, kit: Res<Kit>) {
                 });
                 score(row, T_COLOR, false);
             });
-            col.spawn(Node { width: vh(332.0), justify_content: JustifyContent::SpaceBetween, ..default() }).with_children(|row| {
-                for team in [Team::Ct, Team::T] {
-                    row.spawn(Node { column_gap: vh(4.0), ..default() }).with_children(|t| {
+            // each team's ticks centred under its own score (same widths as the boxes above)
+            col.spawn(Node { column_gap: vh(4.0), ..default() }).with_children(|row| {
+                for (k, team) in [Team::Ct, Team::T].into_iter().enumerate() {
+                    if k == 1 {
+                        row.spawn(Node { width: vh(148.0), ..default() });
+                    }
+                    row.spawn(Node { width: vh(88.0), justify_content: JustifyContent::Center, column_gap: vh(4.0), ..default() }).with_children(|t| {
                         for i in 0..5 {
-                            t.spawn((Tick(team, i), Node { width: vh(28.0), height: vh(4.0), border_radius: BorderRadius::all(px(2)), ..default() }, BackgroundColor(Color::NONE)));
+                            t.spawn((Tick(team, i), Node { width: vh(14.0), height: vh(4.0), border_radius: BorderRadius::all(px(2)), display: Display::None, ..default() }, BackgroundColor(Color::NONE)));
                         }
                     });
                 }
@@ -107,6 +111,12 @@ fn set(t: &mut Mut<Text>, s: String) {
 fn mmss(secs: f32) -> String {
     let s = secs.max(0.0).ceil() as u32;
     format!("{}:{:02}", s / 60, s % 60)
+}
+
+/// A deathmatch game: the server counts its 10 minutes down in the warmup phase (a real
+/// warmup has no time).
+pub fn deathmatch(w: &Walker) -> bool {
+    w.client.round.phase == Phase::Warmup && w.client.round.left > 0.0
 }
 
 /// Buy time left under this many seconds shows amber.
@@ -158,8 +168,15 @@ fn top_bar(
     set(&mut sc, if practice { "-".into() } else { r.score[1].to_string() });
     let planted = matches!(w.client.bomb, BombNet::Planted { .. });
     let urgent = !practice && r.phase == Phase::Live && !planted && r.left <= WARN;
+    let dm = deathmatch(&w);
     let (t, color) = match r.phase {
-        _ if practice => ("--:--".to_string(), TX2),
+        // deathmatch runs on practice rules, so it's asked first: its game clock
+        _ if dm => (mmss(r.left), TX1),
+        // practice: the bomb's own countdown once it's planted
+        _ if practice => match w.client.bomb {
+            BombNet::Planted { left, .. } => (mmss(left), BAD),
+            _ => ("--:--".to_string(), TX2),
+        },
         Phase::Warmup => ("--:--".to_string(), TX2),
         Phase::Live if planted => ("BOMB".to_string(), BAD),
         Phase::Live if urgent => (mmss(r.left), if warn_red(r.left) { BAD } else { TX1 }),
@@ -180,6 +197,7 @@ fn top_bar(
     }
     *last_second = second;
     let label = match r.phase {
+        _ if dm => "DEATHMATCH".into(),
         _ if practice => "PRACTICE".into(),
         Phase::Warmup => "WARMUP".into(),
         // while buying is open (freeze time and the start of the round): how long is left
@@ -194,14 +212,15 @@ fn top_bar(
 }
 
 /// One tick per player under each score, lit while they're alive.
-fn ticks(w: Res<Walker>, mut ticks: Query<(&Tick, &mut BackgroundColor)>) {
-    for (Tick(team, i), mut bg) in &mut ticks {
-        let c = match w.client.scores.iter().filter(|s| s.team == *team).nth(*i) {
-            Some(p) if p.alive => side_color(*team),
-            Some(_) => LINE_2,
-            None => Color::NONE,
-        };
-        bg.set_if_neq(BackgroundColor(c));
+fn ticks(w: Res<Walker>, mut ticks: Query<(&Tick, &mut BackgroundColor, &mut Node)>) {
+    for (Tick(team, i), mut bg, mut node) in &mut ticks {
+        let player = w.client.scores.iter().filter(|s| s.team == *team).nth(*i);
+        // no player: no tick, so the ones there stay centred
+        let display = if player.is_some() { Display::Flex } else { Display::None };
+        if node.display != display {
+            node.display = display;
+        }
+        bg.set_if_neq(BackgroundColor(if player.is_some_and(|p| p.alive) { side_color(*team) } else { LINE_2 }));
     }
 }
 

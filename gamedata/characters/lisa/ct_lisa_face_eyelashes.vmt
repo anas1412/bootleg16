@@ -1,0 +1,14 @@
+"VertexLitGeneric"
+{
+	"$basetexture"		"models/player/vad36CSO2/ct_lisa/ct_lisa_face_eyelashes"
+
+	 //$translucent  1
+	 $nocull 1
+	 $alphatest 1
+	 $ALPHATESTREFERENCE	0.1
+
+}
+
+
+
+

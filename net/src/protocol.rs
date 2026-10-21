@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 39;
+pub const PROTOCOL_VERSION: u32 = 42;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -50,12 +50,9 @@ pub enum ClientMsg {
     /// One 20 ms Opus voice frame while a push-to-talk key is held.
     Voice { channel: VoiceChannel, data: Vec<u8> },
     Bye,
-    /// Which character to wear on each side (terrorists, counter-terrorists; 0..`CLASSES`).
-    Looks { t: u8, ct: u8 },
+    /// The character to wear on both sides: its folder name in gamedata/characters.
+    Character { id: String },
 }
-
-/// Characters per side (CS 1.6's four classes each).
-pub const CLASSES: u8 = 4;
 
 /// Why a player was reported.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,6 +99,8 @@ pub struct Score {
     pub id: u8,
     pub name: String,
     pub kills: i32,
+    /// Deathmatch points (a kill 1, a headshot kill 2).
+    pub points: i32,
     pub deaths: u32,
     pub alive: bool,
     pub team: Team,
@@ -111,8 +110,8 @@ pub struct Score {
     pub assists: u32,
     /// Round MVPs (the defuser, the planter whose bomb went off, else the winner with most kills).
     pub mvps: u32,
-    /// The character they wear as a terrorist and as a counter-terrorist.
-    pub looks: [u8; 2],
+    /// The character they wear (its folder name); empty: not picked.
+    pub character: String,
     /// Kills that were headshots.
     pub headshots: u32,
     /// Health taken off enemies, and rounds played: ADR is `damage / rounds`.
@@ -143,7 +142,8 @@ pub struct PlayerNet {
     /// View angles in 1/65536 of a turn (yaw) and of half a turn (pitch).
     yaw: u16,
     pitch: i16,
-    /// Bit 0 crouched, bit 1 alive, bit 2 in the air (jumping, falling), bit 3 reloading.
+    /// Bit 0 crouched, bit 1 alive, bit 2 in the air (jumping, falling), bit 3 reloading,
+    /// bit 4 spawn-protected (deathmatch).
     flags: u8,
     /// Weapon in hand.
     pub weapon: Id,
@@ -177,6 +177,14 @@ impl PlayerNet {
             team,
             mate,
         }
+    }
+    /// Marked spawn-protected (deathmatch: takes no damage until they move or shoot).
+    pub fn protected(mut self, on: bool) -> PlayerNet {
+        self.flags |= (on as u8) << 4;
+        self
+    }
+    pub fn is_protected(&self) -> bool {
+        self.flags & 16 != 0
     }
     pub fn airborne(&self) -> bool {
         self.flags & 4 != 0
@@ -249,6 +257,7 @@ pub enum GameEvent {
     /// This player's team voted them out of the match.
     VotedOut { player: u8 },
     /// Deathmatch: this player reached the kill limit (everyone's score starts over).
+    /// Deathmatch: time ran out and this player had the most points (scores start over).
     KillLimit { player: u8 },
     /// A breakable broke (for its sound and debris; the state itself is `Snapshot::broken`).
     Broke { model: u16, material: sim::breakables::Material, at: [f32; 3] },
@@ -343,6 +352,8 @@ pub struct Me {
     /// Seconds of buy time left (None: no limit: practice, deathmatch, the warmup).
     pub buy_left: Option<f32>,
     pub defuse_kit: bool,
+    /// Deathmatch spawn protection: no damage until you move or shoot (2 s at most).
+    pub protected: bool,
 }
 
 /// What an item sounds like when you get it (CS 1.6: `CBasePlayerItem::DefaultTouch`,

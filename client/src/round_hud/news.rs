@@ -65,7 +65,8 @@ fn words(e: &GameEvent, w: &Walker) -> Option<(String, String, Color)> {
         }
         GameEvent::KillLimit { player } => {
             let (who, team) = name(*player)?;
-            (format!("{who} reached 100 kills"), "Scores start over".into(), side_color(team))
+            // deathmatch ends (time or kill limit): the top scorer wins, then a new game
+            (format!("{who} wins the deathmatch"), "Most points · scores start over".into(), side_color(team))
         }
         GameEvent::VotedOut { player } => {
             let (who, team) = name(*player)?;

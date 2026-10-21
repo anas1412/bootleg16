@@ -59,7 +59,10 @@ pub enum UiAction {
     /// HUD curve up or down a step.
     HudCurve(i8),
     /// Characters page: side (0 terrorists, 1 counter-terrorists), class.
-    SetLook(u8, u8),
+    /// Characters page: show this side's characters.
+    CharacterSide(net::protocol::Team),
+    /// Characters page: the next (1) or previous (-1) character for the side shown.
+    CycleCharacter(i32),
     Quit,
     Resume,
     Leave,
