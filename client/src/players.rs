@@ -199,7 +199,9 @@ fn draw_others(
     // Dead in the snapshot now: they can be drawn again once they respawn.
     look.dying.retain(|id| all.iter().any(|o| o.id == *id && o.alive));
     // Their character, from the scoreboard (not picked, or not installed here: one by player number).
-    let pick = |id: u8| w.client.scores.iter().find(|s| s.id == id).map(|s| s.character.as_str()).unwrap_or("");
+    // screenshot runs: BOOTLEG16_CHARACTER=<id> dresses everyone else as that character
+    let forced = std::env::var("BOOTLEG16_CHARACTER").ok();
+    let pick = |id: u8| forced.as_deref().unwrap_or_else(|| w.client.scores.iter().find(|s| s.id == id).map(|s| s.character.as_str()).unwrap_or(""));
     let others: Vec<_> = all.into_iter().filter(|o| o.alive && !look.dying.contains(&o.id)).filter_map(|o| Some((characters.for_player(pick(o.id), o.id)?, o))).collect();
     for (e, p) in &drawn {
         if !others.iter().any(|(li, o)| o.id == p.id && *li == p.look && o.weapon == p.weapon) {

@@ -1,7 +1,7 @@
 //! Characters: every folder in `gamedata/characters/` is one, so adding a character is
-//! adding a folder (a Source player model on the ValveBiped skeleton, its materials, and a
-//! `character.cfg` with its name). You pick one in the menu and wear it on both sides; everyone
-//! in the match sees it. All characters play the CS animations (`rig`) and share one hitbox.
+//! adding a folder (a Source player model on the ValveBiped skeleton, its materials, a
+//! `character.cfg` with its name, and optionally a `portrait.png` for its card). You pick one
+//! in the menu and wear it on both sides; everyone in the match sees it. All characters play the CS animations (`rig`) and share one hitbox.
 //! - `rig`: posing a character from the CS skeleton.
 //! - `look`: a character's meshes and materials, ready to draw.
 pub mod look;
@@ -20,6 +20,8 @@ pub struct Entry {
     /// Shown in the menu (`name = "..."` in `character.cfg`; the id when missing).
     pub name: String,
     pub dir: PathBuf,
+    /// `portrait.png` in the folder, shown on the menu card (portrait shaped, about 4:5).
+    pub portrait: Option<Handle<Image>>,
 }
 
 /// Every character found, sorted by id (the same list on every machine with the same data).
@@ -51,7 +53,7 @@ pub fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 32 && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
 }
 
-fn scan() -> Characters {
+fn scan(images: &mut Assets<Image>) -> Characters {
     let mut list: Vec<Entry> = Vec::new();
     for root in crate::gamefiles::paths("characters") {
         let Ok(dirs) = std::fs::read_dir(&root) else { continue };
@@ -61,7 +63,11 @@ fn scan() -> Characters {
                 continue; // the first data folder wins, like every other file
             }
             let name = std::fs::read_to_string(dir.join("character.cfg")).ok().and_then(|t| cfg_name(&t)).unwrap_or_else(|| id.clone());
-            list.push(Entry { id, name, dir });
+            let portrait = std::fs::read(dir.join("portrait.png")).ok().and_then(|bytes| {
+                use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
+                Image::from_buffer(&bytes, ImageType::Extension("png"), CompressedImageFormats::NONE, true, ImageSampler::linear(), bevy::asset::RenderAssetUsages::default()).ok()
+            }).map(|img| images.add(img));
+            list.push(Entry { id, name, dir, portrait });
         }
     }
     list.sort_by(|a, b| a.id.cmp(&b.id));
@@ -73,7 +79,7 @@ pub struct CharactersPlugin;
 
 impl Plugin for CharactersPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(scan());
+        app.init_resource::<Characters>().add_systems(Startup, |mut commands: Commands, mut images: ResMut<Assets<Image>>| commands.insert_resource(scan(&mut images)));
     }
 }
 
@@ -83,10 +89,16 @@ pub fn page(page: &mut ChildSpawnerCommands, kit: &Kit, settings: &Settings, cha
     page.spawn(Node { flex_wrap: FlexWrap::Wrap, column_gap: vh(16.0), row_gap: vh(16.0), margin: UiRect::top(vh(32.0)), ..default() }).with_children(|grid| {
         for c in &characters.0 {
             let picked = settings.character.as_deref() == Some(c.id.as_str());
-            let mut card_e = grid.spawn(card(Node { width: vh(220.0), height: vh(96.0), flex_direction: FlexDirection::Column, justify_content: JustifyContent::FlexEnd, padding: UiRect::all(vh(16.0)), ..default() }, picked));
+            let mut card_e = grid.spawn(card(Node { width: vh(220.0), flex_direction: FlexDirection::Column, padding: UiRect::all(vh(12.0)), row_gap: vh(10.0), ..default() }, picked));
             clickable_keep_border(&mut card_e, UiAction::SetCharacter(c.id.clone()), BG1);
             card_e.with_children(|n| {
-                n.spawn((kit_text(c.name.to_uppercase(), 22.0, if picked { TX1 } else { TX2 }, &kit.text), Pickable::IGNORE));
+                // the portrait, or a quiet frame of the same size until the character has one
+                let frame = Node { width: vh(196.0), height: vh(245.0), ..default() };
+                match &c.portrait {
+                    Some(img) => _ = n.spawn((ImageNode::new(img.clone()), frame, Pickable::IGNORE)),
+                    None => _ = n.spawn((frame, BackgroundColor(Color::BLACK.with_alpha(0.35)), Pickable::IGNORE)),
+                }
+                n.spawn((kit_text(c.name.to_uppercase(), 18.0, if picked { TX1 } else { TX2 }, &kit.text), Pickable::IGNORE));
             });
         }
     });

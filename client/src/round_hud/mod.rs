@@ -109,6 +109,12 @@ fn mmss(secs: f32) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+/// A deathmatch game: the server counts its 10 minutes down in the warmup phase (a real
+/// warmup has no time).
+pub fn deathmatch(w: &Walker) -> bool {
+    w.client.round.phase == Phase::Warmup && w.client.round.left > 0.0
+}
+
 /// Buy time left under this many seconds shows amber.
 pub const BUY_HURRY: f32 = 5.0;
 
@@ -158,8 +164,15 @@ fn top_bar(
     set(&mut sc, if practice { "-".into() } else { r.score[1].to_string() });
     let planted = matches!(w.client.bomb, BombNet::Planted { .. });
     let urgent = !practice && r.phase == Phase::Live && !planted && r.left <= WARN;
+    let dm = deathmatch(&w);
     let (t, color) = match r.phase {
-        _ if practice => ("--:--".to_string(), TX2),
+        // deathmatch runs on practice rules, so it's asked first: its game clock
+        _ if dm => (mmss(r.left), TX1),
+        // practice: the bomb's own countdown once it's planted
+        _ if practice => match w.client.bomb {
+            BombNet::Planted { left, .. } => (mmss(left), BAD),
+            _ => ("--:--".to_string(), TX2),
+        },
         Phase::Warmup => ("--:--".to_string(), TX2),
         Phase::Live if planted => ("BOMB".to_string(), BAD),
         Phase::Live if urgent => (mmss(r.left), if warn_red(r.left) { BAD } else { TX1 }),
@@ -180,6 +193,7 @@ fn top_bar(
     }
     *last_second = second;
     let label = match r.phase {
+        _ if dm => "DEATHMATCH".into(),
         _ if practice => "PRACTICE".into(),
         Phase::Warmup => "WARMUP".into(),
         // while buying is open (freeze time and the start of the round): how long is left

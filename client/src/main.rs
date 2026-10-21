@@ -15,6 +15,7 @@
 //! `BOOTLEG16_CAM=x,y,z` parks the camera there (with `BOOTLEG16_LOOK`, to check map details).
 //! `BOOTLEG16_ASSISTANT=0..3` picks the AI assistant for the run (not saved).
 //! `BOOTLEG16_VOICE=1` shows you and a teammate on the voice list.
+//! `BOOTLEG16_CHARACTER=<id>` dresses every other player as that character.
 //! `BOOTLEG16_FOUND=1` shows a match found and the Reconnect card on the menu.
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead);
 //! `BOOTLEG16_SPECTATE=front` watches them from the front.

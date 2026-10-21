@@ -119,7 +119,7 @@ fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<K
     let line = if w.client.practice { "PRACTICE".to_string() } else { format!("ROUND {}", r.round.max(1)) };
     // kicking: teammates, reserved matches, one call per round, not while a vote runs
     let can_kick = m.on && w.client.ticket != 0 && kicked.0 != Some(r.round) && r.vote.is_none();
-    let ctx = Ctx { me, my_team: w.client.team(), carrier: match w.client.bomb { net::protocol::BombNet::Carried(id) => Some(id), _ => None }, my_kit: w.client.me_info.defuse_kit, can_report: m.on && !w.client.practice, can_report_or_mouse: m.on, can_kick, open: m.open, reported: &reported.0, voice: &voice };
+    let ctx = Ctx { me, my_team: w.client.team(), carrier: match w.client.bomb { net::protocol::BombNet::Carried(id) => Some(id), _ => None }, my_kit: w.client.me_info.defuse_kit, can_report: m.on && !w.client.practice, can_report_or_mouse: m.on, can_kick, open: m.open, reported: &reported.0, voice: &voice, dm: crate::round_hud::deathmatch(&w) };
     let tune = |i: usize| opening.then(|| Anim::stagger(i));
     commands
         .spawn((
@@ -178,6 +178,8 @@ struct Ctx<'a> {
     open: Option<u8>,
     reported: &'a HashSet<u8>,
     voice: &'a crate::voice::VoiceSettings,
+    /// Deathmatch: points (kill 1, headshot 2) stand where MVPs are.
+    dm: bool,
 }
 
 /// One team: header bar (side colour, name, rounds won), column labels, then the players.
@@ -193,7 +195,7 @@ fn team_block(col: &mut ChildSpawnerCommands, kit: &Kit, name: &str, jp: &str, c
             n.spawn(kit_text(format!("{rounds:02}"), 32.0, color, &kit.num));
         });
     });
-    header(col, kit);
+    header(col, kit, ctx.dm);
     if players.is_empty() {
         col.spawn((Node { height: vh(48.0), align_items: AlignItems::Center, padding: UiRect::left(vh(120.0)), border: UiRect::top(px(1)), ..default() }, BorderColor::all(LINE))).with_children(|r| {
             r.spawn(kit_text("No one on this side yet", 16.0, TX3, &kit.text));
@@ -204,11 +206,12 @@ fn team_block(col: &mut ChildSpawnerCommands, kit: &Kit, name: &str, jp: &str, c
     }
 }
 
-fn header(col: &mut ChildSpawnerCommands, kit: &Kit) {
+fn header(col: &mut ChildSpawnerCommands, kit: &Kit, dm: bool) {
     col.spawn(Node { height: vh(36.0), align_items: AlignItems::Center, padding: UiRect::horizontal(vh(24.0)), ..default() }).with_children(|r| {
         r.spawn(Node { width: vh(96.0), ..default() });
         r.spawn((kit_text("PLAYER", 13.0, TX2, &kit.text), Node { flex_grow: 1.0, ..default() }));
         for (c, w) in COLS {
+            let c = if dm && c == "MVP" { "PTS" } else { c };
             r.spawn((kit_text(c, 13.0, TX2, &kit.text), Node { width: vh(w), justify_content: JustifyContent::FlexEnd, ..default() }));
         }
     });
@@ -257,7 +260,7 @@ fn player_row(col: &mut ChildSpawnerCommands, kit: &Kit, s: &Score, ctx: &Ctx) {
             s.assists.to_string(),
             (s.damage / s.rounds.max(1)).to_string(),
             pct(s.headshots, s.kills),
-            s.mvps.to_string(),
+            if ctx.dm { s.points.to_string() } else { s.mvps.to_string() },
             s.money.map(|m| format!("${m}")).unwrap_or_default(),
             if s.bot { String::new() } else { s.ping.to_string() },
         ];
