@@ -179,10 +179,15 @@ fn team_card(row: &mut ChildSpawnerCommands, kit: &Kit, i: usize, key: &str, nam
 pub fn in_game_actions(mut actions: ResMut<UiActions>, mut overlay: ResMut<Overlay>, mut w: ResMut<Walker>, mut next: ResMut<NextState<AppState>>, keys: Res<ButtonInput<KeyCode>>) {
     // CS team menu keys.
     if *overlay == Overlay::Teams {
-        for (k, team) in [(KeyCode::Digit1, Some(Team::T)), (KeyCode::Digit2, Some(Team::Ct)), (KeyCode::Digit5, None), (KeyCode::Digit6, Some(Team::Spectator))] {
-            if keys.just_pressed(k) {
-                actions.0.push(UiAction::ChooseTeam(team));
-            }
+        let team = match crate::ui::digit_pressed(&keys) {
+            Some(1) => Some(Some(Team::T)),
+            Some(2) => Some(Some(Team::Ct)),
+            Some(5) => Some(None),
+            Some(6) => Some(Some(Team::Spectator)),
+            _ => None,
+        };
+        if let Some(team) = team {
+            actions.0.push(UiAction::ChooseTeam(team));
         }
     }
     let mut keep = Vec::new();

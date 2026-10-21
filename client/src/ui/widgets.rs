@@ -125,6 +125,14 @@ fn chip_node(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str, action: UiAct
     e.id()
 }
 
+/// The number key just pressed in a menu (0..=9), from the top row or the numpad.
+pub fn digit_pressed(keys: &ButtonInput<KeyCode>) -> Option<usize> {
+    use KeyCode::*;
+    let row = [Digit0, Digit1, Digit2, Digit3, Digit4, Digit5, Digit6, Digit7, Digit8, Digit9];
+    let pad = [Numpad0, Numpad1, Numpad2, Numpad3, Numpad4, Numpad5, Numpad6, Numpad7, Numpad8, Numpad9];
+    (0..10).find(|&n| keys.just_pressed(row[n]) || keys.just_pressed(pad[n]))
+}
+
 /// A chip that can't be pressed now: the same frame, quiet text, no hover, no action.
 pub fn chip_off(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str) {
     let node = Node { height: vh(44.0), padding: UiRect::horizontal(vh(18.0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(1)), border_radius: BorderRadius::all(vh(RADIUS_S)), ..default() };
@@ -263,4 +271,20 @@ pub fn status_label(p: &mut ChildSpawnerCommands, kit: &Kit, s: &str, color: Col
     p.spawn((Node { padding: UiRect::axes(vh(10.0), vh(6.0)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(vh(RADIUS_S)), ..default() }, BorderColor::all(color.with_alpha(color.alpha() * 0.4)))).with_children(|c| {
         c.spawn(t(kit, Type::Label, s, color));
     });
+}
+
+#[cfg(test)]
+mod digit_tests {
+    use super::*;
+
+    #[test]
+    fn numpad_and_top_row_both_count() {
+        let mut keys = ButtonInput::<KeyCode>::default();
+        assert_eq!(digit_pressed(&keys), None);
+        keys.press(KeyCode::Numpad3);
+        assert_eq!(digit_pressed(&keys), Some(3));
+        keys.clear();
+        keys.press(KeyCode::Digit0);
+        assert_eq!(digit_pressed(&keys), Some(0));
+    }
 }

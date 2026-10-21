@@ -5,7 +5,7 @@
 use crate::game::{Frame, Walker};
 use crate::menu::{AppState, Overlay};
 use crate::hud::{weapon_icon, Icons};
-use crate::ui::{chip, chip_off, clickable_keep_border, kit_text, nav, primary_button, primary_off, vh, Anim, Kit, NavItem, UiAction, UiActions, AMBER, BAD, BG1, CT_COLOR, LINE, OK, TX1, TX2, TX3, T_COLOR};
+use crate::ui::{chip, chip_off, clickable_keep_border, digit_pressed, kit_text, nav, primary_button, primary_off, vh, Anim, Kit, NavItem, UiAction, UiActions, AMBER, BAD, BG1, CT_COLOR, LINE, OK, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
 use net::protocol::{BuyItem, Team};
 
@@ -106,8 +106,7 @@ fn buy_menu(
     let layout = layout(ct);
     // open: on which category (None: the first)
     let mut state: Option<Option<usize>> = (*overlay == Overlay::Buy).then_some(menu.0);
-    // Number keys become the same actions as clicks.
-    let digits = [KeyCode::Digit0, KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9];
+    // Number keys (top row or numpad) become the same actions as clicks.
     // Enter buys the selected card.
     if keys.just_pressed(KeyCode::Enter) {
         if let Some(Some(cat)) = state {
@@ -118,7 +117,7 @@ fn buy_menu(
             }
         }
     }
-    if let (Some(state), Some(n)) = (state, digits.iter().position(|k| keys.just_pressed(*k))) {
+    if let (Some(state), Some(n)) = (state, digit_pressed(&keys)) {
         let i = n.wrapping_sub(1);
         actions.0.push(match (n, state) {
             (0, _) => UiAction::CloseBuy,
