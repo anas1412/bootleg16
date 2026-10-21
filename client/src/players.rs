@@ -28,9 +28,10 @@ impl Plugin for PlayersPlugin {
     }
 }
 
-/// A new round: the bodies are gone (CS clears them at round start).
+/// Bodies stay the whole match (our choice; CS clears them each round): gone when a new one
+/// starts (round 1 after the warmup) or a deathmatch game ends.
 fn clear_corpses(mut commands: Commands, mut news: MessageReader<crate::effects::GameNews>, corpses: Query<Entity, With<Corpse>>) {
-    if news.read().any(|n| matches!(n.0, net::protocol::GameEvent::RoundStart { .. })) {
+    if news.read().any(|n| matches!(n.0, net::protocol::GameEvent::RoundStart { round: 1 } | net::protocol::GameEvent::KillLimit { .. })) {
         for e in &corpses {
             commands.entity(e).despawn();
         }
@@ -48,8 +49,8 @@ pub enum PlayerAnim {
     Died(u8),
 }
 
-/// Corpses kept at once (CS clears them each round).
-const MAX_CORPSES: usize = 16;
+/// Corpses kept at once (a whole match's: 18 rounds of 10 players is 180).
+const MAX_CORPSES: usize = 256;
 
 #[derive(Resource)]
 struct OtherPlayers {
