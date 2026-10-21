@@ -8,7 +8,7 @@ mod news;
 use crate::game::{Frame, Walker};
 use crate::hud::SAFE;
 use crate::menu::AppState;
-use crate::ui::{edge, hud_panel, kit_text, vh, Anim, Edge, EdgeColor, HudLayer, Kit, UiSound, BAD, CT_COLOR, EDGE_REST, LINE_2, TX1, TX2, T_COLOR};
+use crate::ui::{edge, hud_panel, kit_text, vh, Anim, Edge, EdgeColor, HudLayer, Kit, BAD, CT_COLOR, EDGE_REST, LINE_2, TX1, TX2, T_COLOR};
 use bevy::prelude::*;
 use net::protocol::{BombNet, GameEvent, Team};
 use net::rounds::Phase;
@@ -119,9 +119,26 @@ pub fn buy_time(w: &Walker) -> Option<(String, bool)> {
     Some((mmss(left), left < BUY_HURRY))
 }
 
-/// The last seconds swell and tick; the last five tick out loud.
-const URGENT: f32 = 10.0;
-const URGENT_SOUND: f32 = 5.0;
+/// The last 30 seconds warn (CS 1.6, CHudRoundTimer::Draw): the clock flips to red and back,
+/// faster as time runs out, red for good at 0. Silent, as in CS. The last ten also swell.
+const WARN: f32 = 30.0;
+const SWELL: f32 = 10.0;
+
+/// How long each colour lasts at this many seconds left (CS 1.6's steps).
+fn flip_period(left: f32) -> f32 {
+    match left {
+        l if l <= 2.0 => 0.05,
+        l if l <= 5.0 => 0.1,
+        l if l <= 10.0 => 0.2,
+        l if l <= 20.0 => 0.4,
+        _ => 0.8,
+    }
+}
+
+/// Whether the warning clock shows red now.
+fn warn_red(left: f32) -> bool {
+    left <= 0.0 || (left / flip_period(left)).floor() as u32 % 2 == 0
+}
 
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn top_bar(
@@ -132,7 +149,6 @@ fn top_bar(
     mut round: Single<&mut Text, With<RoundNo>>,
     mut edge: Single<&mut Edge, With<ClockEdge>>,
     mut last_second: Local<u32>,
-    mut sounds: MessageWriter<UiSound>,
     mut commands: Commands,
 ) {
     let r = w.client.round;
@@ -141,12 +157,12 @@ fn top_bar(
     set(&mut st, if practice { "-".into() } else { r.score[0].to_string() });
     set(&mut sc, if practice { "-".into() } else { r.score[1].to_string() });
     let planted = matches!(w.client.bomb, BombNet::Planted { .. });
-    let urgent = !practice && r.phase == Phase::Live && !planted && r.left <= URGENT;
+    let urgent = !practice && r.phase == Phase::Live && !planted && r.left <= WARN;
     let (t, color) = match r.phase {
         _ if practice => ("--:--".to_string(), TX2),
         Phase::Warmup => ("--:--".to_string(), TX2),
         Phase::Live if planted => ("BOMB".to_string(), BAD),
-        Phase::Live if urgent => (mmss(r.left), BAD),
+        Phase::Live if urgent => (mmss(r.left), if warn_red(r.left) { BAD } else { TX1 }),
         Phase::Freeze | Phase::Live => (mmss(r.left), TX1),
         Phase::Over | Phase::GameOver => (mmss(r.left), TX2),
     };
@@ -157,13 +173,10 @@ fn top_bar(
     }
     edge.alert = urgent || (r.phase == Phase::Live && planted);
     edge.rest = if edge.alert { 1.0 } else { crate::ui::EDGE_REST };
-    // each second in the last ten: the clock swells and splits, and the last five tick
+    // each second in the last ten: the clock swells and splits (no sound, as in CS)
     let second = r.left.max(0.0).ceil() as u32;
-    if urgent && second != *last_second && second > 0 {
+    if urgent && r.left <= SWELL && second != *last_second && second > 0 {
         commands.entity(clock_e).insert(Anim::tick());
-        if r.left <= URGENT_SOUND {
-            sounds.write(UiSound::Tick);
-        }
     }
     *last_second = second;
     let label = match r.phase {
@@ -189,5 +202,22 @@ fn ticks(w: Res<Walker>, mut ticks: Query<(&Tick, &mut BackgroundColor)>) {
             None => Color::NONE,
         };
         bg.set_if_neq(BackgroundColor(c));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn warning_flips_faster_as_time_runs_out() {
+        assert_eq!(flip_period(25.0), 0.8);
+        assert_eq!(flip_period(15.0), 0.4);
+        assert_eq!(flip_period(8.0), 0.2);
+        assert_eq!(flip_period(4.0), 0.1);
+        assert_eq!(flip_period(1.0), 0.05);
+        assert!(warn_red(0.0));
+        // red and white take turns
+        assert_ne!(warn_red(25.0), warn_red(25.8));
     }
 }
