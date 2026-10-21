@@ -18,7 +18,8 @@ const ATTN_FAR: f32 = 0.3;
 #[derive(Clone, Debug)]
 pub enum Cue {
     /// `at` None = our own (heard in the head, not positioned).
-    Shot { weapon: Id, silenced: bool, at: Option<[f32; 3]> },
+    /// `who`: the shooter (None: you).
+    Shot { weapon: Id, silenced: bool, at: Option<[f32; 3]>, who: Option<u8> },
     /// `who` None = our own (heard in the head).
     Footstep { feet: [f32; 3], who: Option<u8>, step: sim::pmove::Step },
     Hit { sound: net::protocol::HitSound, at: Option<[f32; 3]> },
@@ -58,12 +59,14 @@ pub struct Sounds {
     rng: u64,
     /// Whose next footstep is the left foot (None: ours).
     left_foot: HashMap<Option<u8>, bool>,
+    /// Each player's gunshot playing on their weapon channel (None: yours).
+    weapon_channel: HashMap<Option<u8>, Entity>,
 }
 
 impl Sounds {
     pub fn new() -> Sounds {
         let materials = crate::gamefiles::paths("sound/materials.txt").iter().find_map(|p| std::fs::read_to_string(p).ok()).ok_or(()).map(|t| Materials::parse(&t)).unwrap_or_default();
-        Sounds { dirs: crate::gamefiles::paths("sound"), cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new() }
+        Sounds { dirs: crate::gamefiles::paths("sound"), cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new(), weapon_channel: HashMap::new() }
     }
 
     fn rand(&mut self) -> f32 {
@@ -142,6 +145,8 @@ struct Play {
     volume: f32,
     attn: f32,
     pitch: f32,
+    /// On this player's weapon channel (Some(None): yours): it cuts the sound playing there.
+    channel: Option<Option<u8>>,
 }
 
 /// Play this frame's cues.
@@ -157,12 +162,12 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
         let gun_pitch = 0.94 + (sounds.rand() * 16.0).floor() / 100.0;
         let usp_pitch = 0.87 + (sounds.rand() * 19.0).floor() / 100.0;
         match cue {
-            Cue::Shot { weapon, silenced, at } => {
+            Cue::Shot { weapon, silenced, at, who } => {
                 let options = fire_sound(weapon, silenced);
                 if !options.is_empty() {
                     let file = sounds.pick(options);
                     let pitch = if weapon == Id::Usp && !silenced { usp_pitch } else { gun_pitch };
-                    plays.push(Play { file, at, volume: 1.0, attn: sim::weapons::data::fire_attenuation(weapon, silenced), pitch });
+                    plays.push(Play { file, at, volume: 1.0, attn: sim::weapons::data::fire_attenuation(weapon, silenced), pitch, channel: Some(who) });
                 }
             }
             Cue::Footstep { feet, who, step } => {
@@ -181,7 +186,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 let left = *left as u32;
                 let n = (sounds.rand() < 0.5) as u32 * 2 + 1 + left;
                 let file = format!("player/pl_{}{n}.wav", step_set(step.kind, material));
-                plays.push(Play { file, at: if who.is_none() { None } else { Some(feet) }, volume: step.loudness(material), attn: ATTN_NORM, pitch: 1.0 });
+                plays.push(Play { file, at: if who.is_none() { None } else { Some(feet) }, volume: step.loudness(material), attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
             Cue::Hit { sound, at } => {
                 use net::protocol::HitSound::*;
@@ -195,29 +200,29 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                     Explosion => &["player/pl_pain2.wav", "player/pl_pain4.wav", "player/pl_pain5.wav", "player/pl_pain6.wav", "player/pl_pain7.wav"],
                 };
                 let file = sounds.pick(options);
-                plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 });
+                plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
             Cue::Death { at } => {
                 let file = sounds.pick(&["player/die1.wav", "player/die2.wav", "player/die3.wav", "player/death6.wav"]);
-                plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 });
+                plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
             // HE: `TE_EXPLOSION` without its no-sound flag, so the engine's own blast (explode3-5,
             // full volume, ATTN 0.3); the debris after it is `explosions`.
             Cue::Explosion { at } => {
                 let file = sounds.pick(&["weapons/explode3.wav", "weapons/explode4.wav", "weapons/explode5.wav"]);
-                plays.push(Play { file, at: Some(at), volume: 1.0, attn: ATTN_FAR, pitch: 1.0 });
+                plays.push(Play { file, at: Some(at), volume: 1.0, attn: ATTN_FAR, pitch: 1.0, channel: None });
             }
             // `CGrenade::Explode` (the flashbang): one of two at 0.55, ATTN_NORM.
             Cue::Flash { at } => {
                 let file = sounds.pick(&["weapons/flashbang-1.wav", "weapons/flashbang-2.wav"]);
-                plays.push(Play { file, at: Some(at), volume: 0.55, attn: ATTN_NORM, pitch: 1.0 });
+                plays.push(Play { file, at: Some(at), volume: 0.55, attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
-            Cue::Smoke { at } => plays.push(Play { file: "weapons/sg_explode.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
+            Cue::Smoke { at } => plays.push(Play { file: "weapons/sg_explode.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None }),
             // `CGrenade::BounceSound`: one of three hits at 0.25. (An HE also starts he_bounce,
             // but on the same channel the hit right after it replaces it.)
             Cue::Bounce { at } => {
                 let file = sounds.pick(&["weapons/grenade_hit1.wav", "weapons/grenade_hit2.wav", "weapons/grenade_hit3.wav"]);
-                plays.push(Play { file, at: Some(at), volume: 0.25, attn: ATTN_NORM, pitch: 1.0 });
+                plays.push(Play { file, at: Some(at), volume: 0.25, attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
             Cue::Break { material, at } => {
                 use sim::breakables::Material::*;
@@ -233,7 +238,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 let pitch = 95 + (sounds.rand() * 30.0) as u32;
                 let pitch = if pitch > 97 && pitch < 103 { 100 } else { pitch };
                 let volume = 0.85 + sounds.rand() * 0.15;
-                plays.push(Play { file, at: Some(at), volume, attn: ATTN_NORM, pitch: pitch as f32 / 100.0 });
+                plays.push(Play { file, at: Some(at), volume, attn: ATTN_NORM, pitch: pitch as f32 / 100.0, channel: None });
             }
             Cue::Impact { at, normal } => {
                 // `EV_HLDM_PlayTextureSound`: the surface's sound (pitch 96-111%), ATTN_NORM.
@@ -254,7 +259,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 };
                 let pitch = 0.96 + (sounds.rand() * 16.0).floor() / 100.0;
                 let file = sounds.pick(options);
-                plays.push(Play { file, at: Some(at), volume, attn: ATTN_NORM, pitch });
+                plays.push(Play { file, at: Some(at), volume, attn: ATTN_NORM, pitch, channel: None });
                 // `EV_HLDM_GunshotDecalTrace`: half the impacts ricochet, metal and vents ring.
                 if sounds.rand() < 0.5 {
                     let file = if matches!(material, 'M' | 'V') {
@@ -262,35 +267,39 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                     } else {
                         sounds.pick(&["weapons/ric1.wav", "weapons/ric2.wav", "weapons/ric3.wav", "weapons/ric4.wav", "weapons/ric5.wav", "weapons/ric_conc-1.wav"])
                     };
-                    plays.push(Play { file, at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch: 1.0 });
+                    plays.push(Play { file, at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None });
                 }
             }
             Cue::DryFire { pistol } => {
-                plays.push(Play { file: if pistol { "weapons/dryfire_pistol.wav" } else { "weapons/dryfire_rifle.wav" }.into(), at: None, volume: 0.8, attn: ATTN_NORM, pitch: 1.0 })
+                plays.push(Play { file: if pistol { "weapons/dryfire_pistol.wav" } else { "weapons/dryfire_rifle.wav" }.into(), at: None, volume: 0.8, attn: ATTN_NORM, pitch: 1.0, channel: None })
             }
             Cue::Swing => {
                 // The swing itself is a whoosh, slash or stab (CS plays the same miss sounds for
                 // both); what it hit sounds on its own, from the server (`Cue::Hit`).
                 let file = sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]);
-                plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 0.94 });
+                plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 0.94, channel: None });
             }
             Cue::KnifeMiss { at } => {
                 let file = sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]);
-                plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 0.94 });
+                plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 0.94, channel: None });
             }
-            Cue::Far { file, at, attn } => plays.push(Play { file: file.into(), at: Some(at), volume: 1.0, attn, pitch: 1.0 }),
+            Cue::Far { file, at, attn } => plays.push(Play { file: file.into(), at: Some(at), volume: 1.0, attn, pitch: 1.0, channel: None }),
             Cue::KnifeWall { at } => {
                 let pitch = 0.98 + (sounds.rand() * 4.0).floor() / 100.0;
-                plays.push(Play { file: "weapons/knife_hitwall1.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch });
+                plays.push(Play { file: "weapons/knife_hitwall1.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch, channel: None });
             }
-            Cue::Zoom => plays.push(Play { file: "weapons/zoom.wav".into(), at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
-            Cue::File(file) => plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
-            Cue::Quiet { file, at, volume } => plays.push(Play { file: file.into(), at: Some(at), volume, attn: ATTN_NORM, pitch: 1.0 }),
-            Cue::At { file, at, far } => plays.push(Play { file: file.into(), at: Some(at), volume: 1.0, attn: if far { ATTN_FAR } else { ATTN_NORM }, pitch: 1.0 }),
+            Cue::Zoom => plays.push(Play { file: "weapons/zoom.wav".into(), at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None }),
+            Cue::File(file) => plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None }),
+            Cue::Quiet { file, at, volume } => plays.push(Play { file: file.into(), at: Some(at), volume, attn: ATTN_NORM, pitch: 1.0, channel: None }),
+            Cue::At { file, at, far } => plays.push(Play { file: file.into(), at: Some(at), volume: 1.0, attn: if far { ATTN_FAR } else { ATTN_NORM }, pitch: 1.0, channel: None }),
         }
         for p in plays {
             let Some(handle) = sounds.get(&p.file, &mut assets) else { continue };
             let mut play = PlaybackSettings::DESPAWN.with_speed(p.pitch);
+            // GoldSrc: one sound per entity channel, a new gunshot cuts the last one's tail.
+            if let Some(Some(old)) = p.channel.map(|c| sounds.weapon_channel.remove(&c)) {
+                commands.entity(old).try_despawn();
+            }
             match p.at {
                 Some(at) => {
                     // GoldSrc falloff: full at the source, silent at 1000 / attn units.
@@ -300,11 +309,17 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                         continue;
                     }
                     play = play.with_volume(Volume::Linear(gain)).with_spatial(true);
-                    commands.spawn((AudioPlayer(handle), play, Transform::from_translation(Vec3::from(map::to_y_up(at)))));
+                    let e = commands.spawn((AudioPlayer(handle), play, Transform::from_translation(Vec3::from(map::to_y_up(at))))).id();
+                    if let Some(c) = p.channel {
+                        sounds.weapon_channel.insert(c, e);
+                    }
                 }
                 None => {
                     play = play.with_volume(Volume::Linear(settings.volume * p.volume));
-                    commands.spawn((AudioPlayer(handle), play));
+                    let e = commands.spawn((AudioPlayer(handle), play)).id();
+                    if let Some(c) = p.channel {
+                        sounds.weapon_channel.insert(c, e);
+                    }
                 }
             }
         }

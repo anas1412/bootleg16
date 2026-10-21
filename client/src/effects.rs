@@ -225,7 +225,7 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                     let d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
                     let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-3);
                     shells.eject(weapon, from, d.map(|v| v / len), [0.0; 3], false);
-                    w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from) });
+                    w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from), who: Some(shooter) });
                     anims.write(PlayerAnim::Shot(shooter, silenced));
                 }
             }

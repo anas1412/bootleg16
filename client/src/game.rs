@@ -295,7 +295,7 @@ fn walk(
     // Our own sounds, predicted: no waiting for the server.
     let pistol = w.client.state.loadout.active == sim::weapons::Slot::Secondary;
     for shot in &fired.shots {
-        w.cues.push(sound::Cue::Shot { weapon: shot.weapon, silenced: shot.silenced, at: None });
+        w.cues.push(sound::Cue::Shot { weapon: shot.weapon, silenced: shot.silenced, at: None, who: None });
     }
     if fired.dry_fire {
         w.cues.push(sound::Cue::DryFire { pistol });
