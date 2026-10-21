@@ -53,6 +53,8 @@ pub struct Walker {
     pub client: net::Client,
     /// Eye position at the previous tick, for smoothing between ticks.
     prev_eye: [f32; 3],
+    /// The recoil punch before the last tick, so the view kick is drawn smoothly between ticks.
+    prev_punch: [f32; 3],
     /// V detaches the camera for free flight (the player stays put).
     pub noclip: bool,
     /// Weapon slot key held (to send each press once).
@@ -86,6 +88,7 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>) {
     commands.insert_resource(Walker {
         client,
         prev_eye: [0.0; 3],
+        prev_punch: [0.0; 3],
         noclip: false,
         slot_held: 0,
         drop_held: false,
@@ -176,6 +179,7 @@ fn mouse_look(
     cursor: Single<&CursorOptions>,
     w: Res<Walker>,
     settings: Res<Settings>,
+    fixed: Res<Time<Fixed>>,
     mut cam: Single<(&mut Transform, &mut FlyCam, &mut Projection)>,
 ) {
     let (ref mut tf, ref mut fc, ref mut proj) = *cam;
@@ -195,7 +199,8 @@ fn mouse_look(
         fc.pitch = (fc.pitch - motion.delta.y * sens).clamp(-1.55, 1.55);
     }
     // Recoil punch moves the view (GoldSrc pitch is positive downwards).
-    let punch = w.client.state.loadout.punch;
+    let (a, now) = (fixed.overstep_fraction(), w.client.state.loadout.punch);
+    let punch: [f32; 3] = std::array::from_fn(|i| w.prev_punch[i] + (now[i] - w.prev_punch[i]) * a);
     tf.rotation = Quat::from_euler(EulerRot::YXZ, fc.yaw + punch[1].to_radians(), fc.pitch - punch[0].to_radians(), punch[2].to_radians());
     // Horizontal FOV (90 = normal) at 4:3, as a vertical FOV.
     if let Projection::Perspective(p) = &mut **proj {
@@ -284,6 +289,7 @@ fn walk(
     // Free flight: keep the connection alive but stand still.
     let input = if w.noclip { sim::pmove::Input { yaw: input.yaw, pitch: input.pitch, ..default() } } else { input };
     w.prev_eye = w.client.me().eye();
+    w.prev_punch = w.client.state.loadout.punch;
     let (events, fired) = w.client.tick(input);
     vm.cues.add(&fired);
     // Our own sounds, predicted: no waiting for the server.
