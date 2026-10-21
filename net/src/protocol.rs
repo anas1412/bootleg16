@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 42;
+pub const PROTOCOL_VERSION: u32 = 43;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -342,7 +342,7 @@ pub enum BombNet {
 }
 
 /// Things only you need to know about yourself.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Me {
     pub money: i32,
     /// What the round allows you (your prediction applies it too).
@@ -354,6 +354,10 @@ pub struct Me {
     pub defuse_kit: bool,
     /// Deathmatch spawn protection: no damage until you move or shoot (2 s at most).
     pub protected: bool,
+    /// Hits you took since the last snapshot: which way each came from, as a world yaw
+    /// (GoldSrc degrees) from you to the shooter or blast, even one you can't see (CS 1.6
+    /// sends the victim the damage origin; the HUD shows a direction mark).
+    pub hurt_from: Vec<f32>,
 }
 
 /// What an item sounds like when you get it (CS 1.6: `CBasePlayerItem::DefaultTouch`,

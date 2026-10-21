@@ -630,3 +630,16 @@ clutch_won | grumpk | smug | Clutched it. Fine. You're allowed to be smug. For a
 clutch_won | grumpk | happy | That was good. Really good. Don't tell anyone I said that.
 clutch_won | grumpk | annoyed | You clutched. Now I have to respect you. Terrible.
 clutch_won | grumpk | thinking | Last alive and you won. Who are you?
+
+round_live | claudette | neutral | Go. Stick to the plan.
+round_live | claudette | thinking | Round's live. Take your time on the first contact.
+round_live | claudette | happy | We're live. Go get them.
+round_live | childgbt | neutral | The round has started. Proceed.
+round_live | childgbt | smug | Freeze time is over. You may now move. Carefully.
+round_live | childgbt | thinking | Live. I will be watching. As always.
+round_live | twins | happy | Go, go! / Together, please.
+round_live | twins | neutral | We're live. / Don't rush in alone.
+round_live | twins | smug | Move out. / Quietly, if you can.
+round_live | grumpk | annoyed | Go. Try not to die first.
+round_live | grumpk | neutral | Live. Walk, don't stomp.
+round_live | grumpk | smug | Off you go. Make it look easy.

@@ -63,7 +63,7 @@ impl Server {
                 .filter(|(_, c)| !c.bot)
                 .map(|(a, c)| {
                     let buy_left = if self.rules.free_play() { None } else { self.round.buy_left(self.tick).map(|t| t as f32 * self.rate.tick()) };
-                    let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), buy_left, defuse_kit: c.defuse_kit, protected: c.protected_until > self.tick };
+                    let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), buy_left, defuse_kit: c.defuse_kit, protected: c.protected_until > self.tick, hurt_from: c.hurt_from.iter().map(|f| { let o = c.state.movement.origin; (f[1] - o[1]).atan2(f[0] - o[0]).to_degrees() }).collect() };
                     let seen = &sights[&c.id];
                     // Health and kit only for teammates (spectators see everything anyway).
                     let players: Vec<PlayerNet> = players
@@ -112,6 +112,7 @@ impl Server {
                 };
                 let bytes = encode(&msg);
                 let c = self.clients.get_mut(&addr).unwrap();
+                c.hurt_from.clear();
                 let wire = match c.sent.iter().find(|(t, _)| *t == c.snap_ack) {
                     Some((base, old)) => Some(encode(&ServerMsg::Delta { base: *base, patch: crate::delta::diff(old, &bytes) })).filter(|d| d.len() < bytes.len()),
                     None => None,

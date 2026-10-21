@@ -118,13 +118,17 @@ fn ak_kills_another_player_and_everyone_hears_about_it() {
     let d = [target[0] - eye[0], target[1] - eye[1], target[2] + 8.0 - eye[2]];
     let yaw = d[1].atan2(d[0]).to_degrees();
     let pitch = -(d[2] / (d[0] * d[0] + d[1] * d[1]).sqrt()).atan().to_degrees();
-    let mut kills = Vec::new();
+    let (mut kills, mut from) = (Vec::new(), Vec::new());
     for _ in 0..384 {
         g.tick(Input { yaw, pitch, attack: true, ..Default::default() }, Input::default());
+        from.extend(g.b.take_hurt_from());
         kills.extend(g.b.take_events().into_iter().filter(|e| matches!(e, net::protocol::GameEvent::Kill { .. })));
         let _ = g.a.take_events();
     }
     assert!(!kills.is_empty(), "B never died; health {:?}", g.server.vitals(b));
+    // B was told each hit came from A's side (for the HUD's direction mark).
+    let back = |y: f32| ((y - (yaw + 180.0)) + 540.0).rem_euclid(360.0) - 180.0;
+    assert!(!from.is_empty() && from.iter().all(|y| back(*y).abs() < 10.0), "hits from {from:?}, A is at {}", yaw + 180.0);
     assert!(matches!(kills[0], net::protocol::GameEvent::Kill { killer, victim, weapon: Some(sim::weapons::Id::Ak47), .. } if killer == a && victim == b));
     // A's own predicted ammo matches the server's.
     let server_clip = g.server.player_state(a).unwrap().loadout.active_gun().unwrap().clip;
