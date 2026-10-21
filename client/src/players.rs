@@ -264,7 +264,7 @@ fn anim_events(
                 let r = |k: u32, lo: f32, hi: f32| lo + (hi - lo) * ((roll.wrapping_mul(k) >> 8) % 1000) as f32 / 1000.0;
                 let vel = throw.velocity(at, p.anim.gait_yaw, killer, look.blasted.get(&id).copied(), r);
                 let s = seq(model, name).unwrap_or(0);
-                commands.entity(e).remove::<OtherPlayer>().insert(Corpse { character: p.character.clone(), body: p.body.clone(), seq: s, started: now, done: false, vel, hull: if p.crouched { Hull::Crouched } else { Hull::Standing } });
+                commands.entity(e).remove::<OtherPlayer>().insert(Visibility::Inherited).insert(Corpse { character: p.character.clone(), body: p.body.clone(), seq: s, started: now, done: false, vel, hull: if p.crouched { Hull::Crouched } else { Hull::Standing } });
                 // Old corpses go first.
                 let mut old: Vec<_> = corpses.iter().map(|(e, c)| (c.started, e)).collect();
                 if old.len() >= MAX_CORPSES {
@@ -297,7 +297,9 @@ fn draw_others(
     drawn: Query<(Entity, &OtherPlayer)>,
     characters: Res<crate::characters::Characters>,
 ) {
-    let all = w.client.others();
+    // you too: hidden while you play, your body once you die
+    let mut all = w.client.others();
+    all.extend(w.client.me_as_remote());
     // Dead in the snapshot now: they can be drawn again once they respawn.
     look.dying.retain(|id| all.iter().any(|o| o.id == *id && o.alive));
     // Their character, from the scoreboard (not picked, or not installed here: one by player number).
@@ -346,14 +348,16 @@ fn animate(
     let in_eye = crate::spectate::in_eye(&w, &watch).map(|o| o.id);
     let cam_rot = cam.compute_transform().rotation;
     let (now, dt) = (time.elapsed_secs(), time.delta_secs().max(1e-4));
-    let others = w.client.others_at(fixed.overstep_fraction());
+    let mut others = w.client.others_at(fixed.overstep_fraction());
+    others.extend(w.client.me_as_remote());
+    let me = w.client.id();
     for (e, mut p, mut tf) in &mut live {
         let Some(o) = others.iter().find(|o| o.id == p.id) else { continue };
         // spawn protection (deathmatch): they shimmer until they move or shoot
         let glow = if o.protected { 0.35 + 0.25 * (now * std::f32::consts::TAU * 2.0).sin() } else { 0.0 };
         commands.entity(e).insert(crate::studio::Glow(glow));
         if let Ok(mut v) = vis.get_mut(e) {
-            v.set_if_neq(if in_eye == Some(p.id) { Visibility::Hidden } else { Visibility::Inherited });
+            v.set_if_neq(if in_eye == Some(p.id) || me == Some(p.id) { Visibility::Hidden } else { Visibility::Inherited });
         }
         let model = &look.cs.model;
         p.crouched = o.crouched;

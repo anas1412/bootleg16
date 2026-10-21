@@ -385,7 +385,7 @@ pub(crate) fn move_camera(
             tf.rotation = Quat::from_euler(EulerRot::YXZ, (o.yaw - 90.0).to_radians(), -o.pitch.to_radians(), 0.0);
             return;
         }
-        let watched = crate::spectate::target(&w, &watch).map(|o| (o.origin, o.yaw)).or(if watch.out { watch.last_down } else { None });
+        let watched = watch.death_cam.map(|(o, y, _)| (o, y)).or_else(|| crate::spectate::target(&w, &watch).map(|o| (o.origin, o.yaw))).or(if watch.out { watch.last_down } else { None });
         if let Some((origin, yaw)) = watched {
             let front_first = std::env::var("BOOTLEG16_SPECTATE").is_ok_and(|v| v == "front");
             let (spot, eye) = chase(&w.client.world, origin, yaw, front_first);

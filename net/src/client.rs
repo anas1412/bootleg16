@@ -497,6 +497,15 @@ impl Client {
         }
     }
 
+    /// Us as others see us (for drawing our own body, e.g. once we're dead).
+    pub fn me_as_remote(&self) -> Option<Remote> {
+        let id = self.id()?;
+        let m = &self.state.movement;
+        let (yaw, pitch) = self.history.back().map(|h| (h.1.input.yaw, h.1.input.pitch)).unwrap_or_default();
+        let loadout = &self.state.loadout;
+        Some(Remote { id, origin: m.origin, crouched: m.crouched, alive: self.vitals.alive(), yaw, pitch, weapon: loadout.active_id(), team: self.team(), airborne: !m.on_ground && !m.on_ladder, reloading: loadout.active_gun().is_some_and(|g| g.reloading), protected: self.me_info.protected, mate: None })
+    }
+
     /// Our team according to the scoreboard (Spectator until we pick).
     pub fn team(&self) -> Team {
         self.scores.iter().find(|s| Some(s.id) == self.id()).map(|s| s.team).unwrap_or(Team::Spectator)
