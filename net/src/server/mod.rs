@@ -125,7 +125,7 @@ struct Remote {
     /// What they bought this round, oldest first (`buy::undo_buys` sells it back).
     purchases: Vec<buy::Purchase>,
     /// Their character on each side (`ClientMsg::Looks`); until they say, one picked by id.
-    looks: [u8; 2],
+    character: String,
     /// How their model is animated (as clients draw it): hitboxes follow it.
     anim: sim::anim::Anim,
     money: i32,
@@ -547,7 +547,7 @@ impl Remote {
             rounds: s.rounds,
             ping: s.ping.round() as u16,
             money: Some(self.money),
-            looks: self.looks,
+            character: self.character.clone(),
         }
     }
 
@@ -565,7 +565,7 @@ impl Remote {
             deaths: 0,
             stats: Stats::default(),
             anim: sim::anim::Anim::new(0.0),
-            looks: [id % CLASSES; 2],
+            character: String::new(),
             purchases: Vec::new(),
             money: 0,
             defuse_kit: false,
