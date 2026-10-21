@@ -232,7 +232,7 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
             GameEvent::Footstep { player, at, step } if Some(player) != me => {
                 w.cues.push(sound::Cue::Footstep { feet: [at[0], at[1], at[2] - 36.0], who: Some(player), step });
             }
-            GameEvent::Damage { attacker, victim, sound, group, at, amount } => {
+            GameEvent::Damage { attacker, victim, sound, group, at, .. } => {
                 let victim_at = eye_of(&w, victim);
                 w.cues.push(sound::Cue::Hit { sound, at: if Some(victim) == me { None } else { victim_at } });
                 anims.write(PlayerAnim::Hurt(victim, group));
@@ -241,7 +241,7 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                 if let (Some(at), Some(from)) = (at, eye_of(&w, attacker)) {
                     let d = [at[0] - from[0], at[1] - from[1], at[2] - from[2]];
                     let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-3);
-                    hits.write(Hit::Player { at, dir: d.map(|v| v / l), head: group == sim::hitbox::HitGroup::Head, damage: amount });
+                    hits.write(Hit::Player { at, dir: d.map(|v| v / l), head: group == sim::hitbox::HitGroup::Head });
                 }
             }
             GameEvent::GrenadeBounce { at, .. } => w.cues.push(sound::Cue::Bounce { at }),
