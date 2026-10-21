@@ -130,7 +130,32 @@ impl Grenade {
     }
 }
 
-/// HE damage to someone standing at `victim_origin` (no wall check, like cstrike).
+/// How much of a player at `origin` a blast at `blast` can see, 0..1 (Condition Zero's
+/// `RadiusDamage`, later CS:GO's: the middle 0.4, the head and the feet 0.2 each, either side
+/// 0.1). CS 1.6 had no such check, so an HE hurt through walls; CS2 doesn't.
+pub fn blast_share(world: &World, blast: Vec3, origin: Vec3, crouched: bool) -> f32 {
+    let from = add(blast, [0.0, 0.0, 1.0]);
+    let clear = |to: Vec3| world.trace_line(from, to).fraction >= 1.0;
+    let (dx, dy) = (origin[0] - from[0], origin[1] - from[1]);
+    let l = (dx * dx + dy * dy).sqrt();
+    let side = if l > 0.0 { [-dy / l * 13.0, dx / l * 13.0, 0.0] } else { [0.0, 13.0, 0.0] };
+    let mut share = 0.0;
+    for (to, w) in [
+        (origin, 0.4),
+        (add(origin, [0.0, 0.0, 25.0]), 0.2),
+        (add(origin, [0.0, 0.0, if crouched { -14.0 } else { -34.0 }]), 0.2),
+        (add(origin, side), 0.1),
+        (sub(origin, side), 0.1),
+    ] {
+        if clear(to) {
+            share += w;
+        }
+    }
+    share
+}
+
+/// HE damage to someone standing at `victim_origin`, in the open (CS 1.6's falloff; times
+/// `blast_share` for cover).
 pub fn he_damage(blast: Vec3, victim_origin: Vec3) -> f32 {
     let d = length(sub(add(blast, [0.0, 0.0, 1.0]), victim_origin));
     (HE_DAMAGE - d * (HE_DAMAGE / HE_RADIUS)).max(0.0)
@@ -255,6 +280,10 @@ mod tests {
         assert_eq!(he_damage([0.0; 3], [0.0, 0.0, 1.0]), 100.0);
         assert!((he_damage([0.0; 3], [175.0, 0.0, 1.0]) - 50.0).abs() < 0.01);
         assert_eq!(he_damage([0.0; 3], [400.0, 0.0, 1.0]), 0.0);
+        // In the open the blast sees all of you; under the floor none.
+        let ground = World::flat_floor(-100.0);
+        assert!((blast_share(&ground, [0.0, 0.0, -50.0], [100.0, 0.0, -50.0], false) - 1.0).abs() < 1e-5);
+        assert_eq!(blast_share(&ground, [0.0, 0.0, -50.0], [100.0, 0.0, -150.0], false), 0.0);
         let w = World::flat_floor(-100.0);
         let eye = [100.0, 0.0, 50.0];
         let facing = flash(&w, [0.0, 0.0, 49.0], eye, [-1.0, 0.0, 0.0]).unwrap();

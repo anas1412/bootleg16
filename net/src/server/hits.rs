@@ -30,7 +30,8 @@ impl Server {
                         if c.protected_until > tick || !grenades::blast_reaches(wet, c.state.movement.water_level) {
                             continue;
                         }
-                        let dmg = grenades::he_damage(blast, c.state.movement.origin);
+                        let m = &c.state.movement;
+                        let dmg = grenades::he_damage(blast, m.origin) * grenades::blast_share(&self.world, blast, m.origin, m.crouched);
                         if dmg <= 0.0 {
                             continue;
                         }
