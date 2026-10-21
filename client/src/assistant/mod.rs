@@ -38,10 +38,10 @@ pub const OFF: u8 = ASSISTANTS.len() as u8;
 
 /// Every trigger the lines file must cover (checked by a test).
 #[cfg(test)]
-const TRIGGERS: [&str; 25] = [
+const TRIGGERS: [&str; 26] = [
     "greet_first", "greet_back", "hello", "practice_start", "match_start", "buy_low", "buy_rich", "round_won", "round_lost", "you_died", "streak",
     "bomb_planted", "bomb_defused", "last_alive", "halftime", "match_won", "match_lost", "teammate_down",
-    "bomb_dropped", "bomb_yours", "enemy_spotted", "mvp", "flashed", "team_out", "clutch_won",
+    "bomb_dropped", "bomb_yours", "enemy_spotted", "mvp", "flashed", "team_out", "clutch_won", "round_live",
 ];
 
 /// Below this you can't buy a rifle and armor; at or above the other, you're rich.
@@ -68,6 +68,8 @@ pub struct Brain {
     clutch_said: bool,
     /// Said this round that the whole team is down.
     team_out_said: bool,
+    /// The round's phase last time we looked (freeze time ending: "round_live").
+    last_phase: Option<net::rounds::Phase>,
     /// Round MVPs on the scoreboard last time we looked (None until the first scoreboard).
     mvps: Option<u32>,
     /// Last bomb state and visible enemies seen, to notice changes (same data as the HUD/radar).
@@ -90,6 +92,7 @@ impl Plugin for AssistantPlugin {
             team_out_said: false,
             mvps: None,
             last_bomb: None,
+            last_phase: None,
             seen_enemies: Vec::new(),
         })
         .init_resource::<view::Faces>()
@@ -156,6 +159,12 @@ fn in_game(mut news: MessageReader<GameNews>, w: Res<Walker>, settings: Res<Sett
     // What the radar and scoreboard show, the assistant knows too.
     use net::protocol::BombNet;
     if !c.practice && my_team != Team::Spectator {
+        // Freeze time over (CS plays its radio "Go go go" here; ours is the assistant, silent).
+        use net::rounds::Phase;
+        if brain.last_phase == Some(Phase::Freeze) && c.round.phase == Phase::Live && c.vitals.alive() {
+            brain.say("round_live", Kind::Relay, now(), &settings, &[]);
+        }
+        brain.last_phase = Some(c.round.phase);
         let bomb = c.bomb;
         if brain.last_bomb != Some(bomb) {
             match (brain.last_bomb, bomb) {

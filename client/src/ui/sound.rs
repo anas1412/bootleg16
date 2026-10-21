@@ -18,9 +18,17 @@ pub enum UiSound {
     Tick,
     /// A match found: three rising notes.
     Found,
-    /// Freeze time is over, the round is live: two quick rising notes (CS plays a radio
-    /// "Go go go" here; we have no radio).
+    /// Round events, where CS 1.6 plays a radio call; ours are short cues, no voice (and the
+    /// assistant's line). Freeze time over, the round is live (CS: "Go go go").
     Go,
+    /// The bomb is planted (CS: "The bomb has been planted"): high, low, high.
+    Planted,
+    /// The bomb is defused (CS: "Bomb has been defused"): two bright rising notes.
+    Defused,
+    /// The round is won or lost (CS: "Terrorists win" / "Counter-terrorists win"): a rising
+    /// or a falling three notes.
+    Won,
+    Lost,
     /// A status icon appearing (buy zone, kit) or going.
     On,
     Off,
@@ -36,6 +44,10 @@ impl UiSound {
             UiSound::Tick => (vec![1320.0], 0.2),
             UiSound::Found => (vec![660.0, 880.0, 1320.0], 0.5),
             UiSound::Go => (vec![587.0, 880.0], 0.5),
+            UiSound::Planted => (vec![988.0, 740.0, 988.0], 0.5),
+            UiSound::Defused => (vec![784.0, 1175.0], 0.5),
+            UiSound::Won => (vec![523.0, 659.0, 784.0], 0.5),
+            UiSound::Lost => (vec![523.0, 440.0, 349.0], 0.45),
             UiSound::On => (vec![880.0], 0.18),
             UiSound::Off => (vec![660.0], 0.18),
         }

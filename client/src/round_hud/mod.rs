@@ -17,7 +17,7 @@ pub struct RoundHudPlugin;
 
 impl Plugin for RoundHudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<RoundNews>().add_systems(OnEnter(AppState::InGame), (spawn, money::spawn, news::spawn)).add_systems(Update, (top_bar, ticks, money::money, news::news, news::progress).in_set(Frame::Ui));
+        app.add_message::<RoundNews>().add_systems(OnEnter(AppState::InGame), (spawn, money::spawn, news::spawn)).add_systems(Update, (top_bar, ticks, event_cues, money::money, news::news, news::progress).in_set(Frame::Ui));
     }
 }
 
@@ -220,6 +220,22 @@ fn top_bar(
         Phase::GameOver => "MATCH OVER".into(),
     };
     set(&mut round, label);
+}
+
+/// A cue for each round event (no voice: CS plays a radio call for these).
+fn event_cues(mut news: MessageReader<crate::effects::GameNews>, w: Res<Walker>, mut sounds: MessageWriter<crate::ui::UiSound>) {
+    use crate::ui::UiSound;
+    let mine = w.client.team();
+    for crate::effects::GameNews(e) in news.read() {
+        let cue = match e {
+            GameEvent::BombPlanted { .. } => UiSound::Planted,
+            GameEvent::BombDefused { .. } => UiSound::Defused,
+            GameEvent::RoundEnd { .. } if mine == Team::Spectator => continue,
+            GameEvent::RoundEnd { winner, .. } => if *winner == mine { UiSound::Won } else { UiSound::Lost },
+            _ => continue,
+        };
+        sounds.write(cue);
+    }
 }
 
 /// One tick per player under each score, lit while they're alive.
