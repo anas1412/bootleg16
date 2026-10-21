@@ -285,12 +285,10 @@ fn buy_menu(
                 let nums: Vec<String> = (1..=layout.len()).map(|i| format!("{i:02}")).collect();
                 nav(col, &kit, "buy.cat", layout.iter().enumerate().map(|(i, e)| NavItem { num: &nums[i], label: e.0, jp: "", action: UiAction::BuyCategory(i), selected: i == cat }).collect(), true);
                 col.spawn((kit_text("1-9 · BUY    ENTER · BUY SELECTED    ESC · CLOSE", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), padding: UiRect::left(vh(16.0)), ..default() }));
-                // sell back this round's buys (the server refunds only what's unused)
-                if !free {
-                    col.spawn(Node { margin: UiRect { top: vh(24.0), left: vh(16.0), ..default() }, ..default() }).with_children(|r| {
-                        chip(r, &kit, "Undo buys", UiAction::UndoBuys, false);
-                    });
-                }
+                // sell back this round's buys (the server refunds only what's unused; free buys just go)
+                col.spawn(Node { margin: UiRect { top: vh(24.0), left: vh(16.0), ..default() }, ..default() }).with_children(|r| {
+                    chip(r, &kit, "Undo buys", UiAction::UndoBuys, false);
+                });
             });
             // Cards, two columns.
             body.spawn(Node { flex_grow: 1.0, flex_basis: px(0), min_width: px(0), flex_wrap: FlexWrap::Wrap, justify_content: JustifyContent::SpaceBetween, row_gap: vh(16.0), align_content: AlignContent::FlexStart, ..default() }).with_children(|grid| {
