@@ -79,23 +79,17 @@ struct BuyRoot;
 #[derive(Component)]
 struct BuyClock;
 
-/// Buy time left under this many seconds shows amber.
-const BUY_HURRY: f32 = 5.0;
-
 /// "· 0:14 LEFT" while buy time runs (none in practice, deathmatch and warmup). At 0 the server
 /// stops buying and overlay.rs closes the shop.
 fn buy_clock(w: Res<Walker>, mut clock: Query<(&mut Text, &mut TextColor), With<BuyClock>>) {
-    let left = w.client.me_info.buy_left;
+    // the same clock as the top bar's "BUY 0:14"
+    let time = crate::round_hud::buy_time(&w);
     for (mut t, mut c) in &mut clock {
-        let s = left.map(|l| {
-            let n = l.max(0.0).ceil() as u32;
-            format!("· {}:{:02} LEFT", n / 60, n % 60)
-        });
-        let s = s.unwrap_or_default();
+        let s = time.as_ref().map(|(left, _)| format!("· {left} LEFT")).unwrap_or_default();
         if t.0 != s {
             t.0 = s;
         }
-        c.set_if_neq(TextColor(if left.is_some_and(|l| l < BUY_HURRY) { AMBER } else { TX2 }));
+        c.set_if_neq(TextColor(if time.as_ref().is_some_and(|(_, hurry)| *hurry) { AMBER } else { TX2 }));
     }
 }
 

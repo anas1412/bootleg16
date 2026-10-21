@@ -54,7 +54,7 @@ mod play;
 mod play_page;
 mod players;
 mod radar;
-mod round_hud;
+pub mod round_hud;
 mod scoreboard;
 mod spectate;
 mod sky;

@@ -109,6 +109,16 @@ fn mmss(secs: f32) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+/// Buy time left under this many seconds shows amber.
+pub const BUY_HURRY: f32 = 5.0;
+
+/// The buy time left, as the top bar and the shop both show it ("0:14"), and whether it's
+/// nearly out. None where buying has no limit (practice, deathmatch, warmup) or it has ended.
+pub fn buy_time(w: &Walker) -> Option<(String, bool)> {
+    let left = w.client.me_info.buy_left.filter(|l| *l > 0.0)?;
+    Some((mmss(left), left < BUY_HURRY))
+}
+
 /// The last seconds swell and tick; the last five tick out loud.
 const URGENT: f32 = 10.0;
 const URGENT_SOUND: f32 = 5.0;
@@ -159,8 +169,11 @@ fn top_bar(
     let label = match r.phase {
         _ if practice => "PRACTICE".into(),
         Phase::Warmup => "WARMUP".into(),
-        Phase::Freeze => format!("ROUND {} · BUY", r.round),
-        Phase::Live => format!("ROUND {}", r.round),
+        // while buying is open (freeze time and the start of the round): how long is left
+        Phase::Freeze | Phase::Live => match buy_time(&w) {
+            Some((t, _)) => format!("ROUND {} · BUY {t}", r.round),
+            None => format!("ROUND {}", r.round),
+        },
         Phase::Over => "ROUND OVER".into(),
         Phase::GameOver => "MATCH OVER".into(),
     };
