@@ -20,7 +20,7 @@ impl Plugin for BuyPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BuyMenu>()
             .add_systems(OnEnter(AppState::InGame), spawn)
-            .add_systems(Update, buy_menu.in_set(Frame::Ui));
+            .add_systems(Update, (buy_menu, buy_clock).chain().in_set(Frame::Ui));
     }
 }
 
@@ -74,6 +74,30 @@ fn layout(ct: bool) -> Vec<Entry> {
 
 #[derive(Component)]
 struct BuyRoot;
+
+/// The buy time left, by the side's name in the header.
+#[derive(Component)]
+struct BuyClock;
+
+/// Buy time left under this many seconds shows amber.
+const BUY_HURRY: f32 = 5.0;
+
+/// "· 0:14 LEFT" while buy time runs (none in practice, deathmatch and warmup). At 0 the server
+/// stops buying and overlay.rs closes the shop.
+fn buy_clock(w: Res<Walker>, mut clock: Query<(&mut Text, &mut TextColor), With<BuyClock>>) {
+    let left = w.client.me_info.buy_left;
+    for (mut t, mut c) in &mut clock {
+        let s = left.map(|l| {
+            let n = l.max(0.0).ceil() as u32;
+            format!("· {}:{:02} LEFT", n / 60, n % 60)
+        });
+        let s = s.unwrap_or_default();
+        if t.0 != s {
+            t.0 = s;
+        }
+        c.set_if_neq(TextColor(if left.is_some_and(|l| l < BUY_HURRY) { AMBER } else { TX2 }));
+    }
+}
 
 fn spawn(mut menu: ResMut<BuyMenu>) {
     menu.0 = None;
@@ -248,7 +272,10 @@ fn buy_menu(
             }
             head.with_children(|h| {
                     h.spawn(Node { flex_direction: FlexDirection::Column, row_gap: vh(8.0), ..default() }).with_children(|t| {
-                        t.spawn(kit_text(if ct { "BUY · BUREAU" } else { "BUY · STRAYS" }, 13.0, team_color, &kit.text));
+                        t.spawn(Node { column_gap: vh(8.0), ..default() }).with_children(|l| {
+                            l.spawn(kit_text(if ct { "BUY · BUREAU" } else { "BUY · STRAYS" }, 13.0, team_color, &kit.text));
+                            l.spawn((BuyClock, kit_text("", 13.0, TX2, &kit.text)));
+                        });
                         t.spawn(Node { align_items: AlignItems::Baseline, column_gap: vh(16.0), ..default() }).with_children(|r| {
                             r.spawn(kit_text("ARMORY", 52.0, TX1, &kit.display));
                             r.spawn(kit_text("武器庫", 13.0, TX3, &kit.jp));
