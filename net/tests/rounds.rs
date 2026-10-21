@@ -205,15 +205,16 @@ fn everything_bought_this_round_sells_back() {
 }
 
 #[test]
-fn practice_hands_you_the_bomb_whatever_your_team_and_you_may_defuse_it() {
+fn practice_hands_the_strays_the_bomb_and_you_may_defuse_it_yourself() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup_with(&bsp, 0, 0.0, quick());
     g.server.set_rules(net::server::Rules::practice(0));
-    g.connect_as(Some(Team::Ct), Some(Team::Spectator));
-    let a = g.a.id().unwrap();
+    g.connect_as(Some(Team::T), Some(Team::Ct));
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
     let mut ev = Vec::new();
     wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
-    assert!(g.server.player_state(a).unwrap().loadout.c4, "the bomb is yours in practice, even as a CT");
+    assert!(g.server.player_state(a).unwrap().loadout.c4, "the Strays (T) get the bomb in practice");
+    assert!(!g.server.player_state(b).unwrap().loadout.c4, "the Bureau (CT) don't");
     // plant it in a site
     let spot = site_spot(&bsp);
     g.server.teleport(a, spot);
@@ -227,7 +228,7 @@ fn practice_hands_you_the_bomb_whatever_your_team_and_you_may_defuse_it() {
         _ => None,
     });
     let at = at.expect("planted");
-    // and defuse it yourself
+    // and defuse it yourself (practice)
     g.server.teleport(a, [at[0] + 30.0, at[1], at[2] + 40.0]);
     wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
     let eye = g.server.player(a).unwrap().eye();

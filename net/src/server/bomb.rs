@@ -1,7 +1,7 @@
 //! The bomb: carried by a terrorist, dropped when they die (or press G), planted in a bomb
 //! site (the plant itself is weapon code in `sim`), defused by a counter-terrorist holding
-//! use on it, or it explodes. In practice the bomb is always yours: handed to you (whatever your
-//! team) and handed again 3 s after it went off or was defused, and you may defuse it too.
+//! use on it, or it explodes. In practice the bomb is yours when you play the Strays (T): handed
+//! to you, and again 3 s after it went off or was defused; you may defuse it yourself there.
 use super::*;
 use crate::rounds::{EndReason, Phase};
 
@@ -49,7 +49,8 @@ impl Server {
         self.bomb = Bomb::Carried(c.id);
     }
 
-    /// Practice: no bomb in play (or 3 s after the last one ended): hand it to the player.
+    /// Practice: no bomb in play (or 3 s after the last one ended): hand it to the player, if
+    /// they play the Strays.
     fn practice_bomb_step(&mut self) {
         if !self.rules.practice || self.world.zones.bomb_sites.is_empty() {
             return;
@@ -57,7 +58,7 @@ impl Server {
         match self.bomb {
             Bomb::Gone if self.practice_bomb == 0 => self.practice_bomb = self.tick + self.rate.secs(3.0),
             Bomb::None | Bomb::Gone if self.tick >= self.practice_bomb => {
-                let Some(c) = self.clients.values_mut().filter(|c| !c.bot && c.vitals.alive() && c.team != Team::Spectator).min_by_key(|c| c.id) else { return };
+                let Some(c) = self.clients.values_mut().filter(|c| !c.bot && c.vitals.alive() && c.team == Team::T).min_by_key(|c| c.id) else { return };
                 c.state.loadout.give(Id::C4, 0.0);
                 self.bomb = Bomb::Carried(c.id);
                 self.practice_bomb = 0;
@@ -121,7 +122,7 @@ impl Server {
                 let taker = self.clients.values_mut().find(|c| {
                     let o = c.state.movement.origin;
                     let h = c.state.movement.hull();
-                    (c.team == Team::T || (practice && !c.bot)) && c.vitals.alive() && (0..3).all(|k| at[k] >= o[k] + h.mins()[k] - 16.0 && at[k] <= o[k] + h.maxs()[k] + 16.0)
+                    c.team == Team::T && c.vitals.alive() && (0..3).all(|k| at[k] >= o[k] + h.mins()[k] - 16.0 && at[k] <= o[k] + h.maxs()[k] + 16.0)
                 });
                 if let Some(c) = taker {
                     c.state.loadout.give(Id::C4, 0.0);
@@ -200,7 +201,7 @@ impl Server {
     pub(super) fn bomb_net(&self, viewer: Team) -> BombNet {
         let now = self.tick;
         match self.bomb {
-            Bomb::Carried(id) if viewer == Team::T || self.rules.practice => BombNet::Carried(id),
+            Bomb::Carried(id) if viewer == Team::T => BombNet::Carried(id),
             Bomb::Dropped(at) => BombNet::Dropped(at),
             Bomb::Planted { at, explode, defuse } => BombNet::Planted {
                 at,
