@@ -125,6 +125,14 @@ fn chip_node(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str, action: UiAct
     e.id()
 }
 
+/// A chip that can't be pressed now: the same frame, quiet text, no hover, no action.
+pub fn chip_off(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str) {
+    let node = Node { height: vh(44.0), padding: UiRect::horizontal(vh(18.0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(1)), border_radius: BorderRadius::all(vh(RADIUS_S)), ..default() };
+    p.spawn((node, BorderColor::all(LINE))).with_children(|c| {
+        c.spawn(kit_text(label.to_uppercase(), 13.0, TX3, &kit.text));
+    });
+}
+
 /// A single framed choice (toast buttons, Invite). Selected: amber frame and text.
 pub fn chip(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str, action: UiAction, selected: bool) {
     chip_node(p, kit, label, action, selected, true, |_| {});

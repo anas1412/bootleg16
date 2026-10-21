@@ -5,7 +5,7 @@
 use crate::game::{Frame, Walker};
 use crate::menu::{AppState, Overlay};
 use crate::hud::{weapon_icon, Icons};
-use crate::ui::{chip, clickable_keep_border, kit_text, nav, primary_button, primary_off, vh, Anim, Kit, NavItem, UiAction, UiActions, AMBER, BAD, BG1, CT_COLOR, LINE, OK, TX1, TX2, TX3, T_COLOR};
+use crate::ui::{chip, chip_off, clickable_keep_border, kit_text, nav, primary_button, primary_off, vh, Anim, Kit, NavItem, UiAction, UiActions, AMBER, BAD, BG1, CT_COLOR, LINE, OK, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
 use net::protocol::{BuyItem, Team};
 
@@ -90,10 +90,12 @@ fn buy_menu(
     mut actions: ResMut<UiActions>,
     mut w: ResMut<Walker>,
     mut menu: ResMut<BuyMenu>,
-    mut shown: Local<Option<(Option<Option<usize>>, usize, Team, i32, Vec<(String, i32, bool)>, Vec<Option<u8>>)>>,
+    mut shown: Local<Option<(Option<Option<usize>>, usize, Team, i32, Vec<(String, i32, bool)>, Vec<Option<u8>>, bool)>>,
     roots: Query<Entity, With<BuyRoot>>,
     mut overlay: ResMut<Overlay>,
     (time, mut last_click): (Res<Time>, Local<Option<(usize, f32)>>),
+    // bought anything this round (the round it was): Undo needs something to undo
+    mut bought: Local<(u32, bool)>,
 ) {
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
     if auto && std::env::var_os("BOOTLEG16_MENU").is_none() {
@@ -135,6 +137,7 @@ fn buy_menu(
         }
         UiAction::UndoBuys => {
             w.client.undo_buys();
+            bought.1 = false;
             false
         }
         UiAction::BuyCategory(i) => {
@@ -159,6 +162,7 @@ fn buy_menu(
         // the menu stays open: buy several things, undo, close with B, Esc or 0
         UiAction::Buy(item) => {
             w.client.buy(*item);
+            bought.1 = true;
             false
         }
         _ => true,
@@ -168,8 +172,13 @@ fn buy_menu(
         if let Some(Some(cat)) = state {
             if let Some((_, item)) = layout.get(cat).and_then(|Entry(_, items)| items.get(menu.1)) {
                 w.client.buy(*item);
+                bought.1 = true;
             }
         }
+    }
+    // a new round, or dying, empties the list (the server's too)
+    if bought.0 != w.client.round.round || !w.client.vitals.alive() {
+        *bought = (w.client.round.round, false);
     }
     if auto && state.is_none() {
         // Screenshot check: `BOOTLEG16_MENU=<page>` (0 pistols .. 3 equipment; default rifles).
@@ -187,12 +196,12 @@ fn buy_menu(
     let mates: Vec<(String, i32, bool)> = w.client.scores.iter().filter(|s| Some(s.id) != w.client.id()).filter_map(|s| s.money.map(|m| (s.name.clone(), m, s.alive))).collect();
     // what you already have, per item (the cards say OWNED, grenades how many)
     let have: Vec<Option<u8>> = layout.iter().flat_map(|Entry(_, items)| items.iter().map(|(_, item)| owned(&w, *item))).collect();
-    if *shown == Some((state, menu.1, team, money, mates.clone(), have.clone())) {
+    if *shown == Some((state, menu.1, team, money, mates.clone(), have.clone(), bought.1)) {
         return;
     }
     // What changed decides what moves: opening tunes everything in; a new category tunes the
     // cards in (staggered) and the details; a new card just the details; closing tunes out.
-    let prev = shown.replace((state, menu.1, team, money, mates.clone(), have));
+    let prev = shown.replace((state, menu.1, team, money, mates.clone(), have, bought.1));
     let was = prev.as_ref().and_then(|p| p.0);
     let opening = was.is_none();
     let new_cat = opening || was != Some(state.unwrap_or(None)) || prev.as_ref().map(|p| p.2) != Some(team);
@@ -287,7 +296,11 @@ fn buy_menu(
                 col.spawn((kit_text("1-9 · BUY    ENTER · BUY SELECTED    ESC · CLOSE", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), padding: UiRect::left(vh(16.0)), ..default() }));
                 // sell back this round's buys (the server refunds only what's unused; free buys just go)
                 col.spawn(Node { margin: UiRect { top: vh(24.0), left: vh(16.0), ..default() }, ..default() }).with_children(|r| {
-                    chip(r, &kit, "Undo buys", UiAction::UndoBuys, false);
+                    if bought.1 {
+                        chip(r, &kit, "Undo buys", UiAction::UndoBuys, false);
+                    } else {
+                        chip_off(r, &kit, "Undo buys");
+                    }
                 });
             });
             // Cards, two columns.
