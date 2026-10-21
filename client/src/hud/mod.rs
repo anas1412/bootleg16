@@ -206,6 +206,9 @@ fn status(
     for mut vis in &mut alive_only {
         vis.set_if_neq(if alive && !covered.0 { Visibility::Inherited } else { Visibility::Hidden });
     }
+    // CS 1.6 (`UpdateClientData`): health shows whole, and never 0 while you live
+    // (falls take fractions, so 0.4 left is alive and shows 1)
+    v.health = if v.health > 0.0 && v.health < 1.0 { 1.0 } else { v.health.trunc().max(0.0) };
     let low = v.health <= LOW_HP;
     health.0.target = v.health;
     // while the panel bursts, the animation owns its colours
