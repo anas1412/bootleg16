@@ -1,6 +1,6 @@
 // The HUD, live (client/src/hud_motion.rs does the same in the game). A demo loop on the HUD
 // screens: hits, shots, a reload, money, a weapon switch, voices, buy zone and kit, and the
-// timer's last 10 s. Every change uses the same motion as the menus: values count or roll,
+// timer's last 30 s (as CS 1.6: the clock flips to red, faster as time runs out, no sound). Every change uses the same motion as the menus: values count or roll,
 // bars drain with a trail, edges flare, things open and close in place.
 function hudLive(root) {
   const $ = id => root.querySelector('#' + id);
@@ -60,6 +60,8 @@ function hudLive(root) {
     const c = $('clip'); c.textContent = clip; c.classList.remove('low'); restart(c, 'roll-up');
     $('reserve').textContent = '/ ' + reserve; flare($('ammo'));
   };
+  // the carried strip: the one in your hands bright
+  const own = id => root.querySelectorAll('.own').forEach(o => o.classList.toggle('on', o.id === 'own-' + id));
   const status = (id, on) => { const s = $(id); if (s.classList.contains('on') === on) return; s.classList.toggle('on', on); if (on) restart(s, 'pop'); flare($('money')); tone([on ? 880 : 660], { vol: .03 }); };
   const voice = (name, color, ch, on) => {
     const list = $('voices'), row = list.querySelector(`[data-voice="${name}"]`);
@@ -75,18 +77,29 @@ function hudLive(root) {
     if (alive()) setTimeout(levels, 70);
   };
   levels();
-  // the round timer: every second; the last 10 s turn red and pulse, with a quiet tick
+  // the round timer (game: round_hud top_bar): from 30 s it flips to red and back, every
+  // 0.8 s, then 0.4 from 20, 0.2 from 10, 0.1 from 5, 0.05 from 2, red for good at 0; the
+  // last ten seconds also swell. Silent, as in CS 1.6.
+  const period = l => l <= 2 ? .05 : l <= 5 ? .1 : l <= 10 ? .2 : l <= 20 ? .4 : .8;
+  let end = performance.now() + state.t * 1000, shownSec = -1;
+  state.restart = secs => { end = performance.now() + secs * 1000; };
   const clock = () => {
     if (!alive()) return;
-    state.t = Math.max(0, state.t - 1);
-    const t = $('clock-t'), urgent = state.t <= 10;
-    t.textContent = `${Math.floor(state.t / 60)}:${String(state.t % 60).padStart(2, '0')}`;
-    $('clock').classList.toggle('urgent', urgent);
-    if (urgent) { restart(t, 'tick'); if (state.t <= 5) tone([1320], { vol: .025, len: .05 }); }
-    setTimeout(clock, 1000);
+    const left = Math.max(0, (end - performance.now()) / 1000), sec = Math.ceil(left), t = $('clock-t');
+    if (sec !== shownSec) {
+      t.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+      if (left <= 10 && sec > 0) restart(t, 'tick');
+      shownSec = sec;
+    }
+    const warn = left <= 30;
+    $('clock').classList.toggle('warn', warn);
+    $('clock').classList.toggle('red', warn && (left <= 0 || Math.floor(left / period(left)) % 2 === 0));
+    setTimeout(clock, 25);
   };
-  $('clock-t').textContent = '0:20';
-  setTimeout(clock, 1000);
+  // the live demo is past buy time, and starts before the kit is bought
+  $('round-l').textContent = 'Round 13';
+  $('own-kit').classList.add('gone');
+  clock();
 
   // the loop
   const loop = () => {
@@ -98,16 +111,16 @@ function hudLive(root) {
     at(4400, () => vitals(22, 41));
     at(5200, () => reload(2500));
     at(6000, () => voice('Hawk', 'var(--ct-color)', 'Near', true));
-    at(7000, () => { cash(-200); status('st-kit', true); });
-    at(8400, () => weapon('Desert Eagle', 'd_deagle', 7, 7, 35));
+    at(7000, () => { cash(-200); $('own-kit').classList.remove('gone'); restart($('own-kit'), 'pop'); });
+    at(8400, () => { weapon('USP', 'd_usp', 12, 12, 100); own('usp'); });
     at(9200, () => status('st-buy', false));
     [9800, 10100, 10400].forEach(ms => at(ms, shoot));
     at(12500, () => voice('Hawk', '', '', false));
     at(15000, () => {
       // next round: back to full
-      vitals(100, 67); weapon('AK-47', 'd_ak47', 24, 30, 90); status('st-buy', true); status('st-kit', false);
+      vitals(100, 67); weapon('AK-47', 'd_ak47', 24, 30, 90); own('ak'); status('st-buy', true); $('own-kit').classList.add('gone');
       state.cash = 3250; $('cash').textContent = '3250'; voice('Ghost', 'var(--ct-color)', 'Team', true);
-      state.t = 21;
+      state.restart(21);
     });
     at(16000, loop);
   };

@@ -207,8 +207,8 @@
 .vc-name { font: 700 16px var(--f-num); }
 .vc-ch { color: var(--tx2); }
 /* the round timer's last 10 s: red, and each second pulses */
-#clock.urgent { --edge: var(--bad); } #clock.urgent #clock-t { color: var(--bad); }
-#clock.urgent > .edge { opacity: 1; }
+#clock.warn { --edge: var(--bad); } #clock.warn > .edge { opacity: 1; }
+#clock.red #clock-t { color: var(--bad); }
 .tick { animation: tick 420ms var(--ease-out); }
 @keyframes tick { 0% { transform: scale(1.14); --split: 4px; } 100% { transform: none; --split: 0px; } }
 #clock-t { display: inline-block; text-shadow: calc(-1 * var(--split)) 0 rgba(73, 198, 255, .9), var(--split) 0 rgba(255, 79, 139, .9); }
@@ -318,3 +318,12 @@
 .rc-line { font: 600 20px var(--f-text); color: var(--tx1); } .rc-line b { font-family: var(--f-num); }
 .rc-bar { width: 100%; height: 3px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
 .rc-bar i { display: block; height: 100%; background: var(--bad); }
+
+/* What you carry, over the weapon panel: the one in your hands bright, the rest quiet. */
+.owned { display: flex; align-items: center; gap: 14px; }
+.own { display: flex; align-items: center; gap: 4px; color: rgba(142, 155, 168, .85); transition: color var(--t-hover); }
+.own.on { color: var(--tx1); }
+.own b { font: 700 16px var(--f-num); }
+.own.gone { display: none; }
+/* A chip that can't be pressed now (Undo buys before you bought anything): quiet frame and text. */
+.chip.off { color: var(--tx3); box-shadow: inset 0 0 0 1px var(--line); pointer-events: none; }

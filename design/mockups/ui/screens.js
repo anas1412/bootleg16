@@ -126,11 +126,11 @@ const SCREENS = {
     html: () => spectate(),
   },
   hud: {
-    name: 'In game', game: 'de_dust_ct.jpg', note: 'Live: hits drain health with a trail, shots roll the clip, reloads fill from the centre, money counts with its change, voice rows show who talks, the timer pulses in its last 10 s.',
+    name: 'In game', game: 'de_dust_ct.jpg', note: 'Live: hits drain health with a trail, shots roll the clip, reloads fill from the centre, money counts with its change, voice rows show who talks, from 30 s the clock flips to red, faster as time runs out, silent as in CS 1.6. Over the weapon panel, what you carry (in your hands bright).',
     html: () => hud(),
   },
   buy: {
-    name: 'Buy', game: 'de_dust_ct.jpg', covered: true, note: 'Opens over the game: the game blurs and dims behind it. Toggle it to see both ways.',
+    name: 'Buy', game: 'de_dust_ct.jpg', covered: true, note: 'Opens over the game and stays open: buy several things, double-click a card to buy, Undo buys (lit once you bought something), Esc or B close. What you own says OWNED; full grenades and armor too. Toggle it to see both ways.',
     html: () => hud() + `<div class="over">${buy()}</div>`,
   },
   scores: {
@@ -138,9 +138,9 @@ const SCREENS = {
     html: () => hud() + `<div class="over">${scores()}</div>`,
   },
   pause: {
-    name: 'Pause', game: 'de_dust2_t.jpg', covered: true, note: 'Esc. The same list rows as the main menu.',
+    name: 'Esc menu', game: 'de_dust2_t.jpg', covered: true, note: 'Esc. The game keeps running underneath: there is no pause, as in CS 1.6. The same list rows as the main menu.',
     html: () => hud() + `<div class="over" style="display:grid;place-items:center"><div class="tune" style="width:560px">
-      ${ui.pageTitle('Match', 'Paused', '一時停止')}<div style="margin-top:32px">${ui.nav([['01', 'Resume', '再開', true], ['02', 'Choose team', 'チーム'], ['03', 'Settings', '設定'], ['04', 'Leave match', '退出']])}</div></div></div>`,
+      ${ui.pageTitle('Match', 'Menu', 'メニュー')}<div style="margin-top:32px">${ui.nav([['01', 'Resume', '再開', true], ['02', 'Choose team', 'チーム'], ['03', 'Settings', '設定'], ['04', 'Leave match', '退出']])}</div></div></div>`,
   },
   teams: {
     name: 'Team pick', game: 'de_dust2_t.jpg', covered: true, note: 'Each side card carries its colour bar on top. Keys 1 and 2.',
@@ -222,6 +222,9 @@ for (const s of Object.values(SCREENS)) if (s.menu) s.html = () => menuFrame(s.m
 // Every HUD panel: rounded, tinted to your team, an edge light on top in your team's colour
 // (flares on events), and the same motion language as the menus (hud.js runs the live demo).
 const MIC = `url('data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="13" rx="4"/><path d="M5 11a7 7 0 0 0 14 0" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"/><path d="M12 18v4M8 22h8" stroke="#000" stroke-width="2" stroke-linecap="round"/></svg>')}')`;
+// What you carry (game: hud/owned.rs), in number-key order: [id, icon, width at 26 tall, count, in your hands].
+// The kit and the C4 live here too, not by the money.
+const OWNED = [['ak', 'd_ak47', 72, 1, true], ['usp', 'd_usp', 64, 1], ['knife', 'd_knife', 83, 1], ['flash', 'd_flashbang', 15, 2], ['he', 'd_grenade', 17, 1], ['kit', 'defuser', 28, 1]];
 const hudIco = (n, w, h, c, extra = '') => `<i class="spr" style="--s:url(${A}hud/${n}.png);width:${w}px;height:${h}px;color:${c}"${extra}></i>`;
 // One voice row: mic, live level, the name in its team's colour, the channel. Yours carries
 // the amber bar on the outer (left) edge.
@@ -261,13 +264,13 @@ function hud() {
   <div class="abs panel hud" id="money" style="left:var(--safe);top:296px;width:256px;height:48px;display:flex;align-items:center;gap:8px;padding:0 16px"><i class="edge"></i>
     <span style="font:700 26px var(--f-num);color:var(--ok)">$</span><span id="cash" style="font:700 26px var(--f-num);font-variant-numeric:tabular-nums">3250</span>
     <span class="cash-delta" id="delta"></span>
-    <span class="st-row"><span class="st" id="st-kit" title="Defuse kit">${hudIco('defuser', 24, 24, 'var(--ct-color)')}</span><span class="st on" id="st-buy" title="Buy zone">${hudIco('buyzone', 24, 24, 'var(--ok)')}</span></span></div>
+    <span class="st-row"><span class="st on" id="st-buy" title="Buy zone">${hudIco('buyzone', 24, 24, 'var(--ok)')}</span></span></div>
   <div class="abs" id="voices" style="left:var(--safe);top:360px;display:flex;flex-direction:column;align-items:flex-start;gap:4px">
     ${voiceRow('anas', 'var(--ct-color)', 'Team', true)}${voiceRow('Ghost', 'var(--ct-color)', 'Team')}</div>
   <div class="abs" style="left:0;right:0;top:var(--safe);display:flex;flex-direction:column;align-items:center;gap:12px">
     <div style="display:flex;gap:4px">
       <div class="panel hud score" style="width:88px;display:grid;place-items:center;--edge:var(--ct-color)"><i class="edge on"></i><span class="num-m" style="color:var(--ct-color)">7</span></div>
-      <div class="panel hud" id="clock" style="width:148px;padding:10px 0;display:flex;flex-direction:column;align-items:center;gap:6px"><span class="num-m" id="clock-t">1:42</span><span class="label">Round 13</span></div>
+      <div class="panel hud" id="clock" style="min-width:148px;padding:10px 16px;white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:6px"><i class="edge"></i><span class="num-m" id="clock-t">1:42</span><span class="label" id="round-l">Round 13 · Buy 0:07</span></div>
       <div class="panel hud score" style="width:88px;display:grid;place-items:center;--edge:var(--t-color)"><i class="edge on"></i><span class="num-m" style="color:var(--t-color)">5</span></div></div>
     <div style="width:332px;display:flex;justify-content:space-between">${ticks('var(--ct-color)', 3)}${ticks('var(--t-color)', 4)}</div></div>
   <div class="abs" style="right:var(--safe);top:var(--safe);display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -280,44 +283,48 @@ function hud() {
     <div style="padding:16px var(--pad);display:flex;align-items:center;gap:var(--gap)">${ui.ico('cross', 36, 36)}<div><div class="num-l" id="hp">100</div><div class="meter" style="width:132px;margin-top:10px"><b id="hp-ghost" style="width:100%"></b><i id="hp-bar" style="width:100%"></i></div></div></div>
     <div style="width:1px;background:var(--line)"></div>
     <div style="padding:16px var(--pad);display:flex;align-items:center;gap:14px">${ui.ico('suithelmet_full', 32, 32, 'var(--tx2)')}<div><div class="num-m" id="ap" style="color:var(--tx2)">67</div><div class="meter" style="width:72px;margin-top:10px"><b id="ap-ghost" style="width:67%"></b><i id="ap-bar" style="width:67%;background:var(--tx2)"></i></div></div></div></div>
+  <div class="abs owned" id="owned" style="right:var(--safe);bottom:calc(var(--safe) + 112px)">${OWNED.map(([id, n, w, count, on]) => `<span class="own${on ? ' on' : ''}" id="own-${id}">${hudIco(n, w, 26, 'currentColor')}${count > 1 ? `<b>${count}</b>` : ''}</span>`).join('')}</div>
   <div class="abs panel hud" id="ammo" style="right:var(--safe);bottom:var(--safe);display:flex"><i class="edge"></i><i class="reload" id="reload"></i>
     <div class="wpn tune" id="wpn" style="width:184px;white-space:nowrap;padding:16px var(--pad);display:flex;flex-direction:column;justify-content:center;gap:10px"><span class="label" style="color:var(--tx1)">AK-47</span>${ui.ico('d_ak47', 108, 36, 'var(--tx2)')}</div>
     <div style="width:1px;background:var(--line)"></div>
     <div style="padding:16px var(--pad);display:flex;align-items:baseline;gap:10px"><span class="num-l clip" id="clip">24</span><span class="num-s" id="reserve" style="color:var(--tx2)">/ 90</span></div></div>`;
 }
 
-// Strays side. [name, price, art, ammo or note, damage, rpm, move speed, penetration]; equipment has no gun stats.
+// Strays side. Art is the game's flat HUD icon (as the game's shop). [name, price, art, ammo or note, damage, rpm, move speed, penetration]; equipment has no gun stats.
 const BUY = [
-  ['Pistols', [['Glock-18', 400, 'gun/glock18', '20 / 120', 25, 400, 250, 1], ['USP', 500, 'gun/usp', '12 / 100', 34, 352, 250, 1], ['Desert Eagle', 650, 'gun/deagle', '7 / 35', 54, 267, 250, 2]]],
-  ['SMGs', [['MAC-10', 1400, 'gun/mac10', '30 / 100', 29, 857, 250, 1], ['MP5', 1500, 'gun/mp5navy', '30 / 120', 26, 750, 250, 1], ['UMP45', 1700, 'gun/ump45', '25 / 100', 30, 571, 250, 1], ['P90', 2350, 'gun/p90', '50 / 100', 26, 857, 245, 1]]],
-  ['Rifles', [['Galil', 2000, 'gun/galil', '35 / 90', 30, 666, 240, 2], ['AK-47', 2500, 'gun/ak47', '30 / 90', 36, 600, 221, 2], ['Scout', 2750, 'gun/scout', '10 / 90', 75, 48, 260, 3], ['AWP', 4750, 'gun/awp', '10 / 30', 115, 41, 210, 3]]],
-  ['Equipment', [['Kevlar', 650, 'hud/suit_full', 'Armor 100'], ['Kevlar + Helmet', 1000, 'hud/suithelmet_full', 'Armor 100 · helmet'], ['Flashbang', 200, 'gun/flashbang', 'Max 2'], ['HE Grenade', 300, 'gun/hegrenade', 'Max 1'], ['Smoke Grenade', 300, 'gun/smokegrenade', 'Max 1']]],
+  ['Pistols', [['Glock-18', 400, 'hud/d_glock18', '20 / 120', 25, 400, 250, 1], ['USP', 500, 'hud/d_usp', '12 / 100', 34, 352, 250, 1], ['Desert Eagle', 650, 'hud/d_deagle', '7 / 35', 54, 267, 250, 2]]],
+  ['SMGs', [['MAC-10', 1400, 'hud/d_mac10', '30 / 100', 29, 857, 250, 1], ['MP5', 1500, 'hud/d_mp5navy', '30 / 120', 26, 750, 250, 1], ['UMP45', 1700, 'hud/d_ump45', '25 / 100', 30, 571, 250, 1], ['P90', 2350, 'hud/d_p90', '50 / 100', 26, 857, 245, 1]]],
+  ['Rifles', [['Galil', 2000, 'hud/d_galil', '35 / 90', 30, 666, 240, 2], ['AK-47', 2500, 'hud/d_ak47', '30 / 90', 36, 600, 221, 2], ['Scout', 2750, 'hud/d_scout', '10 / 90', 75, 48, 260, 3], ['AWP', 4750, 'hud/d_awp', '10 / 30', 115, 41, 210, 3]]],
+  ['Equipment', [['Kevlar', 650, 'hud/suit_full', 'Armor 100'], ['Kevlar + Helmet', 1000, 'hud/suithelmet_full', 'Armor 100 · helmet'], ['Flashbang', 200, 'hud/d_flashbang', 'Max 2'], ['HE Grenade', 300, 'hud/d_grenade', 'Max 1'], ['Smoke Grenade', 300, 'hud/d_smoke', 'Max 1']]],
 ];
 const FUNDS = 3250;
+// What you already have (game: buy.rs owned / cost_now): the card says OWNED, no price.
+const OWN = { 'AK-47': 1, 'Flashbang': 2, 'HE Grenade': 1 };
 const buyState = { cat: 2, sel: 1 };
 
 function buyCards(cat, sel) {
   return BUY[cat][1].map((g, i) => {
-    const cant = g[1] > FUNDS, on = i === sel, icon = g[2].startsWith('hud/');
-    const art = icon ? `<i class="spr abs" style="--s:url(${A}${g[2]}.png);left:50%;top:52px;width:88px;height:88px;margin-left:-44px;color:${cant ? 'var(--tx3)' : 'var(--tx1)'}"></i>`
+    const have = OWN[g[0]], cant = have || g[1] > FUNDS, on = i === sel, icon = g[2].startsWith('hud/');
+    const gun = g[2].startsWith('hud/d_');
+    const art = icon ? `<i class="spr abs" style="--s:url(${A}${g[2]}.png);${gun ? 'left:40px;right:40px;top:58px;height:76px' : 'left:50%;top:52px;width:88px;height:88px;margin-left:-44px'};color:${cant ? 'var(--tx3)' : 'var(--tx1)'}"></i>`
       : `<i class="gun abs" style="--s:url(${A}${g[2]}.png);left:40px;right:40px;top:52px;height:88px;${cant ? 'filter:grayscale(1) brightness(.45)' : ''}"></i>`;
     return `<div class="card tune${on ? ' sel' : ''}" data-item="${i}" style="--i:${i};height:200px;padding:20px var(--pad);cursor:pointer">
-      <div style="display:flex"><span class="label n">${String(i + 1).padStart(2, '0')}</span><span class="label" style="margin-left:auto">${g[3]}</span></div>${art}
-      <div class="abs" style="left:var(--pad);right:var(--pad);bottom:18px;display:flex;align-items:baseline"><span class="h3" style="color:${cant ? 'var(--tx3)' : 'var(--tx1)'}">${g[0]}</span><span class="num-s" style="margin-left:auto;font-size:20px;color:${cant ? 'var(--bad)' : 'var(--tx1)'}">$${g[1]}</span></div></div>`;
+      <div style="display:flex;gap:10px"><span class="label n">${String(i + 1).padStart(2, '0')}</span>${have ? `<span class="label" style="color:var(--amber)">Owned${have > 1 ? ' x' + have : ''}</span>` : ''}<span class="label" style="margin-left:auto">${g[3]}</span></div>${art}
+      <div class="abs" style="left:var(--pad);right:var(--pad);bottom:18px;display:flex;align-items:baseline"><span class="h3" style="color:${cant ? 'var(--tx3)' : 'var(--tx1)'}">${g[0]}</span><span class="num-s" style="margin-left:auto;font-size:20px;color:${cant ? 'var(--bad)' : 'var(--tx1)'}">${have ? '' : '$' + g[1]}</span></div></div>`;
   }).join('');
 }
 
 function buyDetails(cat, sel) {
-  const g = BUY[cat][1][sel], cant = g[1] > FUNDS, icon = g[2].startsWith('hud/');
+  const g = BUY[cat][1][sel], have = OWN[g[0]], cant = g[1] > FUNDS, icon = g[2].startsWith('hud/');
   const size = Math.min(96, Math.floor(404 / (g[0].length * 0.43)));
   const spec = g.length > 4
     ? [['Damage', g[4], g[4] / 120], ['Fire rate', `${g[5]} rpm`, g[5] / 900], ['Magazine', g[3], 0], ['Move speed', g[6], g[6] / 260], ['Penetration', g[7], g[7] / 3]]
     : [['Use', g[3], 0]];
   return `<div class="tune"><div class="label" style="color:var(--amber)">${BUY[cat][0]} · selected</div>
     <div class="display" style="font-size:${size}px;line-height:96px;height:96px;margin-top:12px;white-space:nowrap">${g[0]}</div></div>
-    ${icon ? `<i class="spr tune" style="--s:url(${A}${g[2]}.png);display:block;width:120px;height:120px;margin:24px auto;color:var(--tx1);--i:1"></i>` : `<i class="gun tune" style="--s:url(${A}${g[2]}.png);height:120px;margin:24px 0;--i:1"></i>`}
+    ${icon ? `<i class="spr tune" style="--s:url(${A}${g[2]}.png);display:block;${g[2].startsWith('hud/d_') ? 'width:100%' : 'width:120px'};height:120px;margin:24px auto;color:var(--tx1);--i:1"></i>` : `<i class="gun tune" style="--s:url(${A}${g[2]}.png);height:120px;margin:24px 0;--i:1"></i>`}
     ${spec.map((s, i) => `<div class="tune" style="--i:${i + 2};display:grid;grid-template-columns:130px 1fr 112px;gap:16px;align-items:center;height:44px;border-top:1px solid var(--line)"><span class="label">${s[0]}</span><div class="meter"${s[2] ? '' : ' style="visibility:hidden"'}><i style="width:${Math.min(1, s[2]) * 100}%"></i></div><span class="num-s" style="text-align:right;font-size:16px">${s[1]}</span></div>`).join('')}
-    <div class="abs" style="left:32px;right:32px;bottom:32px">${(cant ? ui.primary(`Buy · $${g[1]}`, `Need $${g[1] - FUNDS}`, true) : ui.primary(`Buy · $${g[1]}`)).replace('min-width', 'width')}</div>`;
+    <div class="abs" style="left:32px;right:32px;bottom:32px">${(have ? ui.primary('Buy', 'Owned', true) : cant ? ui.primary(`Buy · $${g[1]}`, `Need $${g[1] - FUNDS}`, true) : ui.primary(`Buy · $${g[1]}`)).replace('min-width', 'width')}</div>`;
 }
 
 function buy() {
@@ -327,8 +334,8 @@ function buy() {
       <div class="bteam"><div class="label">Team</div><div class="row">${[['kova', 4350], ['vera', 1200], ['rook', 800, 1]].map(([n, m, dead]) => `<div class="bt${m < 2700 ? ' low' : ''}${dead ? ' dead' : ''}"><span>${n}</span><b>$${m}</b></div>`).join('')}</div></div>
       <div style="margin-left:48px;text-align:right"><div class="label">Funds</div><div style="font:700 44px var(--f-num);margin-top:4px"><span style="color:var(--ok)">$</span>${FUNDS}</div></div></div>
     <div class="abs tune" style="left:var(--margin);top:240px;width:360px;--i:1">${ui.nav(BUY.map((c, i) => [String(i + 1).padStart(2, '0'), c[0], '', i === cat]), 'compact buycats')}
-      <div class="label" style="margin:24px 0 0 16px;color:var(--tx3)">1-9 · buy    Enter · buy selected    0 · close</div>
-      <button class="chip" style="margin:24px 0 0 16px">Undo buys</button></div>
+      <div class="label" style="margin:24px 0 0 16px;color:var(--tx3);display:flex;gap:14px;white-space:nowrap;letter-spacing:.08em"><span>1-9 · buy</span><span>Enter · buy selected</span><span>Esc · close</span></div>
+      <button class="chip" style="margin:24px 0 0 16px" title="Greyed (.chip.off) until you buy something this round">Undo buys</button></div>
     <div id="cards" class="abs" style="left:496px;top:240px;width:820px;display:grid;grid-template-columns:1fr 1fr;gap:16px">${buyCards(cat, sel)}</div>
     <div class="abs panel tune" style="left:1356px;right:var(--margin);top:240px;bottom:96px;--i:3"><div id="details" class="abs" style="inset:0;padding:32px">${buyDetails(cat, sel)}</div></div>`;
 }
