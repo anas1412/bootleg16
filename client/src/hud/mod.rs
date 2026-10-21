@@ -5,6 +5,7 @@
 //! HUD sprites, `hint` short hints in the low middle. Round state and money are `round_hud`, the kill feed `killfeed`.
 mod crosshair;
 mod hint;
+mod hit_dir;
 mod icons;
 mod motion;
 mod owned;
@@ -30,8 +31,8 @@ impl Plugin for HudPlugin {
         app.add_plugins(FrameTimeDiagnosticsPlugin::default())
             .init_resource::<Kit>()
             .init_resource::<Icons>()
-            .add_systems(OnEnter(AppState::InGame), (spawn, crosshair::spawn))
-            .add_systems(Update, (status, crosshair::crosshair, net_stats, owned::owned, protection).in_set(Frame::Ui));
+            .add_systems(OnEnter(AppState::InGame), (spawn, crosshair::spawn, hit_dir::spawn))
+            .add_systems(Update, (status, crosshair::crosshair, net_stats, owned::owned, protection, hit_dir::marks).in_set(Frame::Ui));
         motion::plugin(app);
         hint::plugin(app);
         visor::plugin(app);
