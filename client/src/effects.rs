@@ -98,8 +98,12 @@ fn spawn_parts(commands: &mut Commands, marker: impl Bundle, at: [f32; 3], parts
     models::spawn_lit(commands, parent, parts, materials);
 }
 
+/// A grenade in flight: its place in the snapshot's list and which kind it is.
 #[derive(Component)]
-struct GrenadeView;
+struct GrenadeView {
+    slot: usize,
+    kind: usize,
+}
 
 #[derive(Component)]
 struct GroundGunView;
@@ -147,21 +151,36 @@ fn grenade_effects(
     mut flash: ResMut<Flash>,
     fx: Res<Effects>,
     mut studio: ResMut<Assets<crate::studio::StudioMaterial>>,
-    views: Query<Entity, With<GrenadeView>>,
+    mut views: Query<(Entity, &GrenadeView, &mut Transform)>,
     mut overlay: Single<&mut BackgroundColor, With<FlashOverlay>>,
 ) {
     let dt = time.delta_secs();
-    // Grenades in flight: few enough to redraw from scratch every frame they exist.
-    for e in &views {
-        commands.entity(e).despawn();
+    // Grenades in flight: each keeps its model and only moves; one is made when a grenade
+    // appears (or a slot changes kind) and removed when it's gone.
+    let kind_of = |k: &sim::grenades::Kind| match k {
+        sim::grenades::Kind::He => 0,
+        sim::grenades::Kind::Flash => 1,
+        sim::grenades::Kind::Smoke => 2,
+    };
+    let flying = &w.client.grenades;
+    let mut have = vec![false; flying.len()];
+    for (e, v, mut tf) in &mut views {
+        match flying.get(v.slot) {
+            Some((k, at)) if kind_of(k) == v.kind => {
+                have[v.slot] = true;
+                let to = Vec3::from(map::to_y_up(*at));
+                if tf.translation != to {
+                    tf.translation = to;
+                }
+            }
+            _ => commands.entity(e).despawn(),
+        }
     }
-    for (kind, at) in w.client.grenades.clone() {
-        let i = match kind {
-            sim::grenades::Kind::He => 0,
-            sim::grenades::Kind::Flash => 1,
-            sim::grenades::Kind::Smoke => 2,
-        };
-        spawn_parts(&mut commands, GrenadeView, at, &fx.grenades[i], &mut studio);
+    for (slot, (k, at)) in flying.iter().enumerate() {
+        if !have[slot] {
+            let kind = kind_of(k);
+            spawn_parts(&mut commands, GrenadeView { slot, kind }, *at, &fx.grenades[kind], &mut studio);
+        }
     }
     // Explosions and flashes from server events (sorted out in `events`).
     let me = w.client.id();
