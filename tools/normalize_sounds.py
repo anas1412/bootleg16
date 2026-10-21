@@ -14,7 +14,8 @@ import numpy as np
 
 SHOT_PEAK = 0.80    # of full scale (about -2 dBFS)
 FOLEY_PEAK = 0.35   # about -9 dBFS
-SHOT = re.compile(r"-\d+\.wav$")
+# shots: `<weapon>-1.wav`, and the two named without the dash (awp1, usp1)
+SHOT = re.compile(r"(-\d+|^awp\d|^usp\d)\.wav$")
 
 
 def normalize(path, dry):
@@ -30,7 +31,7 @@ def normalize(path, dry):
     if peak < 1e-4:
         return None
     rel = os.path.basename(os.path.dirname(path)) == "weapons"
-    target = SHOT_PEAK if rel and SHOT.search(path) else FOLEY_PEAK
+    target = SHOT_PEAK if rel and SHOT.search(os.path.basename(path)) else FOLEY_PEAK
     gain = target / peak
     if abs(gain - 1.0) < 0.03:
         return None
