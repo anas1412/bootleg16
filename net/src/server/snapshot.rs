@@ -40,7 +40,7 @@ impl Server {
                 .map(|c| {
                     let (m, v) = (&c.state.movement, &c.vitals);
                     let mate = Mate { health: v.health.clamp(0.0, 255.0).ceil() as u8, armor: v.armor.clamp(0.0, 255.0).ceil() as u8, helmet: v.helmet, defuse_kit: c.defuse_kit, ammo: c.state.loadout.active_gun().map(|g| (g.clip.min(u16::MAX as u32) as u16, g.reserve.min(u16::MAX as u32) as u16)) };
-                    PlayerNet::new(c.id, m.origin, c.view.0, c.view.1, m.crouched, v.alive(), !m.on_ground && !m.on_ladder, c.state.loadout.active_gun().is_some_and(|g| g.reloading), c.state.loadout.active_id(), c.team, Some(mate))
+                    PlayerNet::new(c.id, m.origin, c.view.0, c.view.1, m.crouched, v.alive(), !m.on_ground && !m.on_ladder, c.state.loadout.active_gun().is_some_and(|g| g.reloading), c.state.loadout.active_id(), c.team, Some(mate)).protected(c.protected_until > self.tick)
                 })
                 .collect();
             let doors = self.world.doors.net_state();
@@ -63,7 +63,7 @@ impl Server {
                 .filter(|(_, c)| !c.bot)
                 .map(|(a, c)| {
                     let buy_left = if self.rules.free_play() { None } else { self.round.buy_left(self.tick).map(|t| t as f32 * self.rate.tick()) };
-                    let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), buy_left, defuse_kit: c.defuse_kit };
+                    let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), buy_left, defuse_kit: c.defuse_kit, protected: c.protected_until > self.tick };
                     let seen = &sights[&c.id];
                     // Health and kit only for teammates (spectators see everything anyway).
                     let players: Vec<PlayerNet> = players

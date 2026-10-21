@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 41;
+pub const PROTOCOL_VERSION: u32 = 42;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -142,7 +142,8 @@ pub struct PlayerNet {
     /// View angles in 1/65536 of a turn (yaw) and of half a turn (pitch).
     yaw: u16,
     pitch: i16,
-    /// Bit 0 crouched, bit 1 alive, bit 2 in the air (jumping, falling), bit 3 reloading.
+    /// Bit 0 crouched, bit 1 alive, bit 2 in the air (jumping, falling), bit 3 reloading,
+    /// bit 4 spawn-protected (deathmatch).
     flags: u8,
     /// Weapon in hand.
     pub weapon: Id,
@@ -176,6 +177,14 @@ impl PlayerNet {
             team,
             mate,
         }
+    }
+    /// Marked spawn-protected (deathmatch: takes no damage until they move or shoot).
+    pub fn protected(mut self, on: bool) -> PlayerNet {
+        self.flags |= (on as u8) << 4;
+        self
+    }
+    pub fn is_protected(&self) -> bool {
+        self.flags & 16 != 0
     }
     pub fn airborne(&self) -> bool {
         self.flags & 4 != 0
@@ -343,6 +352,8 @@ pub struct Me {
     /// Seconds of buy time left (None: no limit: practice, deathmatch, the warmup).
     pub buy_left: Option<f32>,
     pub defuse_kit: bool,
+    /// Deathmatch spawn protection: no damage until you move or shoot (2 s at most).
+    pub protected: bool,
 }
 
 /// What an item sounds like when you get it (CS 1.6: `CBasePlayerItem::DefaultTouch`,

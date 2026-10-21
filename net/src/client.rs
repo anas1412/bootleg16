@@ -179,7 +179,7 @@ impl Client {
             wanted_character: None,
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0, stage: Stage::Match, abandoned: [false; 2], vote: None, paused: false },
             bomb: BombNet::None,
-            me_info: Me { money: 0, limits: Default::default(), can_buy: false, buy_left: None, defuse_kit: false },
+            me_info: Me { money: 0, limits: Default::default(), can_buy: false, buy_left: None, defuse_kit: false, protected: false },
         })
     }
 

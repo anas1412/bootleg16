@@ -50,7 +50,7 @@ fn drop_in_fight_respawn_and_the_time_limit_resets_scores() {
     // A walk-in without a seat gets nowhere.
     let mut walk_in = net::Client::connect(server.local_addr(), "x", map.world()).unwrap();
     // Straight onto a team (no team pick), they fight, die, come back.
-    let (mut events, mut ticks) = (Vec::new(), 0);
+    let (mut events, mut ticks, mut protected) = (Vec::new(), 0, false);
     while !events.iter().any(|e| matches!(e, GameEvent::KillLimit { .. })) {
         ticks += 1;
         assert!(ticks < 128 * 40, "the game never ended ({} events)", events.len());
@@ -59,6 +59,7 @@ fn drop_in_fight_respawn_and_the_time_limit_resets_scores() {
         for b in bots.iter_mut() {
             b.tick();
         }
+        protected |= bots.iter().any(|b| b.client.me_info.protected);
         events.extend(bots[0].take_events());
         bots[1].take_events();
         if ticks % 8 == 0 {
@@ -66,6 +67,7 @@ fn drop_in_fight_respawn_and_the_time_limit_resets_scores() {
         }
     }
     assert!(walk_in.id().is_none(), "no seat, no way in");
+    assert!(protected, "a fresh spawn never showed as protected");
     // Back in the fight straight away, and the scores started over.
     for _ in 0..3 * 128 {
         server.step();
