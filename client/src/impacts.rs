@@ -35,7 +35,7 @@ pub enum Hit {
     /// A knife struck the wall: just the mark.
     Mark { at: [f32; 3], normal: [f32; 3] },
     /// `dir`: which way the bullet was going.
-    Player { at: [f32; 3], dir: [f32; 3], head: bool },
+    Player { at: [f32; 3], dir: [f32; 3], head: bool, damage: f32 },
     /// Sparks (`env_spark`, bullets on metal).
     Sparks { at: [f32; 3] },
     /// An HE went off here: a scorch on the floor under it.
@@ -59,23 +59,31 @@ struct Looks {
     /// The wad, for the maps' own `infodecal`s.
     wad: Option<goldsrc::wad::Wad>,
     dust: Handle<StandardMaterial>,
-    blood: Handle<StandardMaterial>,
     /// Hot sparks (additive, bright).
     spark: Handle<StandardMaterial>,
     /// The four wall puff sprites: frames and width (texels = units at scale 1).
     puffs: Vec<(Vec<Handle<Image>>, f32)>,
+    /// CS's blood spray (`bloodspray.spr`) and drop (`blood.spr`) sprites.
+    spray: (Vec<Handle<Image>>, f32),
+    drop: Handle<StandardMaterial>,
     materials: goldsrc::materials::Materials,
 }
 
 /// A wall puff: which sprite, its age, size and drift (Y-up), and its own material.
 #[derive(Component)]
 struct Puff {
-    sprite: usize,
+    /// A wall puff sprite, or None for the blood spray.
+    sprite: Option<usize>,
+    fps: f32,
+    rise: f32,
     age: f32,
     size: f32,
     vel: Vec3,
     material: Handle<StandardMaterial>,
 }
+
+/// CS's blood colour (palette index 247, a dark red).
+const BLOOD: Color = Color::srgb(0.47, 0.0, 0.0);
 
 /// The puff sprites' frame rate (`EV_HLDM_DecalGunshot`'s 35) and their brightness (`renderamt` 150).
 const PUFF_FPS: f32 = 35.0;
@@ -129,13 +137,17 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
         scorches: load_decals(&wad, &["{scorch1", "{scorch2", "{scorch3"], &mut images, &mut materials),
         wad,
         dust: materials.add(solid(Color::srgb(0.55, 0.5, 0.42))),
-        blood: materials.add(solid(Color::srgb(0.55, 0.02, 0.01))),
         spark: materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.8, 0.35), unlit: true, alpha_mode: AlphaMode::Add, ..default() }),
         // Additive: their texels are display values (see `explosions`), so no sRGB decode.
         puffs: (1..=4)
             .filter_map(|i| crate::gamefiles::paths(&format!("sprites/wall_puff{i}.spr")).iter().find_map(|p| goldsrc::spr::Sprite::load(p).ok()))
             .map(|s| (s.frames.into_iter().map(|f| images.add(rgba_image(s.width, s.height, f, false, TextureFormat::Rgba8Unorm))).collect(), s.width as f32))
             .collect(),
+        spray: crate::gamefiles::paths("sprites/bloodspray.spr").iter().find_map(|p| goldsrc::spr::Sprite::load(p).ok()).map(|s| (s.frames.into_iter().map(|f| images.add(rgba_image(s.width, s.height, f, false, TextureFormat::Rgba8UnormSrgb))).collect(), s.width as f32)).unwrap_or_default(),
+        drop: {
+            let tex = crate::gamefiles::paths("sprites/blood.spr").iter().find_map(|p| goldsrc::spr::Sprite::load(p).ok()).and_then(|s| s.frames.into_iter().next().map(|f| images.add(rgba_image(s.width, s.height, f, false, TextureFormat::Rgba8UnormSrgb))));
+            materials.add(StandardMaterial { base_color: BLOOD, base_color_texture: tex, unlit: true, alpha_mode: AlphaMode::Blend, ..default() })
+        },
         materials: crate::gamefiles::paths("sound/materials.txt").iter().find_map(|p| std::fs::read_to_string(p).ok()).map(|t| goldsrc::materials::Materials::parse(&t)).unwrap_or_else(|| goldsrc::materials::Materials::parse("")),
     });
 }
@@ -208,7 +220,7 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
                     let material = mats.add(StandardMaterial { base_color: Color::linear_rgb(c[0], c[1], c[2]), base_color_texture: looks.puffs[sprite].0.first().cloned(), unlit: true, alpha_mode: AlphaMode::Add, ..default() });
                     let size = looks.puffs[sprite].1 * scale * (1.0 + 0.5 * noise(k as u32 + 7, salt));
                     commands.spawn((
-                        Puff { sprite, age: 0.0, size, vel: n * 25.0, material: material.clone() },
+                        Puff { sprite: Some(sprite), fps: PUFF_FPS, rise: 20.0, age: 0.0, size, vel: n * 25.0, material: material.clone() },
                         Mesh3d(looks.quad.clone()),
                         MeshMaterial3d(material),
                         Transform::from_translation(p + n * 5.0).with_scale(Vec3::splat(size)),
@@ -229,12 +241,26 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
             }
             // GoldSrc's TE_SPARKS: a spray of hot bits that fall and fade fast.
             Hit::Sparks { at } => burst(&mut commands, y_up(at), Vec3::Y * 0.3, 14, 220.0, 0.5, 0.45, &looks.spark, true),
-            Hit::Player { at, dir, head } => {
+            Hit::Player { at, dir, head, damage } => {
                 let (p, d) = (y_up(at), y_up(dir).normalize_or(Vec3::Y));
-                // Spray out of the exit side, and a puff back towards the shooter.
-                let (n, speed, size) = if head { (22, 160.0, 1.4) } else { (10, 110.0, 1.0) };
-                burst(&mut commands, p, d, n, speed, size, 0.5, &looks.blood, true);
-                burst(&mut commands, p, -d, n / 2, speed * 0.5, size, 0.3, &looks.blood, true);
+                // CS 1.6 `UTIL_BloodDrips`: a blood sprite as big as the damage (twice it in
+                // multiplayer, a tenth, from 3 to 16), CS's own spray and drop sprites. The engine
+                // draws it; how is matched by eye: the spray plays once where you hit, the drops
+                // fly out of the exit side and fall.
+                let size = (damage * 2.0 / 10.0).clamp(3.0, 16.0);
+                if !looks.spray.0.is_empty() {
+                    let material = mats.add(StandardMaterial { base_color: BLOOD, base_color_texture: looks.spray.0.first().cloned(), unlit: true, alpha_mode: AlphaMode::Blend, ..default() });
+                    let w = looks.spray.1 * size / 25.0;
+                    commands.spawn((
+                        Puff { sprite: None, fps: 30.0, rise: -40.0, age: 0.0, size: w, vel: d * 10.0, material: material.clone() },
+                        Mesh3d(looks.quad.clone()),
+                        MeshMaterial3d(material),
+                        Transform::from_translation(p).with_scale(Vec3::splat(w)),
+                        DespawnOnExit(AppState::InGame),
+                    ));
+                }
+                let drops = size as u32 + if head { 4 } else { 0 };
+                burst(&mut commands, p, d + Vec3::Y * 0.4, drops, 140.0, 1.3, 0.7, &looks.drop, true);
                 // Splat on a wall close behind them, as CS does.
                 let reach = if head { 180.0 } else { 120.0 };
                 let end = std::array::from_fn(|i| at[i] + dir[i] * reach);
@@ -253,8 +279,11 @@ fn puffs(mut commands: Commands, time: Res<Time>, looks: Res<Looks>, cam: Single
     let facing = cam.compute_transform().rotation;
     for (e, mut p, mut tf) in &mut q {
         p.age += dt;
-        let frames = &looks.puffs[p.sprite].0;
-        let Some(frame) = frames.get((p.age * PUFF_FPS) as usize) else {
+        let frames = match p.sprite {
+            Some(s) => &looks.puffs[s].0,
+            None => &looks.spray.0,
+        };
+        let Some(frame) = frames.get((p.age * p.fps) as usize) else {
             mats.remove(&p.material);
             commands.entity(e).despawn();
             continue;
@@ -264,7 +293,7 @@ fn puffs(mut commands: Commands, time: Res<Time>, looks: Res<Looks>, cam: Single
                 m.base_color_texture = Some(frame.clone());
             }
         }
-        p.vel.y += 20.0 * dt; // smoke rises
+        p.vel.y += p.rise * dt; // smoke rises
         tf.translation += p.vel * dt;
         tf.rotation = facing;
         tf.scale = Vec3::splat(p.size);
