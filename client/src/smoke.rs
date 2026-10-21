@@ -4,7 +4,7 @@
 //! corridors and stops at doorways. Each cell is a soft grey puff; cells at the edge of the
 //! cloud are thinner, so it reads as one dense body with soft edges, darker underneath. It
 //! billows out over the first `BLOOM` seconds, churns slowly, and thins out over the last
-//! `FADE`. (The server still hides what's behind it with a sphere: server/visibility.rs.)
+//! `FADE`. It only hides on screen: as in CS 1.6, the server still sends whoever is in it.
 use crate::game::{FlyCam, Frame, Walker};
 use crate::level::rgba_image;
 use crate::menu::AppState;

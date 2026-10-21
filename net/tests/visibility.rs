@@ -1,4 +1,4 @@
-//! Anti-wallhack over localhost UDP: enemies out of sight aren't sent; sounds are sent only
+//! Anti-wallhack over localhost UDP: enemies behind walls aren't sent (smoke hides no one); sounds are sent only
 //! within hearing range. Skipped when de_dust2 isn't installed.
 mod common;
 use common::*;
@@ -38,24 +38,19 @@ fn enemies_behind_walls_are_not_sent_but_in_the_open_they_are() {
 }
 
 #[test]
-fn smoke_hides_enemies_from_the_server_too() {
+fn smoke_does_not_hide_anyone_from_the_server() {
+    // CS 1.6 sends players behind smoke as usual (the cloud only hides them on screen).
     let Some(bsp) = dust2() else { return };
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
     let o = g.server.player(a).unwrap().origin;
-    g.server.teleport(b, [o[0] + 400.0, o[1], o[2]]);
-    for _ in 0..64 {
-        g.tick(Input::default(), Input::default());
-    }
-    assert!(g.a.others().iter().any(|p| p.id == b), "in plain view first");
-    // A smoke between them: thrown straight ahead (smokes pop when they stop rolling).
     g.server.add_smoke([o[0] + 200.0, o[1], o[2] - 30.0]);
     for _ in 0..(128 * 3) {
         g.server.teleport(b, [o[0] + 400.0, o[1], o[2]]);
         g.tick(Input::default(), Input::default());
     }
-    assert!(!g.a.others().iter().any(|p| p.id == b), "seen through the smoke");
+    assert!(g.a.others().iter().any(|p| p.id == b), "hidden by the smoke");
 }
 
 #[test]

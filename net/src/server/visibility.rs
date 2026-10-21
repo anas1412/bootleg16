@@ -14,7 +14,8 @@ const LOOKAHEAD: f32 = 0.15;
 /// GoldSrc sound falloff: silent at 1000 / attenuation units (footsteps: ATTN_NORM 0.8; shots:
 /// `fire_attenuation`).
 const HEAR_NORMAL: f32 = 1000.0 / 0.8;
-/// A smoke cloud hides what's behind it once it has bloomed (1 s) until it thins out (last 2 s):
+/// A smoke cloud (for the aim checks only, `aimcheck`) blocks the line once it has bloomed (1 s)
+/// until it thins out (last 2 s):
 /// a sphere this big around a point this high over where it popped.
 const SMOKE_RADIUS: f32 = 140.0;
 const SMOKE_LIFT: f32 = 40.0;
@@ -67,7 +68,10 @@ impl Server {
                     }
                 }
             }
-            if eyes.iter().any(|e| points.iter().any(|p| !self.world.sight_blocked(*e, *p) && !self.smoked(*e, *p))) {
+            // Smoke doesn't hide anyone here: CS 1.6 never holds players back for it (only
+            // its bots can't see through it), and a cloud-shaped cutoff made players pop at
+            // its edge. Walls do.
+            if eyes.iter().any(|e| points.iter().any(|p| !self.world.sight_blocked(*e, *p))) {
                 return true;
             }
         }
