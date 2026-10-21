@@ -347,6 +347,10 @@ fn animate(
     // Watching someone through their eyes: their own body isn't drawn.
     let in_eye = crate::spectate::in_eye(&w, &watch).map(|o| o.id);
     let cam_rot = cam.compute_transform().rotation;
+    // A player wholly behind the camera keeps moving but isn't posed (nobody sees the bones;
+    // they're culled too, see `models::body_bounds`). Yours always is (the death cam).
+    let (cam_at, cam_fwd) = (cam.translation(), cam.forward().as_vec3());
+    let behind = |at: Vec3| (at - cam_at).dot(cam_fwd) < -64.0;
     let (now, dt) = (time.elapsed_secs(), time.delta_secs().max(1e-4));
     let mut others = w.client.others_at(fixed.overstep_fraction());
     others.extend(w.client.me_as_remote());
@@ -365,9 +369,12 @@ fn animate(
         p.anim.step(model, &d, now, dt);
         let posed = p.anim.pose(model, &d, now);
         *tf = Transform::from_translation(Vec3::from(map::to_y_up(o.origin))).with_rotation(Quat::from_rotation_y(posed.yaw.to_radians()));
+        let lit = now < p.flash_until;
+        if me != Some(p.id) && behind(tf.translation) {
+            continue;
+        }
         let pose = posed.bones;
         p.character.set_pose(&p.body, &pose, &mut bones);
-        let lit = now < p.flash_until;
         if let Some((wm, g)) = &p.gun {
             let gun_pose = wm.model.borrow_pose(model, &pose);
             models::set_pose(&g.joints, &gun_pose, &mut bones);

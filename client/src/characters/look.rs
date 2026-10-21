@@ -7,7 +7,6 @@ use crate::map;
 use crate::studio::{LitPart, StudioMaterial};
 use bevy::{
     asset::RenderAssetUsages,
-    camera::visibility::NoFrustumCulling,
     mesh::{skinning::{SkinnedMesh, SkinnedMeshInverseBindposes}, Indices, PrimitiveTopology, VertexAttributeValues},
     prelude::*,
     render::render_resource::TextureFormat,
@@ -83,9 +82,9 @@ impl Look {
         };
         let joints: Vec<Entity> = (0..bones).map(|_| commands.spawn((Transform::default(), ChildOf(parent))).id()).collect();
         for (mesh, material) in &self.parts {
-            // bounds come from the bind pose, nowhere near the posed body: don't cull
+            // bounds from the bind pose are nowhere near the posed body: the body's own instead
             let skin = SkinnedMesh { inverse_bindposes: self.bindposes.clone(), joints: joints.clone() };
-            commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(crate::models::own(materials, material)), LitPart, skin, NoFrustumCulling, ChildOf(parent)));
+            commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(crate::models::own(materials, material)), LitPart, skin, crate::models::body_bounds(), ChildOf(parent)));
         }
         joints
     }

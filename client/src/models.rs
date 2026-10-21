@@ -5,7 +5,7 @@ use crate::map;
 use crate::studio::{LitPart, StudioMaterial};
 use bevy::{
     asset::RenderAssetUsages,
-    camera::visibility::NoFrustumCulling,
+    camera::{primitives::Aabb, visibility::{NoAutoAabb, NoFrustumCulling}},
     mesh::{skinning::{SkinnedMesh, SkinnedMeshInverseBindposes}, Indices, PrimitiveTopology, VertexAttributeValues},
     prelude::*,
     render::render_resource::TextureFormat,
@@ -106,12 +106,26 @@ impl Loaded {
         let joints: Vec<Entity> = (0..self.model.bones.len().max(1)).map(|_| commands.spawn((Transform::default(), ChildOf(mirror.unwrap_or(parent)))).id()).collect();
         let mut parts = Vec::new();
         for (mesh, material) in &skin.parts {
-            // Bounds come from the bind pose, which is nowhere near the posed body: don't cull.
-            parts.push(commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(own(materials, material)), LitPart, SkinnedMesh { inverse_bindposes: skin.bindposes.clone(), joints: joints.clone() }, NoFrustumCulling)).id());
+            // Bounds from the bind pose are nowhere near the posed body: a model on a body gets
+            // the body's bounds, the view model (mirrored, always in front of you) none.
+            let mut part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(own(materials, material)), LitPart, SkinnedMesh { inverse_bindposes: skin.bindposes.clone(), joints: joints.clone() }));
+            if mirror.is_some() {
+                part.insert(NoFrustumCulling);
+            } else {
+                part.insert(body_bounds());
+            }
+            parts.push(part.id());
         }
         commands.entity(parent).add_children(&parts);
         SpawnedSkin { joints, parts, mirror }
     }
+}
+
+/// Culling bounds for a player's body parts, in the player's own space (its origin, the middle
+/// of the hull): wide enough for any pose, a dying body or a gun held out. Skinned meshes have
+/// only their bind pose's bounds, so without these they were drawn even behind you.
+pub fn body_bounds() -> (Aabb, NoAutoAabb) {
+    (Aabb::from_min_max(Vec3::splat(-64.0), Vec3::splat(64.0)), NoAutoAabb)
 }
 
 /// Move a skinned model's bones to `pose` (GoldSrc model space).

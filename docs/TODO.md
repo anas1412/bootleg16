@@ -162,6 +162,11 @@ land, and add new ones here instead of leaving them only in chat.
 
 ## Later (after milestone 1)
 
+- [ ] Smoke on the GPU (one mesh per cloud, puffs moved in a vertex shader): tried 2026-10-22, it
+      rendered but the cloud came out see-through (a player inside showed as a silhouette) even
+      with the standard material's fragment path; the old per-puff smoke stays until that's
+      understood. The attempt: one quad per puff, puff data in NORMAL/UV_1/TANGENT, `now` uniform.
+
 - [ ] (low priority) Callouts: place names per map area (GoldSrc maps have none: our own zone data per
       map), shown under the radar ("A LONG"), on teammates' voice rows and in the assistant's
       relay lines; bomb site A/B letters and dead teammates' last position on the radar
