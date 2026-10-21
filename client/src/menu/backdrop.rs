@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
 /// How out of focus: the picture is shrunk this many times, then blurred.
-const SHRINK: u32 = 4;
+const SHRINK: u32 = 2;
 /// Box-blur radius (at the shrunk size); three passes each way make it a gaussian.
 const RADIUS: usize = 3;
 
@@ -92,7 +92,7 @@ fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         .with_children(|r| {
             r.spawn((Backdrop { aspect }, ImageNode::new(images.add(img)), Node { flex_shrink: 0.0, ..default() }, Pickable::IGNORE));
             // dim it all a little, and the left (the menu list) a lot
-            r.spawn((full(), BackgroundColor(BG0.with_alpha(0.6)), Pickable::IGNORE));
+            r.spawn((full(), BackgroundColor(BG0.with_alpha(0.4)), Pickable::IGNORE));
             r.spawn((
                 full(),
                 BackgroundGradient::from(LinearGradient::to_right(vec![ColorStop::percent(BG0.with_alpha(0.8), 0.0), ColorStop::percent(BG0.with_alpha(0.6), 30.0), ColorStop::percent(BG0.with_alpha(0.0), 55.0)])),
