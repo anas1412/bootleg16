@@ -80,6 +80,12 @@ fn cfg_side(text: &str) -> Option<Team> {
     }
 }
 
+/// A CS 1.6 class this character is (`cs = "urban"` in its character.cfg), if it is one.
+pub fn cs_class(dir: &std::path::Path) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join("character.cfg")).ok()?;
+    cfg(&text, "cs").filter(|c| valid_id(c))
+}
+
 /// A valid id: lowercase letters, digits, `-` and `_`, at most 32 (it travels over the network).
 pub fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 32 && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
@@ -89,7 +95,7 @@ fn scan(images: &mut Assets<Image>) -> Characters {
     let mut list: Vec<Entry> = Vec::new();
     for root in crate::gamefiles::paths("characters") {
         let Ok(dirs) = std::fs::read_dir(&root) else { continue };
-        for dir in dirs.flatten().map(|d| d.path()).filter(|d| d.join("model.mdl").is_file()) {
+        for dir in dirs.flatten().map(|d| d.path()).filter(|d| d.join("model.mdl").is_file() || cs_class(d).is_some()) {
             let Some(id) = dir.file_name().and_then(|n| n.to_str()).map(str::to_string).filter(|id| valid_id(id)) else { continue };
             if list.iter().any(|e| e.id == id) {
                 continue; // the first data folder wins, like every other file
@@ -105,7 +111,8 @@ fn scan(images: &mut Assets<Image>) -> Characters {
             list.push(Entry { id, name, dir, portrait, side, voice });
         }
     }
-    list.sort_by(|a, b| a.id.cmp(&b.id));
+    // our own characters first, then CS 1.6's classes, each by id
+    list.sort_by_key(|e| (cs_class(&e.dir).is_some(), e.id.clone()));
     info!("characters: {}", list.iter().map(|e| e.id.as_str()).collect::<Vec<_>>().join(", "));
     Characters(list)
 }

@@ -82,14 +82,14 @@ fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut
 impl OtherPlayers {
     /// Character `i`, loaded on first use (None if its files don't load).
     #[allow(clippy::too_many_arguments)]
-    fn look(&mut self, i: usize, characters: &crate::characters::Characters, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>, images: &mut Assets<Image>, materials: &mut Assets<crate::studio::StudioMaterial>) -> Option<Arc<crate::characters::look::Look>> {
+    fn look(&mut self, i: usize, characters: &crate::characters::Characters, cache: &mut models::ModelCache, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>, images: &mut Assets<Image>, materials: &mut Assets<crate::studio::StudioMaterial>) -> Option<Arc<crate::characters::look::Look>> {
         // the list is read at startup and may not have existed yet when this was made
         if self.looks.len() < characters.0.len() {
             self.looks.resize(characters.0.len(), None);
         }
         if self.looks.get(i)?.is_none() {
             let entry = characters.0.get(i)?;
-            match crate::characters::look::Look::load(&entry.dir, &self.cs.model, meshes, bindposes, images, materials) {
+            match crate::characters::look::Look::load(&entry.dir, &self.cs, cache, meshes, bindposes, images, materials) {
                 Ok(l) => self.looks[i] = Some(Arc::new(l)),
                 Err(e) => {
                     error!("character {}: {e}", entry.id);
@@ -316,7 +316,7 @@ fn draw_others(
         if drawn.iter().any(|(_, d)| d.id == o.id && d.look == *li && d.weapon == o.weapon) {
             continue;
         }
-        let Some(character) = look.look(*li, &characters, &mut meshes, &mut bindposes, &mut images, &mut materials) else { continue };
+        let Some(character) = look.look(*li, &characters, &mut cache, &mut meshes, &mut bindposes, &mut images, &mut materials) else { continue };
         let parent = commands.spawn((place(o), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
         let joints = character.spawn(&mut commands, parent, &mut materials);
         let gun = cache.get(&models::weapon_model("p", o.weapon), &mut images, &mut materials).map(|wm| {
