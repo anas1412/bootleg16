@@ -102,6 +102,9 @@ fn initial_accuracy(a: &Accuracy) -> f32 {
     }
 }
 
+/// The most of each grenade you may carry: HE, flash, smoke (CS 1.6).
+pub const GRENADE_MAX: [u8; 3] = [1, 2, 1];
+
 /// What the player is carrying.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Loadout {
@@ -233,12 +236,12 @@ impl Loadout {
     pub fn give(&mut self, id: Id, now: f64) -> bool {
         match id {
             Id::HeGrenade | Id::Flashbang | Id::Smoke => {
-                let (i, max) = match id {
-                    Id::HeGrenade => (0, 1),
-                    Id::Flashbang => (1, 2),
-                    _ => (2, 1),
+                let i = match id {
+                    Id::HeGrenade => 0,
+                    Id::Flashbang => 1,
+                    _ => 2,
                 };
-                if self.grenades[i] >= max {
+                if self.grenades[i] >= GRENADE_MAX[i] {
                     return false;
                 }
                 self.grenades[i] += 1;

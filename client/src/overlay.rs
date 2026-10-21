@@ -31,10 +31,12 @@ pub(crate) fn pause_menu(
     mut asked: Local<bool>,
     mut cursor: Single<&mut CursorOptions>,
     roots: Query<Entity, With<OverlayRoot>>,
+    buy: Res<crate::buy::BuyMenu>,
 ) {
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
     if !auto {
-        if keys.just_pressed(KeyCode::Escape) {
+        // with the shop open, Esc closes the shop instead (buy.rs)
+        if keys.just_pressed(KeyCode::Escape) && !buy.is_open() {
             *overlay = if *overlay == Overlay::None { Overlay::Pause } else { Overlay::None };
         }
         if binds.just(crate::binds::Action::Teams, &keys, &mouse) {

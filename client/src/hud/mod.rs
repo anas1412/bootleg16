@@ -55,6 +55,9 @@ struct AliveOnly;
 /// The active weapon's silhouette in the ammo panel.
 #[derive(Component)]
 struct WeaponIcon;
+/// The armor icon: vest, or vest and helmet; dim with no armor.
+#[derive(Component)]
+struct ArmorIcon;
 #[derive(Component)]
 struct NetStats;
 /// The clip and reserve half of the weapon panel (hidden when there's no gun in hand).
@@ -121,7 +124,7 @@ fn spawn(mut commands: Commands, kit: Res<Kit>, icons: Res<Icons>) {
         });
         p.spawn(divider());
         p.spawn(section()).with_children(|s| {
-            s.spawn(icons.node("suithelmet_full", 32.0, TX2));
+            s.spawn((ArmorIcon, icons.node("suit_full", 32.0, TX2)));
             s.spawn(Node { flex_direction: FlexDirection::Column, ..default() }).with_children(|c| {
                 c.spawn((ArmorNumber, Count::new(0.0, 0.08), kit_text("0", 32.0, TX2, &kit.num)));
                 let m = meter(c, 72.0, TX2, 0.0);
@@ -173,7 +176,8 @@ fn status(
     mut armor: Single<&mut Count, (With<ArmorNumber>, Without<HealthNumber>)>,
     mut hm: Single<&mut Meter, (With<HealthMeter>, Without<ArmorMeter>)>,
     mut am: Single<&mut Meter, (With<ArmorMeter>, Without<HealthMeter>)>,
-    mut icon: Single<(&mut ImageNode, &mut Node), (With<WeaponIcon>, Without<AmmoPart>)>,
+    mut icon: Single<(&mut ImageNode, &mut Node), (With<WeaponIcon>, Without<AmmoPart>, Without<ArmorIcon>)>,
+    mut armor_icon: Single<(&mut ImageNode, &mut Node), (With<ArmorIcon>, Without<AmmoPart>, Without<WeaponIcon>)>,
     mut alive_only: Query<&mut Visibility, With<AliveOnly>>,
     covered: Res<crate::ui::Covered>,
     bursting: Query<(), (With<VitalsPanel>, With<crate::ui::Anim>)>,
@@ -188,6 +192,7 @@ fn status(
     if let Some(m) = watched.as_ref().and_then(|t| t.mate) {
         v.health = m.health as f32;
         v.armor = m.armor as f32;
+        v.helmet = m.helmet;
     }
     let weapon = watched.as_ref().map(|t| t.weapon).unwrap_or(l.active_id());
     let alive = (w.client.vitals.alive() && w.client.id().is_some() && w.client.team() != Team::Spectator) || watched.is_some();
@@ -235,9 +240,21 @@ fn status(
             t.0 = s;
         }
     }
-    // Swap the weapon silhouette when the weapon changes.
-    let (image, rect, aspect) = icons.pick(weapon_icon(weapon));
+    // Swap the weapon silhouette when the weapon changes; the armor icon shows what you wear.
+    let armor_art = if v.helmet && v.armor > 0.0 { "suithelmet_full" } else { "suit_full" };
+    let tint = if v.armor > 0.0 { TX2 } else { TX2.with_alpha(0.35) };
     let (node, layout) = &mut *icon;
+    swap_icon(&icons, weapon_icon(weapon), node, layout);
+    let (node, layout) = &mut *armor_icon;
+    if node.color != tint {
+        node.color = tint;
+    }
+    swap_icon(&icons, armor_art, node, layout);
+}
+
+/// Point an icon node at another icon (only touching what changed).
+fn swap_icon(icons: &Icons, name: &str, node: &mut ImageNode, layout: &mut Node) {
+    let (image, rect, aspect) = icons.pick(name);
     if node.image != image {
         node.image = image;
     }

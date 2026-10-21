@@ -13,6 +13,32 @@ pub fn price(item: BuyItem) -> Option<i32> {
     }
 }
 
+/// What an item costs you right now; None = nothing to buy (you have it, or carry the most
+/// allowed). Full armor makes the vest-and-helmet only the helmet's price. The server's buy
+/// and the client's buy menu both ask this, so they never disagree.
+pub fn cost_now(item: BuyItem, l: &sim::weapons::Loadout, armor: f32, helmet: bool, kit: bool) -> Option<i32> {
+    let full = armor >= combat::MAX_ARMOR;
+    match item {
+        BuyItem::Kevlar if full => None,
+        BuyItem::KevlarHelmet if full && helmet => None,
+        BuyItem::KevlarHelmet if full => Some(HELMET),
+        BuyItem::DefuseKit if kit => None,
+        BuyItem::Weapon(id @ (Id::HeGrenade | Id::Flashbang | Id::Smoke)) => {
+            let i = match id {
+                Id::HeGrenade => 0,
+                Id::Flashbang => 1,
+                _ => 2,
+            };
+            (l.grenades[i] < sim::weapons::GRENADE_MAX[i]).then(|| price(item)).flatten()
+        }
+        BuyItem::Weapon(id) if [&l.primary, &l.secondary].into_iter().flatten().any(|g| g.id == id) => None,
+        other => price(other),
+    }
+}
+
+/// The helmet alone (vest and helmet with full armor already on).
+const HELMET: i32 = 350;
+
 /// The guns on sale (a trimmed CS 1.6 list), and which side may buy each.
 pub fn allowed(team: Team, item: BuyItem) -> bool {
     use Id::*;
@@ -129,14 +155,7 @@ impl Server {
         let c = self.clients.get_mut(&from).unwrap();
         let now = c.last_run as f64 * self.rate.tick() as f64;
         // What it costs; None = nothing to buy (already have it).
-        let cost = match item {
-            BuyItem::Kevlar if c.vitals.armor >= combat::MAX_ARMOR => None,
-            // Already wearing full armor: only the helmet is paid for.
-            BuyItem::KevlarHelmet if c.vitals.helmet && c.vitals.armor >= combat::MAX_ARMOR => None,
-            BuyItem::KevlarHelmet if c.vitals.armor >= combat::MAX_ARMOR => Some(350),
-            BuyItem::DefuseKit if c.defuse_kit => None,
-            other => price(other),
-        };
+        let cost = cost_now(item, &c.state.loadout, c.vitals.armor, c.vitals.helmet, c.defuse_kit);
         let Some(cost) = cost else { return };
         let cost = if free { 0 } else { cost };
         if c.money < cost {
@@ -201,10 +220,34 @@ impl Server {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sim::weapons::{GunState, Loadout};
 
     #[test]
     fn both_sides_can_buy_the_p228_for_600() {
         assert!(allowed(Team::T, BuyItem::Weapon(Id::P228)) && allowed(Team::Ct, BuyItem::Weapon(Id::P228)));
         assert_eq!(price(BuyItem::Weapon(Id::P228)), Some(600));
+    }
+
+    #[test]
+    fn cost_now_follows_what_you_have() {
+        let mut l = Loadout::knife_only();
+        // no armor: full prices
+        assert_eq!(cost_now(BuyItem::Kevlar, &l, 0.0, false, false), Some(650));
+        assert_eq!(cost_now(BuyItem::KevlarHelmet, &l, 0.0, false, false), Some(1000));
+        // full vest: no second vest, the helmet alone
+        assert_eq!(cost_now(BuyItem::Kevlar, &l, 100.0, false, false), None);
+        assert_eq!(cost_now(BuyItem::KevlarHelmet, &l, 100.0, false, false), Some(HELMET));
+        assert_eq!(cost_now(BuyItem::KevlarHelmet, &l, 100.0, true, false), None);
+        // worn vest: buyable again
+        assert_eq!(cost_now(BuyItem::Kevlar, &l, 40.0, true, false), Some(650));
+        assert_eq!(cost_now(BuyItem::DefuseKit, &l, 0.0, false, true), None);
+        // two flashes is the most
+        l.grenades = [0, 2, 0];
+        assert_eq!(cost_now(BuyItem::Weapon(Id::Flashbang), &l, 0.0, false, false), None);
+        assert!(cost_now(BuyItem::Weapon(Id::HeGrenade), &l, 0.0, false, false).is_some());
+        // the gun you already hold
+        l.primary = Some(GunState::new(Id::Ak47));
+        assert_eq!(cost_now(BuyItem::Weapon(Id::Ak47), &l, 0.0, false, false), None);
+        assert!(cost_now(BuyItem::Weapon(Id::M4a1), &l, 0.0, false, false).is_some());
     }
 }

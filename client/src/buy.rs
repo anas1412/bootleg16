@@ -9,7 +9,6 @@ use crate::ui::{chip, clickable_keep_border, kit_text, nav, primary_button, prim
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use net::protocol::{BuyItem, Team};
-use net::server::buy::price;
 
 /// Teammates with less than this show red in the buy menu: they can't buy a rifle (an AK-47).
 const RIFLE: i32 = 2700;
@@ -79,7 +78,7 @@ fn spawn(mut menu: ResMut<BuyMenu>) {
 fn buy_menu(
     mut commands: Commands,
     (kit, icons): (Res<Kit>, Res<Icons>),
-    keys: Res<ButtonInput<KeyCode>>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
     mut actions: ResMut<UiActions>,
     mut w: ResMut<Walker>,
     mut menu: ResMut<BuyMenu>,
@@ -110,6 +109,11 @@ fn buy_menu(
                 }
             }
         }
+    }
+    // Esc closes the shop (B again does too) and is used up, so the pause menu doesn't open
+    if menu.0.is_some() && keys.just_pressed(KeyCode::Escape) {
+        menu.0 = None;
+        keys.clear_just_pressed(KeyCode::Escape);
     }
     let b_pressed = binds.just(crate::binds::Action::Buy, &keys, &mouse);
     if b_pressed && can_buy {
@@ -215,13 +219,16 @@ fn buy_menu(
     let Some(state) = menu.0 else { return };
     let tune = |on: bool, i: usize| on.then(|| Anim::stagger(i));
     let free = w.client.practice || w.client.round.phase == net::rounds::Phase::Warmup;
-    let cost = |item: BuyItem| match price(item) {
+    // What each item costs you now, by the server's own rule (None: you have it, or carry
+    // the most allowed; full armor makes the helmet the only cost).
+    let now = |item: BuyItem| net::server::buy::cost_now(item, &w.client.state.loadout, w.client.vitals.armor, w.client.vitals.helmet, w.client.me_info.defuse_kit);
+    let cost = |item: BuyItem| match now(item) {
+        None => String::new(),
         _ if free => "FREE".to_string(),
         Some(p) => format!("${p}"),
-        None => String::new(),
     };
     // Prices you can't pay show red, the card dims.
-    let afford = |item: BuyItem| free || price(item).is_none_or(|p| p <= money);
+    let afford = |item: BuyItem| now(item).is_some_and(|p| free || p <= money);
     let team_color = if ct { CT_COLOR } else { T_COLOR };
     let cat = state.unwrap_or(0);
     let Some(Entry(_, items)) = layout.get(cat).cloned() else { return };
@@ -289,7 +296,7 @@ fn buy_menu(
             cats.with_children(|col| {
                 let nums: Vec<String> = (1..=layout.len()).map(|i| format!("{i:02}")).collect();
                 nav(col, &kit, "buy.cat", layout.iter().enumerate().map(|(i, e)| NavItem { num: &nums[i], label: e.0, jp: "", action: UiAction::BuyCategory(i), selected: i == cat }).collect(), true);
-                col.spawn((kit_text("1-9 · BUY    ENTER · BUY SELECTED    0 · CLOSE", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), padding: UiRect::left(vh(16.0)), ..default() }));
+                col.spawn((kit_text("1-9 · BUY    ENTER · BUY SELECTED    ESC · CLOSE", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), padding: UiRect::left(vh(16.0)), ..default() }));
                 // sell back this round's buys (the server refunds only what's unused)
                 if !free {
                     col.spawn(Node { margin: UiRect { top: vh(24.0), left: vh(16.0), ..default() }, ..default() }).with_children(|r| {
@@ -354,14 +361,23 @@ fn buy_menu(
                     }
                     d.spawn(Node { flex_grow: 1.0, ..default() });
                     if afford(item) {
-                        primary_button(d, &kit, &format!("Buy · {}", cost(item)), "Enter", UiAction::Buy(item));
+                        primary_button(d, &kit, &buy_label(&cost(item)), "Enter", UiAction::Buy(item));
                     } else {
-                        primary_off(d, &kit, &format!("Buy · {}", cost(item)), &format!("Need ${}", price(item).unwrap_or(0) - money));
+                        let why = match now(item) {
+                            Some(p) => format!("Need ${}", p - money),
+                            None => "Owned".to_string(),
+                        };
+                        primary_off(d, &kit, &buy_label(&cost(item)), &why);
                     }
                     });
                 });
             });
         });
+}
+
+/// The buy button's words: the price after it, when there is one.
+fn buy_label(cost: &str) -> String {
+    if cost.is_empty() { "Buy".into() } else { format!("Buy · {cost}") }
 }
 
 /// How many of an item you already have (None: none).
