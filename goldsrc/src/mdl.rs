@@ -31,6 +31,8 @@ pub struct Sequence {
     pub fps: f32,
     pub frames: usize,
     pub blends: usize,
+    /// How far forward one pass of the sequence moves (walk, run: what the gait speed is drawn for).
+    pub linear_x: f32,
     /// Byte offset of this sequence's per-bone animation headers (one set per blend).
     anim_index: usize,
     /// Animation events: (frame, event id, options). Event 5004 plays the sound named
@@ -142,6 +144,7 @@ impl Model {
                 fps: f32_at(o + 32)?,
                 frames: i32_at(o + 56)?.max(1) as usize,
                 blends: i32_at(o + 120)?.max(1) as usize,
+                linear_x: f32_at(o + 76)?,
                 anim_index: i32_at(o + 124)? as usize,
             });
         }
@@ -193,28 +196,40 @@ impl Model {
     /// Like `pose`, at a fractional frame: neighbouring frames are blended, as the
     /// engine does, so animations are smooth at any frame rate.
     pub fn pose_at(&self, seq: usize, frame: f32, blend: f32) -> Vec<BoneTransform> {
-        self.to_model_space(self.local_pose(seq, frame, blend, 0.0))
+        // A CS player sequence's 3x3 grid: level yaw, `blend` is the pitch.
+        let b = if self.sequences.get(seq).is_some_and(|s| s.blends == 9) { [127.5 / 255.0, blend] } else { [blend, blend] };
+        self.to_model_space(self.local_pose(seq, frame, b))
     }
 
-    /// A player pose the way GoldSrc draws one: the legs (every bone before "Bip01 Spine")
-    /// from the gait sequence (run, walk, crouch...), the rest from the upper-body one
-    /// (aim, shoot, reload, flinch). `gait` and `upper` are (sequence, frame). `twist`: degrees
-    /// the torso turns from the legs (CS: spread over the four spine bones, a quarter each).
-    pub fn player_pose(&self, gait: (usize, f32), upper: (usize, f32), blend: f32, twist: f32) -> Vec<BoneTransform> {
-        let mut local = self.local_pose(upper.0, upper.1, blend, twist);
-        let legs = self.local_pose(gait.0, gait.1, 0.5, 0.0);
-        let spine = self.bones.iter().position(|b| b.name == "Bip01 Spine").unwrap_or(0);
-        local[..spine].copy_from_slice(&legs[..spine]);
+    /// A player pose the way CS 1.6 draws one (`CGameStudioModelRenderer::StudioSetupBones`):
+    /// the upper-body sequence (aim, shoot, reload, flinch) at `blend` ([yaw, pitch], 0..1),
+    /// cross-faded from `prev` ((sequence, frame), its weight) when it just changed, then the
+    /// legs from the gait sequence (run, walk, crouch...): the bones before "Bip01 Spine",
+    /// and from the first child of "Bip01 Pelvis" after it on. `gait` and `upper` are
+    /// (sequence, frame).
+    pub fn player_pose(&self, gait: (usize, f32), upper: (usize, f32), blend: [f32; 2], prev: Option<((usize, f32), f32)>) -> Vec<BoneTransform> {
+        let mut local = self.local_pose(upper.0, upper.1, blend);
+        if let Some(((seq, frame), w)) = prev {
+            let old = self.local_pose(seq, frame, blend);
+            local = mix(local, old, w.clamp(0.0, 1.0));
+        }
+        let gait = self.local_pose(gait.0, gait.1, [0.5, 0.5]);
+        let mut legs = true;
+        for (i, b) in self.bones.iter().enumerate() {
+            if b.name == "Bip01 Spine" {
+                legs = false;
+            } else if legs || (b.parent >= 0 && self.bones[b.parent as usize].name == "Bip01 Pelvis") {
+                local[i] = gait[i];
+                legs = true;
+            }
+        }
         self.to_model_space(local)
     }
 
-    /// Each bone's rotation and position relative to its parent.
-    fn local_pose(&self, seq: usize, frame: f32, blend: f32, twist: f32) -> Vec<(Quat, Vec3)> {
-        // The spine bones' share of the twist, round their own x axis (along the spine).
-        let adj = |b: usize, ch: usize| -> f32 {
-            let spine = matches!(self.bones[b].name.as_str(), "Bip01 Spine" | "Bip01 Spine1" | "Bip01 Spine2" | "Bip01 Spine3");
-            if spine && ch == 3 { (twist / 4.0).to_radians() } else { 0.0 }
-        };
+    /// Each bone's rotation and position relative to its parent. `blend` (0..1): a CS player
+    /// sequence's 9 sets are a 3x3 grid, [yaw, pitch] each picking between two neighbours
+    /// the way CS does it from the 0..255 blend bytes; other sequences blend by `blend[0]`.
+    fn local_pose(&self, seq: usize, frame: f32, blend: [f32; 2]) -> Vec<(Quat, Vec3)> {
         // (A sequence number from another model is clamped, never an out-of-range panic.)
         let s = &self.sequences[seq.min(self.sequences.len() - 1)];
         let frame = frame.clamp(0.0, (s.frames - 1) as f32);
@@ -226,17 +241,25 @@ impl Model {
             (0..self.bones.len())
                 .map(|b| {
                     let c = |ch| self.channel(anim, b, ch, frame);
-                    (angle_quaternion([c(3) + adj(b, 3), c(4) + adj(b, 4), c(5) + adj(b, 5)]), [c(0), c(1), c(2)])
+                    (angle_quaternion([c(3), c(4), c(5)]), [c(0), c(1), c(2)])
                 })
                 .collect()
         };
-        let mix = |a: Vec<(Quat, Vec3)>, b: Vec<(Quat, Vec3)>, t: f32| -> Vec<(Quat, Vec3)> {
-            a.iter().zip(&b).map(|(x, y)| (slerp(x.0, y.0, t), std::array::from_fn(|i| x.1[i] + (y.1[i] - x.1[i]) * t))).collect()
-        };
-        // `blend` spans all blend sets (CS player models use 9 for aim pitch; 0.5 = the middle one).
-        let pos = blend.clamp(0.0, 1.0) * (s.blends - 1) as f32;
-        let (lo, bt) = (pos.floor() as usize, pos.fract());
         let at_frame = |frame: usize| {
+            if s.blends == 9 {
+                // (first set, weight of the next): 0..127 the low two, 128..255 the high two.
+                let half = |b: f32| {
+                    let b = b.clamp(0.0, 1.0) * 255.0;
+                    if b > 127.0 { (1, ((b - 127.0) * 2.0 / 255.0).min(1.0)) } else { (0, b * 2.0 / 255.0) }
+                };
+                let ((col, ty), (row, tp)) = (half(blend[0]), half(blend[1]));
+                let set = |r: usize, c: usize| local(r * 3 + c, frame);
+                let near = mix(set(row, col), set(row, col + 1), ty);
+                let far = mix(set(row + 1, col), set(row + 1, col + 1), ty);
+                return mix(near, far, tp);
+            }
+            let pos = blend[0].clamp(0.0, 1.0) * (s.blends - 1) as f32;
+            let (lo, bt) = (pos.floor() as usize, pos.fract());
             let a = local(lo, frame);
             if bt > 0.0 && lo + 1 < s.blends {
                 mix(a, local(lo + 1, frame), bt)
@@ -492,4 +515,9 @@ impl Model {
         }
         out
     }
+}
+
+/// Each bone `t` of the way from `a` to `b`.
+fn mix(a: Vec<(Quat, Vec3)>, b: Vec<(Quat, Vec3)>, t: f32) -> Vec<(Quat, Vec3)> {
+    a.iter().zip(&b).map(|(x, y)| (slerp(x.0, y.0, t), std::array::from_fn(|i| x.1[i] + (y.1[i] - x.1[i]) * t))).collect()
 }

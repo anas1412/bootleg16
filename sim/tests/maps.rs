@@ -178,12 +178,12 @@ fn hitboxes_from_the_real_player_model() {
     let Ok(model) = goldsrc::mdl::Model::load(format!("{dir}/models/player/arctic/arctic.mdl")) else { return };
     use sim::hitbox::{HitGroup, Hitboxes};
     let hb = Hitboxes::from_model(&model, "carbine").expect("aim sequences");
-    // Twisting turns the head round the vertical axis, not off it.
+    // The yaw blend turns the head round the vertical axis, not off it.
     let seq0 = model.sequence("ref_aim_carbine").unwrap();
-    let (straight, turned) = (model.player_pose((0, 0.0), (seq0, 0.0), 0.5, 0.0), model.player_pose((0, 0.0), (seq0, 0.0), 0.5, 20.0));
+    let (straight, turned) = (model.player_pose((0, 0.0), (seq0, 0.0), [0.5, 0.5], None), model.player_pose((0, 0.0), (seq0, 0.0), [0.2, 0.5], None));
     let head_bone = model.bones.iter().position(|b| b.name == "Bip01 Head").unwrap();
     let (a, b) = (straight[head_bone].pos, turned[head_bone].pos);
-    assert!(((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt() > 1.0 && (a[2] - b[2]).abs() < 2.0, "{a:?} -> {b:?}");
+    assert!(((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt() > 1.0 && (a[2] - b[2]).abs() < 4.0, "{a:?} -> {b:?}");
     // Aim at the posed head's real centre (the rifle aim pose leans the head forward).
     let seq = model.sequence("ref_aim_carbine").unwrap();
     let pose = model.pose(seq, 0, 0.5);
@@ -476,4 +476,16 @@ fn animated_hitboxes_follow_the_model() {
     let wrap = |a: f32| (a + 540.0).rem_euclid(360.0) - 180.0;
     let (f0, f1) = (wrap(facing(&posed)), wrap(facing(&p)));
     assert!(wrap(f1 - f0).abs() < 25.0, "chest faces {f1} strafing vs {f0} standing");
+    // Standing still, the legs stay put while the view turns up to 90 degrees, then catch
+    // up (CS: fast until within 5 degrees, but steps under a degree are dropped).
+    let mut t = Anim::new(0.0);
+    let look = |yaw: f32| Drive { yaw, ..drive([0.0; 3]) };
+    for i in 0..200 {
+        t.step(&model, &look(80.0), i as f32 / 100.0, 0.01);
+    }
+    assert_eq!(t.gait_yaw, 0.0);
+    for i in 0..200 {
+        t.step(&model, &look(120.0), 2.0 + i as f32 / 100.0, 0.01);
+    }
+    assert!(t.gait_yaw > 80.0 && t.gait_yaw < 100.0, "legs at {}", t.gait_yaw);
 }
