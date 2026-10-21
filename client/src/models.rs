@@ -160,7 +160,11 @@ impl ModelCache {
                     let mut rgba = t.rgba;
                     crate::level::tex_gamma(&mut rgba);
                     let image = images.add(rgba_image(t.width, t.height, rgba, true, TextureFormat::Rgba8UnormSrgb));
-                    materials.add(crate::studio::material(image))
+                    let mut m = crate::studio::material(image);
+                    if t.additive {
+                        m.base.alpha_mode = AlphaMode::Add;
+                    }
+                    materials.add(m)
                 })
                 .collect();
             Arc::new(Loaded { model, materials: mats, skin: Default::default() })

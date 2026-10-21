@@ -351,6 +351,8 @@ pub struct ModelTexture {
     pub width: u32,
     pub height: u32,
     pub rgba: Vec<u8>,
+    /// `STUDIO_NF_ADDITIVE`: added onto what's behind (black shows nothing): glass, screens.
+    pub additive: bool,
 }
 
 impl Model {
@@ -387,7 +389,7 @@ impl Model {
                         [c[0], c[1], c[2], if masked && p == 255 { 0 } else { 255 }]
                     })
                     .collect();
-                Some(ModelTexture { name, width: w as u32, height: h as u32, rgba })
+                Some(ModelTexture { name, width: w as u32, height: h as u32, rgba, additive: flags & 0x20 != 0 })
             })
             .collect()
     }

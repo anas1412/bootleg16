@@ -114,7 +114,8 @@ pub(super) fn crosshair(
     let id = l.active_id();
     let scoped = l.active_gun().is_some_and(|g| g.fov() < 90) && is_sniper(id);
     scope.set_if_neq(if alive && scoped { Visibility::Inherited } else { Visibility::Hidden });
-    root.set_if_neq(if alive && !is_sniper(id) && !covered.0 { Visibility::Inherited } else { Visibility::Hidden });
+    // CS 1.6: no crosshair with the C4 out (its weapon_c4.txt has none), nor the snipers' unscoped.
+    root.set_if_neq(if alive && !is_sniper(id) && id != Id::C4 && !covered.0 { Visibility::Inherited } else { Visibility::Hidden });
     // The gap is the real spread of the next shot, seen at this screen size: spread is
     // the tangent of the cone, and the view is 90° wide at 4:3 (vertical half-angle 36.87°).
     let h = windows.iter().next().map(|w| w.height()).unwrap_or(720.0);

@@ -4,5 +4,7 @@
 # name = the weapon's name in the game (sim weapons data); right, up, forward = how far to move
 # it from where its model puts it (game units; negative = left, down, back); mirror: yes (the
 # old CS way: models are stored left-handed and shown mirrored) or no (the model is already
-# right-handed). Weapons not listed: 0 0 0 yes. (The grenades are CS 1.6's own models.)
+# right-handed, as the grenades are). Weapons not listed: 0 0 0 yes.
+flashbang      0 0 0 no
+smokegrenade   0 0 0 no
 

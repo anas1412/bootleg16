@@ -27,7 +27,8 @@ pub struct Limits {
 pub fn step(s: &mut PlayerState, input: &Input, dt: f32, cmd_time: f64, seed: u64, limits: Limits, world: &World, vars: &MoveVars) -> (Events, Fired) {
     s.movement.max_speed = s.loadout.max_speed();
     let frozen_input;
-    let input = if limits.frozen {
+    // Planting the C4 holds you still (`CC4::PrimaryAttack`: max speed 1 while arming).
+    let input = if limits.frozen || s.loadout.planting.is_some() {
         frozen_input = Input { forward: 0.0, side: 0.0, jump: false, ..*input };
         &frozen_input
     } else {
