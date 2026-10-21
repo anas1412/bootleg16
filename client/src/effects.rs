@@ -259,6 +259,16 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                     hits.write(Hit::Mark { at, normal });
                 }
             }
+            // Getting an item: CS 1.6's pick-up sounds (yours in your head, others' where they are).
+            GameEvent::Pickup { player, at, item } => {
+                use net::protocol::PickupSound::*;
+                let file = match item {
+                    Gun => "items/gunpickup2.wav",
+                    Armor => "items/ammopickup2.wav",
+                    Kit => "items/kevlar.wav",
+                };
+                w.cues.push(if Some(player) == me { sound::Cue::File(file.into()) } else { sound::Cue::Quiet { file, at, volume: 1.0 } });
+            }
             // The throw animation (no call-out: there's no radio, and the AI assistant doesn't
             // announce grenades).
             GameEvent::Thrown { player, .. } => {

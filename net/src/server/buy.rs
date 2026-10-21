@@ -197,6 +197,12 @@ impl Server {
             }
         };
         if bought {
+            let sound = match item {
+                BuyItem::Weapon(_) => PickupSound::Gun,
+                BuyItem::Kevlar | BuyItem::KevlarHelmet => PickupSound::Armor,
+                BuyItem::DefuseKit => PickupSound::Kit,
+            };
+            self.events.push(GameEvent::Pickup { player: c.id, at: c.state.movement.origin, item: sound });
             c.money -= cost;
             let l = &c.state.loadout;
             let undo = match item {

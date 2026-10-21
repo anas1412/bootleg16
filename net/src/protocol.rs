@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 38;
+pub const PROTOCOL_VERSION: u32 = 39;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -218,6 +218,8 @@ pub enum GameEvent {
     /// A knife swing (`CKnife::Swing` / `Stab`): `hit` someone (their hit sound comes with the
     /// damage), else the wall it struck, if any (point, surface normal).
     Knife { player: u8, at: [f32; 3], hit: bool, wall: Option<([f32; 3], [f32; 3])> },
+    /// Someone got an item (bought or picked up): its sound, heard nearby.
+    Pickup { player: u8, at: [f32; 3], item: PickupSound },
     /// Someone threw a grenade (their throw animation; their team hears "Fire in the hole!").
     Thrown { player: u8, kind: sim::grenades::Kind },
     /// `weapon` None = fell to death.
@@ -341,6 +343,16 @@ pub struct Me {
     /// Seconds of buy time left (None: no limit: practice, deathmatch, the warmup).
     pub buy_left: Option<f32>,
     pub defuse_kit: bool,
+}
+
+/// What an item sounds like when you get it (CS 1.6: `CBasePlayerItem::DefaultTouch`,
+/// `CWeaponBox::Touch` gunpickup2; `CItemKevlar` / `CItemAssaultSuit` ammopickup2;
+/// `CItemThighPack` kevlar).
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PickupSound {
+    Gun,
+    Armor,
+    Kit,
 }
 
 /// Which impact sound a hit makes.

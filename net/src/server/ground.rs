@@ -32,6 +32,8 @@ impl Server {
             });
             if let Some(c) = taker {
                 c.defuse_kit = true;
+                let (id, at) = (c.id, c.state.movement.origin);
+                self.events.push(GameEvent::Pickup { player: id, at, item: PickupSound::Kit });
                 self.kits.swap_remove(k);
             } else {
                 k += 1;
@@ -48,7 +50,9 @@ impl Server {
                 near && c.vitals.alive() && !(c.id == g.dropper && tick < g.dropper_wait_until)
             });
             let gun = g.gun;
-            if taker.is_some_and(|c| c.state.loadout.pick_up(gun)) {
+            let got = taker.and_then(|c| c.state.loadout.pick_up(gun).then(|| (c.id, c.state.movement.origin)));
+            if let Some((id, at)) = got {
+                self.events.push(GameEvent::Pickup { player: id, at, item: PickupSound::Gun });
                 self.ground.swap_remove(i);
             } else {
                 i += 1;
