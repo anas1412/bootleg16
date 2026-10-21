@@ -1,6 +1,7 @@
 //! Main menu, practice setup, joining a server, settings, the connecting screen,
 //! the in-game Esc menu and team selection. `settings`: the player settings and their file;
 //! `connect`: starting and joining a match.
+mod backdrop;
 mod connect;
 mod settings;
 
@@ -61,6 +62,7 @@ pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         crate::found::plugin(app);
+        backdrop::plugin(app);
         app.add_plugins(crate::play::PlayPlugin)
             .init_resource::<UiActions>()
             .init_resource::<Kit>()
