@@ -117,6 +117,11 @@ pub(super) struct UpSweep;
 pub(super) struct UpTimer;
 #[derive(Component)]
 pub(super) struct UpRing;
+/// Which face a portrait is (the Twins: 0 her, 1 him); only the one talking moves.
+#[derive(Component)]
+pub(super) struct Speaker(usize);
+/// Space between the Twins' two portraits.
+const TWIN_GAP: f32 = 12.0;
 #[derive(Component)]
 pub(super) struct UpName;
 /// A waveform bar: how far from the portrait.
@@ -144,7 +149,8 @@ fn spawn(commands: &mut Commands, faces: &Faces, kit: &Kit, who: usize, mood: Mo
     let a = &ASSISTANTS[who];
     let c = a.color;
     let (her, his) = parts(text);
-    let twins = !his.is_empty();
+    // the Twins always show both faces, side by side
+    let twins = who == 2;
     let name = if twins { format!("{} · HER", a.name.to_uppercase()) } else { a.name.to_uppercase() };
     let line_font = 20.0;
     commands
@@ -168,7 +174,8 @@ fn spawn(commands: &mut Commands, faces: &Faces, kit: &Kit, who: usize, mood: Mo
                         // the waveforms, out from the portrait along the edge
                         for right in [false, true] {
                             let side = Node { top: vh(-8.0), height: vh(16.0), align_items: AlignItems::Center, column_gap: vh(4.0), flex_direction: if right { FlexDirection::Row } else { FlexDirection::RowReverse }, ..full() };
-                            let side = if right { Node { left: percent(50), margin: UiRect::left(vh(FACE / 2.0 + RING + 16.0)), ..side } } else { Node { right: percent(50), margin: UiRect::right(vh(FACE / 2.0 + RING + 16.0)), ..side } };
+                            let reach = if twins { FACE + 2.0 * RING + TWIN_GAP / 2.0 + 16.0 } else { FACE / 2.0 + RING + 16.0 };
+                            let side = if right { Node { left: percent(50), margin: UiRect::left(vh(reach)), ..side } } else { Node { right: percent(50), margin: UiRect::right(vh(reach)), ..side } };
                             band.spawn(side).with_children(|w| {
                                 for k in 0..BARS {
                                     w.spawn((Wave(k), Node { width: vh(3.0), height: vh(3.0), border_radius: BorderRadius::all(px(2)), ..default() }, BackgroundColor(c.with_alpha(rest_alpha(k)))));
@@ -190,23 +197,32 @@ fn spawn(commands: &mut Commands, faces: &Faces, kit: &Kit, who: usize, mood: Mo
                             });
                         }
                     });
-                // the portrait in its ring, centred on the edge
-                up.spawn((
-                    UpRing,
-                    if who == 3 { Anim::slam() } else { Anim::tune_in(0.16) },
-                    Node { position_type: PositionType::Absolute, top: px(0), left: percent(50), margin: UiRect::left(vh(-(FACE / 2.0 + RING))), padding: UiRect::all(vh(RING - 1.0)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(vh(8.0 + RING)), ..default() },
-                    BackgroundColor(Color::srgba(0.027, 0.035, 0.047, 0.9)),
-                    BorderColor::all(c.with_alpha(0.7)),
-                    BoxShadow(vec![glow(c, 0.0)]),
-                ))
-                .with_children(|ring| {
-                    portrait(ring, faces, face_for(who), mood, c, FACE);
-                    for (x, y) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-                        let b = px(2);
-                        let border = UiRect { left: if x < 0.0 { b } else { px(0) }, right: if x > 0.0 { b } else { px(0) }, top: if y < 0.0 { b } else { px(0) }, bottom: if y > 0.0 { b } else { px(0) } };
-                        ring.spawn((Lock(x, y), Node { width: vh(12.0), height: vh(12.0), border, ..full() }, BorderColor::all(c), Visibility::Hidden));
-                    }
-                });
+                // the portrait in its ring, centred on the edge (the Twins: her left, him right)
+                let faces_shown: Vec<(usize, Mood, f32)> = if twins {
+                    vec![(face_for(who), mood, -(FACE + 2.0 * RING + TWIN_GAP / 2.0)), (BROTHER_FACE, mood2, TWIN_GAP / 2.0)]
+                } else {
+                    vec![(face_for(who), mood, -(FACE / 2.0 + RING))]
+                };
+                for (k, (face, m, offset)) in faces_shown.into_iter().enumerate() {
+                    up.spawn((
+                        UpRing,
+                        Speaker(k),
+                        if who == 3 { Anim::slam() } else { Anim::tune_in(0.16 + 0.06 * k as f32) },
+                        Node { position_type: PositionType::Absolute, top: px(0), left: percent(50), margin: UiRect::left(vh(offset)), padding: UiRect::all(vh(RING - 1.0)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(vh(8.0 + RING)), ..default() },
+                        BackgroundColor(Color::srgba(0.027, 0.035, 0.047, 0.9)),
+                        BorderColor::all(c.with_alpha(0.7)),
+                        BoxShadow(vec![glow(c, 0.0)]),
+                    ))
+                    .with_children(|ring| {
+                        let tile = portrait(ring, faces, face, m, c, FACE);
+                        ring.commands().entity(tile).insert(Speaker(k));
+                        for (x, y) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+                            let b = px(2);
+                            let border = UiRect { left: if x < 0.0 { b } else { px(0) }, right: if x > 0.0 { b } else { px(0) }, top: if y < 0.0 { b } else { px(0) }, bottom: if y > 0.0 { b } else { px(0) } };
+                            ring.spawn((Lock(x, y), Node { width: vh(12.0), height: vh(12.0), border, ..full() }, BorderColor::all(c), Visibility::Hidden));
+                        }
+                    });
+                }
             });
         });
 }
@@ -256,7 +272,7 @@ pub(super) fn animate(
     covered: Res<Covered>,
     overlay: Option<Res<crate::menu::Overlay>>,
     mut ups: Query<(Entity, &mut Uplink, &mut Visibility)>,
-    mut rigs: Query<&mut Rig>,
+    mut rigs: Query<(&mut Rig, &Speaker)>,
     mut name: Query<&mut Text, With<UpName>>,
     mut rows: Query<(&LineRow, &mut Node)>,
     mut texts: Query<(&LineText, &mut TextColor)>,
@@ -275,16 +291,14 @@ pub(super) fn animate(
     up.talking = up.plan.rows.iter().position(|(s, e)| t >= *s && t < *e).map(|i| (i, ((t - up.plan.rows[i].0) / 0.02) as usize));
     let loud = up.talking.map(|(i, at)| up.plan.voice[i].get(at).copied().unwrap_or(0.0)).unwrap_or(0.0);
     up.level += (loud - up.level) * 0.25;
-    for mut r in &mut rigs {
-        r.talking = up.talking.is_some();
+    // only the one talking moves (one face: row 0 always)
+    for (mut r, Speaker(k)) in &mut rigs {
+        r.talking = up.talking.is_some_and(|(i, _)| i == *k || up.who != 2);
     }
     // the Twins hand over
     if up.plan.rows.len() > 1 && !up.handed && t >= up.plan.rows[0].1 {
         up.handed = true;
         sounds.write(UiSound::Hand(PITCH[2]));
-        for mut r in &mut rigs {
-            r.set(BROTHER_FACE, up.mood2);
-        }
         for mut n in &mut name {
             n.0 = format!("{} · HIM", ASSISTANTS[2].name.to_uppercase());
         }
