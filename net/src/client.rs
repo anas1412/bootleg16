@@ -54,6 +54,8 @@ pub struct Remote {
     pub airborne: bool,
     /// Reloading their gun.
     pub reloading: bool,
+    /// Spawn-protected (deathmatch): takes no damage until they move or shoot.
+    pub protected: bool,
     /// Health and kit: teammates only (None for enemies).
     pub mate: Option<crate::protocol::Mate>,
 }
@@ -413,8 +415,15 @@ impl Client {
     }
 
     pub fn others(&self) -> Vec<Remote> {
+        self.others_at(1.0)
+    }
+
+    /// Everyone else as drawn `frac` (0..1) of the way through the current tick: a tick
+    /// behind and gliding up to `render_tick`, the way your own view glides between ticks
+    /// (so frames between ticks show them moving, and the last one is what a shot is checked at).
+    pub fn others_at(&self, frac: f32) -> Vec<Remote> {
         let me = self.id();
-        let rt = self.render_tick;
+        let rt = self.render_tick - 1.0 + frac.clamp(0.0, 1.0);
         let (Some(newest), Some(_)) = (self.snaps.back(), self.snaps.front()) else { return Vec::new() };
         // Snapshot pair bracketing the render time (or the newest one if we're ahead).
         let pair = self.snaps.iter().zip(self.snaps.iter().skip(1)).find(|(a, b)| a.tick as f32 <= rt && rt <= b.tick as f32);
@@ -435,12 +444,12 @@ impl Client {
                         Some(pa) => pa.yaw() + ((pb.yaw() - pa.yaw() + 540.0).rem_euclid(360.0) - 180.0) * t,
                         None => pb.yaw(),
                     };
-                    out.push(Remote { id: pb.id, origin, crouched: pb.crouched(), alive: pb.alive(), yaw, pitch: pb.pitch(), weapon: pb.weapon, team: pb.team, airborne: pb.airborne(), reloading: pb.reloading(), mate: pb.mate });
+                    out.push(Remote { id: pb.id, origin, crouched: pb.crouched(), alive: pb.alive(), yaw, pitch: pb.pitch(), weapon: pb.weapon, team: pb.team, airborne: pb.airborne(), reloading: pb.reloading(), protected: pb.is_protected(), mate: pb.mate });
                 }
             }
             None => {
                 for p in newest.players.iter().filter(|p| Some(p.id) != me) {
-                    out.push(Remote { id: p.id, origin: p.origin(), crouched: p.crouched(), alive: p.alive(), yaw: p.yaw(), pitch: p.pitch(), weapon: p.weapon, team: p.team, airborne: p.airborne(), reloading: p.reloading(), mate: p.mate });
+                    out.push(Remote { id: p.id, origin: p.origin(), crouched: p.crouched(), alive: p.alive(), yaw: p.yaw(), pitch: p.pitch(), weapon: p.weapon, team: p.team, airborne: p.airborne(), reloading: p.reloading(), protected: p.is_protected(), mate: p.mate });
                 }
             }
         }

@@ -278,6 +278,7 @@ fn animate(
     w: Res<Walker>,
     look: Res<OtherPlayers>,
     time: Res<Time>,
+    fixed: Res<Time<Fixed>>,
     mut live: Query<(Entity, &mut OtherPlayer, &mut Transform), (Without<Corpse>, Without<ChildOf>)>,
     mut corpses: Query<&mut Corpse>,
     mut bones: Query<&mut Transform, With<ChildOf>>,
@@ -289,7 +290,7 @@ fn animate(
     let in_eye = crate::spectate::in_eye(&w, &watch).map(|o| o.id);
     let cam_rot = cam.compute_transform().rotation;
     let (now, dt) = (time.elapsed_secs(), time.delta_secs().max(1e-4));
-    let others = w.client.others();
+    let others = w.client.others_at(fixed.overstep_fraction());
     for (e, mut p, mut tf) in &mut live {
         let Some(o) = others.iter().find(|o| o.id == p.id) else { continue };
         // spawn protection (deathmatch): they shimmer until they move or shoot

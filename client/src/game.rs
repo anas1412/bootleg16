@@ -379,6 +379,7 @@ pub(crate) fn move_camera(
     // with the whole team out, from behind where the last of you went down (spectate.rs).
     if crate::spectate::spectating(&w) && !w.noclip {
         if let Some(o) = crate::spectate::in_eye(&w, &watch) {
+            let o = w.client.others_at(fixed.overstep_fraction()).into_iter().find(|r| r.id == o.id).unwrap_or(o);
             let h = if o.crouched { sim::pmove::VIEW_HEIGHT_CROUCHED } else { sim::pmove::VIEW_HEIGHT_STANDING };
             tf.translation = Vec3::from(map::to_y_up([o.origin[0], o.origin[1], o.origin[2] + h]));
             tf.rotation = Quat::from_euler(EulerRot::YXZ, (o.yaw - 90.0).to_radians(), -o.pitch.to_radians(), 0.0);
