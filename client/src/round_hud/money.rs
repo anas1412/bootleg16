@@ -5,7 +5,7 @@ use super::{abs, set};
 use crate::game::Walker;
 use crate::hud::{Icons, SAFE};
 use crate::menu::AppState;
-use crate::ui::{edge, hud_panel, kit_text, vh, Anim, Count, Edge, EdgeColor, HudLayer, Kit, Opens, UiSound, BAD, CT_COLOR, EDGE_REST, OK, TX1, TX2};
+use crate::ui::{edge, hud_panel, kit_text, vh, Anim, Count, Edge, EdgeColor, HudLayer, Kit, Opens, UiSound, EDGE_REST, OK, TX1, TX2};
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -19,9 +19,7 @@ pub(super) struct Delta;
 /// A status icon: which one.
 #[derive(Component, Clone, Copy, PartialEq)]
 pub(super) enum Status {
-    Kit,
     Buy,
-    Bomb,
 }
 
 /// An icon's slot: 24 wide plus the 8 gap before it.
@@ -38,7 +36,8 @@ pub(super) fn spawn(mut commands: Commands, kit: Res<Kit>, icons: Res<Icons>) {
             p.spawn((Money, Count::new(0.0, 0.14), kit_text("0", 26.0, TX1, &kit.num)));
             p.spawn((Delta, kit_text("", 16.0, OK, &kit.num), UiTransform::default()));
             p.spawn(Node { margin: UiRect::left(Val::Auto), align_items: AlignItems::Center, ..default() }).with_children(|row| {
-                for (s, icon, color) in [(Status::Kit, "defuser", CT_COLOR), (Status::Bomb, "c4", TX1), (Status::Buy, "buyzone", OK)] {
+                // the kit and the C4 are in the carried strip over the weapon panel (hud/owned.rs)
+                for (s, icon, color) in [(Status::Buy, "buyzone", OK)] {
                     row.spawn((s, Opens::new(false, SLOT), Node { width: px(0), height: vh(24.0), justify_content: JustifyContent::FlexEnd, overflow: Overflow::clip(), ..default() })).with_children(|slot| {
                         slot.spawn(icons.node(icon, 24.0, color)).entry::<Node>().and_modify(|mut n| n.flex_shrink = 0.0);
                     });
@@ -56,8 +55,7 @@ pub(super) fn money(
     mut count: Single<&mut Count, With<Money>>,
     delta: Single<(&mut Text, &mut TextColor, &mut UiTransform), With<Delta>>,
     mut edge: Single<&mut Edge, With<MoneyEdge>>,
-    mut slots: Query<(Entity, &Status, &mut Opens, &Children)>,
-    mut images: Query<&mut ImageNode>,
+    mut slots: Query<(Entity, &Status, &mut Opens)>,
     mut sounds: MessageWriter<UiSound>,
     mut commands: Commands,
     covered: Res<crate::ui::Covered>,
@@ -90,14 +88,10 @@ pub(super) fn money(
         let mut text = text;
         set(&mut text, String::new());
     }
-    // what you need to act on: kit, bomb (red in a site), buy zone
-    let l = &w.client.state.loadout;
-    let in_site = w.client.world.zones.in_bomb_site(w.client.me().origin);
-    for (e, s, mut o, kids) in &mut slots {
+    // where you can buy
+    for (e, s, mut o) in &mut slots {
         let want = alive
             && match s {
-                Status::Kit => w.client.me_info.defuse_kit,
-                Status::Bomb => l.c4,
                 Status::Buy => w.client.me_info.can_buy,
             };
         if o.open != want {
@@ -106,16 +100,6 @@ pub(super) fn money(
                 commands.entity(e).insert(Anim::burst());
             }
             sounds.write(if want { UiSound::On } else { UiSound::Off });
-        }
-        if *s == Status::Bomb {
-            for k in kids {
-                if let Ok(mut img) = images.get_mut(*k) {
-                    let c = if in_site { BAD } else { TX1 };
-                    if img.color != c {
-                        img.color = c;
-                    }
-                }
-            }
         }
     }
 }

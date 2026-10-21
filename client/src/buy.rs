@@ -83,7 +83,7 @@ fn buy_menu(
     mut actions: ResMut<UiActions>,
     mut w: ResMut<Walker>,
     mut menu: ResMut<BuyMenu>,
-    mut shown: Local<Option<(Option<Option<usize>>, usize, Team, i32, Vec<(String, i32, bool)>)>>,
+    mut shown: Local<Option<(Option<Option<usize>>, usize, Team, i32, Vec<(String, i32, bool)>, Vec<Option<u8>>)>>,
     mut cursor: Single<&mut CursorOptions>,
     roots: Query<Entity, With<BuyRoot>>,
     mut hints: MessageWriter<crate::hud::Hint>,
@@ -159,9 +159,9 @@ fn buy_menu(
             }
             false
         }
+        // the menu stays open: buy several things, undo, close with B, Esc or 0
         UiAction::Buy(item) => {
             w.client.buy(*item);
-            menu.0 = None;
             false
         }
         _ => true,
@@ -171,7 +171,6 @@ fn buy_menu(
         if let Some(Some(cat)) = menu.0 {
             if let Some((_, item)) = layout.get(cat).and_then(|Entry(_, items)| items.get(menu.1)) {
                 w.client.buy(*item);
-                menu.0 = None;
             }
         }
     }
@@ -194,12 +193,14 @@ fn buy_menu(
     let money = w.client.me_info.money;
     // teammates' money (CS2): who can buy, who needs a drop. The server only sends your team's.
     let mates: Vec<(String, i32, bool)> = w.client.scores.iter().filter(|s| Some(s.id) != w.client.id()).filter_map(|s| s.money.map(|m| (s.name.clone(), m, s.alive))).collect();
-    if *shown == Some((menu.0, menu.1, team, money, mates.clone())) {
+    // what you already have, per item (the cards say OWNED, grenades how many)
+    let have: Vec<Option<u8>> = layout.iter().flat_map(|Entry(_, items)| items.iter().map(|(_, item)| owned(&w, *item))).collect();
+    if *shown == Some((menu.0, menu.1, team, money, mates.clone(), have.clone())) {
         return;
     }
     // What changed decides what moves: opening tunes everything in; a new category tunes the
     // cards in (staggered) and the details; a new card just the details; closing tunes out.
-    let prev = shown.replace((menu.0, menu.1, team, money, mates.clone()));
+    let prev = shown.replace((menu.0, menu.1, team, money, mates.clone(), have));
     let was = prev.as_ref().and_then(|p| p.0);
     let opening = was.is_none();
     let new_cat = opening || was != Some(menu.0.unwrap_or(None)) || prev.as_ref().map(|p| p.2) != Some(team);
@@ -308,7 +309,14 @@ fn buy_menu(
                     }
                     card.with_children(|c| {
                         c.spawn(Node { justify_content: JustifyContent::SpaceBetween, ..default() }).with_children(|top| {
-                            top.spawn((kit_text(format!("{}", i + 1), 13.0, if selected { AMBER } else { TX2 }, &kit.text), Pickable::IGNORE));
+                            top.spawn((Node { column_gap: vh(10.0), align_items: AlignItems::Center, ..default() }, Pickable::IGNORE)).with_children(|n| {
+                                n.spawn((kit_text(format!("{}", i + 1), 13.0, if selected { AMBER } else { TX2 }, &kit.text), Pickable::IGNORE));
+                                match owned(&w, *item) {
+                                    Some(c) if c > 1 => n.spawn((kit_text(format!("OWNED x{c}"), 13.0, AMBER, &kit.text), Pickable::IGNORE)),
+                                    Some(_) => n.spawn((kit_text("OWNED", 13.0, AMBER, &kit.text), Pickable::IGNORE)),
+                                    None => n.spawn(Node::default()),
+                                };
+                            });
                             top.spawn((kit_text(cost(*item), 20.0, if ok { TX1 } else { BAD }, &kit.num), Pickable::IGNORE));
                         });
                         c.spawn((Node { flex_grow: 1.0, justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() }, Pickable::IGNORE)).with_children(|pic| {
@@ -354,6 +362,23 @@ fn buy_menu(
                 });
             });
         });
+}
+
+/// How many of an item you already have (None: none).
+fn owned(w: &Walker, item: BuyItem) -> Option<u8> {
+    use sim::weapons::Id;
+    let l = &w.client.state.loadout;
+    let v = &w.client.vitals;
+    let n = match item {
+        BuyItem::Weapon(Id::HeGrenade) => l.grenades[0],
+        BuyItem::Weapon(Id::Flashbang) => l.grenades[1],
+        BuyItem::Weapon(Id::Smoke) => l.grenades[2],
+        BuyItem::Weapon(id) => (l.primary.as_ref().is_some_and(|g| g.id == id) || l.secondary.as_ref().is_some_and(|g| g.id == id)) as u8,
+        BuyItem::Kevlar => (v.armor >= 100.0) as u8,
+        BuyItem::KevlarHelmet => (v.armor >= 100.0 && v.helmet) as u8,
+        BuyItem::DefuseKit => w.client.me_info.defuse_kit as u8,
+    };
+    (n > 0).then_some(n)
 }
 
 /// The picture for an item: gun art, or the HUD icon for armor and the kit.
