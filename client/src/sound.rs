@@ -6,7 +6,6 @@ use crate::menu::Settings;
 use bevy::audio::{PlaybackSettings, Volume};
 use bevy::prelude::*;
 use goldsrc::materials::Materials;
-use sim::grenades::Kind;
 use sim::weapons::Id;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -27,7 +26,7 @@ pub enum Cue {
     Explosion { at: [f32; 3] },
     Flash { at: [f32; 3] },
     Smoke { at: [f32; 3] },
-    Bounce { kind: Kind, at: [f32; 3] },
+    Bounce { at: [f32; 3] },
     /// A breakable broke (`CBreakable::Die`: one of two sounds, pitch 95-124 (97-103 = 100),
     /// volume 0.85-1).
     Break { material: sim::breakables::Material, at: [f32; 3] },
@@ -38,6 +37,8 @@ pub enum Cue {
     /// Someone else's knife missed (`at`), or yours struck a wall.
     KnifeMiss { at: Option<[f32; 3]> },
     KnifeWall { at: [f32; 3] },
+    /// The planted bomb's beep, carrying as far as its stage says (`C4Think`).
+    Beep { file: &'static str, at: [f32; 3], attn: f32 },
     Zoom,
     /// A sound file named by a view model animation event (reloads, draws, pins).
     File(String),
@@ -214,7 +215,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
             Cue::Smoke { at } => plays.push(Play { file: "weapons/sg_explode.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
             // `CGrenade::BounceSound`: one of three hits at 0.25. (An HE also starts he_bounce,
             // but on the same channel the hit right after it replaces it.)
-            Cue::Bounce { at, .. } => {
+            Cue::Bounce { at } => {
                 let file = sounds.pick(&["weapons/grenade_hit1.wav", "weapons/grenade_hit2.wav", "weapons/grenade_hit3.wav"]);
                 plays.push(Play { file, at: Some(at), volume: 0.25, attn: ATTN_NORM, pitch: 1.0 });
             }
@@ -277,6 +278,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 let file = sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]);
                 plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 0.94 });
             }
+            Cue::Beep { file, at, attn } => plays.push(Play { file: file.into(), at: Some(at), volume: 1.0, attn, pitch: 1.0 }),
             Cue::KnifeWall { at } => {
                 let pitch = 0.98 + (sounds.rand() * 4.0).floor() / 100.0;
                 plays.push(Play { file: "weapons/knife_hitwall1.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch });

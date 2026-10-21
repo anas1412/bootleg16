@@ -244,7 +244,7 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                     hits.write(Hit::Player { at, dir: d.map(|v| v / l), head: group == sim::hitbox::HitGroup::Head });
                 }
             }
-            GameEvent::GrenadeBounce { kind, at } => w.cues.push(sound::Cue::Bounce { kind, at }),
+            GameEvent::GrenadeBounce { at, .. } => w.cues.push(sound::Cue::Bounce { at }),
             // CS: the throw animation, and the thrower's team hears the radio call
             // (`%!MRAD_FIREINHOLE`, the same file for both teams).
             // CS: a miss whooshes at 94% pitch (heard by those around), a wall rings

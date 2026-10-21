@@ -21,6 +21,9 @@ struct BombView;
 #[derive(Component)]
 struct BombLight;
 
+/// The LED glow's size (units).
+const GLOW_SIZE: f32 = 0.3 * 64.0;
+
 /// What is drawn now: dropped or planted, and where.
 #[derive(Clone, Copy, PartialEq)]
 enum Shown {
@@ -60,7 +63,13 @@ fn show_bomb(
             None => Vec::new(),
         };
         let (b, c) = (load("w_backpack.mdl"), load("w_c4.mdl"));
-        (b, c, meshes.add(Sphere::new(1.2)), materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.1, 0.05), unlit: true, ..default() }))
+        // CS's LED glow (`TE_GLOWSPRITE` with `ledglow.spr` at a tenth of its size: 0.3 x 64 texels).
+        let glow = crate::gamefiles::paths("sprites/ledglow.spr").iter().find_map(|p| goldsrc::spr::Sprite::load(p).ok()).and_then(|s| s.frames.into_iter().next().map(|f| (s.width, s.height, f)));
+        let material = match glow {
+            Some((gw, gh, f)) => StandardMaterial { base_color_texture: Some(images.add(crate::level::rgba_image(gw, gh, f, false, bevy::render::render_resource::TextureFormat::Rgba8Unorm))), unlit: true, alpha_mode: AlphaMode::Add, ..default() },
+            None => StandardMaterial { base_color: Color::srgb(1.0, 0.1, 0.05), unlit: true, ..default() },
+        };
+        (b, c, meshes.add(Rectangle::new(GLOW_SIZE, GLOW_SIZE)), materials.add(material))
     });
     let (at, list) = match want {
         Shown::Dropped(at) => (at, &*backpack),
@@ -74,26 +83,69 @@ fn show_bomb(
     }
 }
 
-/// Beep (and blink) faster as the timer runs down; CS goes through five beep sounds.
-fn beeps(time: Res<Time>, mut w: ResMut<Walker>, mut next: Local<f32>, mut total: Local<f32>, mut lights: Query<&mut Visibility, With<BombLight>>) {
+/// The bomb's beeps and blinks as CS 1.6's `CGrenade::C4Think` (cs.so, read with REA): a beep
+/// every 1.4 s from 0.5 s after the plant; the beep sound goes through five stages (each file
+/// beeps more often, and carries further: attenuation 1.5, 1.0, 0.8, 0.5, 0.2), the first a
+/// quarter of the timer long and each one 10% shorter than the last; the LED glows for a tenth
+/// of a second every 2 s from 2 s in.
+const BEEP_EVERY: f32 = 1.4;
+const FIRST_BEEP: f32 = 0.5;
+const BLINK_EVERY: f32 = 2.0;
+const BLINK_FOR: f32 = 0.1;
+const STAGES: [(&str, f32); 5] = [("weapons/c4_beep1.wav", 1.5), ("weapons/c4_beep2.wav", 1.0), ("weapons/c4_beep3.wav", 0.8), ("weapons/c4_beep4.wav", 0.5), ("weapons/c4_beep5.wav", 0.2)];
+
+/// Which beep stage the bomb is in, `elapsed` seconds after a plant with a `timer`-second fuse.
+fn stage(elapsed: f32, timer: f32) -> usize {
+    let mut interval = (timer as i32 >> 2) as f32; // whole seconds, as CS stores it
+    let (mut start, mut k) = (0.0, 0);
+    while k + 1 < STAGES.len() && elapsed >= start + interval {
+        start += interval;
+        interval *= 0.9;
+        k += 1;
+    }
+    k
+}
+
+fn beeps(mut w: ResMut<Walker>, mut total: Local<f32>, mut beeped: Local<u32>, cam: Single<&GlobalTransform, With<crate::game::FlyCam>>, mut lights: Query<(&mut Visibility, &mut Transform, &ChildOf), With<BombLight>>, parents: Query<&GlobalTransform, Without<crate::game::FlyCam>>) {
     let BombNet::Planted { at, left, .. } = w.client.bomb else {
-        *total = 0.0;
+        (*total, *beeped) = (0.0, 0);
         return;
     };
     if *total < left {
         *total = left; // first sight of it: about the full timer
-        *next = 0.0;
+        *beeped = 0;
     }
-    let frac = (left / total.max(0.01)).clamp(0.0, 1.0);
-    let now = time.elapsed_secs();
-    let blink = now < *next - (0.1 + 1.4 * frac) * 0.5; // lit for the first half of each gap
-    for mut v in &mut lights {
-        v.set_if_neq(if blink { Visibility::Inherited } else { Visibility::Hidden });
+    let elapsed = *total - left;
+    let lit = elapsed >= BLINK_EVERY && elapsed % BLINK_EVERY < BLINK_FOR;
+    let face = cam.compute_transform().rotation;
+    for (mut v, mut tf, parent) in &mut lights {
+        v.set_if_neq(if lit { Visibility::Inherited } else { Visibility::Hidden });
+        // face the camera (the parent is the bomb, which has no turn of its own)
+        let up = parents.get(parent.parent()).map(|g| g.compute_transform().rotation).unwrap_or_default();
+        tf.rotation = up.inverse() * face;
     }
-    if now >= *next {
-        *next = now + 0.1 + 1.4 * frac;
-        const BEEPS: [&str; 5] = ["weapons/c4_beep1.wav", "weapons/c4_beep2.wav", "weapons/c4_beep3.wav", "weapons/c4_beep4.wav", "weapons/c4_beep5.wav"];
-        let file = BEEPS[(((1.0 - frac) * 5.0) as usize).min(4)];
-        w.cues.push(sound::Cue::At { file, at, far: false });
+    let due = if elapsed < FIRST_BEEP { 0 } else { ((elapsed - FIRST_BEEP) / BEEP_EVERY) as u32 + 1 };
+    if due > *beeped {
+        *beeped = due;
+        let (file, attn) = STAGES[stage(elapsed, *total)];
+        w.cues.push(sound::Cue::Beep { file, at, attn });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_beep_stages_follow_cs() {
+        // 40 s fuse: stages start at 0, 10, 19, 27.1 and 34.39 s
+        assert_eq!(stage(0.0, 40.0), 0);
+        assert_eq!(stage(9.9, 40.0), 0);
+        assert_eq!(stage(10.0, 40.0), 1);
+        assert_eq!(stage(18.9, 40.0), 1);
+        assert_eq!(stage(19.0, 40.0), 2);
+        assert_eq!(stage(27.2, 40.0), 3);
+        assert_eq!(stage(34.5, 40.0), 4);
+        assert_eq!(stage(39.9, 40.0), 4);
     }
 }
