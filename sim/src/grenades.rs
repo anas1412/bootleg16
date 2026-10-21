@@ -164,11 +164,17 @@ pub fn flash(world: &World, blast: Vec3, eye: Vec3, forward: Vec3) -> Option<Bli
     if adj <= 0.0 {
         return None;
     }
-    Some(if dot(sub(from, eye), forward) >= 0.0 {
-        Blind { hold: adj / 1.5, fade: 3.0 * adj, alpha: 255 }
-    } else {
-        Blind { hold: adj / 3.5, fade: 1.75 * adj, alpha: 200 }
-    })
+    // How much they face it: CS2's (CS:GO's) bands, not CS 1.6's (which whites out anyone
+    // even slightly facing it, and still 200 white for seconds behind). Strength as CS 1.6
+    // (`RadiusFlash`: held adj / 1.5, fading 3 x adj, looking at it), shares as CS:GO's.
+    let facing = dot(sub(from, eye), forward) / dist.max(1.0);
+    let (share, alpha) = match facing {
+        f if f >= 0.6 => (1.0, 255),
+        f if f >= 0.3 => (0.65, 255),
+        f if f >= -0.2 => (0.4, 255),
+        _ => (0.2, 200),
+    };
+    Some(Blind { hold: adj / 1.5 * share, fade: 3.0 * adj * share, alpha })
 }
 
 /// A flash on someone still blinded by an earlier one (`RadiusFlash`): looking at it adds
@@ -253,8 +259,11 @@ mod tests {
         let eye = [100.0, 0.0, 50.0];
         let facing = flash(&w, [0.0, 0.0, 49.0], eye, [-1.0, 0.0, 0.0]).unwrap();
         let away = flash(&w, [0.0, 0.0, 49.0], eye, [1.0, 0.0, 0.0]).unwrap();
+        let side = flash(&w, [0.0, 0.0, 49.0], eye, [0.0, 1.0, 0.0]).unwrap();
         assert_eq!(facing.alpha, 255);
-        assert!(facing.hold > away.hold && facing.fade > away.fade);
+        assert!(facing.hold > side.hold && side.hold > away.hold);
+        // CS2: behind you it's only a short flash, even close
+        assert!(away.hold < 0.6 && away.fade < 2.5 && away.alpha == 200, "{away:?}");
         assert!(flash(&w, [0.0, 0.0, 49.0], [2000.0, 0.0, 50.0], [-1.0, 0.0, 0.0]).is_none(), "too far");
         // Behind the floor (no line of sight).
         assert!(flash(&w, [0.0, 0.0, -150.0], eye, [-1.0, 0.0, 0.0]).is_none());
