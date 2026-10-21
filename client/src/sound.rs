@@ -37,8 +37,8 @@ pub enum Cue {
     /// Someone else's knife missed (`at`), or yours struck a wall.
     KnifeMiss { at: Option<[f32; 3]> },
     KnifeWall { at: [f32; 3] },
-    /// The planted bomb's beep, carrying as far as its stage says (`C4Think`).
-    Beep { file: &'static str, at: [f32; 3], attn: f32 },
+    /// A sound somewhere at its own attenuation (the bomb's beeps, its blast).
+    Far { file: &'static str, at: [f32; 3], attn: f32 },
     Zoom,
     /// A sound file named by a view model animation event (reloads, draws, pins).
     File(String),
@@ -278,7 +278,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 let file = sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]);
                 plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 0.94 });
             }
-            Cue::Beep { file, at, attn } => plays.push(Play { file: file.into(), at: Some(at), volume: 1.0, attn, pitch: 1.0 }),
+            Cue::Far { file, at, attn } => plays.push(Play { file: file.into(), at: Some(at), volume: 1.0, attn, pitch: 1.0 }),
             Cue::KnifeWall { at } => {
                 let pitch = 0.98 + (sounds.rand() * 4.0).floor() / 100.0;
                 plays.push(Play { file: "weapons/knife_hitwall1.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch });

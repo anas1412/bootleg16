@@ -308,7 +308,9 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                 round.write(RoundNews(e));
             }
             GameEvent::BombExploded { at } => {
-                w.cues.push(sound::Cue::At { file: "weapons/c4_explode1.wav", at, far: true });
+                // `CGrenade::Explode2`: the blast at ATTN 0.25, then debris (0.55).
+                w.cues.push(sound::Cue::Far { file: "weapons/c4_explode1.wav", at, attn: 0.25 });
+                w.cues.push(sound::Cue::Quiet { file: ["weapons/debris1.wav", "weapons/debris2.wav", "weapons/debris3.wav"][(at[0].abs() as usize) % 3], at, volume: 0.55 });
                 w.pending_fx.push(e.clone());
                 round.write(RoundNews(e));
             }

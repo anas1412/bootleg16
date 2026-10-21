@@ -128,7 +128,7 @@ fn beeps(mut w: ResMut<Walker>, mut total: Local<f32>, mut beeped: Local<u32>, c
     if due > *beeped {
         *beeped = due;
         let (file, attn) = STAGES[stage(elapsed, *total)];
-        w.cues.push(sound::Cue::Beep { file, at, attn });
+        w.cues.push(sound::Cue::Far { file, at, attn });
     }
 }
 
