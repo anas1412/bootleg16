@@ -1,0 +1,10 @@
+"VertexLitGeneric"
+{
+
+	"$baseTexture" "models\player\vad36CSO2\emma\ct_emma_face_eyelashes"
+        $translucent  1
+	$alphatest 1
+	$nocull 1
+
+	$ShadowSilouette	0
+}

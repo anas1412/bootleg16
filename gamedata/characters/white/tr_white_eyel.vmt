@@ -1,0 +1,9 @@
+"VertexLitGeneric"
+{
+	"$baseTexture" "models\player\vad36CSO2\white\tr_white_eyel"
+        $translucent  1
+	$alphatest 1
+	$nocull 1
+	$ALPHATESTREFERENCE	0.1
+	$ShadowSilouette	0
+}
