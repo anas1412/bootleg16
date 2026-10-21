@@ -61,6 +61,10 @@ pub struct LitPart;
 #[derive(Component)]
 pub struct LitByMe;
 
+/// Put on a model's parent to brighten it toward white (0..1): a player who can't be hurt yet.
+#[derive(Component)]
+pub struct Glow(pub f32);
+
 pub struct StudioPlugin;
 
 impl Plugin for StudioPlugin {
@@ -168,18 +172,18 @@ fn light_models(
     probe: Res<Probe>,
     w: Res<Walker>,
     parts: Query<(&MeshMaterial3d<StudioMaterial>, &ChildOf), With<LitPart>>,
-    parents: Query<(&GlobalTransform, Has<LitByMe>)>,
+    parents: Query<(&GlobalTransform, Has<LitByMe>, Option<&Glow>)>,
     mut materials: ResMut<Assets<StudioMaterial>>,
 ) {
     let mut cache: HashMap<Entity, StudioUniform> = HashMap::new();
     for (mat, parent) in &parts {
         let p = parent.parent();
         let light = *cache.entry(p).or_insert_with(|| {
-            let mine = matches!(parents.get(p), Ok((_, true)) | Err(_));
+            let mine = matches!(parents.get(p), Ok((_, true, _)) | Err(_));
             let origin = if mine {
                 w.client.me().origin
             } else {
-                let v = parents.get(p).map(|(tf, _)| tf.translation()).unwrap_or_default();
+                let v = parents.get(p).map(|(tf, _, _)| tf.translation()).unwrap_or_default();
                 [v.x, -v.z, v.y] // back from Y-up to GoldSrc axes
             };
             let mut light = probe.light(&w.client.world, origin);
@@ -187,6 +191,7 @@ fn light_models(
             if mine {
                 light.levels.x = light.levels.x.max(VIEW_MIN_AMBIENT);
             }
+            light.levels.z = parents.get(p).ok().and_then(|(_, _, g)| g).map_or(0.0, |g| g.0);
             light
         });
         if let Some(mut m) = materials.get_mut(&mat.0) {

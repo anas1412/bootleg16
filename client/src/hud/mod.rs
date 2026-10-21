@@ -18,7 +18,7 @@ pub use icons::{weapon_icon, Icons};
 
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
-use crate::ui::{edge, hud_panel, kit_text, meter, vh, Count, EdgeColor, HudLayer, Kit, Meter, BAD, EDGE_REST, LINE, TX1, TX2};
+use crate::ui::{edge, hud_panel, kit_text, meter, vh, Count, EdgeColor, HudLayer, Kit, Meter, AMBER, BAD, EDGE_REST, LINE, TX1, TX2};
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use net::protocol::Team;
@@ -31,7 +31,7 @@ impl Plugin for HudPlugin {
             .init_resource::<Kit>()
             .init_resource::<Icons>()
             .add_systems(OnEnter(AppState::InGame), (spawn, crosshair::spawn))
-            .add_systems(Update, (status, crosshair::crosshair, net_stats, owned::owned).in_set(Frame::Ui));
+            .add_systems(Update, (status, crosshair::crosshair, net_stats, owned::owned, protection).in_set(Frame::Ui));
         motion::plugin(app);
         hint::plugin(app);
         visor::plugin(app);
@@ -153,6 +153,12 @@ fn spawn(mut commands: Commands, kit: Res<Kit>, icons: Res<Icons>) {
             });
         });
 
+    // Over the vitals: spawn protection (deathmatch), while you can't be hurt.
+    // (the root's visibility belongs to the menu blur, so the line toggles inside it)
+    commands.spawn((game.clone(), HudLayer, pos(Node { left: vh(SAFE + 4.0), bottom: vh(SAFE + 128.0), ..default() }))).with_children(|r| {
+        r.spawn((Protection, Visibility::Hidden, kit_text("SPAWN PROTECTION", 13.0, AMBER, &kit.text), shadowed()));
+    });
+
     // Top right, over the kill feed: frame rate and ping.
     commands.spawn((game.clone(), HudLayer, NetStats, kit_text("", 13.0, TX2, &kit.num), shadowed(), pos(Node { right: vh(SAFE), top: vh(SAFE), ..default() })));
 
@@ -263,6 +269,20 @@ fn swap_icon(icons: &Icons, name: &str, node: &mut ImageNode, layout: &mut Node)
     }
     if layout.aspect_ratio != Some(aspect) {
         layout.aspect_ratio = Some(aspect);
+    }
+}
+
+/// The spawn protection line.
+#[derive(Component)]
+struct Protection;
+
+/// Shown while you're spawn-protected, breathing softly.
+fn protection(w: Res<Walker>, time: Res<Time>, mut tag: Single<(&mut Visibility, &mut TextColor), With<Protection>>) {
+    let on = w.client.me_info.protected && w.client.vitals.alive();
+    tag.0.set_if_neq(if on { Visibility::Inherited } else { Visibility::Hidden });
+    if on {
+        let a = 0.7 + 0.3 * (time.elapsed_secs() * std::f32::consts::TAU / 1.4).sin();
+        tag.1.set_if_neq(TextColor(AMBER.with_alpha(a)));
     }
 }
 
