@@ -138,20 +138,22 @@ const SCREENS = {
     html: () => hud() + `<div class="over">${scores()}</div>`,
   },
   pause: {
-    name: 'Esc menu', game: 'de_dust2_t.jpg', covered: true, note: 'Esc. The game keeps running underneath: there is no pause, as in CS 1.6. The same list rows as the main menu.',
-    html: () => hud() + `<div class="over" style="display:grid;place-items:center"><div class="tune" style="width:560px">
-      ${ui.pageTitle('Match', 'Menu', 'メニュー')}<div style="margin-top:32px">${ui.nav([['01', 'Resume', '再開', true], ['02', 'Choose team', 'チーム'], ['03', 'Settings', '設定'], ['04', 'Leave match', '退出']])}</div></div></div>`,
+    name: 'Esc menu', game: 'de_dust2_t.jpg', covered: true, note: 'Esc. The game keeps running underneath: there is no pause, as in CS 1.6. The same list rows as the main menu, on a glass plate lit along the top in your side\'s colour; the line over the title says where you are.',
+    html: () => hud() + `<div class="over" style="display:grid;place-items:center"><div class="plate side tune" style="--team:var(--t-color);width:640px"><i class="edge"></i>
+      ${ui.pageTitle('<span style="color:var(--t-color)">Strays</span> · de_dust2 · Round 13', 'Menu', 'メニュー')}<div style="margin-top:32px">${ui.nav([['01', 'Resume', '再開', true], ['02', 'Choose team', 'チーム'], ['03', 'Leave match', '退出']])}</div>
+      <div class="label" style="margin-top:20px;padding-left:20px">Esc · back to the game</div></div></div>`,
   },
   teams: {
-    name: 'Team pick', game: 'de_dust2_t.jpg', covered: true, note: 'Each side card carries its colour bar on top. Keys 1 and 2.',
+    name: 'Team pick', game: 'de_dust2_t.jpg', covered: true, note: 'Each side card is lit in its colour from the top edge down. Under the role: who is on that side now (a tick per player) and the rounds it has won, so you can see where you are needed. Keys 1 and 2.',
     html: () => hud() + `<div class="over" style="display:grid;place-items:center"><div class="tune">
       ${ui.pageTitle('Pick a side', 'Choose your team', 'チーム選択')}
       <div style="display:flex;gap:var(--gap);margin-top:32px">
-        ${[['1', 'Strays', 'ストレイズ', 'Attack · plant the bomb', 'var(--t-color)', 1], ['2', 'Bureau', 'ビューロー', 'Defend · defuse', 'var(--ct-color)']].map((s, i) => `
-        <div class="card tune${s[5] ? ' sel' : ''}" style="--i:${i + 1};width:400px;padding:var(--pad)"><div class="abs" style="left:0;right:0;top:0;height:var(--bar);background:${s[4]}"></div>
-          <div class="label">${s[0]}</div><div class="h2" style="margin-top:24px;color:${s[4]}">${s[1]}</div><div class="jp" style="margin-top:8px">${s[2]}</div>
-          <div class="body" style="margin-top:24px;color:var(--tx2)">${s[3]}</div></div>`).join('')}
-      </div><div style="display:flex;gap:6px;margin-top:var(--gap)">${ui.chip('Auto-assign')}${ui.chip('Spectate')}</div></div></div>`,
+        ${[['1', 'Strays', 'ストレイズ', 'Attack · plant the bomb', 'var(--t-color)', 4, 5, 1], ['2', 'Bureau', 'ビューロー', 'Defend · defuse the bomb', 'var(--ct-color)', 3, 7]].map((s, i) => `
+        <div class="card side tune${s[7] ? ' sel' : ''}" style="--i:${i + 1};--c:${s[4]};width:400px;padding:var(--pad)">
+          <div class="label n">${s[0]}</div><div class="h2" style="margin-top:24px;color:${s[4]}">${s[1]}</div><div class="jp" style="margin-top:8px">${s[2]}</div>
+          <div class="body" style="margin-top:16px;color:var(--tx2)">${s[3]}</div>
+          <div class="side-foot"><span class="ticks">${Array.from({ length: 5 }, (_, k) => `<i${k < s[5] ? ' class="on"' : ''}></i>`).join('')}</span><span class="label">${s[5]} players</span><span class="label" style="margin-left:auto"><b class="num">${s[6]}</b> rounds</span></div></div>`).join('')}
+      </div><div style="display:flex;gap:6px;margin-top:var(--gap)">${ui.chip('5 · Auto-select')}${ui.chip('6 · Spectate')}</div></div></div>`,
   },
   assistant: {
     name: 'AI assistant', note: 'In matches, bottom centre: the edge light draws out, the icon tunes in on it, the line resolves from the centre outward. Click one to replay.',
@@ -209,10 +211,14 @@ function matchFound(accepted, you) {
 
 // Under a player's scoreboard row (mouse freed with right-click): report, and for teammates a
 // kick vote.
+// A player's menu, under their row: their voice (Mute this match, volume, Block for good),
+// reports, and a kick vote for a teammate.
 function playerMenu(name, mate) {
-  return `<div class="tune" style="display:flex;align-items:center;gap:8px;height:56px;padding-left:120px">
-    <span class="label" style="margin-right:8px">${name}</span>${['Cheating', 'Griefing', 'Abuse'].map(r => ui.chip('Report · ' + r)).join('')}
-    ${mate ? '<span style="width:1px;height:28px;background:var(--line-2);margin:0 8px"></span>' + ui.chip('Vote to kick') : ''}</div>`;
+  const line = (inner, i) => `<div style="display:flex;align-items:center;gap:8px;height:52px;white-space:nowrap">${inner}</div>`;
+  const tag = s => `<span class="label" style="width:96px">${s}</span>`;
+  return `<div class="tune" style="padding:4px var(--pad) 12px 120px">
+    ${line(`${tag('Voice')}${ui.chip('Mute')}${ui.chip('−')}<span class="num-s" style="width:56px;text-align:center;font-size:16px">100%</span>${ui.chip('+')}${ui.chip('Block')}`)}
+    ${line(`${tag('Report')}${['Cheating', 'Griefing', 'Abuse'].map(r => ui.chip(r)).join('')}${mate ? '<span style="width:1px;height:28px;background:var(--line);margin:0 8px"></span>' + ui.chip('Vote to kick') : ''}<span style="flex:1"></span>${ui.chip('Cancel')}`)}</div>`;
 }
 
 // Menu pages draw inside the shared frame.
@@ -347,13 +353,15 @@ function scores() {
     const [t, n] = r.split(':'), c = t === 'ct' ? 'var(--ct-color)' : 'var(--t-color)';
     return `<div style="flex:1;height:40px;background:var(--bg1);box-shadow:inset 0 calc(-1 * var(--bar)) 0 ${c};display:grid;place-items:center">${ui.ico(n, 26, 26, c)}</div>`;
   }).join('');
-  const row = (r) => `<div style="display:grid;grid-template-columns:96px 1fr 96px 96px;align-items:center;height:48px;padding:0 var(--pad);border-top:1px solid var(--line);${r[4] ? 'background:var(--amber-wash);box-shadow:inset var(--bar) 0 0 var(--amber)' : ''};color:${r[3] === 'Dead' ? 'var(--tx3)' : 'var(--tx1)'}">
-    <span>${r[3] ? ui.status(r[3], { C4: 'c4', Kit: 'kit', Dead: 'dead', Bot: '' }[r[3]]) : ''}</span><span class="body" style="font-size:19px">${r[0]}</span><span class="num-s" style="text-align:right">${r[1]}</span><span class="num-s" style="text-align:right">${r[2]}</span></div>${r[5] ? playerMenu(r[0], r[5] === 'mate') : ''}`;
+  // other people's rows end in the button that opens their menu (lit once the mouse is free)
+  const btn = r => r[4] || r[3] === 'Bot' ? '<span></span>' : `<span class="ibtn${r[5] ? ' on' : ''}"><i class="spr" style="--s:${MIC};width:18px;height:18px"></i></span>`;
+  const row = (r) => `<div style="display:grid;grid-template-columns:96px 1fr 96px 96px 56px;align-items:center;height:48px;padding:0 var(--pad);border-top:1px solid var(--line);${r[4] ? 'background:var(--amber-wash);box-shadow:inset var(--bar) 0 0 var(--amber)' : ''};color:${r[3] === 'Dead' ? 'var(--tx3)' : 'var(--tx1)'}">
+    <span>${r[3] ? ui.status(r[3], { C4: 'c4', Kit: 'kit', Dead: 'dead', Bot: '' }[r[3]]) : ''}</span><span class="body" style="font-size:19px">${r[0]}</span><span class="num-s" style="text-align:right">${r[1]}</span><span class="num-s" style="text-align:right">${r[2]}</span>${btn(r)}</div>${r[5] ? playerMenu(r[0], r[5] === 'mate') : ''}`;
   const team = (name, jp, score, c, rows, i) => `<div class="tune" style="--i:${i};margin-top:32px">
     <div style="display:flex;align-items:center;background:var(--bg1);box-shadow:inset var(--bar) 0 0 ${c}">
       <div style="padding:12px var(--pad);flex:1;display:flex;align-items:baseline;gap:var(--gap)"><span class="h2" style="font-size:40px">${name}</span><span class="jp">${jp}</span><span class="label">${rows.length} players</span></div>
       <div class="num-m" style="padding:0 var(--pad);color:${c}">${String(score).padStart(2, '0')}</div></div>
-    <div style="display:grid;grid-template-columns:96px 1fr 96px 96px;height:36px;align-items:center;padding:0 var(--pad)"><span></span><span class="label">Player</span><span class="label" style="text-align:right">K</span><span class="label" style="text-align:right">D</span></div>
+    <div style="display:grid;grid-template-columns:96px 1fr 96px 96px 56px;height:36px;align-items:center;padding:0 var(--pad)"><span></span><span class="label">Player</span><span class="label" style="text-align:right">K</span><span class="label" style="text-align:right">D</span><span></span></div>
     ${rows.map(row).join('')}</div>`;
   return `<div class="abs" style="left:360px;right:360px;top:160px">
     <div class="tune" style="display:flex;align-items:center"><span class="label">de_dust · Round 13</span><span class="num-s" style="margin-left:auto">1:42</span></div>

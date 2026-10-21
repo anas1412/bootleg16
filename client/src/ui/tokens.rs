@@ -36,6 +36,9 @@ pub const LINE_2: Color = Color::srgba(0.784, 0.902, 1.0, 0.24);
 pub const LINE_3: Color = Color::srgba(0.784, 0.902, 1.0, 0.45);
 /// The faint wash under a hovered row or choice.
 pub const HOVER: Color = Color::srgba(0.784, 0.902, 1.0, 0.04);
+/// The glass plate a menu over the game sits on (tokens.css .plate: .55 in the browser; Bevy
+/// blends in linear light, where the same dark reads lighter, so a little more here).
+pub const PLATE_BG: Color = Color::srgba(0.055, 0.067, 0.086, 0.72);
 /// The dim behind menus and popups drawn over the game (the blur does the rest).
 pub const BACKDROP: Color = Color::srgba(0.027, 0.031, 0.043, 0.72);
 

@@ -210,3 +210,6 @@ Journal (`journalctl -b 0`): after the game went fullscreen, `kwin_wayland_wrapp
 
 ## Depth of field and window resizes (2026-10-21)
 The menu blur is depth of field on the world camera (`ui/motion/blur.rs`). With it on, a window size change (drag, resolution setting, Alt+Enter) quit the game with a render validation error ("Attachments have differing sizes") or a segfault. Two things fix it, both needed: depth of field only on the world camera, never the weapon's (`ViewModelCamera`, which draws into the same picture), and no depth of field until the size has been steady for 0.5 s and 10 frames (a slow loading frame can eat the whole half second). Test with `BOOTLEG16_OVERLAY=pause BOOTLEG16_RESIZE=drag` and `=1024,768`.
+
+## Bevy UI blends in linear light (2026-10-21)
+A translucent colour over a dark surface shows much brighter in the game than in the browser (which blends in sRGB): white at .05 over BG1 came out ~4x too bright. And a gradient from clear white to black passes through grey, which drew a dark band across every lit card. `panels::lit` uses .005 for the mockup's .045 and a clear *black* middle stop; colour washes (`side_card`) need about a quarter of the mockup's alpha. Check washes in a game screenshot, not just the mockup.

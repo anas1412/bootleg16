@@ -5,7 +5,7 @@
 //! selection here, the shop in `buy`. They tune in over the blurred game and out when closed.
 use crate::game::Walker;
 use crate::menu::AppState;
-use crate::ui::{card, chip, clickable_keep_border, kit_text, nav, page_title, vh, Anim, Blurs, Kit, NavItem, UiAction, UiActions, BAR, CT_COLOR, TX1, TX2, TX3, T_COLOR};
+use crate::ui::{chip, clickable_keep_border, edge, kit_text, nav, page_title, page_title_lead, plate, side_bar, side_card, vh, Anim, Blurs, EdgeColor, Kit, NavItem, UiAction, UiActions, AMBER, BG1, CT_COLOR, LINE, LINE_2, PLATE_EDGE, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
 use net::protocol::Team;
@@ -115,10 +115,22 @@ pub(crate) fn menus(
         Overlay::Menu => {
             // a teammate left: you may call a surrender vote
             let abandoned = w.client.round.abandoned[(me_team == Team::Ct) as usize] && me_team != Team::Spectator;
+            // where you are: your side, the map, the round
+            let lead = match me_team {
+                Team::Spectator => None,
+                t => Some((if t == Team::Ct { "Bureau" } else { "Strays" }, if t == Team::Ct { CT_COLOR } else { T_COLOR })),
+            };
+            let map = w.client.map.clone().unwrap_or_default();
+            let eyebrow = match w.client.round.phase {
+                _ if practice => format!("Practice · {map}"),
+                net::rounds::Phase::Warmup => format!("{map} · Warmup"),
+                _ => format!("{map} · Round {}", w.client.round.round),
+            };
             commands.spawn((OverlayRoot, DespawnOnExit(AppState::InGame), full_dim())).with_children(|root| {
-                root.spawn((Node { width: vh(560.0), flex_direction: FlexDirection::Column, ..default() }, Anim::stagger(0))).with_children(|col| {
+                root.spawn((plate(Node { width: vh(640.0), flex_direction: FlexDirection::Column, ..default() }), Anim::stagger(0))).with_children(|col| {
+                    col.spawn(edge(EdgeColor::Team, PLATE_EDGE));
                     col.spawn(Node { margin: UiRect::bottom(vh(24.0)), flex_direction: FlexDirection::Column, ..default() }).with_children(|t| {
-                        page_title(t, &kit, if practice { "Practice" } else { "Match" }, "Menu", "メニュー");
+                        page_title_lead(t, &kit, lead, &eyebrow, "Menu", "メニュー");
                     });
                     let item = |num, label, jp, action, selected| NavItem { num, label, jp, action, selected };
                     let mut items = vec![item("01", "Resume", "再開", UiAction::Resume, true), item("02", "Choose team", "チーム", UiAction::ShowTeams, false)];
@@ -127,7 +139,8 @@ pub(crate) fn menus(
                     }
                     items.push(item(if abandoned { "04" } else { "03" }, "Leave match", "退出", UiAction::Leave, false));
                     nav(col, &kit, "pause.nav", items, false);
-                    col.spawn((kit_text("ESC · BACK TO THE GAME", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), padding: UiRect::left(vh(16.0)), ..default() }));
+                    // in line with the row numbers (20 padding + the 4 bar)
+                    col.spawn((kit_text("ESC · BACK TO THE GAME", 13.0, TX2, &kit.text), Node { margin: UiRect::top(vh(20.0)), padding: UiRect::left(vh(24.0)), ..default() }));
                 });
             });
         }
@@ -138,8 +151,9 @@ pub(crate) fn menus(
                         page_title(t, &kit, "Pick a side", "Choose your team", "チーム選択");
                     });
                     col.spawn(Node { column_gap: vh(16.0), ..default() }).with_children(|row| {
-                        team_card(row, &kit, 1, "1", "Strays", "ストレイズ", "Attack · plant the bomb", T_COLOR, UiAction::ChooseTeam(Some(Team::T)), me_team == Team::T);
-                        team_card(row, &kit, 2, "2", "Bureau", "ビューロー", "Defend · defuse the bomb", CT_COLOR, UiAction::ChooseTeam(Some(Team::Ct)), me_team == Team::Ct);
+                        let side = |t: Team| Side { players: w.client.scores.iter().filter(|s| s.team == t).count(), rounds: (!practice).then(|| w.client.round.score[(t == Team::Ct) as usize] as u32) };
+                        team_card(row, &kit, 1, "1", "Strays", "ストレイズ", "Attack · plant the bomb", T_COLOR, side(Team::T), UiAction::ChooseTeam(Some(Team::T)), me_team == Team::T);
+                        team_card(row, &kit, 2, "2", "Bureau", "ビューロー", "Defend · defuse the bomb", CT_COLOR, side(Team::Ct), UiAction::ChooseTeam(Some(Team::Ct)), me_team == Team::Ct);
                     });
                     col.spawn((Node { column_gap: vh(8.0), margin: UiRect::top(vh(16.0)), ..default() }, Anim::stagger(3))).with_children(|row| {
                         chip(row, &kit, "5 · Auto-select", UiAction::ChooseTeam(None), false);
@@ -159,19 +173,48 @@ fn full_dim() -> impl Bundle {
     )
 }
 
-/// One side: key, big name, Japanese name, what you do; the side's colour as a bar on top.
+/// Who is on a side now, and the rounds it has won (none in practice).
+struct Side {
+    players: usize,
+    rounds: Option<u32>,
+}
+
+/// One side: key, big name, Japanese name, what you do, lit in the side's colour; at the
+/// foot who is on it (a tick per player) and the rounds it has won, so you see where you're
+/// needed.
 #[allow(clippy::too_many_arguments)]
-fn team_card(row: &mut ChildSpawnerCommands, kit: &Kit, i: usize, key: &str, name: &str, jp: &str, role: &str, color: Color, action: UiAction, current: bool) {
-    let node = Node { width: vh(420.0), height: vh(280.0), flex_direction: FlexDirection::Column, padding: UiRect::all(vh(28.0)), ..default() };
-    let mut e = row.spawn((card(node, current), Anim::stagger(i)));
-    let base = if current { crate::ui::BG1.mix(&crate::ui::AMBER, 0.08) } else { crate::ui::BG1 };
+fn team_card(row: &mut ChildSpawnerCommands, kit: &Kit, i: usize, key: &str, name: &str, jp: &str, role: &str, color: Color, side: Side, action: UiAction, current: bool) {
+    let node = Node { width: vh(420.0), flex_direction: FlexDirection::Column, padding: UiRect::all(vh(28.0)), ..default() };
+    let mut e = row.spawn((side_card(node, color, current), Anim::stagger(i)));
+    let base = if current { BG1.mix(&AMBER, 0.08) } else { BG1 };
     e.with_children(|c| {
-        c.spawn((Node { position_type: PositionType::Absolute, left: px(0), right: px(0), top: px(0), height: vh(BAR), ..default() }, BackgroundColor(color), Pickable::IGNORE));
-        c.spawn((kit_text(key, 13.0, TX2, &kit.text), Pickable::IGNORE));
-        c.spawn((Node { flex_grow: 1.0, ..default() }, Pickable::IGNORE));
-        c.spawn((kit_text(name.to_uppercase(), 52.0, color, &kit.display), Pickable::IGNORE));
+        c.spawn(side_bar(color));
+        c.spawn((kit_text(key, 13.0, if current { AMBER } else { TX2 }, &kit.text), Pickable::IGNORE));
+        c.spawn((kit_text(name.to_uppercase(), 52.0, color, &kit.display), Node { margin: UiRect::top(vh(24.0)), ..default() }, Pickable::IGNORE));
         c.spawn((kit_text(jp, 13.0, TX3, &kit.jp), Node { margin: UiRect::top(vh(6.0)), ..default() }, Pickable::IGNORE));
         c.spawn((kit_text(role.to_uppercase(), 13.0, if current { TX1 } else { TX2 }, &kit.text), Node { margin: UiRect::top(vh(16.0)), ..default() }, Pickable::IGNORE));
+        c.spawn((Node { height: vh(32.0), ..default() }, Pickable::IGNORE));
+        c.spawn((Node { height: px(1), ..default() }, BackgroundColor(LINE), Pickable::IGNORE));
+        c.spawn((Node { align_items: AlignItems::Center, column_gap: vh(12.0), margin: UiRect::top(vh(16.0)), ..default() }, Pickable::IGNORE)).with_children(|f| {
+            // five slots for a 5v5; more when more play (practice, deathmatch), up to ten
+            let slots = side.players.clamp(5, 10);
+            f.spawn((Node { column_gap: vh(4.0), ..default() }, Pickable::IGNORE)).with_children(|ticks| {
+                for k in 0..slots {
+                    ticks.spawn((Node { width: vh(14.0), height: vh(4.0), border_radius: BorderRadius::all(vh(2.0)), ..default() }, BackgroundColor(if k < side.players { color } else { LINE_2 }), Pickable::IGNORE));
+                }
+            });
+            let players = match side.players {
+                1 => "1 PLAYER".to_string(),
+                n => format!("{n} PLAYERS"),
+            };
+            f.spawn((kit_text(players, 13.0, TX2, &kit.text), Pickable::IGNORE));
+            if let Some(r) = side.rounds {
+                f.spawn((Node { margin: UiRect::left(Val::Auto), align_items: AlignItems::Baseline, column_gap: vh(6.0), ..default() }, Pickable::IGNORE)).with_children(|n| {
+                    n.spawn((kit_text(r.to_string(), 18.0, TX1, &kit.num), Pickable::IGNORE));
+                    n.spawn((kit_text("ROUNDS", 13.0, TX2, &kit.text), Pickable::IGNORE));
+                });
+            }
+        });
     });
     clickable_keep_border(&mut e, action, base);
 }

@@ -164,7 +164,7 @@
 
 /* ---- the HUD, alive (hud.js runs the demo; client/src/hud_motion.rs does the same) ---- */
 /* the edge light on every HUD panel: your team's colour, quiet; it flares on events */
-.hud > .edge { position: absolute; left: 12px; right: 12px; top: 0; height: 2px; border-radius: 1px; pointer-events: none; z-index: 1;
+.hud > .edge, .plate > .edge { position: absolute; left: 12px; right: 12px; top: 0; height: 2px; border-radius: 1px; pointer-events: none; z-index: 1;
   background: linear-gradient(90deg, transparent, var(--edge, var(--team)) 25%, var(--edge, var(--team)) 75%, transparent); opacity: .35; }
 .hud > .edge.on { opacity: 1; }
 .flare > .edge { animation: flare 600ms var(--ease-out); }
@@ -327,3 +327,19 @@
 .own.gone { display: none; }
 /* A chip that can't be pressed now (Undo buys before you bought anything): quiet frame and text. */
 .chip.off { color: var(--tx3); box-shadow: inset 0 0 0 1px var(--line); pointer-events: none; }
+
+/* a menu over the game: its plate is lit along the top in your side's colour (the HUD's edge light, steady) */
+.plate.side { position: relative; }
+.plate > .edge { opacity: .8; }
+/* a side card: lit in its colour from the top edge down; who is on it and what it has won at the foot */
+.card.side { background: linear-gradient(color-mix(in srgb, var(--c) 13%, transparent), transparent 65%), var(--lit), var(--bg1); box-shadow: var(--hi), inset 0 var(--bar) 0 var(--c), inset 0 0 0 1px var(--line), var(--e1); }
+.card.side:hover { box-shadow: var(--hi), inset 0 var(--bar) 0 var(--c), inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), var(--e2); }
+.card.side.sel { background: linear-gradient(color-mix(in srgb, var(--c) 13%, transparent), transparent 65%), linear-gradient(var(--amber-wash), var(--amber-wash)), var(--lit), var(--bg1); box-shadow: var(--hi), inset 0 var(--bar) 0 var(--c), inset 0 0 0 2px var(--amber), var(--e2); }
+.side-foot { display: flex; align-items: center; gap: 12px; margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); }
+.side-foot .ticks { display: flex; gap: 4px; }
+.side-foot .ticks i { width: 14px; height: 4px; border-radius: 2px; background: var(--line-2); }
+.side-foot .ticks i.on { background: var(--c); }
+.side-foot .num { font: 700 18px var(--f-num); color: var(--tx1); margin-right: 4px; }
+/* a framed square holding an icon: the handle on a row whose click opens something (the scoreboard's player menu) */
+.ibtn { justify-self: end; width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--radius-s); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--tx2); }
+.ibtn.on { box-shadow: inset 0 0 0 1px var(--line-3); color: var(--tx1); }

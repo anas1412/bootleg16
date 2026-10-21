@@ -37,12 +37,15 @@ stepping), never at rest. **Amber is you**: your selection, your main action, yo
 - **`panels`:** `soft` (radius), `lift`, `hud_panel` (glass, tinted 7% to your side via
   `Tint::Team`), `card` (selected: amber frame on an amber wash), `feed_row` (kill feed and
   voice rows: yours `Tint::You` with the amber bar on the outer side, inside the padding, so
-  content lines up).
+  content lines up), `plate` (the glass a menu over the game sits on, with your side's
+  `edge` along the top), `side_card` and `side_bar` (team pick: a card lit in its side's
+  colour from the top edge down).
 - **`widgets`:** `nav` (numbered list, the selection slides), `chips` / `Choice` (one
   selection per group, it slides), `chip`, `chip_w`, `stepper` (the value rolls),
   `setting_row`, `primary_button` (the one main action: amber frame, 6 px bar on the reading
   edge, key on the far edge), `primary_off` (same shape, quiet, the reason in red),
-  `page_title`, `status_label`.
+  `page_title`, `page_title_lead` (the eyebrow starts with a word in its colour, e.g. your
+  side), `status_label`.
 - **`motion`:** `Anim` (tune in / out, burst, slam, roll, tick) on a node and its whole
   subtree; `Slide`; `Fade` / `FadeBorder` hovers; `Blurs` for menus over the game (the game
   blurs, the shared scrim dims it, a scanline sweeps, the HUD hides; `Covered` says so).

@@ -56,6 +56,16 @@ pub fn clickable_keep_border(e: &mut EntityCommands, action: UiAction, base: Col
     clickable(e, action, base, false);
 }
 
+/// A small framed square holding an icon: the visible handle on a row whose click opens
+/// something (the scoreboard's player menu). It's only the look: the row takes the click and
+/// bursts it on hover, so it never fires twice. `live`: the mouse can use it now.
+pub fn icon_button(p: &mut ChildSpawnerCommands, image: Handle<Image>, live: bool) {
+    let node = Node { width: vh(32.0), height: vh(32.0), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(1)), border_radius: BorderRadius::all(vh(RADIUS_S)), ..default() };
+    p.spawn((node, BorderColor::all(if live { LINE_3 } else { LINE_2 }), Pickable::IGNORE)).with_children(|b| {
+        b.spawn((ImageNode { image, color: if live { TX1 } else { TX2 }, ..default() }, Node { width: vh(18.0), height: vh(18.0), ..default() }, Pickable::IGNORE));
+    });
+}
+
 /// A hairline between list rows.
 pub fn hairline(p: &mut ChildSpawnerCommands) {
     p.spawn((Node { height: px(1), ..default() }, BackgroundColor(LINE)));
@@ -257,8 +267,24 @@ pub fn primary_off(p: &mut ChildSpawnerCommands, kit: &Kit, label: &str, reason:
 
 /// Page heading: small label, big title, Japanese subtitle.
 pub fn page_title(p: &mut ChildSpawnerCommands, kit: &Kit, eyebrow: &str, title: &str, jp: &str) {
+    page_title_lead(p, kit, None, eyebrow, title, jp);
+}
+
+/// A page title whose eyebrow starts with a word in its own colour (your side, over a menu
+/// in a match: "Strays · de_dust2 · Round 13").
+pub fn page_title_lead(p: &mut ChildSpawnerCommands, kit: &Kit, lead: Option<(&str, Color)>, eyebrow: &str, title: &str, jp: &str) {
     p.spawn(Node { flex_direction: FlexDirection::Column, ..default() }).with_children(|c| {
-        c.spawn(t(kit, Type::Label, eyebrow, TX2));
+        c.spawn(Node::default()).with_children(|r| {
+            match lead {
+                Some((word, color)) => {
+                    r.spawn(t(kit, Type::Label, word, color));
+                    r.spawn(t(kit, Type::Label, format!(" · {eyebrow}"), TX2));
+                }
+                None => {
+                    r.spawn(t(kit, Type::Label, eyebrow, TX2));
+                }
+            }
+        });
         c.spawn(Node { align_items: AlignItems::Baseline, column_gap: vh(GAP), margin: UiRect::top(vh(GAP_S)), ..default() }).with_children(|r| {
             r.spawn(t(kit, Type::H2, title, TX1));
             r.spawn(t(kit, Type::Jp, jp, TX3));
