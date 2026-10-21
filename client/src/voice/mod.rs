@@ -13,7 +13,7 @@ pub use rows::{MicIcon, Talking};
 use crate::menu::{menu_has_keys, AppState, Overlay};
 use bevy::prelude::*;
 use net::protocol::{VoiceChannel, VOICE_FRAME, VOICE_RATE};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 pub struct VoicePlugin;
@@ -24,7 +24,7 @@ impl Plugin for VoicePlugin {
             .insert_resource(Devices(audio::input_devices()))
             .init_resource::<MicLevel>()
             .add_systems(Startup, open_audio)
-            .add_systems(OnEnter(AppState::InGame), rows::spawn)
+            .add_systems(OnEnter(AppState::InGame), (rows::spawn, |mut s: ResMut<VoiceSettings>| s.muted.clear()))
             .add_systems(Update, page::mic_test.run_if(in_state(AppState::Menu)))
             .add_systems(Update, (talk, listen).chain().in_set(Frame::Sound))
             .add_systems(Update, rows::rows.in_set(Frame::Ui));
@@ -57,13 +57,17 @@ pub struct VoiceSettings {
     pub open_mic: bool,
     /// Noise gate: frames quieter than this peak (0..1) aren't sent (0 = off). Open mic needs it.
     pub gate: f32,
-    /// Each player's voice volume by name (0 = muted; missing = 1).
+    /// Each player's voice volume by name (missing = 1).
     players: HashMap<String, f32>,
+    /// Muted for this match only (not saved; cleared when you join a match).
+    muted: HashSet<String>,
+    /// Blocked: never heard again, team or proximity, in any match (saved).
+    blocked: HashSet<String>,
 }
 
 impl Default for VoiceSettings {
     fn default() -> Self {
-        VoiceSettings { on: true, mic: String::new(), mic_volume: 1.0, volume: 1.0, open_mic: false, gate: 0.03, players: HashMap::new() }
+        VoiceSettings { on: true, mic: String::new(), mic_volume: 1.0, volume: 1.0, open_mic: false, gate: 0.03, players: HashMap::new(), muted: HashSet::new(), blocked: HashSet::new() }
     }
 }
 
@@ -91,9 +95,20 @@ impl VoiceSettings {
                 "volume" => s.volume = v.parse().unwrap_or(s.volume),
                 "open_mic" => s.open_mic = v == "true",
                 "gate" => s.gate = v.parse().unwrap_or(s.gate),
+                k if k.starts_with("block.") => {
+                    s.blocked.insert(k["block.".len()..].to_string());
+                }
                 k if k.starts_with("player.") => {
-                    if let Ok(g) = v.parse() {
-                        s.players.insert(k["player.".len()..].to_string(), g);
+                    let name = k["player.".len()..].to_string();
+                    match v.parse::<f32>() {
+                        // a mute saved before Block existed stays off for good
+                        Ok(g) if g <= 0.0 => {
+                            s.blocked.insert(name);
+                        }
+                        Ok(g) => {
+                            s.players.insert(name, g);
+                        }
+                        Err(_) => {}
                     }
                 }
                 _ => {}
@@ -112,17 +127,51 @@ impl VoiceSettings {
         for (name, g) in &self.players {
             text.push_str(&format!("player.{name}={g}\n"));
         }
+        for name in &self.blocked {
+            text.push_str(&format!("block.{name}=true\n"));
+        }
         let _ = std::fs::write(p, text);
     }
 
-    /// How loud `name`'s voice plays for you (0 = muted).
+    /// How loud `name`'s voice plays for you (0: muted or blocked).
     pub fn player_gain(&self, name: &str) -> f32 {
+        if self.is_muted(name) || self.is_blocked(name) {
+            return 0.0;
+        }
+        self.player_volume(name)
+    }
+
+    /// The volume you set for `name` (whether or not they're muted).
+    pub fn player_volume(&self, name: &str) -> f32 {
         self.players.get(name).copied().unwrap_or(1.0)
     }
 
-    /// Set `name`'s voice volume (0 mutes them; 1 is normal, up to 2), and remember it.
+    pub fn is_muted(&self, name: &str) -> bool {
+        self.muted.contains(name)
+    }
+
+    pub fn is_blocked(&self, name: &str) -> bool {
+        self.blocked.contains(name)
+    }
+
+    /// Mute or unmute `name` for this match.
+    pub fn toggle_mute(&mut self, name: &str) {
+        if !self.muted.remove(name) {
+            self.muted.insert(name.to_string());
+        }
+    }
+
+    /// Block or unblock `name` for good, and remember it.
+    pub fn toggle_block(&mut self, name: &str) {
+        if !self.blocked.remove(name) {
+            self.blocked.insert(name.to_string());
+        }
+        self.save();
+    }
+
+    /// Set `name`'s voice volume (1 is normal, from a quarter up to 2), and remember it.
     pub fn set_player_gain(&mut self, name: &str, gain: f32) {
-        let g = gain.clamp(0.0, 2.0);
+        let g = gain.clamp(0.25, 2.0);
         if (g - 1.0).abs() < 1e-3 {
             self.players.remove(name);
         } else {

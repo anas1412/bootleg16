@@ -7,7 +7,7 @@
 use crate::game::{Frame, Walker};
 use crate::hud::Icons;
 use crate::menu::AppState;
-use crate::ui::{chip, clickable, kit_text, vh, Anim, Blurs, Kit, UiAction, UiActions, AMBER, BAR, BG1, CT_COLOR, LINE, TX1, TX2, TX3, T_COLOR};
+use crate::ui::{chip, clickable, icon_button, kit_text, vh, Anim, Blurs, Kit, UiAction, UiActions, AMBER, BAR, BG1, CT_COLOR, LINE, TX1, TX2, TX3, T_COLOR};
 use net::protocol::ReportReason;
 use std::collections::HashSet;
 use bevy::prelude::*;
@@ -45,7 +45,15 @@ struct Kicked(Option<u32>);
 struct Reported(HashSet<u8>);
 
 /// Right-click while holding the scoreboard frees the mouse for it (overlay.rs moves the mouse).
-fn mouse(keys: Res<ButtonInput<KeyCode>>, buttons: Res<ButtonInput<MouseButton>>, binds: Res<crate::binds::Binds>, mut m: ResMut<ScoreMouse>) {
+fn mouse(keys: Res<ButtonInput<KeyCode>>, buttons: Res<ButtonInput<MouseButton>>, binds: Res<crate::binds::Binds>, w: Res<Walker>, mut m: ResMut<ScoreMouse>) {
+    // screenshot runs: BOOTLEG16_SCORES=menu frees the mouse and opens the first other person's menu
+    if std::env::var("BOOTLEG16_SCORES").as_deref() == Ok("menu") {
+        m.on = true;
+        if m.open.is_none() {
+            m.open = w.client.scores.iter().find(|s| Some(s.id) != w.client.id() && !s.bot && s.team != Team::Spectator).map(|s| s.id);
+        }
+        return;
+    }
     if binds.held(crate::binds::Action::Scores, &keys, &buttons) {
         if buttons.just_pressed(MouseButton::Right) {
             m.on = !m.on;
@@ -58,12 +66,15 @@ fn mouse(keys: Res<ButtonInput<KeyCode>>, buttons: Res<ButtonInput<MouseButton>>
 fn report_actions(mut actions: ResMut<UiActions>, mut m: ResMut<ScoreMouse>, mut reported: ResMut<Reported>, mut kicked: ResMut<Kicked>, mut w: ResMut<Walker>, mut voice: ResMut<crate::voice::VoiceSettings>) {
     actions.0.retain(|a| match a {
         UiAction::Mute(name) => {
-            let g = voice.player_gain(name);
-            voice.set_player_gain(name, if g == 0.0 { 1.0 } else { 0.0 });
+            voice.toggle_mute(name);
+            false
+        }
+        UiAction::Block(name) => {
+            voice.toggle_block(name);
             false
         }
         UiAction::PlayerVolume(name, d) => {
-            let g = voice.player_gain(name);
+            let g = voice.player_volume(name);
             voice.set_player_gain(name, g + d);
             false
         }
@@ -87,6 +98,9 @@ fn report_actions(mut actions: ResMut<UiActions>, mut m: ResMut<ScoreMouse>, mut
     });
 }
 
+/// The last column: the button that opens a player's menu (voice, report, kick).
+const MENU_COL: f32 = 56.0;
+
 /// Slots in the strip: a full regulation match (first to 13).
 const SLOTS: usize = 24;
 
@@ -97,7 +111,7 @@ const COLS: [(&str, f32); 8] = [("K", 56.0), ("D", 56.0), ("A", 56.0), ("ADR", 7
 type Shown = (Vec<Score>, [u32; 2], usize, bool, Option<u8>, usize);
 
 #[allow(clippy::too_many_arguments)]
-fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<crate::binds::Binds>), w: Res<Walker>, kit: Res<Kit>, icons: Res<Icons>, m: Res<ScoreMouse>, (reported, kicked, voice): (Res<Reported>, Res<Kicked>, Res<crate::voice::VoiceSettings>), roots: Query<Entity, With<ScoresRoot>>, mut shown: Local<Option<Shown>>) {
+fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<crate::binds::Binds>), w: Res<Walker>, kit: Res<Kit>, icons: Res<Icons>, m: Res<ScoreMouse>, (reported, kicked, voice): (Res<Reported>, Res<Kicked>, Res<crate::voice::VoiceSettings>), roots: Query<Entity, With<ScoresRoot>>, mic: Option<Res<crate::voice::MicIcon>>, mut shown: Local<Option<Shown>>) {
     let auto_show = std::env::var_os("BOOTLEG16_SCORES").is_some();
     let want = (binds.held(crate::binds::Action::Scores, &keys, &buttons) || auto_show).then(|| (w.client.scores.clone(), w.client.round.score, w.client.round_history.len(), m.on, m.open, reported.0.len()));
     // a voice volume changed: redraw too
@@ -119,7 +133,7 @@ fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<K
     let line = if w.client.practice { "PRACTICE".to_string() } else { format!("ROUND {}", r.round.max(1)) };
     // kicking: teammates, reserved matches, one call per round, not while a vote runs
     let can_kick = m.on && w.client.ticket != 0 && kicked.0 != Some(r.round) && r.vote.is_none();
-    let ctx = Ctx { me, my_team: w.client.team(), carrier: match w.client.bomb { net::protocol::BombNet::Carried(id) => Some(id), _ => None }, my_kit: w.client.me_info.defuse_kit, can_report: m.on && !w.client.practice, can_report_or_mouse: m.on, can_kick, open: m.open, reported: &reported.0, voice: &voice };
+    let ctx = Ctx { me, my_team: w.client.team(), carrier: match w.client.bomb { net::protocol::BombNet::Carried(id) => Some(id), _ => None }, my_kit: w.client.me_info.defuse_kit, can_report: m.on && !w.client.practice, can_report_or_mouse: m.on, can_kick, open: m.open, reported: &reported.0, voice: &voice, mic: mic.map(|m| m.0.clone()) };
     let tune = |i: usize| opening.then(|| Anim::stagger(i));
     commands
         .spawn((
@@ -138,7 +152,7 @@ fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<K
                 head.with_children(|h| {
                     h.spawn((kit_text(format!("SCOREBOARD · {line}"), 13.0, TX2, &kit.text), Node { flex_grow: 1.0, ..default() }));
                     if !w.client.practice {
-                        h.spawn(kit_text(if m.on { "CLICK A PLAYER: VOICE, REPORT · RIGHT-CLICK TO LOCK THE MOUSE" } else { "RIGHT-CLICK TO USE THE MOUSE" }, 13.0, TX3, &kit.text));
+                        h.spawn(kit_text(if m.on { "CLICK A PLAYER: VOICE, BLOCK, REPORT · RIGHT-CLICK TO LOCK THE MOUSE" } else { "RIGHT-CLICK TO USE THE MOUSE" }, 13.0, TX3, &kit.text));
                     }
                 });
                 if !w.client.practice {
@@ -178,6 +192,8 @@ struct Ctx<'a> {
     open: Option<u8>,
     reported: &'a HashSet<u8>,
     voice: &'a crate::voice::VoiceSettings,
+    /// The microphone on each player's menu button.
+    mic: Option<Handle<Image>>,
 }
 
 /// One team: header bar (side colour, name, rounds won), column labels, then the players.
@@ -211,6 +227,7 @@ fn header(col: &mut ChildSpawnerCommands, kit: &Kit) {
         for (c, w) in COLS {
             r.spawn((kit_text(c, 13.0, TX2, &kit.text), Node { width: vh(w), justify_content: JustifyContent::FlexEnd, ..default() }));
         }
+        r.spawn(Node { width: vh(MENU_COL), ..default() });
     });
 }
 
@@ -232,7 +249,7 @@ fn player_row(col: &mut ChildSpawnerCommands, kit: &Kit, s: &Score, ctx: &Ctx) {
         ("", TX3)
     };
     let reported = ctx.reported.contains(&s.id);
-    let gain = ctx.voice.player_gain(&s.name);
+    let (muted, blocked, volume) = (ctx.voice.is_muted(&s.name), ctx.voice.is_blocked(&s.name), ctx.voice.player_volume(&s.name));
     let base = if mine { BG1.mix(&AMBER, 0.08) } else { Color::NONE };
     // your bar sits inside the padding, so every row's content lines up
     let node = Node { height: vh(48.0), align_items: AlignItems::Center, padding: UiRect { left: vh(if mine { 24.0 - BAR } else { 24.0 }), right: vh(24.0), ..default() }, border: UiRect { left: vh(if mine { BAR } else { 0.0 }), top: px(1), ..default() }, ..default() };
@@ -244,8 +261,8 @@ fn player_row(col: &mut ChildSpawnerCommands, kit: &Kit, s: &Score, ctx: &Ctx) {
             }
         });
         r.spawn((kit_text(&s.name, 19.0, c, &kit.text), Node { flex_grow: 1.0, ..default() }, Pickable::IGNORE));
-        if gain == 0.0 {
-            r.spawn((kit_text("MUTED", 13.0, TX3, &kit.text), Node { margin: UiRect::right(vh(16.0)), ..default() }, Pickable::IGNORE));
+        if blocked || muted {
+            r.spawn((kit_text(if blocked { "BLOCKED" } else { "MUTED" }, 13.0, TX3, &kit.text), Node { margin: UiRect::right(vh(16.0)), ..default() }, Pickable::IGNORE));
         }
         if reported {
             r.spawn((kit_text("REPORTED", 13.0, TX3, &kit.text), Node { margin: UiRect::right(vh(16.0)), ..default() }, Pickable::IGNORE));
@@ -264,6 +281,12 @@ fn player_row(col: &mut ChildSpawnerCommands, kit: &Kit, s: &Score, ctx: &Ctx) {
         for (v, (_, w)) in values.into_iter().zip(COLS) {
             r.spawn((kit_text(v, 18.0, c, &kit.num), Node { width: vh(w), justify_content: JustifyContent::FlexEnd, ..default() }, Pickable::IGNORE));
         }
+        // other people's rows: the handle that opens their menu (it lights once the mouse is free)
+        r.spawn((Node { width: vh(MENU_COL), justify_content: JustifyContent::FlexEnd, ..default() }, Pickable::IGNORE)).with_children(|b| {
+            if let (false, false, Some(mic)) = (mine, s.bot, ctx.mic.clone()) {
+                icon_button(b, mic, ctx.can_report_or_mouse);
+            }
+        });
     });
     let report = ctx.can_report && !mine && !s.bot && !reported;
     let kick = ctx.can_kick && !mine && !s.bot && s.team == ctx.my_team;
@@ -273,27 +296,45 @@ fn player_row(col: &mut ChildSpawnerCommands, kit: &Kit, s: &Score, ctx: &Ctx) {
         clickable(&mut e, UiAction::ReportMenu(s.id), base, false);
     }
     if ctx.open == Some(s.id) {
-        col.spawn((Node { height: vh(56.0), align_items: AlignItems::Center, column_gap: vh(8.0), padding: UiRect::left(vh(120.0)), ..default() }, Anim::tune_in(0.0))).with_children(|m| {
+        // two lines under the row: their voice, then reports and the kick vote
+        let line = || Node { height: vh(52.0), align_items: AlignItems::Center, column_gap: vh(8.0), ..default() };
+        let tag = |m: &mut ChildSpawnerCommands, s: &str| {
+            m.spawn((kit_text(s, 13.0, TX2, &kit.text), Node { width: vh(96.0), ..default() }));
+        };
+        let sep = |m: &mut ChildSpawnerCommands| {
+            m.spawn((Node { width: px(1), height: vh(28.0), margin: UiRect::horizontal(vh(8.0)), ..default() }, BackgroundColor(LINE)));
+        };
+        col.spawn((Node { flex_direction: FlexDirection::Column, padding: UiRect { left: vh(120.0), right: vh(24.0), top: vh(4.0), bottom: vh(12.0) }, ..default() }, Anim::tune_in(0.0))).with_children(|menu| {
             if voice {
-                m.spawn((kit_text("VOICE", 13.0, TX2, &kit.text), Node { margin: UiRect::right(vh(8.0)), ..default() }));
-                chip(m, kit, if gain == 0.0 { "Unmute" } else { "Mute" }, UiAction::Mute(s.name.clone()), gain == 0.0);
-                chip(m, kit, "−", UiAction::PlayerVolume(s.name.clone(), -0.25), false);
-                m.spawn((kit_text(format!("{:.0}%", gain * 100.0), 16.0, TX1, &kit.num), Node { width: vh(56.0), justify_content: JustifyContent::Center, ..default() }));
-                chip(m, kit, "+", UiAction::PlayerVolume(s.name.clone(), 0.25), false);
-                m.spawn((Node { width: px(1), height: vh(28.0), margin: UiRect::horizontal(vh(8.0)), ..default() }, BackgroundColor(LINE)));
+                menu.spawn(line()).with_children(|m| {
+                    tag(m, "VOICE");
+                    if !blocked {
+                        chip(m, kit, if muted { "Unmute" } else { "Mute" }, UiAction::Mute(s.name.clone()), muted);
+                        chip(m, kit, "−", UiAction::PlayerVolume(s.name.clone(), -0.25), false);
+                        m.spawn((kit_text(format!("{:.0}%", volume * 100.0), 16.0, TX1, &kit.num), Node { width: vh(56.0), justify_content: JustifyContent::Center, ..default() }));
+                        chip(m, kit, "+", UiAction::PlayerVolume(s.name.clone(), 0.25), false);
+                    }
+                    // for good, in every match (Mute is this match only)
+                    chip(m, kit, if blocked { "Unblock" } else { "Block" }, UiAction::Block(s.name.clone()), blocked);
+                });
             }
-            if report {
-                m.spawn((kit_text(format!("REPORT {} FOR", s.name.to_uppercase()), 13.0, TX2, &kit.text), Node { margin: UiRect::right(vh(8.0)), ..default() }));
-                for (label, reason) in [("Cheating", ReportReason::Cheating), ("Griefing", ReportReason::Griefing), ("Abuse", ReportReason::Abuse)] {
-                    chip(m, kit, label, UiAction::Report(s.id, reason), false);
+            menu.spawn(line()).with_children(|m| {
+                if report {
+                    tag(m, "REPORT");
+                    for (label, reason) in [("Cheating", ReportReason::Cheating), ("Griefing", ReportReason::Griefing), ("Abuse", ReportReason::Abuse)] {
+                        chip(m, kit, label, UiAction::Report(s.id, reason), false);
+                    }
                 }
-            }
-            if kick {
-                // apart from the reports: it's a team vote, not a review
-                m.spawn((Node { width: px(1), height: vh(28.0), margin: UiRect::horizontal(vh(8.0)), ..default() }, BackgroundColor(LINE)));
-                chip(m, kit, "Vote to kick", UiAction::Kick(s.id), false);
-            }
-            chip(m, kit, "Cancel", UiAction::ReportMenu(s.id), false);
+                if kick {
+                    // apart from the reports: it's a team vote, not a review
+                    if report {
+                        sep(m);
+                    }
+                    chip(m, kit, "Vote to kick", UiAction::Kick(s.id), false);
+                }
+                m.spawn(Node { flex_grow: 1.0, ..default() });
+                chip(m, kit, "Cancel", UiAction::ReportMenu(s.id), false);
+            });
         });
     }
 }
