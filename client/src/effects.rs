@@ -247,6 +247,16 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
             GameEvent::GrenadeBounce { kind, at } => w.cues.push(sound::Cue::Bounce { kind, at }),
             // CS: the throw animation, and the thrower's team hears the radio call
             // (`%!MRAD_FIREINHOLE`, the same file for both teams).
+            // CS: a miss whooshes at 94% pitch (heard by those around), a wall rings
+            // (`knife_hitwall1`, 98-101%); a hit sounds with its damage.
+            GameEvent::Knife { player, at, hit, wall } => {
+                if Some(player) != me && !hit && wall.is_none() {
+                    w.cues.push(sound::Cue::KnifeMiss { at: Some(at) });
+                }
+                if let Some(wall) = wall {
+                    w.cues.push(sound::Cue::KnifeWall { at: wall });
+                }
+            }
             GameEvent::Thrown { player, .. } => {
                 if Some(player) != me {
                     anims.write(PlayerAnim::Shot(player, false));

@@ -35,6 +35,9 @@ pub enum Cue {
     Impact { at: [f32; 3], normal: [f32; 3] },
     DryFire { pistol: bool },
     Swing,
+    /// Someone else's knife missed (`at`), or yours struck a wall.
+    KnifeMiss { at: Option<[f32; 3]> },
+    KnifeWall { at: [f32; 3] },
     Zoom,
     /// A sound file named by a view model animation event (reloads, draws, pins).
     File(String),
@@ -268,7 +271,15 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 // The swing itself is a whoosh, slash or stab (CS plays the same miss sounds for
                 // both); what it hit sounds on its own, from the server (`Cue::Hit`).
                 let file = sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]);
-                plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 });
+                plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 0.94 });
+            }
+            Cue::KnifeMiss { at } => {
+                let file = sounds.pick(&["weapons/knife_slash1.wav", "weapons/knife_slash2.wav"]);
+                plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 0.94 });
+            }
+            Cue::KnifeWall { at } => {
+                let pitch = 0.98 + (sounds.rand() * 4.0).floor() / 100.0;
+                plays.push(Play { file: "weapons/knife_hitwall1.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch });
             }
             Cue::Zoom => plays.push(Play { file: "weapons/zoom.wav".into(), at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
             Cue::File(file) => plays.push(Play { file, at: None, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),

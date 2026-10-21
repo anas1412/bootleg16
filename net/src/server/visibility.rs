@@ -128,6 +128,9 @@ impl Server {
             .iter()
             .filter(|e| match e {
                 GameEvent::Footstep { player, at, .. } => visible.contains(player) || hears(*at, HEAR_NORMAL),
+                // A knife swing is heard like a footstep (ATTN_NORM): it must not give away
+                // someone hidden across the map.
+                GameEvent::Knife { player, at, .. } => visible.contains(player) || hears(*at, HEAR_NORMAL),
                 GameEvent::Shot { shooter, weapon, silenced, from, .. } => visible.contains(shooter) || hears(*from, 1000.0 / sim::weapons::data::fire_attenuation(*weapon, *silenced)),
                 _ => true,
             })
