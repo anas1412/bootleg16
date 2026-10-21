@@ -218,7 +218,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
             Cue::Death { at, voice } => {
-                let options: &[&str] = if voice.is_some() { &["player/die1.wav", "player/die2.wav", "player/die3.wav"] } else { &["player/die1.wav", "player/die2.wav", "player/die3.wav", "player/death6.wav"] };
+                let options: &[&str] = if voice.is_some() { &["player/death1.wav", "player/death2.wav", "player/death3.wav", "player/death4.wav"] } else { &["player/die1.wav", "player/die2.wav", "player/die3.wav", "player/death6.wav"] };
                 let file = sounds.pick(options);
                 let file = sounds.voiced(voice.as_deref(), file);
                 plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None });
@@ -369,10 +369,10 @@ mod tests {
     #[test]
     fn a_voice_uses_its_own_file_where_it_has_one() {
         let mut s = super::Sounds::new();
-        if !s.dirs.iter().any(|d| d.join("player/female/die1.wav").is_file()) {
+        if !s.dirs.iter().any(|d| d.join("player/female/death1.wav").is_file()) {
             return; // no game data here
         }
-        assert_eq!(s.voiced(Some("female"), "player/die1.wav".into()), "player/female/die1.wav");
+        assert_eq!(s.voiced(Some("female"), "player/death1.wav".into()), "player/female/death1.wav");
         assert_eq!(s.voiced(Some("female"), "player/pl_pain2.wav".into()), "player/pl_pain2.wav");
         assert_eq!(s.voiced(None, "player/die1.wav".into()), "player/die1.wav");
     }
