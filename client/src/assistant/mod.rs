@@ -38,10 +38,10 @@ pub const OFF: u8 = ASSISTANTS.len() as u8;
 
 /// Every trigger the lines file must cover (checked by a test).
 #[cfg(test)]
-const TRIGGERS: [&str; 26] = [
+const TRIGGERS: [&str; 25] = [
     "greet_first", "greet_back", "hello", "practice_start", "match_start", "buy_low", "buy_rich", "round_won", "round_lost", "you_died", "streak",
     "bomb_planted", "bomb_defused", "last_alive", "halftime", "match_won", "match_lost", "teammate_down",
-    "bomb_dropped", "bomb_yours", "enemy_spotted", "mvp", "flashed", "team_out", "clutch_won", "teammate_grenade",
+    "bomb_dropped", "bomb_yours", "enemy_spotted", "mvp", "flashed", "team_out", "clutch_won",
 ];
 
 /// Below this you can't buy a rifle and armor; at or above the other, you're rich.
@@ -243,10 +243,6 @@ fn in_game(mut news: MessageReader<GameNews>, w: Res<Walker>, settings: Res<Sett
             }
             // A real white-out (not a glance from behind).
             GameEvent::Flash { blinded, .. } if blinded.iter().any(|(id, b)| Some(*id) == me && b.hold > 0.5) => brain.say("flashed", Kind::Personal, now(), &settings, &[]),
-            // A teammate threw a grenade (CS's "Fire in the hole!"; you can see them throw it).
-            GameEvent::Thrown { player, .. } if Some(*player) != me && team_of(*player) == Some(my_team) => {
-                brain.say("teammate_grenade", Kind::Relay, now(), &settings, &[("teammate", name_of(*player))]);
-            }
             GameEvent::BombPlanted { .. } => brain.say("bomb_planted", Kind::Critical, now(), &settings, &[]),
             GameEvent::BombDefused { .. } => brain.say("bomb_defused", Kind::Critical, now(), &settings, &[]),
             GameEvent::SidesSwapped => brain.say("halftime", Kind::Personal, now(), &settings, &[]),

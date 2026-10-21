@@ -259,7 +259,8 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                     hits.write(Hit::Mark { at, normal });
                 }
             }
-            // The throw animation (the AI assistant calls out a teammate's grenade).
+            // The throw animation (no call-out: there's no radio, and the AI assistant doesn't
+            // announce grenades).
             GameEvent::Thrown { player, .. } => {
                 if Some(player) != me {
                     anims.write(PlayerAnim::Shot(player, false));

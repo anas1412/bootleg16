@@ -630,16 +630,3 @@ clutch_won | grumpk | smug | Clutched it. Fine. You're allowed to be smug. For a
 clutch_won | grumpk | happy | That was good. Really good. Don't tell anyone I said that.
 clutch_won | grumpk | annoyed | You clutched. Now I have to respect you. Terrible.
 clutch_won | grumpk | thinking | Last alive and you won. Who are you?
-
-teammate_grenade | claudette | neutral | {teammate}'s throwing a grenade. Mind the bounce.
-teammate_grenade | claudette | worried | Grenade out from {teammate}. Don't walk into it.
-teammate_grenade | claudette | thinking | {teammate} threw one. Wait for it, then go.
-teammate_grenade | childgbt | neutral | {teammate} has released a grenade. Stand clear.
-teammate_grenade | childgbt | smug | {teammate} is throwing things again. Look away if it is a flash.
-teammate_grenade | childgbt | thinking | Grenade from {teammate}. I calculated the arc. You are mostly safe.
-teammate_grenade | twins | shocked | Grenade! / It's {teammate}'s. Stay back.
-teammate_grenade | twins | neutral | {teammate} threw one. / Wait for it.
-teammate_grenade | twins | annoyed | Watch out for {teammate}'s grenade. / And don't stand in it.
-teammate_grenade | grumpk | annoyed | {teammate}'s throwing again. Duck.
-teammate_grenade | grumpk | neutral | Grenade from {teammate}. Hope they aimed it.
-teammate_grenade | grumpk | laughing | {teammate} threw one. This should be good.
