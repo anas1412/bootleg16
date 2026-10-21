@@ -105,6 +105,15 @@ impl Match {
         self.phase_end = tick + self.ticks(self.cfg.round_time);
     }
 
+    /// Ticks of buy time left (None: no limit, the warmup).
+    pub fn buy_left(&self, tick: u32) -> Option<u32> {
+        match self.phase {
+            Phase::Warmup => None,
+            Phase::Freeze | Phase::Live => Some(self.buy_end.saturating_sub(tick)),
+            _ => Some(0),
+        }
+    }
+
     pub fn can_buy(&self, tick: u32) -> bool {
         match self.phase {
             Phase::Warmup => true,

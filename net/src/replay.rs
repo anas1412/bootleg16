@@ -121,7 +121,7 @@ impl Replay {
             kits: Vec::new(),
             round: f.round,
             bomb: f.bomb,
-            me: crate::protocol::Me { money: 0, limits: Default::default(), can_buy: false, defuse_kit: false },
+            me: crate::protocol::Me { money: 0, limits: Default::default(), can_buy: false, buy_left: None, defuse_kit: false },
         });
         for a in self.viewers.keys().copied().collect::<Vec<_>>() {
             self.socket.send(a, msg.clone());

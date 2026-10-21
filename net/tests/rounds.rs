@@ -246,6 +246,7 @@ fn practice_hands_the_strays_the_bomb_and_only_a_ct_defuses() {
     ev.clear();
     wait(&mut g, 2.5, Input::default(), look, &mut ev);
     assert!(ev.iter().any(|e| matches!(e, GameEvent::BombDefused { .. })), "{ev:?}");
+    assert!(ev.iter().any(|e| *e == GameEvent::RoundEnd { winner: Team::Ct, reason: EndReason::BombDefused }), "practice tells who won");
     // a fresh bomb 3 s later
     wait(&mut g, 3.5, Input::default(), Input::default(), &mut ev);
     assert!(g.server.player_state(a).unwrap().loadout.c4, "handed another one");

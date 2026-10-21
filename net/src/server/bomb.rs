@@ -152,9 +152,7 @@ impl Server {
                         } else if tick >= done {
                             self.bomb = Bomb::Gone;
                             self.events.push(GameEvent::BombDefused { by: id });
-                            if self.round.phase == Phase::Live {
-                                self.end_round(Team::Ct, EndReason::BombDefused);
-                            }
+                            self.bomb_decides(Team::Ct, EndReason::BombDefused);
                         }
                     }
                     None => {
@@ -192,8 +190,16 @@ impl Server {
                 self.events.push(GameEvent::Kill { killer: WORLD, victim: c.id, weapon: Some(Id::C4), headshot: false });
             }
         }
+        self.bomb_decides(Team::T, EndReason::BombExploded);
+    }
+
+    /// CS 1.6: a defuse wins the round for the CTs, the blast for the terrorists. Practice has
+    /// no rounds, but you're told who won just the same (no score, play goes on).
+    fn bomb_decides(&mut self, winner: Team, reason: EndReason) {
         if self.round.phase == Phase::Live {
-            self.end_round(Team::T, EndReason::BombExploded);
+            self.end_round(winner, reason);
+        } else if self.rules.practice {
+            self.events.push(GameEvent::RoundEnd { winner, reason });
         }
     }
 

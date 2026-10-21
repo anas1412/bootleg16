@@ -62,7 +62,8 @@ impl Server {
                 .iter()
                 .filter(|(_, c)| !c.bot)
                 .map(|(a, c)| {
-                    let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), defuse_kit: c.defuse_kit };
+                    let buy_left = if self.rules.free_play() { None } else { self.round.buy_left(self.tick).map(|t| t as f32 * self.rate.tick()) };
+                    let me = Me { money: c.money, limits: self.limits(c.id), can_buy: self.can_buy(c), buy_left, defuse_kit: c.defuse_kit };
                     let seen = &sights[&c.id];
                     // Health and kit only for teammates (spectators see everything anyway).
                     let players: Vec<PlayerNet> = players
