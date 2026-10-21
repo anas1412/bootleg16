@@ -203,3 +203,40 @@ fn everything_bought_this_round_sells_back() {
     assert_eq!(g.server.money(a), Some(after));
     assert_eq!(g.server.player_state(a).unwrap().loadout.primary.map(|p| p.id), Some(Id::Ak47));
 }
+
+#[test]
+fn practice_hands_you_the_bomb_whatever_your_team_and_you_may_defuse_it() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, quick());
+    g.server.set_rules(net::server::Rules::practice(0));
+    g.connect_as(Some(Team::Ct), Some(Team::Spectator));
+    let a = g.a.id().unwrap();
+    let mut ev = Vec::new();
+    wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
+    assert!(g.server.player_state(a).unwrap().loadout.c4, "the bomb is yours in practice, even as a CT");
+    // plant it in a site
+    let spot = site_spot(&bsp);
+    g.server.teleport(a, spot);
+    wait(&mut g, 0.5, Input::default(), Input::default(), &mut ev);
+    wait(&mut g, 0.1, Input { slot: 5, ..Default::default() }, Input::default(), &mut ev);
+    wait(&mut g, 0.5, Input::default(), Input::default(), &mut ev);
+    ev.clear();
+    wait(&mut g, 3.3, Input { attack: true, ..Default::default() }, Input::default(), &mut ev);
+    let at = ev.iter().find_map(|e| match e {
+        GameEvent::BombPlanted { at, .. } => Some(*at),
+        _ => None,
+    });
+    let at = at.expect("planted");
+    // and defuse it yourself
+    g.server.teleport(a, [at[0] + 30.0, at[1], at[2] + 40.0]);
+    wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
+    let eye = g.server.player(a).unwrap().eye();
+    let d = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
+    let look = Input { yaw: d[1].atan2(d[0]).to_degrees(), pitch: -(d[2].atan2((d[0] * d[0] + d[1] * d[1]).sqrt())).to_degrees(), use_key: true, ..Default::default() };
+    ev.clear();
+    wait(&mut g, 2.5, look, Input::default(), &mut ev);
+    assert!(ev.iter().any(|e| matches!(e, GameEvent::BombDefused { .. })), "{ev:?}");
+    // a fresh bomb 3 s later
+    wait(&mut g, 3.5, Input::default(), Input::default(), &mut ev);
+    assert!(g.server.player_state(a).unwrap().loadout.c4, "handed another one");
+}

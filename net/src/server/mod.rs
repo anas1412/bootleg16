@@ -200,6 +200,8 @@ pub struct Server {
     bomb: Bomb,
     /// Who planted this round's bomb (for the MVP).
     planter: Option<u8>,
+    /// Practice: the tick the next bomb is handed out (after one went off or was defused).
+    practice_bomb: u32,
     pieces: breakables::Pieces,
     guard: guard::Guard,
     /// Set while running a match for a fixed list of players.
@@ -260,6 +262,7 @@ impl Server {
             rate,
             bomb: Bomb::None,
             planter: None,
+            practice_bomb: 0,
             last_seen: HashMap::new(),
             pieces: breakables::Pieces::from_bsp(bsp),
             snapshot_bytes: 0,
