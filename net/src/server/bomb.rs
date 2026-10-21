@@ -1,7 +1,8 @@
 //! The bomb: carried by a terrorist, dropped when they die (or press G), planted in a bomb
 //! site (the plant itself is weapon code in `sim`), defused by a counter-terrorist holding
 //! use on it, or it explodes. In practice the bomb is yours when you play the Strays (T): handed
-//! to you, and again 3 s after it went off or was defused; you may defuse it yourself there.
+//! to you, and again 3 s after it went off or was defused. Only a CT defuses, as in CS 1.6
+//! (`CGrenade::Use`), practice too.
 use super::*;
 use crate::rounds::{EndReason, Phase};
 
@@ -105,7 +106,6 @@ impl Server {
     pub(super) fn bomb_step(&mut self) {
         let tick = self.tick;
         self.practice_bomb_step();
-        let practice = self.rules.practice;
         match self.bomb {
             Bomb::Carried(id) => {
                 if !self.clients.values().any(|c| c.id == id && c.vitals.alive() && c.state.loadout.c4) {
@@ -143,7 +143,7 @@ impl Server {
                     let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
                     let (f, _, _) = bullets::view_vectors(c.view.1, c.view.0);
                     let look = if len > 1.0 { (d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / len } else { 1.0 };
-                    (c.team == Team::Ct || (practice && !c.bot)) && c.vitals.alive() && c.use_held && near && look > DEFUSE_LOOK
+                    c.team == Team::Ct && c.vitals.alive() && c.use_held && near && look > DEFUSE_LOOK
                 };
                 match defuse {
                     Some((id, done)) => {

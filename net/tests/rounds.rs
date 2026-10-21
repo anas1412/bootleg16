@@ -205,7 +205,7 @@ fn everything_bought_this_round_sells_back() {
 }
 
 #[test]
-fn practice_hands_the_strays_the_bomb_and_you_may_defuse_it_yourself() {
+fn practice_hands_the_strays_the_bomb_and_only_a_ct_defuses() {
     let Some(bsp) = dust2() else { return };
     let mut g = setup_with(&bsp, 0, 0.0, quick());
     g.server.set_rules(net::server::Rules::practice(0));
@@ -228,14 +228,23 @@ fn practice_hands_the_strays_the_bomb_and_you_may_defuse_it_yourself() {
         _ => None,
     });
     let at = at.expect("planted");
-    // and defuse it yourself (practice)
+    // the T can't defuse it (CS 1.6: only a CT); the CT can
+    let look_from = |g: &mut Game, id: u8| {
+        let eye = g.server.player(id).unwrap().eye();
+        let d = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
+        Input { yaw: d[1].atan2(d[0]).to_degrees(), pitch: -(d[2].atan2((d[0] * d[0] + d[1] * d[1]).sqrt())).to_degrees(), use_key: true, ..Default::default() }
+    };
     g.server.teleport(a, [at[0] + 30.0, at[1], at[2] + 40.0]);
     wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
-    let eye = g.server.player(a).unwrap().eye();
-    let d = [at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]];
-    let look = Input { yaw: d[1].atan2(d[0]).to_degrees(), pitch: -(d[2].atan2((d[0] * d[0] + d[1] * d[1]).sqrt())).to_degrees(), use_key: true, ..Default::default() };
+    let look = look_from(&mut g, a);
     ev.clear();
-    wait(&mut g, 2.5, look, Input::default(), &mut ev);
+    wait(&mut g, 0.5, look, Input::default(), &mut ev);
+    assert!(!ev.iter().any(|e| matches!(e, GameEvent::BombDefused { .. } | GameEvent::Defusing { .. })), "a T defused: {ev:?}");
+    g.server.teleport(b, [at[0] - 30.0, at[1], at[2] + 40.0]);
+    wait(&mut g, 0.1, Input::default(), Input::default(), &mut ev);
+    let look = look_from(&mut g, b);
+    ev.clear();
+    wait(&mut g, 2.5, Input::default(), look, &mut ev);
     assert!(ev.iter().any(|e| matches!(e, GameEvent::BombDefused { .. })), "{ev:?}");
     // a fresh bomb 3 s later
     wait(&mut g, 3.5, Input::default(), Input::default(), &mut ev);
