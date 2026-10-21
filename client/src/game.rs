@@ -225,6 +225,7 @@ fn walk(
     shot_assets: Option<Res<ShotAssets>>,
     mut hits: MessageWriter<crate::impacts::Hit>,
     mut tracers: ResMut<crate::tracers::Tracers>,
+    mut shells: ResMut<crate::shells::Shells>,
     time: Res<Time>,
     mut started: Local<Option<f32>>,
 ) {
@@ -334,6 +335,7 @@ fn walk(
         if !sky {
             tracers.shot(eye, end);
         }
+        shells.eject(shot.weapon, eye, f, w.client.me().velocity, true);
     }
 }
 

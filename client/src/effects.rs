@@ -200,7 +200,7 @@ fn grenade_effects(
 pub struct GameNews(pub GameEvent);
 
 #[allow(clippy::too_many_arguments)]
-fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut<crate::tracers::Tracers>, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>) {
+fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut<crate::tracers::Tracers>, mut shells: ResMut<crate::shells::Shells>, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>) {
     let me = w.client.id();
     let predicting = shot_assets.is_some();
     // Where a player is now (for sounds and the direction blood flies).
@@ -222,6 +222,9 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                 }
                 if Some(shooter) != me {
                     tracers.shot(from, to);
+                    let d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+                    let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-3);
+                    shells.eject(weapon, from, d.map(|v| v / len), [0.0; 3], false);
                     w.cues.push(sound::Cue::Shot { weapon, silenced, at: Some(from) });
                     anims.write(PlayerAnim::Shot(shooter, silenced));
                 }
