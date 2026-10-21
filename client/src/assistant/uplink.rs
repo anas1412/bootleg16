@@ -254,7 +254,7 @@ pub(super) fn draw(mut commands: Commands, brain: Res<Brain>, faces: Res<Faces>,
 pub(super) fn animate(
     time: Res<Time>,
     covered: Res<Covered>,
-    buy: Res<crate::buy::BuyMenu>,
+    overlay: Option<Res<crate::menu::Overlay>>,
     mut ups: Query<(Entity, &mut Uplink, &mut Visibility)>,
     mut rigs: Query<&mut Rig>,
     mut name: Query<&mut Text, With<UpName>>,
@@ -264,7 +264,7 @@ pub(super) fn animate(
     mut commands: Commands,
 ) {
     // under the scoreboard and the Esc menu it hides; over the buy menu it stays
-    let hide = covered.0 && !buy.is_open();
+    let hide = covered.0 && !overlay.is_some_and(|o| *o == crate::menu::Overlay::Buy);
     // ponytail: one uplink at a time (a new line replaces it), so its parts are queried flat
     let Some((root, up, mut vis)) = ups.iter_mut().next() else { return };
     let up = up.into_inner();

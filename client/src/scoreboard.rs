@@ -8,7 +8,6 @@ use crate::game::{Frame, Walker};
 use crate::hud::Icons;
 use crate::menu::AppState;
 use crate::ui::{chip, clickable, kit_text, vh, Anim, Blurs, Kit, UiAction, UiActions, AMBER, BAR, BG1, CT_COLOR, LINE, TX1, TX2, TX3, T_COLOR};
-use bevy::window::{CursorGrabMode, CursorOptions};
 use net::protocol::ReportReason;
 use std::collections::HashSet;
 use bevy::prelude::*;
@@ -45,17 +44,14 @@ struct Kicked(Option<u32>);
 #[derive(Resource, Default)]
 struct Reported(HashSet<u8>);
 
-fn mouse(keys: Res<ButtonInput<KeyCode>>, buttons: Res<ButtonInput<MouseButton>>, binds: Res<crate::binds::Binds>, mut m: ResMut<ScoreMouse>, mut cursor: Single<&mut CursorOptions>) {
+/// Right-click while holding the scoreboard frees the mouse for it (overlay.rs moves the mouse).
+fn mouse(keys: Res<ButtonInput<KeyCode>>, buttons: Res<ButtonInput<MouseButton>>, binds: Res<crate::binds::Binds>, mut m: ResMut<ScoreMouse>) {
     if binds.held(crate::binds::Action::Scores, &keys, &buttons) {
         if buttons.just_pressed(MouseButton::Right) {
             m.on = !m.on;
-            cursor.grab_mode = if m.on { CursorGrabMode::None } else { CursorGrabMode::Locked };
-            cursor.visible = m.on;
         }
     } else if m.on || m.open.is_some() {
         *m = ScoreMouse::default();
-        cursor.grab_mode = CursorGrabMode::Locked;
-        cursor.visible = false;
     }
 }
 

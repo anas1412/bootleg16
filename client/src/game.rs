@@ -1,16 +1,15 @@
 //! Playing: the connection (`Walker`), keyboard and mouse into sim inputs, and the camera.
 //! Also defines the order the other in-game plugins run in each frame (`Frame`).
 use crate::binds::{Action, Bind, Binds};
-use crate::buy::BuyMenu;
 use crate::level::Spawns;
-use crate::menu::{overlay_open, AppState, Overlay, PendingClient, Settings};
+use crate::menu::{menu_has_keys, AppState, Overlay, PendingClient, Settings};
 use crate::notice::Notice;
 use crate::{map, sound, viewmodel};
 use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
     prelude::*,
-    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
+    window::{CursorGrabMode, CursorOptions},
 };
 
 /// In-game frame order: camera first, then server events, then everything drawn from
@@ -44,7 +43,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, connection.run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
             .add_systems(OnExit(AppState::InGame), |mut c: Commands| c.remove_resource::<Reconnecting>())
             .add_systems(FixedUpdate, walk.run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
-            .add_systems(Update, (face_spawn, mouse_look, move_camera, grab_cursor).chain().in_set(Frame::Camera));
+            .add_systems(Update, (face_spawn, mouse_look, move_camera, crate::overlay::cursor).chain().in_set(Frame::Camera));
     }
 }
 
@@ -219,7 +218,6 @@ fn walk(
     wheel: Res<AccumulatedMouseScroll>,
     cursor: Single<&CursorOptions>,
     cam: Single<&FlyCam>,
-    buy: Res<BuyMenu>,
     overlay: Option<Res<Overlay>>,
     mut w: ResMut<Walker>,
     shot_assets: Option<Res<ShotAssets>>,
@@ -234,11 +232,12 @@ fn walk(
     // Automated screenshot runs ignore the keyboard too (the window may pop up while you type);
     // so do menus over the game.
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
-    let keys = if auto || overlay_open(overlay) { &ButtonInput::<KeyCode>::default() } else { &*keys };
+    // while the shop is open, number keys belong to it (you can still move)
+    let buying = overlay.as_ref().is_some_and(|o| **o == Overlay::Buy);
+    let keys = if auto || menu_has_keys(overlay) { &ButtonInput::<KeyCode>::default() } else { &*keys };
     let slot_keys = [Action::Primary, Action::Secondary, Action::Knife, Action::Grenade, Action::Bomb];
     let on = |a: Action| binds.held(a, keys, &mouse);
-    // While the buy menu is open, number keys belong to the menu.
-    let mut slot = if buy.is_open() { 0 } else { slot_keys.iter().position(|a| on(*a)).map(|i| i as u8 + 1).unwrap_or(0) };
+    let mut slot = if buying { 0 } else { slot_keys.iter().position(|a| on(*a)).map(|i| i as u8 + 1).unwrap_or(0) };
     if on(Action::LastWeapon) {
         slot = sim::pmove::SLOT_LAST;
     }
@@ -423,17 +422,3 @@ pub(crate) fn move_camera(
     tf.translation += dir.normalize_or_zero() * speed * time.delta_secs();
 }
 
-/// The mouse is captured while you play: on joining, and again whenever nothing needs the
-/// cursor (a menu, the buy menu, the scoreboard's mouse) and the window has focus. A click
-/// also captures it. Esc is the pause menu.
-fn grab_cursor(mut cursor: Single<&mut CursorOptions>, window: Single<&Window, With<PrimaryWindow>>, mouse: Res<ButtonInput<MouseButton>>, overlay: Option<Res<Overlay>>, buy: Res<BuyMenu>, scores: Res<crate::scoreboard::ScoreMouse>) {
-    // Automated screenshot runs never take the user's mouse.
-    if std::env::var_os("BOOTLEG16_SCREENSHOT").is_some() {
-        return;
-    }
-    let wanted = !overlay_open(overlay) && !buy.is_open() && !scores.on;
-    if wanted && cursor.grab_mode == CursorGrabMode::None && (window.focused || mouse.just_pressed(MouseButton::Left)) {
-        cursor.grab_mode = CursorGrabMode::Locked;
-        cursor.visible = false;
-    }
-}

@@ -3,11 +3,10 @@
 //! 0 closes) and everything is clickable. No ammo to buy: guns come full and reserves
 //! are topped up every round.
 use crate::game::{Frame, Walker};
-use crate::menu::AppState;
+use crate::menu::{AppState, Overlay};
 use crate::hud::{weapon_icon, Icons};
 use crate::ui::{chip, clickable_keep_border, kit_text, nav, primary_button, primary_off, vh, Anim, Kit, NavItem, UiAction, UiActions, AMBER, BAD, BG1, CT_COLOR, LINE, OK, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, CursorOptions};
 use net::protocol::{BuyItem, Team};
 
 /// Teammates with less than this show red in the buy menu: they can't buy a rifle (an AK-47).
@@ -25,13 +24,21 @@ impl Plugin for BuyPlugin {
     }
 }
 
-/// Closed (None), open on the categories (Some(None)) or on one category.
+/// Where you are in the shop: the category (None: the first) and the card. Whether it is
+/// open is `Overlay::Buy` (overlay.rs opens and closes every menu over the game).
 #[derive(Resource, Default)]
-pub struct BuyMenu(Option<Option<usize>>, usize);
+pub struct BuyMenu(Option<usize>, usize);
 
-impl BuyMenu {
-    pub fn is_open(&self) -> bool {
-        self.0.is_some()
+/// Why you can't open the shop now (None: you can).
+pub fn why_not(w: &Walker) -> Option<&'static str> {
+    let team = w.client.team();
+    if w.client.me_info.can_buy {
+        None
+    } else if !w.client.vitals.alive() || team == Team::Spectator {
+        Some("") // nothing to say: you're dead or watching
+    } else {
+        let side = if team == Team::Ct { sim::zones::Side::Ct } else { sim::zones::Side::T };
+        Some(if w.client.world.zones.in_buy_zone(side, w.client.me().origin) { "Buy time is over" } else { "Not in a buy zone" })
     }
 }
 
@@ -73,20 +80,19 @@ fn spawn(mut menu: ResMut<BuyMenu>) {
     menu.1 = 0;
 }
 
-/// B opens / closes; with the menu open the mouse is free to click, and number keys work as in CS.
+/// The shop while it's open: number keys, Enter and clicks pick and buy (as in CS), double-click
+/// buys, and it stays open for more. Opening, closing and the mouse are overlay.rs's.
 #[allow(clippy::too_many_arguments)]
 fn buy_menu(
     mut commands: Commands,
     (kit, icons): (Res<Kit>, Res<Icons>),
-    mut keys: ResMut<ButtonInput<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut actions: ResMut<UiActions>,
     mut w: ResMut<Walker>,
     mut menu: ResMut<BuyMenu>,
     mut shown: Local<Option<(Option<Option<usize>>, usize, Team, i32, Vec<(String, i32, bool)>, Vec<Option<u8>>)>>,
-    mut cursor: Single<&mut CursorOptions>,
     roots: Query<Entity, With<BuyRoot>>,
-    mut hints: MessageWriter<crate::hud::Hint>,
-    (binds, mouse): (Res<crate::binds::Binds>, Res<ButtonInput<MouseButton>>),
+    mut overlay: ResMut<Overlay>,
     (time, mut last_click): (Res<Time>, Local<Option<(usize, f32)>>),
 ) {
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
@@ -96,13 +102,13 @@ fn buy_menu(
     let team = w.client.team();
     let ct = team == Team::Ct;
     let layout = layout(ct);
-    let was_open = menu.0.is_some();
+    // open: on which category (None: the first)
+    let mut state: Option<Option<usize>> = (*overlay == Overlay::Buy).then_some(menu.0);
     // Number keys become the same actions as clicks.
     let digits = [KeyCode::Digit0, KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4, KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9];
-    let can_buy = w.client.me_info.can_buy;
     // Enter buys the selected card.
     if keys.just_pressed(KeyCode::Enter) {
-        if let Some(Some(cat)) = menu.0 {
+        if let Some(Some(cat)) = state {
             if let Some(Entry(_, items)) = layout.get(cat) {
                 if let Some((_, item)) = items.get(menu.1) {
                     actions.0.push(UiAction::Buy(*item));
@@ -110,20 +116,7 @@ fn buy_menu(
             }
         }
     }
-    // Esc closes the shop (B again does too) and is used up, so the pause menu doesn't open
-    if menu.0.is_some() && keys.just_pressed(KeyCode::Escape) {
-        menu.0 = None;
-        keys.clear_just_pressed(KeyCode::Escape);
-    }
-    let b_pressed = binds.just(crate::binds::Action::Buy, &keys, &mouse);
-    if b_pressed && can_buy {
-        menu.0 = if menu.0.is_some() { None } else { Some(None) };
-    } else if b_pressed && w.client.vitals.alive() && team != Team::Spectator {
-        // say why instead of ignoring the key
-        let side = if ct { sim::zones::Side::Ct } else { sim::zones::Side::T };
-        let why = if w.client.world.zones.in_buy_zone(side, w.client.me().origin) { "Buy time is over" } else { "Not in a buy zone" };
-        hints.write(crate::hud::Hint(why.into()));
-    } else if let (Some(state), Some(n)) = (menu.0, digits.iter().position(|k| keys.just_pressed(*k))) {
+    if let (Some(state), Some(n)) = (state, digits.iter().position(|k| keys.just_pressed(*k))) {
         let i = n.wrapping_sub(1);
         actions.0.push(match (n, state) {
             (0, _) => UiAction::CloseBuy,
@@ -137,7 +130,7 @@ fn buy_menu(
     let mut buy_now = false;
     actions.0.retain(|a| match a {
         UiAction::CloseBuy => {
-            menu.0 = None;
+            state = None;
             false
         }
         UiAction::UndoBuys => {
@@ -146,7 +139,7 @@ fn buy_menu(
         }
         UiAction::BuyCategory(i) => {
             if *i < layout.len() {
-                menu.0 = Some(Some(*i));
+                state = Some(Some(*i));
                 menu.1 = 0;
             }
             false
@@ -172,26 +165,21 @@ fn buy_menu(
     });
     // Buy time over, left the buy zone, died: the menu goes away.
     if buy_now {
-        if let Some(Some(cat)) = menu.0 {
+        if let Some(Some(cat)) = state {
             if let Some((_, item)) = layout.get(cat).and_then(|Entry(_, items)| items.get(menu.1)) {
                 w.client.buy(*item);
             }
         }
     }
-    if !can_buy && !auto {
-        menu.0 = None;
-    }
-    if auto && menu.0.is_none() {
+    if auto && state.is_none() {
         // Screenshot check: `BOOTLEG16_MENU=<page>` (0 pistols .. 3 equipment; default rifles).
-        menu.0 = Some(Some(std::env::var("BOOTLEG16_MENU").ok().and_then(|v| v.parse().ok()).unwrap_or(2)));
+        state = Some(Some(std::env::var("BOOTLEG16_MENU").ok().and_then(|v| v.parse().ok()).unwrap_or(2)));
+        *overlay = Overlay::Buy;
     }
-    // Free the mouse while buying; take it back when done.
-    if menu.0.is_some() && !was_open {
-        cursor.grab_mode = CursorGrabMode::None;
-        cursor.visible = true;
-    } else if menu.0.is_none() && was_open && !auto {
-        cursor.grab_mode = CursorGrabMode::Locked;
-        cursor.visible = false;
+    match state {
+        Some(cat) => menu.0 = cat,
+        None if *overlay == Overlay::Buy => *overlay = Overlay::None,
+        None => {}
     }
 
     let money = w.client.me_info.money;
@@ -199,24 +187,24 @@ fn buy_menu(
     let mates: Vec<(String, i32, bool)> = w.client.scores.iter().filter(|s| Some(s.id) != w.client.id()).filter_map(|s| s.money.map(|m| (s.name.clone(), m, s.alive))).collect();
     // what you already have, per item (the cards say OWNED, grenades how many)
     let have: Vec<Option<u8>> = layout.iter().flat_map(|Entry(_, items)| items.iter().map(|(_, item)| owned(&w, *item))).collect();
-    if *shown == Some((menu.0, menu.1, team, money, mates.clone(), have.clone())) {
+    if *shown == Some((state, menu.1, team, money, mates.clone(), have.clone())) {
         return;
     }
     // What changed decides what moves: opening tunes everything in; a new category tunes the
     // cards in (staggered) and the details; a new card just the details; closing tunes out.
-    let prev = shown.replace((menu.0, menu.1, team, money, mates.clone(), have));
+    let prev = shown.replace((state, menu.1, team, money, mates.clone(), have));
     let was = prev.as_ref().and_then(|p| p.0);
     let opening = was.is_none();
-    let new_cat = opening || was != Some(menu.0.unwrap_or(None)) || prev.as_ref().map(|p| p.2) != Some(team);
+    let new_cat = opening || was != Some(state.unwrap_or(None)) || prev.as_ref().map(|p| p.2) != Some(team);
     let new_item = new_cat || prev.as_ref().map(|p| p.1) != Some(menu.1);
     for e in &roots {
-        if menu.0.is_none() {
+        if state.is_none() {
             commands.entity(e).remove::<(BuyRoot, crate::ui::Blurs)>().insert(Anim::tune_out());
         } else {
             commands.entity(e).despawn();
         }
     }
-    let Some(state) = menu.0 else { return };
+    let Some(state) = state else { return };
     let tune = |on: bool, i: usize| on.then(|| Anim::stagger(i));
     let free = w.client.practice || w.client.round.phase == net::rounds::Phase::Warmup;
     // What each item costs you now, by the server's own rule (None: you have it, or carry

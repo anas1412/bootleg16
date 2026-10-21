@@ -1,26 +1,39 @@
-//! In-game overlays: the Esc menu and team selection, drawn over the game. They tune in over
-//! the blurred game and tune out when closed.
+//! Menus over the game, in one place: which one is open (`Overlay`: the Esc menu, team
+//! selection or the shop), the keys that open and close them (Esc closes whatever is open, or
+//! opens the Esc menu; M team selection; B the shop) and the mouse (free while any is open or
+//! the scoreboard has it, captured otherwise). Each menu draws itself: the Esc menu and team
+//! selection here, the shop in `buy`. They tune in over the blurred game and out when closed.
 use crate::game::Walker;
 use crate::menu::AppState;
 use crate::ui::{card, chip, clickable_keep_border, kit_text, nav, page_title, vh, Anim, Blurs, Kit, NavItem, UiAction, UiActions, BAR, CT_COLOR, TX1, TX2, TX3, T_COLOR};
 use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, CursorOptions};
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
 use net::protocol::Team;
 
-/// In-game overlays (Esc menu, team select) as one optional panel.
+/// The menu open over the game, if any: only one at a time.
 #[derive(Resource, Default, PartialEq, Clone, Copy)]
 pub enum Overlay {
     #[default]
     None,
-    Pause,
+    /// The Esc menu. The game keeps running under it: there is no pause, as in CS 1.6.
+    Menu,
     Teams,
+    Buy,
+}
+
+impl Overlay {
+    /// It takes the keyboard too. The shop doesn't: you can move (and talk) while buying.
+    pub fn takes_keys(self) -> bool {
+        matches!(self, Overlay::Menu | Overlay::Teams)
+    }
 }
 
 #[derive(Component)]
 pub(crate) struct OverlayRoot;
 
-/// Esc toggles the pause menu; the Teams key (M) opens team selection (also shown when you join).
-pub(crate) fn pause_menu(
+/// Opens and closes the menus (see the top of this file), and draws the Esc menu and team
+/// selection (team selection also shows when you join).
+pub(crate) fn menus(
     mut commands: Commands,
     kit: Res<Kit>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -29,18 +42,34 @@ pub(crate) fn pause_menu(
     mut shown: Local<Option<Overlay>>,
     w: Res<Walker>,
     mut asked: Local<bool>,
-    mut cursor: Single<&mut CursorOptions>,
     roots: Query<Entity, With<OverlayRoot>>,
-    buy: Res<crate::buy::BuyMenu>,
+    mut hints: MessageWriter<crate::hud::Hint>,
 ) {
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
     if !auto {
-        // with the shop open, Esc closes the shop instead (buy.rs)
-        if keys.just_pressed(KeyCode::Escape) && !buy.is_open() {
-            *overlay = if *overlay == Overlay::None { Overlay::Pause } else { Overlay::None };
-        }
-        if binds.just(crate::binds::Action::Teams, &keys, &mouse) {
+        // Esc closes whatever is open, or opens the Esc menu
+        if keys.just_pressed(KeyCode::Escape) {
+            *overlay = if *overlay == Overlay::None { Overlay::Menu } else { Overlay::None };
+        } else if binds.just(crate::binds::Action::Teams, &keys, &mouse) {
             *overlay = if *overlay == Overlay::Teams { Overlay::None } else { Overlay::Teams };
+        } else if binds.just(crate::binds::Action::Buy, &keys, &mouse) {
+            // B toggles the shop; where you can't buy it says why instead
+            match *overlay {
+                Overlay::Buy => *overlay = Overlay::None,
+                Overlay::None => match crate::buy::why_not(&w) {
+                    None => *overlay = Overlay::Buy,
+                    // dead or spectating: no reason to give
+                    Some(why) if why.is_empty() => {}
+                    Some(why) => {
+                        hints.write(crate::hud::Hint(why.into()));
+                    }
+                },
+                _ => {}
+            }
+        }
+        // buy time over, left the buy zone, died: the shop goes away
+        if *overlay == Overlay::Buy && !w.client.me_info.can_buy {
+            *overlay = Overlay::None;
         }
         // First time in: pick a side, like CS.
         if !*asked && w.client.id().is_some() && !w.client.scores.is_empty() && w.client.team() == Team::Spectator {
@@ -65,7 +94,7 @@ pub(crate) fn pause_menu(
     // Screenshot runs can show an overlay (BOOTLEG16_OVERLAY=pause|teams).
     if auto {
         match std::env::var("BOOTLEG16_OVERLAY").as_deref() {
-            Ok("pause") => *overlay = Overlay::Pause,
+            Ok("pause" | "menu") => *overlay = Overlay::Menu,
             Ok("teams") => *overlay = Overlay::Teams,
             _ => {}
         }
@@ -78,21 +107,18 @@ pub(crate) fn pause_menu(
     for e in &roots {
         commands.entity(e).remove::<(OverlayRoot, Blurs)>().insert(Anim::tune_out());
     }
-    if *overlay != Overlay::None {
-        cursor.grab_mode = CursorGrabMode::None;
-        cursor.visible = true;
-    }
     let me_team = w.client.team();
     let practice = w.client.practice;
     match *overlay {
-        Overlay::None => {}
-        Overlay::Pause => {
+        // the shop draws itself (buy.rs)
+        Overlay::None | Overlay::Buy => {}
+        Overlay::Menu => {
             // a teammate left: you may call a surrender vote
             let abandoned = w.client.round.abandoned[(me_team == Team::Ct) as usize] && me_team != Team::Spectator;
             commands.spawn((OverlayRoot, DespawnOnExit(AppState::InGame), full_dim())).with_children(|root| {
                 root.spawn((Node { width: vh(560.0), flex_direction: FlexDirection::Column, ..default() }, Anim::stagger(0))).with_children(|col| {
                     col.spawn(Node { margin: UiRect::bottom(vh(24.0)), flex_direction: FlexDirection::Column, ..default() }).with_children(|t| {
-                        page_title(t, &kit, if practice { "Practice" } else { "Match" }, "Paused", "一時停止");
+                        page_title(t, &kit, if practice { "Practice" } else { "Match" }, "Menu", "メニュー");
                     });
                     let item = |num, label, jp, action, selected| NavItem { num, label, jp, action, selected };
                     let mut items = vec![item("01", "Resume", "再開", UiAction::Resume, true), item("02", "Choose team", "チーム", UiAction::ShowTeams, false)];
@@ -179,6 +205,26 @@ pub fn in_game_actions(mut actions: ResMut<UiActions>, mut overlay: ResMut<Overl
     actions.0 = keep;
 }
 
-pub fn overlay_open(overlay: Option<Res<Overlay>>) -> bool {
-    overlay.is_some_and(|o| *o != Overlay::None)
+/// A menu over the game has the keyboard (the game and push-to-talk leave it alone).
+pub fn menu_has_keys(overlay: Option<Res<Overlay>>) -> bool {
+    overlay.is_some_and(|o| o.takes_keys())
+}
+
+/// The mouse: free while a menu is open over the game or the scoreboard has it; otherwise
+/// captured while the window has focus (a click also captures it).
+pub fn cursor(mut cursor: Single<&mut CursorOptions>, window: Single<&Window, With<PrimaryWindow>>, mouse: Res<ButtonInput<MouseButton>>, overlay: Option<Res<Overlay>>, scores: Res<crate::scoreboard::ScoreMouse>) {
+    // Automated screenshot runs never take the user's mouse.
+    if std::env::var_os("BOOTLEG16_SCREENSHOT").is_some() {
+        return;
+    }
+    let free = overlay.is_some_and(|o| *o != Overlay::None) || scores.on;
+    if free {
+        if cursor.grab_mode != CursorGrabMode::None {
+            cursor.grab_mode = CursorGrabMode::None;
+            cursor.visible = true;
+        }
+    } else if cursor.grab_mode == CursorGrabMode::None && (window.focused || mouse.just_pressed(MouseButton::Left)) {
+        cursor.grab_mode = CursorGrabMode::Locked;
+        cursor.visible = false;
+    }
 }

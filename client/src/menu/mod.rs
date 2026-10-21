@@ -75,7 +75,7 @@ impl Plugin for MenuPlugin {
             .add_systems(Update, (connect::cancel, connect::advance).chain().run_if(in_state(AppState::Connecting)).run_if(resource_exists::<connect::Work>))
             .add_systems(FixedUpdate, connect::tick_connection.run_if(in_state(AppState::Connecting)))
             .add_systems(OnExit(AppState::Connecting), connect::stop_loading)
-            .add_systems(Update, (crate::overlay::pause_menu, crate::overlay::in_game_actions).chain().run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
+            .add_systems(Update, (crate::overlay::menus, crate::overlay::in_game_actions).chain().run_if(in_state(AppState::InGame)).run_if(resource_exists::<Walker>))
             .add_systems(OnExit(AppState::InGame), connect::leave_game);
     }
 }
@@ -326,5 +326,5 @@ fn menu_actions(
     }
 }
 
-pub use crate::overlay::{overlay_open, Overlay};
+pub use crate::overlay::{menu_has_keys, Overlay};
 

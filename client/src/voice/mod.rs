@@ -10,7 +10,7 @@ pub use page::{apply, page, VoiceAction};
 use crate::binds::{Action, Binds};
 use crate::game::{FlyCam, Frame, Walker};
 pub use rows::{MicIcon, Talking};
-use crate::menu::{overlay_open, AppState, Overlay};
+use crate::menu::{menu_has_keys, AppState, Overlay};
 use bevy::prelude::*;
 use net::protocol::{VoiceChannel, VOICE_FRAME, VOICE_RATE};
 use std::collections::HashMap;
@@ -33,7 +33,7 @@ impl Plugin for VoicePlugin {
 
 /// Which channel you're talking on: a push-to-talk key held (`binds`), voice on, no menu open.
 pub(super) fn pushed(s: &VoiceSettings, binds: &Binds, keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>, overlay: Option<Res<Overlay>>) -> Option<VoiceChannel> {
-    if !s.on || overlay_open(overlay) {
+    if !s.on || menu_has_keys(overlay) {
         None
     } else if binds.held(Action::TeamVoice, keys, mouse) {
         Some(VoiceChannel::Team)
@@ -220,7 +220,7 @@ fn talk(
 ) {
     audio.follow(&settings);
     let auto = std::env::var_os("BOOTLEG16_SCREENSHOT").is_some();
-    let open = settings.on && settings.open_mic && !auto && overlay.as_ref().is_none_or(|o| **o == Overlay::None);
+    let open = settings.on && settings.open_mic && !auto && overlay.as_ref().is_none_or(|o| !o.takes_keys());
     let channel = if auto { None } else { pushed(&settings, &binds, &keys, &mouse, overlay) }.or(open.then_some(VoiceChannel::Team));
     if let Some(mic) = &mut audio.mic {
         mic.set_running(channel.is_some());
