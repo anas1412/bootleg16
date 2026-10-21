@@ -1,9 +1,10 @@
 //! Retargeting: a character on Source's ValveBiped skeleton plays our CS animations. Each
 //! frame the CS skeleton is posed as usual (`sim::anim`, which the server's hitboxes share),
 //! then every character bone takes its CS twin's rotation since rest, measured from where the
-//! two skeletons' limbs point at rest. Bones without a twin (extra fingers, skirt, hair) ride
-//! along with their parent. The character keeps its own proportions, scaled so its legs are
-//! as long as the CS model's (the feet stay on the ground).
+//! two skeletons' limbs point at rest. Body bones also sit exactly where their twin is, so the
+//! hands hold the CS weapon model and the head is in its hitbox; fingers and bones without a
+//! twin (extra fingers, skirt, hair) keep the character's own lengths, scaled so its legs are
+//! as long as the CS model's.
 use bevy::math::{Mat3, Quat, Vec3};
 use goldsrc::mdl::{BoneTransform, Model as CsModel};
 use goldsrc::source::Model as Character;
@@ -40,6 +41,8 @@ pub type Pose = Vec<(Quat, Vec3)>;
 pub struct Rig {
     /// Each character bone's CS twin, if it has one.
     twin: Vec<Option<usize>>,
+    /// Twinned bones placed where their twin is (all but the fingers).
+    pinned: Vec<bool>,
     /// Character bones' parents and bind pose relative to them.
     parent: Vec<Option<usize>>,
     local: Vec<(Quat, Vec3)>,
@@ -98,7 +101,8 @@ impl Rig {
             (Some(a), Some(b)) => a / b,
             _ => 1.0,
         };
-        Rig { twin, parent, local, align, cs_rest_inv: cs_rest.iter().map(|(q, _)| q.inverse()).collect(), bind, scale }
+        let pinned = ch.bones.iter().zip(&twin).map(|(b, t)| t.is_some() && !key(&b.name).contains("finger")).collect();
+        Rig { twin, pinned, parent, local, align, cs_rest_inv: cs_rest.iter().map(|(q, _)| q.inverse()).collect(), bind, scale }
     }
 
     /// The character's pose for this frame from the CS skeleton's (both model space, Z up;
@@ -113,11 +117,12 @@ impl Rig {
                 (Some(t), Some(b)) => bone_quat(b) * self.cs_rest_inv[t] * self.align[i] * self.bind[i].0,
                 _ => from_parent.map(|(pq, _)| pq * lq).unwrap_or(lq),
             };
-            let pos = match (from_parent, self.twin[i], self.parent[i]) {
-                // the root follows its twin (the pelvis carries the body's height and sway)
-                (None, Some(t), _) => cs.get(t).map(|b| Vec3::from_array(b.pos)).unwrap_or(lp * self.scale),
-                // everything else keeps the character's own bone lengths
-                (Some((pq, pp)), _, _) => pp + pq * (lp * self.scale),
+            let twin_at = self.twin[i].filter(|_| self.pinned[i]).and_then(|t| cs.get(t)).map(|b| Vec3::from_array(b.pos));
+            let pos = match (twin_at, from_parent) {
+                // body bones where their twin is (the pelvis carries the height and sway)
+                (Some(at), _) => at,
+                // fingers and extras keep the character's own bone lengths
+                (None, Some((pq, pp))) => pp + pq * (lp * self.scale),
                 _ => lp * self.scale,
             };
             out.push((rot.normalize(), pos));
@@ -176,8 +181,9 @@ mod tests {
         let cs_at = |k: &str| cs_keys.iter().position(|n| n == k).unwrap();
         let cs_dir = (rest[cs_at("bip01lcalf")].1 - rest[cs_at("bip01lthigh")].1).normalize();
         assert!(ch_dir.dot(cs_dir) > 0.98, "thigh {ch_dir} vs {cs_dir}");
-        // the foot ends up near the CS foot's height
-        let foot = at("bip01lfoot");
-        assert!((pose[foot].1.z - rest[cs_at("bip01lfoot")].1.z).abs() < 4.0, "foot {} vs {}", pose[foot].1.z, rest[cs_at("bip01lfoot")].1.z);
+        // feet, hands and head are where the CS ones are (the gun is in the hands, the head in its hitbox)
+        for k in ["bip01lfoot", "bip01rhand", "bip01lhand", "bip01head"] {
+            assert!(pose[at(k)].1.distance(rest[cs_at(k)].1) < 0.01, "{k} {} vs {}", pose[at(k)].1, rest[cs_at(k)].1);
+        }
     }
 }

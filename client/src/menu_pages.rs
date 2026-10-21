@@ -135,7 +135,7 @@ pub fn rebuild_menu(
         Page::Practice => practice(page, &kit, &mut memory, st, &lobby),
         Page::Settings => settings_page(page, &kit, &faces, &mut memory, &settings, steam, &binds, st.settings_tab, tune_page.then_some(delay)),
         Page::Voice => crate::voice::page(page, &kit, &mut memory, &voice, tune_page.then_some(delay)),
-        Page::Characters => crate::characters::page(page, &kit, &settings, &characters),
+        Page::Characters => crate::characters::page(page, &kit, &settings, &characters, st.character_side),
     });
 }
 

@@ -34,15 +34,15 @@ pub struct Settings {
     pub crosshair_dot: bool,
     /// How much the HUD bends like a visor (0 flat .. 100), `hud::visor`.
     pub hud_curve: u8,
-    /// Your character as a terrorist and as a counter-terrorist (Characters page); None until
-    /// you pick (the server varies them).
-    /// The character you wear (a folder in gamedata/characters); None: one by player number.
-    pub character: Option<String>,
+    /// Your character as a counter-terrorist (Bureau) and as a terrorist (Strays), by id
+    /// (a folder in gamedata/characters); None: one of the side's by player number.
+    pub character_ct: Option<String>,
+    pub character_t: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, borderless: false, resolution: crate::window::DEFAULT_RESOLUTION, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60, character: None }
+        Settings { name: "player".into(), sensitivity: 5.0, volume: 0.8, fps_max: 300, vsync: false, borderless: false, resolution: crate::window::DEFAULT_RESOLUTION, team_ids: 2, assistant: 0, chattiness: 1, relay: true, assistant_in_round: true, crosshair_color: 0, crosshair_size: 1, crosshair_dynamic: true, crosshair_dot: false, hud_curve: 60, character_ct: None, character_t: None }
     }
 }
 
@@ -72,13 +72,23 @@ impl Settings {
                     Some(("crosshair_size", v)) => s.crosshair_size = v.trim().parse::<u8>().unwrap_or(1).min(2),
                     Some(("crosshair_dynamic", v)) => s.crosshair_dynamic = v.trim() == "true",
                     Some(("crosshair_dot", v)) => s.crosshair_dot = v.trim() == "true",
-                    Some(("character", v)) => s.character = Some(v.trim().to_string()).filter(|id| crate::characters::valid_id(id)),
+                    Some(("character_ct", v)) => s.character_ct = Some(v.trim().to_string()).filter(|id| crate::characters::valid_id(id)),
+                    Some(("character_t", v)) => s.character_t = Some(v.trim().to_string()).filter(|id| crate::characters::valid_id(id)),
                     Some(("hud_curve", v)) => s.hud_curve = v.trim().parse::<u8>().unwrap_or(60).min(100),
                     _ => {}
                 }
             }
         }
         s
+    }
+
+    /// Your pick for a side (spectators have none).
+    pub fn character_for(&self, team: net::protocol::Team) -> Option<&str> {
+        match team {
+            net::protocol::Team::Ct => self.character_ct.as_deref(),
+            net::protocol::Team::T => self.character_t.as_deref(),
+            _ => None,
+        }
     }
 
     pub(crate) fn save(&self) {
@@ -89,7 +99,7 @@ impl Settings {
             format!(
                 "name={}\nsensitivity={}\nvolume={}\nfps_max={}\nvsync={}\nborderless={}\nresolution={}\nteam_ids={}\nassistant={}\nchattiness={}\nrelay={}\nassistant_in_round={}\ncrosshair_color={}\ncrosshair_size={}\ncrosshair_dynamic={}\ncrosshair_dot={}\nhud_curve={}\n{}",
                 self.name, self.sensitivity, self.volume, self.fps_max, self.vsync, self.borderless, self.resolution, self.team_ids, self.assistant, self.chattiness, self.relay, self.assistant_in_round, self.crosshair_color, self.crosshair_size, self.crosshair_dynamic, self.crosshair_dot, self.hud_curve,
-                self.character.as_ref().map(|c| format!("character={c}\n")).unwrap_or_default()
+                self.character_ct.as_ref().map(|c| format!("character_ct={c}\n")).unwrap_or_default() + &self.character_t.as_ref().map(|c| format!("character_t={c}\n")).unwrap_or_default()
             ),
         );
     }

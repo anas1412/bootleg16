@@ -81,12 +81,8 @@ pub struct FlyCam {
 
 /// Take over the connection, swap in the real map collision, add the camera.
 /// (The loading screen already loaded the map and put its collision in the client.)
-fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>, settings: Res<crate::menu::Settings>) {
+fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>) {
     let Some(mut client) = pending.0.take() else { return };
-    // Your character (Characters page), sent until the server has it.
-    if let Some(id) = settings.character.as_deref().filter(|id| crate::characters::valid_id(id)) {
-        client.set_character(id);
-    }
     commands.insert_resource(Walker {
         client,
         prev_eye: [0.0; 3],

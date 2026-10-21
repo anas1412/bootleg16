@@ -206,7 +206,7 @@ fn draw_others(
     // screenshot runs: BOOTLEG16_CHARACTER=<id> dresses everyone else as that character
     let forced = std::env::var("BOOTLEG16_CHARACTER").ok();
     let pick = |id: u8| forced.as_deref().unwrap_or_else(|| w.client.scores.iter().find(|s| s.id == id).map(|s| s.character.as_str()).unwrap_or(""));
-    let others: Vec<_> = all.into_iter().filter(|o| o.alive && !look.dying.contains(&o.id)).filter_map(|o| Some((characters.for_player(pick(o.id), o.id)?, o))).collect();
+    let others: Vec<_> = all.into_iter().filter(|o| o.alive && !look.dying.contains(&o.id)).filter_map(|o| Some((characters.for_player(pick(o.id), o.id, o.team)?, o))).collect();
     for (e, p) in &drawn {
         if !others.iter().any(|(li, o)| o.id == p.id && *li == p.look && o.weapon == p.weapon) {
             commands.entity(e).despawn();

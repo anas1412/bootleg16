@@ -1,15 +1,18 @@
 //! Characters: every folder in `gamedata/characters/` is one, so adding a character is
 //! adding a folder (a Source player model on the ValveBiped skeleton, its materials, a
-//! `character.cfg` with its name, and optionally a `portrait.png` for its card). You pick one
-//! in the menu and wear it on both sides; everyone in the match sees it. All characters play the CS animations (`rig`) and share one hitbox.
+//! `character.cfg` with its name and side, and optionally a `portrait.png` for the menu).
+//! Each side (Bureau, Strays) has its own characters and you pick one per side; you wear the
+//! one for the side you're on and everyone in the match sees it. All characters play the CS
+//! animations (`rig`) and share one hitbox.
 //! - `rig`: posing a character from the CS skeleton.
 //! - `look`: a character's meshes and materials, ready to draw.
 pub mod look;
 pub mod rig;
 
 use crate::menu::Settings;
-use crate::ui::{card, clickable_keep_border, kit_text, page_title, vh, Kit, UiAction, BG1, TX1, TX2, TX3};
+use crate::ui::{chip, chips, kit_text, page_title, vh, Choice, Kit, UiAction, TX1, TX2, TX3};
 use bevy::prelude::*;
+use net::protocol::Team;
 use std::path::PathBuf;
 
 /// One character folder.
@@ -20,8 +23,10 @@ pub struct Entry {
     /// Shown in the menu (`name = "..."` in `character.cfg`; the id when missing).
     pub name: String,
     pub dir: PathBuf,
-    /// `portrait.png` in the folder, shown on the menu card (portrait shaped, about 4:5).
+    /// `portrait.png` in the folder: the character's picture in the menu (portrait shaped, about 3:4).
     pub portrait: Option<Handle<Image>>,
+    /// `side = "bureau"` (counter-terrorists) or `"strays"` (terrorists); none: either side.
+    pub side: Option<Team>,
 }
 
 /// Every character found, sorted by id (the same list on every machine with the same data).
@@ -33,19 +38,37 @@ impl Characters {
         self.0.iter().position(|e| e.id == id)
     }
 
-    /// The character a player wears: their pick, or (none yet, or not installed here) one
-    /// chosen by their player number so a team doesn't look all alike.
-    pub fn for_player(&self, pick: &str, player: u8) -> Option<usize> {
-        self.find(pick).or_else(|| (!self.0.is_empty()).then(|| player as usize % self.0.len()))
+    /// The characters a side may wear, in order.
+    pub fn of_side(&self, team: Team) -> Vec<usize> {
+        let mine: Vec<usize> = (0..self.0.len()).filter(|&i| self.0[i].side.is_none_or(|s| s == team)).collect();
+        // a side nobody made characters for wears anyone
+        if mine.is_empty() { (0..self.0.len()).collect() } else { mine }
+    }
+
+    /// The character a player wears: their pick, or (none yet, or not installed here) one of
+    /// their side's, chosen by their player number so a team doesn't look all alike.
+    pub fn for_player(&self, pick: &str, player: u8, team: Team) -> Option<usize> {
+        self.find(pick).or_else(|| {
+            let side = self.of_side(team);
+            (!side.is_empty()).then(|| side[player as usize % side.len()])
+        })
     }
 }
 
-/// Reads `name = "..."` from a `character.cfg`.
-fn cfg_name(text: &str) -> Option<String> {
+/// Reads `key = "..."` from a `character.cfg`.
+fn cfg(text: &str, key: &str) -> Option<String> {
     text.lines().find_map(|l| {
         let (k, v) = l.split_once('=')?;
-        (k.trim() == "name").then(|| v.trim().trim_matches('"').to_string()).filter(|v| !v.is_empty())
+        (k.trim() == key).then(|| v.trim().trim_matches('"').to_string()).filter(|v| !v.is_empty())
     })
+}
+
+fn cfg_side(text: &str) -> Option<Team> {
+    match cfg(text, "side")?.to_ascii_lowercase().as_str() {
+        "bureau" | "ct" => Some(Team::Ct),
+        "strays" | "t" => Some(Team::T),
+        _ => None,
+    }
 }
 
 /// A valid id: lowercase letters, digits, `-` and `_`, at most 32 (it travels over the network).
@@ -62,12 +85,14 @@ fn scan(images: &mut Assets<Image>) -> Characters {
             if list.iter().any(|e| e.id == id) {
                 continue; // the first data folder wins, like every other file
             }
-            let name = std::fs::read_to_string(dir.join("character.cfg")).ok().and_then(|t| cfg_name(&t)).unwrap_or_else(|| id.clone());
+            let text = std::fs::read_to_string(dir.join("character.cfg")).unwrap_or_default();
+            let name = cfg(&text, "name").unwrap_or_else(|| id.clone());
+            let side = cfg_side(&text);
             let portrait = std::fs::read(dir.join("portrait.png")).ok().and_then(|bytes| {
                 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
                 Image::from_buffer(&bytes, ImageType::Extension("png"), CompressedImageFormats::NONE, true, ImageSampler::linear(), bevy::asset::RenderAssetUsages::default()).ok()
             }).map(|img| images.add(img));
-            list.push(Entry { id, name, dir, portrait });
+            list.push(Entry { id, name, dir, portrait, side });
         }
     }
     list.sort_by(|a, b| a.id.cmp(&b.id));
@@ -79,34 +104,68 @@ pub struct CharactersPlugin;
 
 impl Plugin for CharactersPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Characters>().add_systems(Startup, |mut commands: Commands, mut images: ResMut<Assets<Image>>| commands.insert_resource(scan(&mut images)));
+        app.init_resource::<Characters>()
+            .add_systems(Startup, |mut commands: Commands, mut images: ResMut<Assets<Image>>| commands.insert_resource(scan(&mut images)))
+            .add_systems(Update, wear.run_if(resource_exists::<crate::game::Walker>));
     }
 }
 
-/// The page: one card per character; the one you wear is framed.
-pub fn page(page: &mut ChildSpawnerCommands, kit: &Kit, settings: &Settings, characters: &Characters) {
-    page_title(page, kit, "Who you are · both sides · everyone in your match sees it", "Characters", "キャラ");
-    page.spawn(Node { flex_wrap: FlexWrap::Wrap, column_gap: vh(16.0), row_gap: vh(16.0), margin: UiRect::top(vh(32.0)), ..default() }).with_children(|grid| {
-        for c in &characters.0 {
-            let picked = settings.character.as_deref() == Some(c.id.as_str());
-            let mut card_e = grid.spawn(card(Node { width: vh(220.0), flex_direction: FlexDirection::Column, padding: UiRect::all(vh(12.0)), row_gap: vh(10.0), ..default() }, picked));
-            clickable_keep_border(&mut card_e, UiAction::SetCharacter(c.id.clone()), BG1);
-            card_e.with_children(|n| {
-                // the portrait, or a quiet frame of the same size until the character has one
-                let frame = Node { width: vh(196.0), height: vh(245.0), ..default() };
-                match &c.portrait {
-                    Some(img) => _ = n.spawn((ImageNode::new(img.clone()), frame, Pickable::IGNORE)),
-                    None => _ = n.spawn((frame, BackgroundColor(Color::BLACK.with_alpha(0.35)), Pickable::IGNORE)),
-                }
-                n.spawn((kit_text(c.name.to_uppercase(), 18.0, if picked { TX1 } else { TX2 }, &kit.text), Pickable::IGNORE));
-            });
-        }
-    });
-    if characters.0.is_empty() {
-        page.spawn((kit_text("NO CHARACTERS FOUND IN THE GAME DATA", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), ..default() }));
-    } else if settings.character.is_none() {
-        page.spawn((kit_text("NOT PICKED YET: YOU GET ONE BY YOUR PLAYER NUMBER", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), ..default() }));
+/// Which character a side wears now: your pick if it's one of the side's, else its first.
+pub fn picked(characters: &Characters, settings: &Settings, team: Team) -> Option<usize> {
+    let side = characters.of_side(team);
+    settings.character_for(team).and_then(|id| characters.find(id)).filter(|i| side.contains(i)).or(side.first().copied())
+}
+
+/// The next (or previous) character for a side, as an id to save.
+pub fn cycle(characters: &Characters, settings: &Settings, team: Team, step: i32) -> Option<String> {
+    let side = characters.of_side(team);
+    let now = picked(characters, settings, team).and_then(|i| side.iter().position(|&x| x == i)).unwrap_or(0) as i32;
+    let n = side.len() as i32;
+    (n > 0).then(|| characters.0[side[(now + step).rem_euclid(n) as usize]].id.clone())
+}
+
+/// In a match: tell the server the character for the side you're on (again when you switch).
+fn wear(mut w: ResMut<crate::game::Walker>, settings: Res<Settings>, characters: Res<Characters>, mut sent: Local<Option<(Team, String)>>) {
+    let team = w.client.team();
+    if team == Team::Spectator || w.client.id().is_none() {
+        return;
     }
+    let id = picked(&characters, &settings, team).map(|i| characters.0[i].id.clone()).unwrap_or_default();
+    if sent.as_ref() != Some(&(team, id.clone())) {
+        w.client.set_character(&id);
+        *sent = Some((team, id));
+    }
+}
+
+/// The page: a tab per side and that side's character, big, with arrows (or the arrow keys)
+/// to go through them. What's shown is what you wear on that side.
+pub fn page(page: &mut ChildSpawnerCommands, kit: &Kit, settings: &Settings, characters: &Characters, side: Team) {
+    page_title(page, kit, "Who you are on each side · everyone in your match sees it", "Characters", "キャラ");
+    page.spawn(Node { margin: UiRect::top(vh(24.0)), ..default() }).with_children(|r| {
+        chips(r, kit, "chr.side", vec![Choice::new("Bureau", UiAction::CharacterSide(Team::Ct), side == Team::Ct), Choice::new("Strays", UiAction::CharacterSide(Team::T), side == Team::T)]);
+    });
+    let list = characters.of_side(side);
+    let Some(now) = picked(characters, settings, side) else {
+        page.spawn((kit_text("NO CHARACTERS FOUND IN THE GAME DATA", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(24.0)), ..default() }));
+        return;
+    };
+    let c = &characters.0[now];
+    let at = list.iter().position(|&x| x == now).unwrap_or(0);
+    page.spawn(Node { align_items: AlignItems::Center, column_gap: vh(24.0), margin: UiRect::top(vh(24.0)), ..default() }).with_children(|row| {
+        chip(row, kit, "‹", UiAction::CycleCharacter(-1), false);
+        row.spawn(Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: vh(12.0), ..default() }).with_children(|col| {
+            // the character's picture, or a quiet frame of the same size until it has one
+            let frame = Node { width: vh(330.0), height: vh(440.0), ..default() };
+            match &c.portrait {
+                Some(img) => _ = col.spawn((ImageNode::new(img.clone()), frame, Pickable::IGNORE)),
+                None => _ = col.spawn((frame, BackgroundColor(Color::BLACK.with_alpha(0.35)), Pickable::IGNORE)),
+            }
+            col.spawn(kit_text(c.name.to_uppercase(), 40.0, TX1, &kit.display));
+            col.spawn(kit_text(format!("{} / {}", at + 1, list.len()), 13.0, TX2, &kit.num));
+        });
+        chip(row, kit, "›", UiAction::CycleCharacter(1), false);
+    });
+    page.spawn((kit_text("← → CHANGE · WORN WHEN YOU PLAY ON THIS SIDE", 13.0, TX3, &kit.text), Node { margin: UiRect::top(vh(16.0)), ..default() }));
 }
 
 #[cfg(test)]
@@ -117,7 +176,9 @@ mod tests {
     fn ids_and_names() {
         assert!(valid_id("lisa") && valid_id("t_white-2"));
         assert!(!valid_id("") && !valid_id("Lisa") && !valid_id("../x") && !valid_id(&"a".repeat(33)));
-        assert_eq!(cfg_name("name = \"Tammy\"\n"), Some("Tammy".into()));
-        assert_eq!(cfg_name("# nothing\n"), None);
+        assert_eq!(cfg("name = \"Tammy\"\n", "name"), Some("Tammy".into()));
+        assert_eq!(cfg("# nothing\n", "name"), None);
+        assert_eq!(cfg_side("side = \"strays\"\n"), Some(Team::T));
+        assert_eq!(cfg_side("side = \"bureau\"\n"), Some(Team::Ct));
     }
 }

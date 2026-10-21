@@ -47,6 +47,8 @@ pub(crate) struct MenuState {
     pub(crate) deathmatch: bool,
     /// Settings page section (`UiAction::SettingsTab`).
     pub(crate) settings_tab: u8,
+    /// Characters page: the side shown.
+    pub(crate) character_side: net::protocol::Team,
     pub(crate) address: String,
     pub(crate) rebuild: bool,
 }
@@ -140,6 +142,7 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>) {
         dummies: 5,
         deathmatch: false,
         settings_tab,
+        character_side: net::protocol::Team::Ct,
         address: String::new(),
         rebuild: true,
     });
@@ -190,7 +193,16 @@ fn menu_actions(
     (mut voice, devices): (ResMut<crate::voice::VoiceSettings>, Res<crate::voice::Devices>),
     (mut lobby, steam): (ResMut<crate::play::Lobby>, Option<Res<crate::steam::Steam>>),
     (mut binds, notice): (ResMut<crate::binds::Binds>, Option<Res<crate::notice::Notice>>),
+    characters: Res<crate::characters::Characters>,
 ) {
+    // Characters page: the arrow keys go through the side's characters
+    if st.page == Page::Characters {
+        for (k, step) in [(KeyCode::ArrowLeft, -1), (KeyCode::ArrowRight, 1)] {
+            if keys.just_pressed(k) {
+                actions.0.push(UiAction::CycleCharacter(step));
+            }
+        }
+    }
     let ready = lobby.shown.as_ref().and_then(|s| s.ready);
     if notice.is_some() {
         // Enter belongs to the notice over the menu
@@ -220,10 +232,16 @@ fn menu_actions(
                 st.page = p;
             }
             UiAction::PickMap(m) => st.map = m,
-            // Characters page: wear this one (on both sides).
-            UiAction::SetCharacter(id) => {
-                settings.character = Some(id);
-                settings.save();
+            // Characters page: a side's tab, and going through its characters
+            UiAction::CharacterSide(team) => st.character_side = team,
+            UiAction::CycleCharacter(step) => {
+                if let Some(id) = crate::characters::cycle(&characters, &settings, st.character_side, step) {
+                    match st.character_side {
+                        net::protocol::Team::T => settings.character_t = Some(id),
+                        _ => settings.character_ct = Some(id),
+                    }
+                    settings.save();
+                }
             }
             UiAction::PracticeMode(dm) => st.deathmatch = dm,
             UiAction::Dummies(d) => st.dummies = (st.dummies + d).clamp(0, 20),
