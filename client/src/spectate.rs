@@ -15,6 +15,7 @@ pub struct SpectatePlugin;
 impl Plugin for SpectatePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Watch>()
+            .init_resource::<PlateShown>()
             .add_systems(OnEnter(AppState::InGame), spawn_plate)
             .add_systems(Update, (note_downs, cycle, team_out, plate).chain().in_set(Frame::Ui).run_if(resource_exists::<Walker>));
     }
@@ -93,6 +94,13 @@ struct OutScreen;
 /// match is going, and the keys to switch.
 #[derive(Component)]
 struct Plate;
+
+/// The watching plate is up (the assistant's panel sits above it then).
+#[derive(Resource, Default)]
+pub struct PlateShown(pub bool);
+
+/// How tall the plate stands, with the gap above it.
+pub const PLATE_HEIGHT: f32 = 128.0;
 #[derive(Component)]
 enum PlateText {
     Name,
@@ -118,9 +126,10 @@ fn spawn_plate(mut commands: Commands, kit: Res<Kit>) {
         });
     };
     commands
-        .spawn((Plate, HudLayer, Visibility::Hidden, DespawnOnExit(AppState::InGame), Node { position_type: PositionType::Absolute, width: percent(100), bottom: vh(SAFE), justify_content: JustifyContent::Center, ..default() }))
+        // (the root's visibility belongs to the menu blur; the panel inside shows and hides)
+        .spawn((HudLayer, DespawnOnExit(AppState::InGame), Node { position_type: PositionType::Absolute, width: percent(100), bottom: vh(SAFE), justify_content: JustifyContent::Center, ..default() }))
         .with_children(|row| {
-            row.spawn(hud_panel(Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: vh(8.0), padding: UiRect::axes(vh(32.0), vh(14.0)), ..default() })).with_children(|p| {
+            row.spawn((Plate, Visibility::Hidden, hud_panel(Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: vh(8.0), padding: UiRect::axes(vh(32.0), vh(14.0)), ..default() }))).with_children(|p| {
                 p.spawn(kit_text("WATCHING", 13.0, TX2, &kit.text));
                 p.spawn(Node { align_items: AlignItems::Baseline, column_gap: vh(20.0), ..default() }).with_children(|r| {
                     r.spawn((PlateText::Name, kit_text("", 26.0, TX1, &kit.text)));
@@ -136,9 +145,13 @@ fn spawn_plate(mut commands: Commands, kit: Res<Kit>) {
         });
 }
 
-fn plate(w: Res<Walker>, watch: Res<Watch>, covered: Res<crate::ui::Covered>, mut root: Single<&mut Visibility, With<Plate>>, mut texts: Query<(&PlateText, &mut Text, &mut TextColor)>) {
+fn plate(w: Res<Walker>, watch: Res<Watch>, covered: Res<crate::ui::Covered>, mut root: Single<&mut Visibility, With<Plate>>, mut texts: Query<(&PlateText, &mut Text, &mut TextColor)>, mut shown: ResMut<PlateShown>) {
     let who = spectating(&w).then(|| target(&w, &watch)).flatten().and_then(|t| w.client.scores.iter().find(|s| s.id == t.id));
-    root.set_if_neq(if who.is_some() && !covered.0 { Visibility::Inherited } else { Visibility::Hidden });
+    let up = who.is_some() && !covered.0;
+    root.set_if_neq(if up { Visibility::Inherited } else { Visibility::Hidden });
+    if shown.0 != up {
+        shown.0 = up;
+    }
     let Some(s) = who else { return };
     for (which, mut t, mut c) in &mut texts {
         let v = match which {

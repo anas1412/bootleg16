@@ -256,6 +256,7 @@ pub(super) fn animate(
     covered: Res<Covered>,
     overlay: Option<Res<crate::menu::Overlay>>,
     mut ups: Query<(Entity, &mut Uplink, &mut Visibility)>,
+    (mut up_node, plate): (Query<&mut Node, (With<Uplink>, Without<LineRow>)>, Option<Res<crate::spectate::PlateShown>>),
     mut rigs: Query<&mut Rig>,
     mut name: Query<&mut Text, With<UpName>>,
     mut rows: Query<(&LineRow, &mut Node)>,
@@ -269,6 +270,13 @@ pub(super) fn animate(
     let Some((root, up, mut vis)) = ups.iter_mut().next() else { return };
     let up = up.into_inner();
     vis.set_if_neq(if hide { Visibility::Hidden } else { Visibility::Inherited });
+    // while you watch someone, their plate holds the bottom: the panel sits above it
+    if let Ok(mut n) = up_node.get_mut(root) {
+        let bottom = vh(SAFE + if plate.is_some_and(|p| p.0) { crate::spectate::PLATE_HEIGHT } else { 0.0 });
+        if n.bottom != bottom {
+            n.bottom = bottom;
+        }
+    }
     let t = time.elapsed_secs() - up.at;
     up.t = t;
     // which row talks, and how loud
