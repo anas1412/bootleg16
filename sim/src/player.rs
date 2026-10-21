@@ -36,6 +36,11 @@ pub fn step(s: &mut PlayerState, input: &Input, dt: f32, cmd_time: f64, seed: u6
     };
     tagging(&mut s.movement, dt);
     let events = pmove::step(&mut s.movement, input, dt, world, vars);
+    if events.land_roll > 0.0 {
+        let punch = &mut s.loadout.punch;
+        punch[2] = events.land_roll;
+        punch[0] = punch[0].min(8.0);
+    }
     let ctx = Context {
         now: cmd_time,
         dt,
