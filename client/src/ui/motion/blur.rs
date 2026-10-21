@@ -60,9 +60,23 @@ fn blur(
     mut hud: Query<&mut Visibility, With<HudLayer>>,
     mut covered_flag: ResMut<Covered>,
     mut commands: Commands,
-    mut cams: Query<(Entity, Option<&mut DepthOfField>), With<Camera3d>>,
+    // the world's camera only: the weapon's camera draws into the same picture, and depth of
+    // field on it breaks frames on resize (the weapon stays sharp under menus)
+    mut cams: Query<(Entity, Option<&mut DepthOfField>), (With<Camera3d>, Without<crate::viewmodel::ViewModelCamera>)>,
+    window: Single<&Window, With<bevy::window::PrimaryWindow>>,
+    (mut size, mut settle): (Local<(u32, u32)>, Local<(f32, u32)>),
 ) {
     let now = time.elapsed_secs();
+    // Depth of field breaks the frame while the window changes size (a render error that
+    // quits the game), so it steps aside until the size has settled.
+    let now_size = (window.physical_width(), window.physical_height());
+    if now_size != *size {
+        *size = now_size;
+        *settle = (now + SETTLE, SETTLE_FRAMES);
+    }
+    // time and frames both: one slow frame (loading) can eat the whole wait
+    settle.1 = settle.1.saturating_sub(1);
+    let steady = now >= settle.0 && settle.1 == 0;
     let covered = !wanted.is_empty();
     if covered && !level.3 {
         level.2 = Some(now);
@@ -96,7 +110,7 @@ fn blur(
         }
     }
     for (cam, dof) in &mut cams {
-        match (dof, level.0 > 0.0) {
+        match (dof, level.0 > 0.0 && steady) {
             (Some(mut d), true) => d.max_circle_of_confusion_diameter = 24.0 * level.0,
             (None, true) => {
                 commands.entity(cam).insert(DepthOfField { mode: DepthOfFieldMode::Gaussian, focal_distance: 0.5, aperture_f_stops: 0.02, max_circle_of_confusion_diameter: 24.0 * level.0, ..default() });
@@ -108,6 +122,11 @@ fn blur(
         }
     }
 }
+
+/// Seconds without blur after the window changes size.
+const SETTLE: f32 = 0.5;
+/// And at least this many frames.
+const SETTLE_FRAMES: u32 = 10;
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<BlurLevel>().init_resource::<Covered>().add_systems(Startup, spawn_scrim).add_systems(Update, blur);

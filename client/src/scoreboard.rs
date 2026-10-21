@@ -134,7 +134,7 @@ fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<K
             GlobalZIndex(7),
         ))
         .with_children(|root| {
-            root.spawn(Node { width: vh(1200.0), flex_direction: FlexDirection::Column, ..default() }).with_children(|col| {
+            root.spawn(Node { width: vh(1200.0), max_width: percent(94.0), flex_direction: FlexDirection::Column, ..default() }).with_children(|col| {
                 let mut head = col.spawn(Node { align_items: AlignItems::Center, ..default() });
                 if let Some(a) = tune(0) {
                     head.insert(a);

@@ -7,6 +7,7 @@ mod crosshair;
 mod hint;
 mod icons;
 mod motion;
+mod owned;
 mod visor;
 
 pub use crate::ui::SAFE;
@@ -30,7 +31,7 @@ impl Plugin for HudPlugin {
             .init_resource::<Kit>()
             .init_resource::<Icons>()
             .add_systems(OnEnter(AppState::InGame), (spawn, crosshair::spawn))
-            .add_systems(Update, (status, crosshair::crosshair, net_stats).in_set(Frame::Ui));
+            .add_systems(Update, (status, crosshair::crosshair, net_stats, owned::owned).in_set(Frame::Ui));
         motion::plugin(app);
         hint::plugin(app);
         visor::plugin(app);
@@ -46,7 +47,6 @@ enum Field {
     Clip,
     Reserve,
     Weapon,
-    Grenades,
     Notice,
 }
 /// Shown only while you're alive in a team.
@@ -134,7 +134,7 @@ fn spawn(mut commands: Commands, kit: Res<Kit>, icons: Res<Icons>) {
     commands
         .spawn((game.clone(), AliveOnly, Sway, Visor, pos(Node { right: vh(SAFE), bottom: vh(SAFE), flex_direction: FlexDirection::Column, align_items: AlignItems::FlexEnd, row_gap: vh(8.0), ..default() })))
         .with_children(|col| {
-            col.spawn((Field::Grenades, kit_text("", 16.0, TX2, &kit.text), shadowed()));
+            col.spawn(owned::node());
             col.spawn(hud_panel(Node::default())).with_children(|p| {
                 p.spawn((AmmoEdge, edge(EdgeColor::Team, EDGE_REST)));
                 p.spawn((ReloadLine, Node { position_type: PositionType::Absolute, left: vh(12.0), right: vh(12.0), bottom: px(0), height: vh(2.0), border_radius: BorderRadius::all(px(1)), ..default() }, BackgroundColor(TX1), UiTransform { scale: Vec2::new(0.0, 1.0), ..default() }, Visibility::Hidden));
@@ -217,13 +217,11 @@ fn status(
             n.display = d;
         }
     }
-    let [he, fl, sm] = if watched.is_some() { [0; 3] } else { l.grenades };
     for (field, mut t) in &mut fields {
         let s = match field {
             Field::Clip => ammo.map(|(c, _)| c.to_string()).unwrap_or_default(),
             Field::Reserve => ammo.map(|(_, r)| format!("/ {r}")).unwrap_or_default(),
             Field::Weapon => sim::weapons::def(weapon).name.to_uppercase(),
-            Field::Grenades => [("HE", he), ("FLASH", fl), ("SMOKE", sm)].iter().filter(|(_, n)| *n > 0).map(|(name, n)| if *n > 1 { format!("{name} x{n}") } else { name.to_string() }).collect::<Vec<_>>().join("   "),
             Field::Notice => match w.client.team() {
                 _ if reconnecting.is_some() => String::new(), // the reconnecting panel says it
                 _ if w.client.id().is_none() => "Connecting...".into(),

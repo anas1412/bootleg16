@@ -278,7 +278,10 @@ fn buy_menu(
                     });
                 });
             // Categories.
-            let mut cats = root.spawn(abs(Node { left: vh(96.0), top: vh(top), width: vh(360.0), flex_direction: FlexDirection::Column, ..default() }));
+            // The three columns share one row between the side margins, so a narrower screen
+            // (16:10, a small window) squeezes the cards, not the details.
+            root.spawn(abs(Node { left: vh(96.0), right: vh(96.0), top: vh(top), bottom: vh(96.0), column_gap: vh(40.0), ..default() })).with_children(|body| {
+            let mut cats = body.spawn(Node { width: vh(360.0), flex_shrink: 0.0, flex_direction: FlexDirection::Column, ..default() });
             if let Some(a) = tune(opening, 1) {
                 cats.insert(a);
             }
@@ -294,12 +297,12 @@ fn buy_menu(
                 }
             });
             // Cards, two columns.
-            root.spawn(abs(Node { left: vh(496.0), width: vh(820.0), top: vh(top), flex_wrap: FlexWrap::Wrap, column_gap: vh(16.0), row_gap: vh(16.0), align_content: AlignContent::FlexStart, ..default() })).with_children(|grid| {
+            body.spawn(Node { flex_grow: 1.0, flex_basis: px(0), min_width: px(0), flex_wrap: FlexWrap::Wrap, justify_content: JustifyContent::SpaceBetween, row_gap: vh(16.0), align_content: AlignContent::FlexStart, ..default() }).with_children(|grid| {
                 for (i, (name, item)) in items.iter().enumerate() {
                     let ok = afford(*item);
                     let selected = i == sel;
                     let base = if selected { BG1.mix(&AMBER, 0.08) } else { BG1 };
-                    let mut card = grid.spawn(crate::ui::card(Node { width: vh(402.0), height: vh(200.0), flex_direction: FlexDirection::Column, padding: UiRect::axes(vh(24.0), vh(20.0)), ..default() }, selected));
+                    let mut card = grid.spawn(crate::ui::card(Node { width: percent(48.5), height: vh(200.0), flex_direction: FlexDirection::Column, padding: UiRect::axes(vh(24.0), vh(20.0)), ..default() }, selected));
                     if let Some(a) = tune(new_cat, i + 2) {
                         card.insert(a);
                     }
@@ -318,7 +321,7 @@ fn buy_menu(
             });
             // Details of the selected card.
             let (name, item) = items[sel];
-            root.spawn((abs(Node { left: vh(1356.0), right: vh(96.0), top: vh(top), bottom: vh(96.0), ..default() }), BackgroundColor(BG1)))
+            body.spawn((Node { width: vh(468.0), flex_shrink: 0.0, ..default() }, BackgroundColor(BG1)))
                 .with_children(|panel| {
                     let mut d = panel.spawn(Node { flex_grow: 1.0, flex_direction: FlexDirection::Column, padding: UiRect::all(vh(32.0)), ..default() });
                     if let Some(a) = tune(new_item, if opening { 3 } else { 0 }) {
@@ -349,6 +352,7 @@ fn buy_menu(
                     }
                     });
                 });
+            });
         });
 }
 
@@ -362,7 +366,15 @@ fn item_art(p: &mut ChildSpawnerCommands, icons: &Icons, item: BuyItem, height: 
     };
     let h = if matches!(item, BuyItem::Weapon(_)) { height } else { height * 0.8 };
     if let Some(n) = name {
-        p.spawn((icons.node_in(n, h, 3.8, color), Pickable::IGNORE));
+        // no wider than its card (narrow screens squeeze the cards): the width leads, the
+        // height follows the picture's shape and stops at `h`
+        p.spawn((icons.node_in(n, h, 3.8, color), Pickable::IGNORE)).entry::<Node>().and_modify(move |mut node| {
+            if let (Val::Vh(tall), Some(aspect)) = (node.height, node.aspect_ratio) {
+                node.width = Val::Vh(tall * aspect);
+                node.height = Val::Auto;
+                node.max_width = percent(90.0);
+            }
+        });
     }
 }
 

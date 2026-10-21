@@ -60,11 +60,13 @@ pub(super) fn money(
     mut images: Query<&mut ImageNode>,
     mut sounds: MessageWriter<UiSound>,
     mut commands: Commands,
+    covered: Res<crate::ui::Covered>,
 ) {
     let alive = w.client.vitals.alive() && w.client.id().is_some();
     let now = time.elapsed_secs();
     let money = w.client.me_info.money;
-    panel.set_if_neq(if w.client.practice { Visibility::Hidden } else { Visibility::Inherited });
+    // hidden under a menu: the buy menu shows your funds itself
+    panel.set_if_neq(if w.client.practice || covered.0 { Visibility::Hidden } else { Visibility::Inherited });
     count.target = money as f32;
     match *last {
         Some((before, _, _)) if before != money => {
