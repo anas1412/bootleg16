@@ -41,6 +41,7 @@ impl Server {
                     self.events.push(GameEvent::Footstep { player: c.id, at: c.state.movement.origin, step });
                 }
                 if ev.fall_damage > 0.0 && c.vitals.hurt(ev.fall_damage, 0.0) {
+                    self.events.push(GameEvent::Damage { attacker: c.id, victim: c.id, amount: ev.fall_damage, group: sim::hitbox::HitGroup::Generic, sound: crate::protocol::HitSound::Splat, at: None });
                     c.respawn_at = Some(tick + if c.bot { self.rate.secs(DUMMY_RESPAWN_SECS) } else { self.rate.secs(self.rules.respawn_secs) });
                     self.events.push(GameEvent::Kill { killer: c.id, victim: c.id, weapon: None, headshot: false });
                 }

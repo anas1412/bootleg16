@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 43;
+pub const PROTOCOL_VERSION: u32 = 44;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -382,6 +382,8 @@ pub enum HitSound {
     /// Knife connected: a slash or a stab.
     KnifeSlash,
     KnifeStab,
+    /// A fall that killed them (CS 1.6 `PostThink`: common/bodysplat.wav).
+    Splat,
 }
 
 /// A smoke cloud: where, and how many seconds it has left.

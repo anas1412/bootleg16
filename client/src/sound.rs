@@ -209,6 +209,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                     Headshot => &["player/headshot1.wav", "player/headshot2.wav", "player/headshot3.wav"],
                     KnifeSlash => &["weapons/knife_hit1.wav", "weapons/knife_hit2.wav", "weapons/knife_hit3.wav", "weapons/knife_hit4.wav"],
                     KnifeStab => &["weapons/knife_stab.wav"],
+                    Splat => &["common/bodysplat.wav"],
                     Explosion => &["player/pl_pain2.wav", "player/pl_pain4.wav", "player/pl_pain5.wav", "player/pl_pain6.wav", "player/pl_pain7.wav"],
                 };
                 // A female voice's packs have no pain cries for blasts: her hurt grunt instead.

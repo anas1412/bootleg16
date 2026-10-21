@@ -261,7 +261,7 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                     anims.write(PlayerAnim::Blasted(victim, at, bomb));
                 }
                 // Knife hits have no exact point: their middle.
-                let at = at.or_else(|| (sound != net::protocol::HitSound::Explosion).then_some(victim_at).flatten());
+                let at = at.or_else(|| (!matches!(sound, net::protocol::HitSound::Explosion | net::protocol::HitSound::Splat)).then_some(victim_at).flatten());
                 if let (Some(at), Some(from)) = (at, eye_of(&w, attacker)) {
                     let d = [at[0] - from[0], at[1] - from[1], at[2] - from[2]];
                     let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-3);
