@@ -22,8 +22,9 @@ pub enum Cue {
     Shot { weapon: Id, silenced: bool, at: Option<[f32; 3]>, who: Option<u8> },
     /// `who` None = our own (heard in the head).
     Footstep { feet: [f32; 3], who: Option<u8>, step: sim::pmove::Step },
-    Hit { sound: net::protocol::HitSound, at: Option<[f32; 3]> },
-    Death { at: Option<[f32; 3]> },
+    /// `voice`: the victim's character's (`characters::Entry::voice`).
+    Hit { sound: net::protocol::HitSound, at: Option<[f32; 3]>, voice: Option<String> },
+    Death { at: Option<[f32; 3]>, voice: Option<String> },
     Explosion { at: [f32; 3] },
     Flash { at: [f32; 3] },
     Smoke { at: [f32; 3] },
@@ -59,6 +60,8 @@ pub struct Sounds {
     rng: u64,
     /// Whose next footstep is the left foot (None: ours).
     left_foot: HashMap<Option<u8>, bool>,
+    /// Whether a voice's own sound file exists.
+    found: HashMap<String, bool>,
     /// Each player's gunshot playing on their weapon channel (None: yours).
     weapon_channel: HashMap<Option<u8>, Entity>,
 }
@@ -66,7 +69,7 @@ pub struct Sounds {
 impl Sounds {
     pub fn new() -> Sounds {
         let materials = crate::gamefiles::paths("sound/materials.txt").iter().find_map(|p| std::fs::read_to_string(p).ok()).ok_or(()).map(|t| Materials::parse(&t)).unwrap_or_default();
-        Sounds { dirs: crate::gamefiles::paths("sound"), cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new(), weapon_channel: HashMap::new() }
+        Sounds { dirs: crate::gamefiles::paths("sound"), cache: HashMap::new(), materials, rng: 0x2545_F491_4F6C_DD1D, left_foot: HashMap::new(), weapon_channel: HashMap::new(), found: HashMap::new() }
     }
 
     fn rand(&mut self) -> f32 {
@@ -78,6 +81,14 @@ impl Sounds {
 
     fn pick(&mut self, options: &[&str]) -> String {
         options[((self.rand() * options.len() as f32) as usize).min(options.len() - 1)].to_string()
+    }
+
+    /// `player/x.wav` in this voice (`player/<voice>/x.wav`) if the data has it, else as is.
+    fn voiced(&mut self, voice: Option<&str>, file: String) -> String {
+        let Some(v) = voice else { return file };
+        let mine = file.replacen("player/", &format!("player/{v}/"), 1);
+        let has = *self.found.entry(mine.clone()).or_insert_with(|| self.dirs.iter().any(|d| d.join(net::gamefiles::clean(&mine)).is_file()));
+        if has { mine } else { file }
     }
 
     pub fn get(&mut self, file: &str, assets: &mut Assets<AudioSource>) -> Option<Handle<AudioSource>> {
@@ -189,7 +200,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 let file = format!("player/pl_{}{n}.wav", step_set(step.kind, material));
                 plays.push(Play { file, at: if who.is_none() { None } else { Some(feet) }, volume: step.loudness(material), attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
-            Cue::Hit { sound, at } => {
+            Cue::Hit { sound, at, voice } => {
                 use net::protocol::HitSound::*;
                 let options: &[&str] = match sound {
                     Flesh => &["player/bhit_flesh-1.wav", "player/bhit_flesh-2.wav", "player/bhit_flesh-3.wav"],
@@ -200,11 +211,16 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                     KnifeStab => &["weapons/knife_stab.wav"],
                     Explosion => &["player/pl_pain2.wav", "player/pl_pain4.wav", "player/pl_pain5.wav", "player/pl_pain6.wav", "player/pl_pain7.wav"],
                 };
+                // A female voice's packs have no pain cries for blasts: her hurt grunt instead.
+                let options: &[&str] = if sound == Explosion && voice.is_some() { &["player/bhit_flesh-1.wav", "player/bhit_flesh-2.wav", "player/bhit_flesh-3.wav"] } else { options };
                 let file = sounds.pick(options);
+                let file = sounds.voiced(voice.as_deref(), file);
                 plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
-            Cue::Death { at } => {
-                let file = sounds.pick(&["player/die1.wav", "player/die2.wav", "player/die3.wav", "player/death6.wav"]);
+            Cue::Death { at, voice } => {
+                let options: &[&str] = if voice.is_some() { &["player/die1.wav", "player/die2.wav", "player/die3.wav"] } else { &["player/die1.wav", "player/die2.wav", "player/die3.wav", "player/death6.wav"] };
+                let file = sounds.pick(options);
+                let file = sounds.voiced(voice.as_deref(), file);
                 plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0, channel: None });
             }
             // HE: `TE_EXPLOSION` without its no-sound flag, so the engine's own blast (explode3-5,
@@ -345,5 +361,19 @@ pub struct SoundPlugin;
 impl Plugin for SoundPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(crate::reverb::ReverbPlugin).add_systems(Update, play_cues.in_set(Frame::Sound));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_voice_uses_its_own_file_where_it_has_one() {
+        let mut s = super::Sounds::new();
+        if !s.dirs.iter().any(|d| d.join("player/female/die1.wav").is_file()) {
+            return; // no game data here
+        }
+        assert_eq!(s.voiced(Some("female"), "player/die1.wav".into()), "player/female/die1.wav");
+        assert_eq!(s.voiced(Some("female"), "player/pl_pain2.wav".into()), "player/pl_pain2.wav");
+        assert_eq!(s.voiced(None, "player/die1.wav".into()), "player/die1.wav");
     }
 }

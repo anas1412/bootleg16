@@ -200,7 +200,7 @@ fn grenade_effects(
 pub struct GameNews(pub GameEvent);
 
 #[allow(clippy::too_many_arguments)]
-fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut<crate::tracers::Tracers>, mut shells: ResMut<crate::shells::Shells>, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>, mut blast: Local<Option<[f32; 3]>>) {
+fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut<crate::tracers::Tracers>, mut shells: ResMut<crate::shells::Shells>, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>, mut blast: Local<Option<[f32; 3]>>, characters: Res<crate::characters::Characters>) {
     let me = w.client.id();
     let predicting = shot_assets.is_some();
     // Where a player is now (for sounds and the direction blood flies).
@@ -234,7 +234,8 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
             }
             GameEvent::Damage { attacker, victim, sound, group, at, .. } => {
                 let victim_at = eye_of(&w, victim);
-                w.cues.push(sound::Cue::Hit { sound, at: if Some(victim) == me { None } else { victim_at } });
+                let voice = characters.voice_of(&w.client, victim);
+                w.cues.push(sound::Cue::Hit { sound, at: if Some(victim) == me { None } else { victim_at }, voice });
                 anims.write(PlayerAnim::Hurt(victim, group));
                 // (the server sends a blast before the damage it does)
                 if let (net::protocol::HitSound::Explosion, Some(at)) = (sound, *blast) {
@@ -282,7 +283,8 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
             }
             GameEvent::Kill { killer, victim, weapon, headshot } => {
                 let at = if Some(victim) == me { None } else { w.client.others().iter().find(|o| o.id == victim).map(|o| o.origin) };
-                w.cues.push(sound::Cue::Death { at });
+                let voice = characters.voice_of(&w.client, victim);
+                w.cues.push(sound::Cue::Death { at, voice });
                 anims.write(PlayerAnim::Died(victim));
                 // Name and team as the feed shows them ("the bomb" for the world).
                 let who = |id: u8| -> (String, Team) {

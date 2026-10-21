@@ -27,6 +27,9 @@ pub struct Entry {
     pub portrait: Option<Handle<Image>>,
     /// `side = "bureau"` (counter-terrorists) or `"strays"` (terrorists); none: either side.
     pub side: Option<Team>,
+    /// `voice = "female"`: their hurt and death sounds come from `sound/player/<voice>/`
+    /// where it has them (none: CS's own).
+    pub voice: Option<String>,
 }
 
 /// Every character found, sorted by id (the same list on every machine with the same data).
@@ -36,6 +39,12 @@ pub struct Characters(pub Vec<Entry>);
 impl Characters {
     pub fn find(&self, id: &str) -> Option<usize> {
         self.0.iter().position(|e| e.id == id)
+    }
+
+    /// The voice of the character player `id` wears (from the scoreboard).
+    pub fn voice_of(&self, client: &net::Client, id: u8) -> Option<String> {
+        let s = client.scores.iter().find(|s| s.id == id)?;
+        self.0.get(self.for_player(&s.character, id, s.team)?)?.voice.clone()
     }
 
     /// The characters a side may wear, in order.
@@ -88,11 +97,12 @@ fn scan(images: &mut Assets<Image>) -> Characters {
             let text = std::fs::read_to_string(dir.join("character.cfg")).unwrap_or_default();
             let name = cfg(&text, "name").unwrap_or_else(|| id.clone());
             let side = cfg_side(&text);
+            let voice = cfg(&text, "voice").filter(|v| valid_id(v));
             let portrait = std::fs::read(dir.join("portrait.png")).ok().and_then(|bytes| {
                 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
                 Image::from_buffer(&bytes, ImageType::Extension("png"), CompressedImageFormats::NONE, true, ImageSampler::linear(), bevy::asset::RenderAssetUsages::default()).ok()
             }).map(|img| images.add(img));
-            list.push(Entry { id, name, dir, portrait, side });
+            list.push(Entry { id, name, dir, portrait, side, voice });
         }
     }
     list.sort_by(|a, b| a.id.cmp(&b.id));
