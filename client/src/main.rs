@@ -82,6 +82,9 @@ fn game_dir() -> PathBuf {
     net::gamefiles::data_dir()
 }
 
+/// Bevy task pool threads by default (see the TaskPoolPlugin below).
+const THREADS: usize = 3;
+
 fn main() {
     // NVIDIA's Vulkan on Wayland (driver 615, KDE) kills the game with "explicit sync is used,
     // but no buffer is attached" when the window goes fullscreen or is resized; its own switch
@@ -98,9 +101,11 @@ fn main() {
                 // Shrink audio space so rodio's 1/d^2 loudness never kicks in: it only pans,
                 // and `sound` applies GoldSrc's own distance falloff.
                 .set(bevy::audio::AudioPlugin { default_spatial_scale: bevy::audio::SpatialScale::new(1.0 / 4096.0), ..default() })
-                // BOOTLEG16_THREADS=n: how many threads Bevy's task pools use (default: one per core).
+                // How many threads Bevy's task pools use: 3, or BOOTLEG16_THREADS=n. One per core
+                // (Bevy's default, 8 here) spent most of its time handing tiny systems between
+                // threads: twice the CPU and fewer frames (53 vs 61 FPS) than 2 or 3 threads.
                 .set(bevy::app::TaskPoolPlugin {
-                    task_pool_options: std::env::var("BOOTLEG16_THREADS").ok().and_then(|v| v.parse().ok()).map_or_else(Default::default, bevy::app::TaskPoolOptions::with_num_threads),
+                    task_pool_options: bevy::app::TaskPoolOptions::with_num_threads(std::env::var("BOOTLEG16_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(THREADS)),
                 }),
         )
         // GoldSrc lighting is fully baked into lightmaps; no extra ambient.
