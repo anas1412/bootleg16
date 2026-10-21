@@ -61,8 +61,10 @@ Linux). For now it plays on the CS 1.6 files from the user's own install. It run
 
 ## How fidelity is checked
 
-- Facts come from ReGameDLL (GPL, used for facts only, never code) and from disassembling
-  CS's `client.so` with `objdump`. It has DWARF symbols.
+- Facts come from ReGameDLL (GPL, used for facts only, never code) and from decompiling CS's
+  `client.so` and `cs.so` (both have DWARF symbols) with REA + Ghidra: `~/tools/cs16/dec.sh
+  client.so V_CalcBob` writes `~/tools/cs16/dec/client_V_CalcBob.c` (`source ~/tools/rea-env.sh`
+  first; Ghidra and Java 21 are in `~/tools`). Facts only: never paste decompiled code.
   - `EV_Fire*`: sound attenuations.
   - `EV_HLDM_PlayTextureSound` and `GunshotDecalTrace`: impact sounds and decals.
   - `CGameStudioModelRenderer`: how player models are posed and lit.

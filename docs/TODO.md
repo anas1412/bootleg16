@@ -120,7 +120,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] One mixer for everything: game sounds, map sounds, UI tones and voice each play their own
       way now (falloff written twice). One play path, one listener
 - [ ] Volume buses with Settings sliders: master, effects, ambience, UI, assistant, voice
-- [ ] Sound channels as GoldSrc (per player: weapon, body, voice, item): a new sound cuts the old
+- [ ] Sound channels as GoldSrc (per player: weapon, body, voice, item): a new sound cuts the old. Note (2026-10-21, HUD_StudioEvent): CS 1.6 plays the gun model's sounds (event 5004) as one-shots at a place, so a reload sound that has started keeps playing after a switch in CS too; later ones never fire because the animation changed (we do the same)
       one on its channel (switching weapons mid-reload still plays the reload now)
 - [ ] Voice limit: cap how many sounds play at once, drop the quietest/oldest (a 10-player
       fight can spawn hundreds now)
@@ -128,7 +128,7 @@ land, and add new ones here instead of leaving them only in chat.
       so spectating hears from the wrong place
 - [ ] Volume changes reach sounds already playing (only map ambience does now)
 - [ ] Room reverb per area as CS 1.6 (`env_sound` room types in the maps: tunnels, open air)
-- [ ] Footsteps may use the wrong sound (reported in play, not confirmed): check the surface
+- [x] Footsteps compared with CS 1.6 (2026-10-21): timings, volumes and the surface table match; the surface lookup was fixed (`2035856`). Was: Footsteps may use the wrong sound (reported in play, not confirmed): check the surface
       material lookup and the files per material against CS
 
 ### Movement leftovers (`docs/MOVEMENT.md`)
@@ -143,7 +143,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [x] Map props in the pool maps: env_glow, env_spark, infodecal (no env_model/cycler in them)
 - [ ] Switching weapons briefly shows a character model on screen (a third-person model
       drawn in view for a frame or so)
-- [ ] Smoke grenade cloud is far too transparent: should block sight like CS 1.6's
+- [x] Smoke as CS 1.6 (`5bed563`, not yet seen on screen). Was: Smoke grenade cloud is far too transparent: should block sight like CS 1.6's
 
 ### UI (Interference: docs/UI.md, design/mockups/ui is the spec)
 - [x] Scoreboard data: `Score` has assists, MVPs, headshots, damage and rounds (ADR), server-measured
@@ -193,6 +193,11 @@ land, and add new ones here instead of leaving them only in chat.
 - Aim checks (`aimcheck.rs`): reaction times are whole ticks (15.6 ms steps at 64) and the flick window (`FLICK_TICKS`, 8 inputs) is twice as long in time at 64. Retune against real players.
 - Lobby: servers at different rates must not share a queue unless the lobby knows each server's rate.
 - Not done: sim and net test loops still count ticks as 128 (`net/tests/`, `sim` tests); only the multiplayer test runs at 64. README/NETWORKING.md need `--tick`.
+
+## Compared with CS 1.6 (decompiled with REA, 2026-10-21)
+- Done: footsteps (`PM_UpdateStepSound`, `PM_PlayStepSound`, `PM_CatagorizeTextureType`), smoke (`CreateSmokePop`, `CreateGasSmoke`, `CPartSmokeGrenade`), view bob and stair smoothing (`V_CalcBob`, `V_CalcNormalRefdef`: we had neither).
+- Decide: the crosshair. CS 1.6's (`CHudAmmo::DrawCrosshair`) is not the real spread: a per-weapon gap that each shot pushes out (capped at 15), shrinking by 1.3% + 0.1 per frame, doubled in the air, x1.5 when moving faster than the weapon's limit, halved crouched; its lines grow with it and it fades to 120 alpha while firing. Ours shows the real spread of the next shot. Pick one (the HUD belongs to the UI session).
+- Not seen on screen yet: the new smoke, bob and stair smoothing.
 
 ## Window and settings (2026-10-18)
 - Display: a window at a chosen size (Settings, Window size: 720p to 4K) or borderless (no frame, screen-sized; Settings or Alt+Enter), never the compositor's fullscreen mode (it took KDE down on the NVIDIA+Intel laptop, see GOTCHAS). Borderless is untested on that laptop: default is still a 1920x1080 window until it is, Settings has a row (`client/src/window.rs`). Default window 1920x1080.
