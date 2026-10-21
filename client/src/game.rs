@@ -355,7 +355,7 @@ fn chase(world: &sim::collision::World, origin: [f32; 3], yaw: f32, front_first:
     (spot, eye)
 }
 
-fn move_camera(
+pub(crate) fn move_camera(
     time: Res<Time>,
     fixed: Res<Time<Fixed>>,
     keys: Res<ButtonInput<KeyCode>>,
