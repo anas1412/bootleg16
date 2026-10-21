@@ -197,13 +197,16 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 let file = sounds.pick(&["player/die1.wav", "player/die2.wav", "player/die3.wav", "player/death6.wav"]);
                 plays.push(Play { file, at, volume: 1.0, attn: ATTN_NORM, pitch: 1.0 });
             }
+            // HE: `TE_EXPLOSION` without its no-sound flag, so the engine's own blast (explode3-5,
+            // full volume, ATTN 0.3); the debris after it is `explosions`.
             Cue::Explosion { at } => {
-                let file = sounds.pick(&["weapons/hegrenade-1.wav", "weapons/hegrenade-2.wav"]);
+                let file = sounds.pick(&["weapons/explode3.wav", "weapons/explode4.wav", "weapons/explode5.wav"]);
                 plays.push(Play { file, at: Some(at), volume: 1.0, attn: ATTN_FAR, pitch: 1.0 });
             }
+            // `CGrenade::Explode` (the flashbang): one of two at 0.55, ATTN_NORM.
             Cue::Flash { at } => {
                 let file = sounds.pick(&["weapons/flashbang-1.wav", "weapons/flashbang-2.wav"]);
-                plays.push(Play { file, at: Some(at), volume: 0.9, attn: ATTN_FAR, pitch: 1.0 });
+                plays.push(Play { file, at: Some(at), volume: 0.55, attn: ATTN_NORM, pitch: 1.0 });
             }
             Cue::Smoke { at } => plays.push(Play { file: "weapons/sg_explode.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
             // `CGrenade::BounceSound`: one of three hits at 0.25. (An HE also starts he_bounce,
