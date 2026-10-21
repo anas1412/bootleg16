@@ -21,6 +21,22 @@ fn key(name: &str) -> String {
     }
 }
 
+/// CS's hands have a thumb and one finger of two joints each (Finger0, 01, 1, 11); ours have
+/// three fingers of three. The middle finger curls like the index (Finger2x as Finger1x), and
+/// each fingertip (x2) like the joint before it, so a hand closes round the gun.
+fn finger_stand_in(k: &str) -> String {
+    let Some(at) = k.find("finger") else { return k.to_string() };
+    let (head, digits) = k.split_at(at + "finger".len());
+    let mut d: Vec<char> = digits.chars().collect();
+    if let Some(f) = d.first_mut().filter(|f| ('2'..='4').contains(*f)) {
+        *f = '1';
+    }
+    if let Some(j) = d.get_mut(1).filter(|j| **j == '2') {
+        *j = '1';
+    }
+    format!("{head}{}", d.into_iter().collect::<String>())
+}
+
 /// GoldSrc's Euler angles (x roll, y pitch, z yaw; radians) as a rotation.
 fn cs_angles(a: [f32; 3]) -> Quat {
     let (sy, cy) = (a[2] * 0.5).sin_cos();
@@ -69,7 +85,7 @@ impl Rig {
         }
         let bind: Pose = ch.bind_pose().into_iter().map(|(q, p)| (Quat::from_array(q).normalize(), Vec3::from_array(p))).collect();
         let cs_keys: Vec<String> = cs.bones.iter().map(|b| key(&b.name)).collect();
-        let twin: Vec<Option<usize>> = ch.bones.iter().map(|b| cs_keys.iter().position(|k| *k == key(&b.name))).collect();
+        let twin: Vec<Option<usize>> = ch.bones.iter().map(|b| [key(&b.name), finger_stand_in(&key(&b.name))].iter().find_map(|k| cs_keys.iter().position(|c| c == k))).collect();
         let parent: Vec<Option<usize>> = ch.bones.iter().map(|b| usize::try_from(b.parent).ok()).collect();
         let local = ch.bones.iter().map(|b| (Quat::from_array(b.quat).normalize(), Vec3::from_array(b.pos))).collect();
 
@@ -146,6 +162,10 @@ mod tests {
         assert_eq!(key("ValveBiped.Bip01_Spine4"), key("Bip01 Spine3"));
         assert_eq!(key("ValveBiped.Bip01_Head1"), key("Bip01 Head"));
         assert_ne!(key("ValveBiped.Bip01_L_Hand"), key("Bip01 R Hand"));
+        assert_eq!(finger_stand_in(&key("ValveBiped.Bip01_L_Finger22")), key("Bip01 L Finger11"));
+        assert_eq!(finger_stand_in(&key("ValveBiped.Bip01_R_Finger2")), key("Bip01 R Finger1"));
+        assert_eq!(finger_stand_in(&key("ValveBiped.Bip01_R_Finger02")), key("Bip01 R Finger01"));
+        assert_eq!(finger_stand_in(&key("ValveBiped.Bip01_R_Hand")), key("Bip01 R Hand"));
     }
 
     /// With the CS skeleton at rest, each twinned character bone points where its twin does,
