@@ -60,18 +60,22 @@ struct OtherPlayers {
     last_hit: HashMap<u8, HitGroup>,
 }
 
-fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>, characters: Res<crate::characters::Characters>) {
+fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>) {
     let Some(cs) = cache.get("player/arctic/arctic.mdl", &mut images, &mut materials) else {
         error!("the game data is missing models/player/arctic/arctic.mdl: players can't be drawn");
         return;
     };
-    commands.insert_resource(OtherPlayers { cs, looks: vec![None; characters.0.len()], dying: HashSet::new(), last_hit: HashMap::new() });
+    commands.insert_resource(OtherPlayers { cs, looks: Vec::new(), dying: HashSet::new(), last_hit: HashMap::new() });
 }
 
 impl OtherPlayers {
     /// Character `i`, loaded on first use (None if its files don't load).
     #[allow(clippy::too_many_arguments)]
     fn look(&mut self, i: usize, characters: &crate::characters::Characters, meshes: &mut Assets<Mesh>, bindposes: &mut Assets<SkinnedMeshInverseBindposes>, images: &mut Assets<Image>, materials: &mut Assets<crate::studio::StudioMaterial>) -> Option<Arc<crate::characters::look::Look>> {
+        // the list is read at startup and may not have existed yet when this was made
+        if self.looks.len() < characters.0.len() {
+            self.looks.resize(characters.0.len(), None);
+        }
         if self.looks.get(i)?.is_none() {
             let entry = characters.0.get(i)?;
             match crate::characters::look::Look::load(&entry.dir, &self.cs.model, meshes, bindposes, images, materials) {

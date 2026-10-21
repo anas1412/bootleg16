@@ -85,11 +85,15 @@ fn spawn(mut commands: Commands, kit: Res<Kit>) {
                 });
                 score(row, T_COLOR, false);
             });
-            col.spawn(Node { width: vh(332.0), justify_content: JustifyContent::SpaceBetween, ..default() }).with_children(|row| {
-                for team in [Team::Ct, Team::T] {
-                    row.spawn(Node { column_gap: vh(4.0), ..default() }).with_children(|t| {
+            // each team's ticks centred under its own score (same widths as the boxes above)
+            col.spawn(Node { column_gap: vh(4.0), ..default() }).with_children(|row| {
+                for (k, team) in [Team::Ct, Team::T].into_iter().enumerate() {
+                    if k == 1 {
+                        row.spawn(Node { width: vh(148.0), ..default() });
+                    }
+                    row.spawn(Node { width: vh(88.0), justify_content: JustifyContent::Center, column_gap: vh(4.0), ..default() }).with_children(|t| {
                         for i in 0..5 {
-                            t.spawn((Tick(team, i), Node { width: vh(28.0), height: vh(4.0), border_radius: BorderRadius::all(px(2)), ..default() }, BackgroundColor(Color::NONE)));
+                            t.spawn((Tick(team, i), Node { width: vh(14.0), height: vh(4.0), border_radius: BorderRadius::all(px(2)), display: Display::None, ..default() }, BackgroundColor(Color::NONE)));
                         }
                     });
                 }
@@ -208,14 +212,15 @@ fn top_bar(
 }
 
 /// One tick per player under each score, lit while they're alive.
-fn ticks(w: Res<Walker>, mut ticks: Query<(&Tick, &mut BackgroundColor)>) {
-    for (Tick(team, i), mut bg) in &mut ticks {
-        let c = match w.client.scores.iter().filter(|s| s.team == *team).nth(*i) {
-            Some(p) if p.alive => side_color(*team),
-            Some(_) => LINE_2,
-            None => Color::NONE,
-        };
-        bg.set_if_neq(BackgroundColor(c));
+fn ticks(w: Res<Walker>, mut ticks: Query<(&Tick, &mut BackgroundColor, &mut Node)>) {
+    for (Tick(team, i), mut bg, mut node) in &mut ticks {
+        let player = w.client.scores.iter().filter(|s| s.team == *team).nth(*i);
+        // no player: no tick, so the ones there stay centred
+        let display = if player.is_some() { Display::Flex } else { Display::None };
+        if node.display != display {
+            node.display = display;
+        }
+        bg.set_if_neq(BackgroundColor(if player.is_some_and(|p| p.alive) { side_color(*team) } else { LINE_2 }));
     }
 }
 
