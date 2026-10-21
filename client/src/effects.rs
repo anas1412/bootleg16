@@ -245,6 +245,17 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                 }
             }
             GameEvent::GrenadeBounce { kind, at } => w.cues.push(sound::Cue::Bounce { kind, at }),
+            // CS: the throw animation, and the thrower's team hears the radio call
+            // (`%!MRAD_FIREINHOLE`, the same file for both teams).
+            GameEvent::Thrown { player, .. } => {
+                if Some(player) != me {
+                    anims.write(PlayerAnim::Shot(player, false));
+                }
+                let team = if Some(player) == me { Some(w.client.team()) } else { w.client.others().iter().find(|o| o.id == player).map(|o| o.team) };
+                if team == Some(w.client.team()) {
+                    w.cues.push(sound::Cue::File("radio/ct_fireinhole.wav".into()));
+                }
+            }
             GameEvent::Kill { killer, victim, weapon, headshot } => {
                 let at = if Some(victim) == me { None } else { w.client.others().iter().find(|o| o.id == victim).map(|o| o.origin) };
                 w.cues.push(sound::Cue::Death { at });

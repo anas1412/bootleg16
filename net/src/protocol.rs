@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 33;
+pub const PROTOCOL_VERSION: u32 = 34;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -215,6 +215,8 @@ pub enum GameEvent {
     /// with that name play (train's jet fly-by, birds, dogs).
     Fired { name: String },
     GrenadeBounce { kind: sim::grenades::Kind, at: [f32; 3] },
+    /// Someone threw a grenade (their throw animation; their team hears "Fire in the hole!").
+    Thrown { player: u8, kind: sim::grenades::Kind },
     /// `weapon` None = fell to death.
     Kill { killer: u8, victim: u8, weapon: Option<Id>, headshot: bool },
     /// An HE went off here.

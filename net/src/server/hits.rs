@@ -72,6 +72,7 @@ impl Server {
         if let Some((kind, angles)) = p.fired.throw {
             let now = self.tick as f64 * self.rate.tick() as f64;
             self.grenades.push(sim::grenades::throw(kind, p.shooter, p.eye, angles[0], angles[1], p.velocity, now));
+            self.events.push(GameEvent::Thrown { player: p.shooter, kind });
         }
         let targets: Vec<Target> = self.rewind(p.view_tick).into_iter().filter(|t| t.id != p.shooter).collect();
         let mut hits: Vec<(u8, f32, HitGroup, Id, Option<[f32; 3]>)> = Vec::new();

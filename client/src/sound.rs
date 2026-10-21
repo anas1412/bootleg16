@@ -206,9 +206,11 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 plays.push(Play { file, at: Some(at), volume: 0.9, attn: ATTN_FAR, pitch: 1.0 });
             }
             Cue::Smoke { at } => plays.push(Play { file: "weapons/sg_explode.wav".into(), at: Some(at), volume: 1.0, attn: ATTN_NORM, pitch: 1.0 }),
-            Cue::Bounce { kind, at } => {
-                let file = if kind == Kind::He { "weapons/he_bounce-1.wav".into() } else { sounds.pick(&["weapons/grenade_hit1.wav", "weapons/grenade_hit2.wav", "weapons/grenade_hit3.wav"]) };
-                plays.push(Play { file, at: Some(at), volume: 0.5, attn: ATTN_NORM, pitch: 1.0 });
+            // `CGrenade::BounceSound`: one of three hits at 0.25. (An HE also starts he_bounce,
+            // but on the same channel the hit right after it replaces it.)
+            Cue::Bounce { at, .. } => {
+                let file = sounds.pick(&["weapons/grenade_hit1.wav", "weapons/grenade_hit2.wav", "weapons/grenade_hit3.wav"]);
+                plays.push(Play { file, at: Some(at), volume: 0.25, attn: ATTN_NORM, pitch: 1.0 });
             }
             Cue::Break { material, at } => {
                 use sim::breakables::Material::*;
