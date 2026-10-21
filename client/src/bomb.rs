@@ -1,5 +1,5 @@
 //! The bomb in the world: the backpack when it's dropped, the planted C4 with its blinking
-//! light and beeps that speed up as it runs down.
+//! light and beeps that speed up as it runs down; and defuse kits lying where a CT died.
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
 use crate::models::{self, Parts};
@@ -11,7 +11,7 @@ pub struct BombPlugin;
 
 impl Plugin for BombPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (show_bomb, beeps).in_set(Frame::World));
+        app.add_systems(Update, (show_bomb, beeps, show_kits).in_set(Frame::World));
     }
 }
 
@@ -20,6 +20,10 @@ struct BombView;
 
 #[derive(Component)]
 struct BombLight;
+
+/// A defuse kit on the floor (`w_thighpack.mdl`), at this spot.
+#[derive(Component)]
+struct KitView([i32; 3]);
 
 /// The LED glow's size (units).
 const GLOW_SIZE: f32 = 0.3 * 64.0;
@@ -80,6 +84,38 @@ fn show_bomb(
     if matches!(want, Shown::Planted(_)) {
         let l = commands.spawn((BombLight, Mesh3d(light.clone()), MeshMaterial3d(red.clone()), Transform::from_xyz(0.0, 5.0, 0.0), Visibility::Hidden)).id();
         commands.entity(parent).add_child(l);
+    }
+}
+
+/// Defuse kits on the floor follow the server's list.
+#[allow(clippy::too_many_arguments)]
+fn show_kits(
+    mut commands: Commands,
+    w: Res<Walker>,
+    mut cache: ResMut<models::ModelCache>,
+    mut images: ResMut<Assets<Image>>,
+    mut studio: ResMut<Assets<crate::studio::StudioMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut parts: Local<Option<Parts>>,
+    views: Query<(Entity, &KitView)>,
+) {
+    let key = |at: [f32; 3]| at.map(|v| v.round() as i32);
+    let want: Vec<[i32; 3]> = w.client.kits.iter().map(|k| key(*k)).collect();
+    for (e, v) in &views {
+        if !want.contains(&v.0) {
+            commands.entity(e).despawn();
+        }
+    }
+    let parts = parts.get_or_insert_with(|| match cache.get("w_thighpack.mdl", &mut images, &mut studio) {
+        Some(m) => models::static_parts(&m, &m.model.pose(0, 0, 0.0), &mut meshes),
+        None => Vec::new(),
+    });
+    for at in &w.client.kits {
+        if views.iter().any(|(_, v)| v.0 == key(*at)) {
+            continue;
+        }
+        let e = commands.spawn((KitView(key(*at)), Transform::from_translation(Vec3::from(map::to_y_up(*at))), Visibility::default(), DespawnOnExit(AppState::InGame))).id();
+        models::spawn_lit(&mut commands, e, parts, &mut studio);
     }
 }
 

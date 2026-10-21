@@ -40,6 +40,7 @@ impl Server {
         self.grenades.clear();
         self.smokes.clear();
         self.ground.clear();
+        self.kits.clear();
         self.bomb = Bomb::None;
         self.last_seen.clear();
         self.sightings = Default::default();

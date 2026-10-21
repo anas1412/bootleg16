@@ -95,6 +95,8 @@ pub struct Client {
     pub smokes: Vec<SmokeNet>,
     /// Guns on the ground.
     pub ground: Vec<(sim::weapons::Id, [f32; 3])>,
+    /// Defuse kits on the floor.
+    pub kits: Vec<[f32; 3]>,
     /// Scoreboard as last sent.
     pub scores: Vec<Score>,
     /// Every round so far this match (winner, how), from the server.
@@ -159,6 +161,7 @@ impl Client {
             grenades: Vec::new(),
             smokes: Vec::new(),
             ground: Vec::new(),
+            kits: Vec::new(),
             scores: Vec::new(),
             round_history: Vec::new(),
             practice: false,
@@ -316,7 +319,7 @@ impl Client {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
             }
-            ServerMsg::Snapshot { tick, ack, players, you, doors, loadout, events, reliable, broken, grenades, smokes, ground, round, bomb, me } => {
+            ServerMsg::Snapshot { tick, ack, players, you, doors, loadout, events, reliable, broken, grenades, smokes, ground, kits, round, bomb, me } => {
                 let Status::Connected { id } = self.status else { return };
                 if tick <= self.latest_tick {
                     return; // old or duplicate
@@ -341,6 +344,7 @@ impl Client {
                 self.grenades = grenades;
                 self.smokes = smokes;
                 self.ground = ground;
+                self.kits = kits;
                 self.round = round;
                 self.bomb = bomb;
                 self.me_info = me;

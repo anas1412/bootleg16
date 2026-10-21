@@ -154,6 +154,7 @@ impl Server {
             c.purchases.clear(); // a new round: last round's buys are yours for good
         }
         self.ground.clear();
+        self.kits.clear();
         self.grenades.clear();
         self.smokes.clear();
         self.restore_pieces();

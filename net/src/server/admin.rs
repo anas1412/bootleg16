@@ -23,6 +23,14 @@ impl Server {
         }
     }
 
+    /// Kill a player as the world would (tests and admin tools): drops their gear like any death.
+    pub fn slay(&mut self, id: u8) {
+        if let Some(c) = self.clients.values_mut().find(|c| c.id == id && c.vitals.alive()) {
+            c.vitals.health = 0.0;
+            self.events.push(GameEvent::Kill { killer: WORLD, victim: id, weapon: None, headshot: false });
+        }
+    }
+
     /// Move a player (tests and admin tools); their client corrects to it.
     pub fn teleport(&mut self, id: u8, origin: [f32; 3]) {
         if let Some(c) = self.clients.values_mut().find(|c| c.id == id) {

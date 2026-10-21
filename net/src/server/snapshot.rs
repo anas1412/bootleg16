@@ -104,6 +104,7 @@ impl Server {
                     grenades: grenades.clone(),
                     smokes: smokes.clone(),
                     ground: ground.clone(),
+                    kits: self.kits.clone(),
                     round,
                     bomb,
                     me,

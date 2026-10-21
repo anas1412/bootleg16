@@ -22,6 +22,21 @@ impl Server {
                 }
             }
         }
+        // A CT without a kit walking over one takes it.
+        let mut k = 0;
+        while k < self.kits.len() {
+            let at = self.kits[k];
+            let taker = self.clients.values_mut().find(|c| {
+                let (o, h) = (c.state.movement.origin, c.state.movement.hull());
+                c.team == Team::Ct && c.vitals.alive() && !c.defuse_kit && (0..3).all(|i| at[i] >= o[i] + h.mins()[i] - 16.0 && at[i] <= o[i] + h.maxs()[i] + 16.0)
+            });
+            if let Some(c) = taker {
+                c.defuse_kit = true;
+                self.kits.swap_remove(k);
+            } else {
+                k += 1;
+            }
+        }
         let tick = self.tick;
         let mut i = 0;
         while i < self.ground.len() {
@@ -41,13 +56,25 @@ impl Server {
         }
     }
 
-    /// A player died: their primary (or pistol) falls where they were.
+    /// A player died (CS 1.6 `PackDeadPlayerItems`): their best gun (primary, else the pistol;
+    /// never grenades) falls where they were, and their defuse kit
+    /// (CS 1.6 drops it as `item_thighpack`; a CT without one picks it up).
     pub(super) fn drop_on_death(&mut self, victim: u8) {
+        let Some(c) = self.clients.values().find(|c| c.id == victim) else { return };
+        if c.defuse_kit {
+            let o = c.state.movement.origin;
+            let floor = self.world.trace_line(o, [o[0], o[1], o[2] - 4096.0]).end;
+            self.kits.push(floor);
+        }
         let Some(c) = self.clients.values_mut().find(|c| c.id == victim) else { return };
+        c.defuse_kit = false;
         let l = &mut c.state.loadout;
         let gun = l.primary.take().or_else(|| l.secondary.take());
         if let Some(gun) = gun {
-            self.ground.push(GroundGun { gun, origin: c.state.movement.origin, velocity: [0.0, 0.0, -1.0], dropper: victim, dropper_wait_until: 0 });
+            // (`PackPlayerItem`: it flies on with 1.2 x the player's last velocity)
+            let v = c.state.movement.velocity;
+            let velocity = [v[0] * 1.2, v[1] * 1.2, v[2] * 1.2 - 1.0];
+            self.ground.push(GroundGun { gun, origin: c.state.movement.origin, velocity, dropper: victim, dropper_wait_until: 0 });
         }
     }
 }

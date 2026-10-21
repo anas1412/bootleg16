@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 36;
+pub const PROTOCOL_VERSION: u32 = 37;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -403,6 +403,8 @@ pub enum ServerMsg {
         smokes: Vec<SmokeNet>,
         /// Guns lying on the ground.
         ground: Vec<(Id, [f32; 3])>,
+        /// Defuse kits lying where a CT died with one.
+        kits: Vec<[f32; 3]>,
         round: RoundNet,
         bomb: BombNet,
         me: Me,

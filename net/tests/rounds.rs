@@ -241,3 +241,27 @@ fn practice_hands_the_strays_the_bomb_and_you_may_defuse_it_yourself() {
     wait(&mut g, 3.5, Input::default(), Input::default(), &mut ev);
     assert!(g.server.player_state(a).unwrap().loadout.c4, "handed another one");
 }
+
+#[test]
+fn a_dead_cts_defuse_kit_drops_and_another_ct_picks_it_up() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, quick());
+    g.connect_as(Some(Team::Ct), Some(Team::Ct));
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
+    let mut ev = Vec::new();
+    while g.a.round.phase == Phase::Over {
+        wait(&mut g, 0.05, Input::default(), Input::default(), &mut ev);
+    }
+    g.a.buy(net::protocol::BuyItem::DefuseKit);
+    wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
+    assert!(g.a.me_info.defuse_kit, "bought a kit");
+    let at = g.server.player(a).unwrap().origin;
+    g.server.slay(a);
+    wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
+    assert_eq!(g.b.kits.len(), 1, "the kit lies where A died");
+    assert!(!g.b.me_info.defuse_kit);
+    g.server.teleport(b, at);
+    wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
+    assert!(g.b.me_info.defuse_kit, "B picked it up");
+    assert!(g.b.kits.is_empty());
+}

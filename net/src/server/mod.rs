@@ -194,6 +194,8 @@ pub struct Server {
     /// Smoke clouds: where and until when (server seconds).
     smokes: Vec<([f32; 3], f64)>,
     ground: Vec<GroundGun>,
+    /// Defuse kits on the floor (a CT died with one).
+    kits: Vec<[f32; 3]>,
     /// Kill events in `events` already counted (events are cleared at each snapshot).
     kills_settled: usize,
     round: Match,
@@ -257,6 +259,7 @@ impl Server {
             grenades: Vec::new(),
             smokes: Vec::new(),
             ground: Vec::new(),
+            kits: Vec::new(),
             kills_settled: 0,
             round: Match::new(MatchConfig::default(), rate.hz()),
             rate,

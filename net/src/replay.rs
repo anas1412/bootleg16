@@ -118,6 +118,7 @@ impl Replay {
             grenades: f.grenades,
             smokes: f.smokes,
             ground: f.ground,
+            kits: Vec::new(),
             round: f.round,
             bomb: f.bomb,
             me: crate::protocol::Me { money: 0, limits: Default::default(), can_buy: false, defuse_kit: false },
