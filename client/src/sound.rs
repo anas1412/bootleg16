@@ -158,9 +158,16 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 }
             }
             Cue::Footstep { feet, who, step } => {
-                // The surface under the feet decides the sound and its volume.
-                let below = [feet[0], feet[1], feet[2] - 64.0];
-                let material = w.client.world.texture_at(feet, below).map(|t| sounds.materials.kind(t)).unwrap_or('C');
+                // The surface under the feet decides the sound and its volume. CS 1.6
+                // (`PM_CatagorizeTextureType`) traces 64 units down from inside the player, not
+                // from the soles (a trace starting on the floor can miss it: concrete), and reads
+                // the texture of what you stand on (a crate, a grate entity) as well as the world.
+                let start = [feet[0], feet[1], feet[2] + 18.0];
+                let end = [feet[0], feet[1], start[2] - 64.0];
+                let world = &w.client.world;
+                let hit = world.trace_line(start, end);
+                let texture = if hit.fraction < 1.0 && hit.model != 0 { world.texture_of(hit.model, start, end) } else { world.texture_at(start, end) };
+                let material = texture.map(|t| sounds.materials.kind(t)).unwrap_or('C');
                 let left = sounds.left_foot.entry(who).or_insert(false);
                 *left = !*left;
                 let left = *left as u32;
