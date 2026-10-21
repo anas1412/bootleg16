@@ -133,6 +133,8 @@ pub struct Client {
     pub round: RoundNet,
     pub bomb: BombNet,
     pub me_info: Me,
+    /// Which way the hits we took came from, not yet shown (`take_hurt_from`).
+    hurt_from: Vec<f32>,
 }
 
 impl Client {
@@ -181,7 +183,8 @@ impl Client {
             wanted_character: None,
             round: RoundNet { phase: crate::rounds::Phase::Warmup, round: 0, score: [0; 2], left: 0.0, stage: Stage::Match, abandoned: [false; 2], vote: None, paused: false },
             bomb: BombNet::None,
-            me_info: Me { money: 0, limits: Default::default(), can_buy: false, buy_left: None, defuse_kit: false, protected: false },
+            hurt_from: Vec::new(),
+            me_info: Me { money: 0, limits: Default::default(), can_buy: false, buy_left: None, defuse_kit: false, protected: false, hurt_from: Vec::new() },
         })
     }
 
@@ -201,6 +204,12 @@ impl Client {
     }
 
     /// Kill feed, hits, shots from the server since the last call.
+    /// Hits we took since the last call: which way each came from, a world yaw (GoldSrc
+    /// degrees) from us to the shooter or the blast, even when we can't see them.
+    pub fn take_hurt_from(&mut self) -> Vec<f32> {
+        std::mem::take(&mut self.hurt_from)
+    }
+
     pub fn take_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(&mut self.events)
     }
@@ -349,6 +358,7 @@ impl Client {
                 self.kits = kits;
                 self.round = round;
                 self.bomb = bomb;
+                self.hurt_from.extend(me.hurt_from.iter().copied());
                 self.me_info = me;
 
                 // Correct our prediction: take the server's state, replay what it hasn't run yet.

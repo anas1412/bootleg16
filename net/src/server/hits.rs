@@ -41,6 +41,7 @@ impl Server {
                             c.stats.hurt_by.push((g.owner, health.min(c.vitals.health)));
                         }
                         let killed = c.vitals.hurt(health, armor);
+                        c.hurt_from.push(blast);
                         self.events.push(GameEvent::Damage { attacker: g.owner, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion, at: None });
                         if killed {
                             c.respawn_at = Some(tick + if c.bot { self.rate.secs(DUMMY_RESPAWN_SECS) } else { self.rate.secs(self.rules.respawn_secs) });
@@ -154,6 +155,7 @@ impl Server {
                 c.stats.hurt_by.push((p.shooter, health.min(c.vitals.health)));
             }
             let killed = c.vitals.hurt(health, armor);
+            c.hurt_from.push(p.eye);
             self.events.push(GameEvent::Damage { attacker: p.shooter, victim, amount: health, group, sound, at });
             if killed {
                 c.respawn_at = Some(tick + if c.bot { self.rate.secs(DUMMY_RESPAWN_SECS) } else { self.rate.secs(self.rules.respawn_secs) });

@@ -120,6 +120,8 @@ struct Remote {
     points: i32,
     /// Deathmatch spawn protection: no damage until this tick, or until they move or shoot.
     protected_until: u32,
+    /// Where the hits they took since the last snapshot came from (`Me::hurt_from`).
+    hurt_from: Vec<[f32; 3]>,
     /// Scoreboard stats (see `Score`).
     stats: Stats,
     /// What they bought this round, oldest first (`buy::undo_buys` sells it back).
@@ -562,6 +564,7 @@ impl Remote {
             kills: 0,
             points: 0,
             protected_until: 0,
+            hurt_from: Vec::new(),
             deaths: 0,
             stats: Stats::default(),
             anim: sim::anim::Anim::new(0.0),

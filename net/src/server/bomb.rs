@@ -186,6 +186,7 @@ impl Server {
             }
             let (health, armor) = combat::explosion_damage(&c.vitals, dmg);
             let killed = c.vitals.hurt(health, armor);
+            c.hurt_from.push(at);
             self.events.push(GameEvent::Damage { attacker: WORLD, victim: c.id, amount: health, group: HitGroup::Generic, sound: HitSound::Explosion, at: None });
             if killed {
                 self.events.push(GameEvent::Kill { killer: WORLD, victim: c.id, weapon: Some(Id::C4), headshot: false });
