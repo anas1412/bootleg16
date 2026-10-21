@@ -60,8 +60,8 @@ struct Looks {
     blood: Handle<StandardMaterial>,
     /// Hot sparks (additive, bright).
     spark: Handle<StandardMaterial>,
-    /// The four wall puff sprites' frames.
-    puffs: Vec<Vec<Handle<Image>>>,
+    /// The four wall puff sprites: frames and width (texels = units at scale 1).
+    puffs: Vec<(Vec<Handle<Image>>, f32)>,
     materials: goldsrc::materials::Materials,
 }
 
@@ -132,7 +132,7 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
         // Additive: their texels are display values (see `explosions`), so no sRGB decode.
         puffs: (1..=4)
             .filter_map(|i| crate::gamefiles::paths(&format!("sprites/wall_puff{i}.spr")).iter().find_map(|p| goldsrc::spr::Sprite::load(p).ok()))
-            .map(|s| s.frames.into_iter().map(|f| images.add(rgba_image(s.width, s.height, f, false, TextureFormat::Rgba8Unorm))).collect())
+            .map(|s| (s.frames.into_iter().map(|f| images.add(rgba_image(s.width, s.height, f, false, TextureFormat::Rgba8Unorm))).collect(), s.width as f32))
             .collect(),
         materials: crate::gamefiles::paths("sound/materials.txt").iter().find_map(|p| std::fs::read_to_string(p).ok()).map(|t| goldsrc::materials::Materials::parse(&t)).unwrap_or_else(|| goldsrc::materials::Materials::parse("")),
     });
@@ -203,8 +203,8 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
                 if !looks.puffs.is_empty() {
                     let sprite = ((noise(k as u32 + 3, salt) * looks.puffs.len() as f32) as usize).min(looks.puffs.len() - 1);
                     let c = tint.map(|v| v / 255.0 * PUFF_AMOUNT);
-                    let material = mats.add(StandardMaterial { base_color: Color::linear_rgb(c[0], c[1], c[2]), base_color_texture: looks.puffs[sprite].first().cloned(), unlit: true, alpha_mode: AlphaMode::Add, ..default() });
-                    let size = 128.0 * scale * (1.0 + 0.5 * noise(k as u32 + 7, salt));
+                    let material = mats.add(StandardMaterial { base_color: Color::linear_rgb(c[0], c[1], c[2]), base_color_texture: looks.puffs[sprite].0.first().cloned(), unlit: true, alpha_mode: AlphaMode::Add, ..default() });
+                    let size = looks.puffs[sprite].1 * scale * (1.0 + 0.5 * noise(k as u32 + 7, salt));
                     commands.spawn((
                         Puff { sprite, age: 0.0, size, vel: n * 25.0, material: material.clone() },
                         Mesh3d(looks.quad.clone()),
@@ -247,7 +247,7 @@ fn puffs(mut commands: Commands, time: Res<Time>, looks: Res<Looks>, cam: Single
     let facing = cam.compute_transform().rotation;
     for (e, mut p, mut tf) in &mut q {
         p.age += dt;
-        let frames = &looks.puffs[p.sprite];
+        let frames = &looks.puffs[p.sprite].0;
         let Some(frame) = frames.get((p.age * PUFF_FPS) as usize) else {
             mats.remove(&p.material);
             commands.entity(e).despawn();

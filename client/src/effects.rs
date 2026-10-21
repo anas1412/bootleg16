@@ -278,6 +278,8 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
             }
             GameEvent::Flash { at, .. } => {
                 w.cues.push(sound::Cue::Flash { at });
+                // CS: a scorch on the floor (`UTIL_DecalTrace`); a flashbang shows no fireball.
+                hits.write(Hit::Scorch { at });
                 w.pending_fx.push(e);
             }
             GameEvent::BombPlanted { at, .. } => {
