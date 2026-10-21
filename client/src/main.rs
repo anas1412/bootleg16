@@ -60,6 +60,7 @@ mod scoreboard;
 mod spectate;
 mod sky;
 mod smoke;
+mod reverb;
 mod sound;
 mod status_screens;
 mod steam;

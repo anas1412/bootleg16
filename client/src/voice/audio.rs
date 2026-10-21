@@ -170,7 +170,14 @@ impl Speakers {
         };
         let mx2 = mixer.clone();
         let mut acc = 0.0f64;
+        // the room you're in echoes voices too (reverb.rs)
+        let mut room = crate::reverb::Reverb::new(rate, crate::reverb::current());
         let mut render = move |len: usize, write: &mut dyn FnMut(usize, f32)| {
+            let now = crate::reverb::current();
+            if (now.size - room.params.size).abs() > 0.05 {
+                room = crate::reverb::Reverb::new(rate, now);
+            }
+            room.params = now;
             let Ok(mut mx) = mx2.lock() else { return };
             for f in 0..len / channels.max(1) {
                 let (mut l, mut r) = (0.0f32, 0.0f32);
@@ -193,7 +200,8 @@ impl Speakers {
                         }
                     }
                 }
-                let (l, r) = (l.clamp(-1.0, 1.0), r.clamp(-1.0, 1.0));
+                let echo = room.process((l + r) * 0.5);
+                let (l, r) = ((l + echo).clamp(-1.0, 1.0), (r + echo).clamp(-1.0, 1.0));
                 for c in 0..channels {
                     write(f * channels + c, if channels == 1 { (l + r) * 0.5 } else if c % 2 == 0 { l } else { r });
                 }

@@ -150,12 +150,13 @@ struct Play {
 }
 
 /// Play this frame's cues.
-fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settings>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>) {
+fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settings>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>, mut wet: ResMut<Assets<crate::reverb::Reverbed>>) {
     let cues = std::mem::take(&mut w.cues);
     if cues.is_empty() {
         return;
     }
     let ear = w.client.me().eye();
+    let room = crate::reverb::current();
     for cue in cues {
         let mut plays: Vec<Play> = Vec::new();
         // Gunshot pitch varies a little, like CS (94 + 0..15 %; the plain USP 87 + 0..18 %).
@@ -309,14 +310,21 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                         continue;
                     }
                     play = play.with_volume(Volume::Linear(gain)).with_spatial(true);
-                    let e = commands.spawn((AudioPlayer(handle), play, Transform::from_translation(Vec3::from(map::to_y_up(at))))).id();
+                    let place = Transform::from_translation(Vec3::from(map::to_y_up(at)));
+                    let e = match reverbed(&handle, room, &assets, &mut wet) {
+                        Some(h) => commands.spawn((AudioPlayer(h), play, place)).id(),
+                        None => commands.spawn((AudioPlayer(handle), play, place)).id(),
+                    };
                     if let Some(c) = p.channel {
                         sounds.weapon_channel.insert(c, e);
                     }
                 }
                 None => {
                     play = play.with_volume(Volume::Linear(settings.volume * p.volume));
-                    let e = commands.spawn((AudioPlayer(handle), play)).id();
+                    let e = match reverbed(&handle, room, &assets, &mut wet) {
+                        Some(h) => commands.spawn((AudioPlayer(h), play)).id(),
+                        None => commands.spawn((AudioPlayer(handle), play)).id(),
+                    };
                     if let Some(c) = p.channel {
                         sounds.weapon_channel.insert(c, e);
                     }
@@ -326,10 +334,16 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
     }
 }
 
+/// The sound through the room's reverb, when the room has any (open air: None, played dry).
+fn reverbed(h: &Handle<AudioSource>, room: crate::reverb::Params, assets: &Assets<AudioSource>, wet: &mut Assets<crate::reverb::Reverbed>) -> Option<Handle<crate::reverb::Reverbed>> {
+    let source = assets.get(h).filter(|_| room.wet > 0.01)?.clone();
+    Some(wet.add(crate::reverb::Reverbed { source, params: room }))
+}
+
 pub struct SoundPlugin;
 
 impl Plugin for SoundPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, play_cues.in_set(Frame::Sound));
+        app.add_plugins(crate::reverb::ReverbPlugin).add_systems(Update, play_cues.in_set(Frame::Sound));
     }
 }

@@ -127,7 +127,7 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Listener is the camera: falloff is worked out from your own body, panning from the camera,
       so spectating hears from the wrong place
 - [ ] Volume changes reach sounds already playing (only map ambience does now)
-- [ ] Room reverb per area as CS 1.6 (`env_sound` room types in the maps: tunnels, open air)
+- [x] Room reverb (2026-10-21, `client/src/reverb.rs`, not heard in game yet): our maps have no `env_sound`, so CS 1.6 plays them dry; ours is automatic like Source/CS2 (rays from the ears every 0.2 s: open sky dry, enclosed spaces echo, bigger rings longer), on game sounds and voice chat. Tune `room_of` by ear.
 - [x] Footsteps compared with CS 1.6 (2026-10-21): timings, volumes and the surface table match; the surface lookup was fixed (`2035856`). Was: Footsteps may use the wrong sound (reported in play, not confirmed): check the surface
       material lookup and the files per material against CS
 
