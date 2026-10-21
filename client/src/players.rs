@@ -22,6 +22,7 @@ impl Plugin for PlayersPlugin {
             .add_systems(OnEnter(AppState::InGame), |mut l: ResMut<OtherPlayers>| {
                 l.dying.clear();
                 l.last_hit.clear();
+                l.blasted.clear();
             })
             .add_systems(Update, (clear_corpses, anim_events, draw_others, animate).chain().in_set(Frame::World).run_if(resource_exists::<OtherPlayers>));
     }
@@ -42,6 +43,8 @@ pub enum PlayerAnim {
     /// They fired (silenced: no muzzle flash).
     Shot(u8, bool),
     Hurt(u8, HitGroup),
+    /// That hurt was an explosion here (a grenade or the bomb).
+    Blasted(u8, [f32; 3]),
     Died(u8),
 }
 
@@ -58,6 +61,8 @@ struct OtherPlayers {
     dying: HashSet<u8>,
     /// Where each player was last hit (picks the death animation).
     last_hit: HashMap<u8, HitGroup>,
+    /// Where the explosion that last hurt them was, if the last hurt was one.
+    blasted: HashMap<u8, [f32; 3]>,
 }
 
 fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>) {
@@ -65,7 +70,7 @@ fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut
         error!("the game data is missing models/player/arctic/arctic.mdl: players can't be drawn");
         return;
     };
-    commands.insert_resource(OtherPlayers { cs, looks: Vec::new(), dying: HashSet::new(), last_hit: HashMap::new() });
+    commands.insert_resource(OtherPlayers { cs, looks: Vec::new(), dying: HashSet::new(), last_hit: HashMap::new(), blasted: HashMap::new() });
 }
 
 impl OtherPlayers {
@@ -118,6 +123,18 @@ struct Corpse {
     done: bool,
 }
 
+/// CS's death activities as the player models name them: ACT_DIE_HEADSHOT, _CHESTSHOT,
+/// _GUTSHOT, _BACKSHOT.
+const DIE_HEAD: &str = "head";
+const DIE_CHEST: &str = "death1";
+const DIE_GUT: &str = "gutshot";
+const DIE_BACK: &str = "death3";
+
+/// ACT_DIESIMPLE: one of its sequences by their weights (death2 twice as likely).
+fn die_simple(roll: u32) -> &'static str {
+    ["death2", "death2", "left", "right"][roll as usize % 4]
+}
+
 fn seq(model: &goldsrc::mdl::Model, name: &str) -> Option<usize> {
     model.sequence(name)
 }
@@ -127,7 +144,7 @@ fn anim_events(
     mut msgs: MessageReader<PlayerAnim>,
     mut look: ResMut<OtherPlayers>,
     time: Res<Time>,
-    mut live: Query<(Entity, &mut OtherPlayer)>,
+    mut live: Query<(Entity, &mut OtherPlayer, &Transform)>,
     corpses: Query<(Entity, &Corpse)>,
 ) {
     let now = time.elapsed_secs();
@@ -136,8 +153,9 @@ fn anim_events(
             PlayerAnim::Shot(id, _) | PlayerAnim::Hurt(id, _) => {
                 if let PlayerAnim::Hurt(_, g) = *m {
                     look.last_hit.insert(id, g);
+                    look.blasted.remove(&id);
                 }
-                let Some((_, mut p)) = live.iter_mut().find(|(_, p)| p.id == id) else { continue };
+                let Some((_, mut p, _)) = live.iter_mut().find(|(_, p, _)| p.id == id) else { continue };
                 if let PlayerAnim::Shot(_, silenced) = *m {
                     if crate::muzzle::flashes(p.weapon, silenced) {
                         p.flash_until = now + crate::muzzle::FLASH_SECONDS;
@@ -148,22 +166,46 @@ fn anim_events(
                     _ => p.anim.shot(now),
                 }
             }
+            PlayerAnim::Blasted(id, at) => {
+                look.blasted.insert(id, at);
+            }
             PlayerAnim::Died(id) => {
                 look.dying.insert(id);
-                let Some((e, p)) = live.iter().find(|(_, p)| p.id == id) else { continue };
+                let Some((e, p, tf)) = live.iter().find(|(_, p, _)| p.id == id) else { continue };
                 // The corpse keeps the body; the gun drops (the server puts it on the ground).
                 if let Some((_, g)) = &p.gun {
                     g.despawn(&mut commands);
                 }
                 commands.entity(p.flash).despawn();
                 let model = &look.cs.model;
-                let name = match look.last_hit.get(&id) {
-                    _ if p.crouched => "crouch_die",
-                    Some(HitGroup::Head) => "head",
-                    Some(HitGroup::Stomach) => "gutshot",
-                    Some(HitGroup::LeftArm) => "left",
-                    Some(HitGroup::RightArm) => "right",
-                    _ => ["death1", "death2", "death3", "back", "forward"][(id as usize + now as usize) % 5],
+                // CS 1.6 `CBasePlayer::SetAnimation(PLAYER_DIE)`: by where the last hit landed.
+                let roll = (now.to_bits() ^ (id as u32).wrapping_mul(2654435761)).wrapping_mul(2246822519) >> 8;
+                let blast = look.blasted.get(&id).map(|b| {
+                    // the blast behind them throws them forward ("left"), in front of them back
+                    let o = tf.translation;
+                    let (dx, dy) = (o.x - b[0], -o.z - b[1]);
+                    let (s, c) = p.anim.gait_yaw.to_radians().sin_cos();
+                    c * dx + s * dy > 0.0
+                });
+                let name = match (p.crouched, blast, look.last_hit.get(&id)) {
+                    (true, _, _) => "crouch_die",
+                    (_, Some(true), _) => "left",
+                    (_, Some(false), _) => if roll % 2 == 0 { DIE_HEAD } else { "crouch_die" },
+                    (_, _, Some(HitGroup::Head)) => DIE_HEAD,
+                    (_, _, Some(HitGroup::Chest)) => DIE_CHEST,
+                    (_, _, Some(HitGroup::Stomach)) => DIE_GUT,
+                    (_, _, Some(HitGroup::LeftArm)) => "left",
+                    (_, _, Some(HitGroup::RightArm)) => "right",
+                    (_, _, Some(HitGroup::Generic) | None) => match roll % 9 {
+                        0 | 8 => DIE_HEAD,
+                        1 | 7 => DIE_GUT,
+                        2 => DIE_BACK,
+                        4 => "back",
+                        5 => "forward",
+                        6 => DIE_CHEST,
+                        _ => die_simple(roll / 9),
+                    },
+                    _ => die_simple(roll / 9),
                 };
                 let s = seq(model, name).unwrap_or(0);
                 commands.entity(e).remove::<OtherPlayer>().insert(Corpse { character: p.character.clone(), body: p.body.clone(), seq: s, started: now, done: false });
@@ -250,6 +292,9 @@ fn animate(
     let others = w.client.others();
     for (e, mut p, mut tf) in &mut live {
         let Some(o) = others.iter().find(|o| o.id == p.id) else { continue };
+        // spawn protection (deathmatch): they shimmer until they move or shoot
+        let glow = if o.protected { 0.35 + 0.25 * (now * std::f32::consts::TAU * 2.0).sin() } else { 0.0 };
+        commands.entity(e).insert(crate::studio::Glow(glow));
         if let Ok(mut v) = vis.get_mut(e) {
             v.set_if_neq(if in_eye == Some(p.id) { Visibility::Hidden } else { Visibility::Inherited });
         }
