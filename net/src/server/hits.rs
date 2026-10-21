@@ -194,6 +194,10 @@ impl Server {
                 v.purchases.clear();
                 if !respawns {
                     v.respawn_at = None; // wait for the next round
+                } else if v.respawn_at.is_none() {
+                    // Any death comes back where rounds don't run (the bomb's blast, an admin
+                    // slay: not just shots, grenades and falls, which set their own).
+                    v.respawn_at = Some(self.tick + if v.bot { self.rate.secs(DUMMY_RESPAWN_SECS) } else { self.rate.secs(self.rules.respawn_secs) });
                 }
                 // CS2 assists: over 40 damage to them this life, by a teammate of the killer.
                 let hurt = std::mem::take(&mut v.stats.hurt_by);

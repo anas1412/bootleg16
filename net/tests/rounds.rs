@@ -275,3 +275,19 @@ fn a_dead_cts_defuse_kit_drops_and_another_ct_picks_it_up() {
     assert!(g.b.me_info.defuse_kit, "B picked it up");
     assert!(g.b.kits.is_empty());
 }
+
+#[test]
+fn practice_brings_you_back_after_the_bomb_kills_you() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup_with(&bsp, 0, 0.0, quick());
+    g.server.set_rules(net::server::Rules::practice(0));
+    g.connect_as(Some(Team::T), Some(Team::Spectator));
+    let a = g.a.id().unwrap();
+    let mut ev = Vec::new();
+    wait(&mut g, 0.3, Input::default(), Input::default(), &mut ev);
+    g.server.slay(a);
+    wait(&mut g, 0.2, Input::default(), Input::default(), &mut ev);
+    assert!(!g.server.vitals(a).unwrap().alive());
+    wait(&mut g, 1.0, Input::default(), Input::default(), &mut ev);
+    assert!(g.server.vitals(a).unwrap().alive(), "still waiting to respawn");
+}
