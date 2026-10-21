@@ -22,7 +22,7 @@ pub struct StudioLight {
     pub light: StudioUniform,
 }
 
-#[derive(ShaderType, Reflect, Debug, Clone, Copy)]
+#[derive(ShaderType, Reflect, Debug, Clone, Copy, PartialEq)]
 pub struct StudioUniform {
     /// Which way the light travels (world, Y-up).
     pub dir: Vec4,
@@ -167,13 +167,16 @@ impl Probe {
 /// The least ambient light (GoldSrc 0..128) on the weapon you hold.
 const VIEW_MIN_AMBIENT: f32 = 72.0;
 
-/// Every lit model part gets the light where its parent stands (a few traces per model).
+/// Every lit model part gets the light where its parent stands (a few traces per model). The
+/// traces run again only once a model has moved, and a material is written only when its light
+/// changed: writing one makes the renderer prepare it again.
 fn light_models(
     probe: Res<Probe>,
     w: Res<Walker>,
     parts: Query<(&MeshMaterial3d<StudioMaterial>, &ChildOf), With<LitPart>>,
     parents: Query<(&GlobalTransform, Has<LitByMe>, Option<&Glow>)>,
     mut materials: ResMut<Assets<StudioMaterial>>,
+    mut traced: Local<HashMap<Entity, ([f32; 3], StudioUniform)>>,
 ) {
     let mut cache: HashMap<Entity, StudioUniform> = HashMap::new();
     for (mat, parent) in &parts {
@@ -186,7 +189,16 @@ fn light_models(
                 let v = parents.get(p).map(|(tf, _, _)| tf.translation()).unwrap_or_default();
                 [v.x, -v.z, v.y] // back from Y-up to GoldSrc axes
             };
-            let mut light = probe.light(&w.client.world, origin);
+            // trace again only after moving more than a unit (the light under a model barely changes)
+            let moved = |o: &[f32; 3]| (0..3).any(|i| (o[i] - origin[i]).abs() > 1.0);
+            let mut light = match traced.get(&p) {
+                Some((o, l)) if !moved(o) => *l,
+                _ => {
+                    let l = probe.light(&w.client.world, origin);
+                    traced.insert(p, (origin, l));
+                    l
+                }
+            };
             // The weapon in your hands never goes black in a dark corner (its textures are dark already).
             if mine {
                 light.levels.x = light.levels.x.max(VIEW_MIN_AMBIENT);
@@ -194,8 +206,14 @@ fn light_models(
             light.levels.z = parents.get(p).ok().and_then(|(_, _, g)| g).map_or(0.0, |g| g.0);
             light
         });
-        if let Some(mut m) = materials.get_mut(&mat.0) {
-            m.extension.light = light;
+        if materials.get(&mat.0).is_some_and(|m| m.extension.light != light) {
+            if let Some(mut m) = materials.get_mut(&mat.0) {
+                m.extension.light = light;
+            }
         }
+    }
+    // forget models that are gone
+    if traced.len() > cache.len() {
+        traced.retain(|e, _| cache.contains_key(e));
     }
 }
