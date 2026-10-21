@@ -8,6 +8,7 @@ use crate::menu::AppState;
 use crate::{map, models};
 use bevy::prelude::*;
 use bevy::mesh::skinning::SkinnedMeshInverseBindposes;
+use sim::collision::Hull;
 use sim::hitbox::HitGroup;
 use sim::weapons::Id;
 use std::collections::{HashMap, HashSet};
@@ -43,10 +44,12 @@ fn clear_corpses(mut commands: Commands, mut news: MessageReader<crate::effects:
 pub enum PlayerAnim {
     /// They fired (silenced: no muzzle flash).
     Shot(u8, bool),
-    Hurt(u8, HitGroup),
-    /// That hurt was an explosion here (a grenade or the bomb).
-    Blasted(u8, [f32; 3]),
-    Died(u8),
+    /// Hurt: where, and how badly.
+    Hurt(u8, HitGroup, f32),
+    /// That hurt was an explosion here (a grenade, or the bomb: true).
+    Blasted(u8, [f32; 3], bool),
+    /// Died; where their killer was (for which way the body is thrown).
+    Died(u8, Option<[f32; 3]>),
 }
 
 /// Corpses kept at once (a whole match's: 18 rounds of 10 players is 180).
@@ -62,8 +65,10 @@ struct OtherPlayers {
     dying: HashSet<u8>,
     /// Where each player was last hit (picks the death animation).
     last_hit: HashMap<u8, HitGroup>,
+    /// How much the last hit took (CS: over 20 is a big one).
+    last_damage: HashMap<u8, f32>,
     /// Where the explosion that last hurt them was, if the last hurt was one.
-    blasted: HashMap<u8, [f32; 3]>,
+    blasted: HashMap<u8, ([f32; 3], bool)>,
 }
 
 fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>) {
@@ -71,7 +76,7 @@ fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut
         error!("the game data is missing models/player/arctic/arctic.mdl: players can't be drawn");
         return;
     };
-    commands.insert_resource(OtherPlayers { cs, looks: Vec::new(), dying: HashSet::new(), last_hit: HashMap::new(), blasted: HashMap::new() });
+    commands.insert_resource(OtherPlayers { cs, looks: Vec::new(), dying: HashSet::new(), last_hit: HashMap::new(), last_damage: HashMap::new(), blasted: HashMap::new() });
 }
 
 impl OtherPlayers {
@@ -122,6 +127,44 @@ struct Corpse {
     seq: usize,
     started: f32,
     done: bool,
+    /// Still moving (thrown by the shot that killed them), GoldSrc units a second.
+    vel: Vec3,
+    hull: Hull,
+}
+
+/// How a body is thrown when they die (`CBasePlayer::Killed`'s `m_iThrowDirection`).
+#[derive(Clone, Copy)]
+enum Throw {
+    None,
+    /// Their own forward or back: 100-200 a second, and up 50-100.
+    Forward,
+    Back,
+    /// Along the killer's aim, 200-300 (and up 200-300; flat for some arm shots).
+    Shooter,
+    ShooterFlat,
+    /// Away from the grenade (500 less its distance, up 1.5 x 350 less it) or the bomb
+    /// (2300 less its distance, a quarter of it, up a 2.75th).
+    Blast,
+}
+
+impl Throw {
+    fn velocity(self, at: [f32; 3], yaw: f32, killer: Option<[f32; 3]>, blast: Option<([f32; 3], bool)>, r: impl Fn(u32, f32, f32) -> f32) -> Vec3 {
+        let (s, c) = yaw.to_radians().sin_cos();
+        let aim = killer.map(|k| Vec3::new(at[0] - k[0], at[1] - k[1], 0.0).normalize_or_zero()).unwrap_or(Vec3::ZERO);
+        match self {
+            Throw::None => Vec3::ZERO,
+            Throw::Forward => Vec3::new(c, s, 0.0) * r(3, 100.0, 200.0) + Vec3::Z * r(5, 50.0, 100.0),
+            Throw::Back => Vec3::new(c, s, 0.0) * -r(3, 100.0, 200.0) + Vec3::Z * r(5, 50.0, 100.0),
+            Throw::Shooter => aim * r(3, 200.0, 300.0) + Vec3::Z * r(5, 200.0, 300.0),
+            Throw::ShooterFlat => aim * r(3, 200.0, 300.0),
+            Throw::Blast => {
+                let Some((b, bomb)) = blast else { return Vec3::ZERO };
+                let v = Vec3::new(at[0] - b[0], at[1] - b[1], at[2] - b[2]);
+                let (d, dir) = (v.length(), v.normalize_or_zero());
+                if bomb { (dir * (2300.0 - d) * 0.25).with_z((2300.0 - d) / 2.75) } else { (dir * (500.0 - d)).with_z((350.0 - d) * 1.5) }
+            }
+        }
+    }
 }
 
 /// CS's death activities as the player models name them: ACT_DIE_HEADSHOT, _CHESTSHOT,
@@ -151,9 +194,10 @@ fn anim_events(
     let now = time.elapsed_secs();
     for m in msgs.read() {
         match *m {
-            PlayerAnim::Shot(id, _) | PlayerAnim::Hurt(id, _) => {
-                if let PlayerAnim::Hurt(_, g) = *m {
+            PlayerAnim::Shot(id, _) | PlayerAnim::Hurt(id, _, _) => {
+                if let PlayerAnim::Hurt(_, g, amount) = *m {
                     look.last_hit.insert(id, g);
+                    look.last_damage.insert(id, amount);
                     look.blasted.remove(&id);
                 }
                 let Some((_, mut p, _)) = live.iter_mut().find(|(_, p, _)| p.id == id) else { continue };
@@ -163,14 +207,14 @@ fn anim_events(
                     }
                 }
                 match *m {
-                    PlayerAnim::Hurt(_, g) => p.anim.hurt(g, now),
+                    PlayerAnim::Hurt(_, g, _) => p.anim.hurt(g, now),
                     _ => p.anim.shot(now),
                 }
             }
-            PlayerAnim::Blasted(id, at) => {
-                look.blasted.insert(id, at);
+            PlayerAnim::Blasted(id, at, bomb) => {
+                look.blasted.insert(id, (at, bomb));
             }
-            PlayerAnim::Died(id) => {
+            PlayerAnim::Died(id, killer) => {
                 look.dying.insert(id);
                 let Some((e, p, tf)) = live.iter().find(|(_, p, _)| p.id == id) else { continue };
                 // The corpse keeps the body; the gun drops (the server puts it on the ground).
@@ -181,35 +225,46 @@ fn anim_events(
                 let model = &look.cs.model;
                 // CS 1.6 `CBasePlayer::SetAnimation(PLAYER_DIE)`: by where the last hit landed.
                 let roll = (now.to_bits() ^ (id as u32).wrapping_mul(2654435761)).wrapping_mul(2246822519) >> 8;
-                let blast = look.blasted.get(&id).map(|b| {
+                let blast = look.blasted.get(&id).map(|(b, _)| {
                     // the blast behind them throws them forward ("left"), in front of them back
                     let o = tf.translation;
                     let (dx, dy) = (o.x - b[0], -o.z - b[1]);
                     let (s, c) = p.anim.gait_yaw.to_radians().sin_cos();
                     c * dx + s * dy > 0.0
                 });
-                let name = match (p.crouched, blast, look.last_hit.get(&id)) {
-                    (true, _, _) => "crouch_die",
-                    (_, Some(true), _) => "left",
-                    (_, Some(false), _) => if roll % 2 == 0 { DIE_HEAD } else { "crouch_die" },
-                    (_, _, Some(HitGroup::Head)) => DIE_HEAD,
-                    (_, _, Some(HitGroup::Chest)) => DIE_CHEST,
-                    (_, _, Some(HitGroup::Stomach)) => DIE_GUT,
-                    (_, _, Some(HitGroup::LeftArm)) => "left",
-                    (_, _, Some(HitGroup::RightArm)) => "right",
+                // (the animation, and how the body is thrown: `Throw`)
+                let big = look.last_damage.get(&id).is_some_and(|d| *d > 20.0);
+                let (name, throw) = match (p.crouched, blast, look.last_hit.get(&id)) {
+                    (true, _, _) => ("crouch_die", Throw::Back),
+                    (_, Some(true), _) => ("left", Throw::Blast),
+                    (_, Some(false), _) => (if roll % 2 == 0 { DIE_HEAD } else { "crouch_die" }, Throw::Blast),
+                    (_, _, Some(HitGroup::Head)) => (DIE_HEAD, match roll % 9 + big as u32 {
+                        1 | 2 => Throw::Back,
+                        3 | 4 => Throw::Forward,
+                        5 | 6 => Throw::Shooter,
+                        _ => Throw::None,
+                    }),
+                    (_, _, Some(HitGroup::Chest)) => (DIE_CHEST, Throw::None),
+                    (_, _, Some(HitGroup::Stomach)) => (DIE_GUT, Throw::None),
+                    (_, _, Some(HitGroup::LeftArm)) => ("left", Throw::None),
+                    (_, _, Some(HitGroup::RightArm)) => ("right", if roll % 2 == 0 { Throw::Shooter } else { Throw::ShooterFlat }),
                     (_, _, Some(HitGroup::Generic) | None) => match roll % 9 {
-                        0 | 8 => DIE_HEAD,
-                        1 | 7 => DIE_GUT,
-                        2 => DIE_BACK,
-                        4 => "back",
-                        5 => "forward",
-                        6 => DIE_CHEST,
-                        _ => die_simple(roll / 9),
+                        0 => (DIE_HEAD, Throw::Back),
+                        8 => (DIE_HEAD, Throw::None),
+                        1 | 7 => (DIE_GUT, Throw::None),
+                        2 => (DIE_BACK, Throw::Shooter),
+                        4 => ("back", Throw::Shooter),
+                        5 => ("forward", Throw::Forward),
+                        6 => (DIE_CHEST, Throw::None),
+                        _ => (die_simple(roll / 9), Throw::None),
                     },
-                    _ => die_simple(roll / 9),
+                    _ => (die_simple(roll / 9), Throw::None),
                 };
+                let at = [tf.translation.x, -tf.translation.z, tf.translation.y];
+                let r = |k: u32, lo: f32, hi: f32| lo + (hi - lo) * ((roll.wrapping_mul(k) >> 8) % 1000) as f32 / 1000.0;
+                let vel = throw.velocity(at, p.anim.gait_yaw, killer, look.blasted.get(&id).copied(), r);
                 let s = seq(model, name).unwrap_or(0);
-                commands.entity(e).remove::<OtherPlayer>().insert(Corpse { character: p.character.clone(), body: p.body.clone(), seq: s, started: now, done: false });
+                commands.entity(e).remove::<OtherPlayer>().insert(Corpse { character: p.character.clone(), body: p.body.clone(), seq: s, started: now, done: false, vel, hull: if p.crouched { Hull::Crouched } else { Hull::Standing } });
                 // Old corpses go first.
                 let mut old: Vec<_> = corpses.iter().map(|(e, c)| (c.started, e)).collect();
                 if old.len() >= MAX_CORPSES {
@@ -281,7 +336,7 @@ fn animate(
     time: Res<Time>,
     fixed: Res<Time<Fixed>>,
     mut live: Query<(Entity, &mut OtherPlayer, &mut Transform), (Without<Corpse>, Without<ChildOf>)>,
-    mut corpses: Query<&mut Corpse>,
+    mut corpses: Query<(&mut Corpse, &mut Transform), (Without<OtherPlayer>, Without<ChildOf>)>,
     mut bones: Query<&mut Transform, With<ChildOf>>,
     mut vis: Query<&mut Visibility>,
     cam: Single<&GlobalTransform, With<crate::game::FlyCam>>,
@@ -327,7 +382,29 @@ fn animate(
             v.set_if_neq(if lit { Visibility::Inherited } else { Visibility::Hidden });
         }
     }
-    for mut c in &mut corpses {
+    for (mut c, mut tf) in &mut corpses {
+        // Thrown: flies (gravity 800) and slides to a stop (PlayerDeathThink: 20 off each think).
+        if c.vel != Vec3::ZERO {
+            let world = &w.client.world;
+            let p = tf.translation;
+            let at = [p.x, -p.z, p.y];
+            c.vel.z -= 800.0 * dt;
+            let to = [at[0] + c.vel.x * dt, at[1] + c.vel.y * dt, at[2] + c.vel.z * dt];
+            let t = world.trace(c.hull, at, to);
+            if t.fraction < 1.0 {
+                let n = Vec3::from(t.normal);
+                let into = n * c.vel.dot(n);
+                c.vel -= into;
+            }
+            let ground = world.trace(c.hull, t.end, [t.end[0], t.end[1], t.end[2] - 2.0]).fraction < 1.0;
+            if ground {
+                c.vel.z = c.vel.z.max(0.0);
+                // ponytail: CS thinks every server frame (~100 a second), so 2000 a second
+                let speed = c.vel.length();
+                c.vel = if speed > 2000.0 * dt { c.vel * (1.0 - 2000.0 * dt / speed) } else { Vec3::ZERO };
+            }
+            tf.translation = Vec3::from(map::to_y_up(t.end));
+        }
         if c.done {
             continue;
         }
@@ -336,5 +413,24 @@ fn animate(
         let frame = (now - c.started) * sq.fps;
         c.done = frame >= sq.frames as f32 - 1.0;
         c.character.set_pose(&c.body, &model.pose_at(c.seq, frame, 0.5), &mut bones);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bodies_are_thrown_the_way_cs_throws_them() {
+        let mid = |_: u32, lo: f32, hi: f32| (lo + hi) / 2.0;
+        // facing +x: back is -x and a little up
+        let v = Throw::Back.velocity([0.0; 3], 0.0, None, None, mid);
+        assert!(v.x < -100.0 && v.z > 50.0, "{v}");
+        // along the killer's aim, away from them, and up
+        let v = Throw::Shooter.velocity([100.0, 0.0, 0.0], 0.0, Some([0.0; 3]), None, mid);
+        assert!(v.x > 200.0 && v.z > 200.0, "{v}");
+        // a grenade 100 units west throws them east (400) and up (375)
+        let v = Throw::Blast.velocity([0.0; 3], 0.0, None, Some(([-100.0, 0.0, 0.0], false)), mid);
+        assert!((v.x - 400.0).abs() < 1e-3 && (v.z - 375.0).abs() < 1e-3, "{v}");
     }
 }
