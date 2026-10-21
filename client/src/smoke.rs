@@ -1,5 +1,7 @@
-//! Smoke clouds drawn like CS: a cluster of soft grey sprite puffs that billow out over the
-//! first second and a half, drift a little, and thin out over the last three seconds.
+//! Smoke clouds drawn like CS 1.6 (`CreateSmokePop` / `CreateGasSmoke` / `CPartSmokeGrenade`
+//! in client.so, read with REA): the gas puff sprite, each puff 175 to 225 units, grey 155 to
+//! 175, fully opaque within a moment of appearing (brightness ramps to 255), thinning out only
+//! over the last five seconds. The puffs billow out over the first second and a half.
 //! (The server also treats them as blocking sight: server/visibility.rs.)
 use crate::game::{FlyCam, Frame, Walker};
 use crate::level::rgba_image;
@@ -17,12 +19,14 @@ impl Plugin for SmokePlugin {
 }
 
 /// Puffs per cloud, and how far they reach from its middle (GoldSrc units).
-const PUFFS: usize = 30;
+const PUFFS: usize = 40;
 const SPREAD: f32 = 120.0;
-const PUFF_SIZE: f32 = 110.0;
-/// Seconds to billow out, and to fade at the end.
+/// Puff size range (CS: `RandomFloat(175, 225)`) and grey range (`RandomFloat(155, 175)`).
+const PUFF_SIZE: (f32, f32) = (175.0, 225.0);
+const GREY: (f32, f32) = (155.0, 175.0);
+/// Seconds to billow out, and to fade at the end (CS fades its puffs over the last 5).
 const BLOOM: f32 = 1.5;
-const FADE: f32 = 3.0;
+const FADE: f32 = 5.0;
 
 #[derive(Resource)]
 struct Looks {
@@ -49,7 +53,13 @@ fn puff_image(n: u32) -> Image {
 }
 
 fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut images: ResMut<Assets<Image>>) {
-    commands.insert_resource(Looks { quad: meshes.add(Rectangle::new(1.0, 1.0)), puff: images.add(puff_image(64)) });
+    // CS's gas puff sprite (first frame); a soft puff of our own if the data has none.
+    let sprite = ["sprites/gas_puff_01.spr", "sprites/gas_puff_01_wh.spr"].iter().flat_map(|f| crate::gamefiles::paths(f)).find_map(|p| goldsrc::spr::Sprite::load(p).ok());
+    let puff = match sprite.and_then(|s| s.frames.into_iter().next().map(|f| (s.width, s.height, f))) {
+        Some((w, h, rgba)) => rgba_image(w, h, rgba, false, TextureFormat::Rgba8UnormSrgb),
+        None => puff_image(64),
+    };
+    commands.insert_resource(Looks { quad: meshes.add(Rectangle::new(1.0, 1.0)), puff: images.add(puff) });
 }
 
 /// One cloud, keyed by where it popped.
@@ -90,10 +100,12 @@ fn clouds(mut commands: Commands, mut w: ResMut<Walker>, looks: Res<Looks>, mut 
             let a = f * 2.399_963;
             let r = SPREAD * (0.25 + 0.75 * ((f + 0.5) / PUFFS as f32).sqrt());
             let home = Vec3::new(a.cos() * r, 25.0 + (i % 5) as f32 * 28.0 + (f * 0.37).sin() * 10.0, a.sin() * r * 0.9);
-            let material = materials.add(StandardMaterial { base_color_texture: Some(looks.puff.clone()), unlit: true, alpha_mode: AlphaMode::Blend, ..default() });
+            let k = (f * 1.7).sin() * 0.5 + 0.5;
+            let grey = (GREY.0 + (GREY.1 - GREY.0) * ((f * 2.9).cos() * 0.5 + 0.5)) / 255.0;
+            let material = materials.add(StandardMaterial { base_color: Color::srgb(grey, grey, grey), base_color_texture: Some(looks.puff.clone()), unlit: true, alpha_mode: AlphaMode::Blend, ..default() });
             let puff = Puff {
                 home,
-                size: PUFF_SIZE * (0.8 + 0.4 * ((f * 1.7).sin() * 0.5 + 0.5)),
+                size: PUFF_SIZE.0 + (PUFF_SIZE.1 - PUFF_SIZE.0) * k,
                 drift: Vec3::new((f * 0.9).sin(), 0.3, (f * 1.3).cos()) * 6.0,
                 spin: ((f * 2.3).sin()) * 0.15,
                 material: material.clone(),
@@ -120,7 +132,7 @@ fn puffs(
         let age = sim::grenades::SMOKE_SECONDS as f32 - s.left;
         let grow = (age / BLOOM).clamp(0.0, 1.0);
         let grow = 1.0 - (1.0 - grow).powi(3); // fast out, settles gently
-        let alpha = 0.9 * (s.left / FADE).clamp(0.0, 1.0);
+        let alpha = (s.left / FADE).clamp(0.0, 1.0);
         for c in children {
             let Ok((p, mut tf)) = puffs.get_mut(*c) else { continue };
             tf.translation = p.home * grow + p.drift * (age * 0.3).min(4.0);
