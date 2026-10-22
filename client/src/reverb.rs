@@ -71,11 +71,13 @@ impl Reverb {
     }
 }
 
-/// A sound played through the room's reverb (as it was when the sound started).
+/// A sound played through the room's reverb (as it was when the sound started), and placed
+/// left or right GoldSrc's way: `pan` is each ear's gain ([left, right]; None: as recorded).
 #[derive(Asset, TypePath, Clone)]
 pub struct Reverbed {
     pub source: AudioSource,
     pub params: Params,
+    pub pan: Option<[f32; 2]>,
 }
 
 impl Decodable for Reverbed {
@@ -86,7 +88,8 @@ impl Decodable for Reverbed {
         let (rate, channels) = (inner.sample_rate().get(), inner.channels().get() as usize);
         let reverb = Reverb::new(rate, self.params);
         let tail = (reverb.tail_secs(rate) * rate as f32) as usize;
-        Wet { inner: Some(inner), reverb, channels, rate, frame: vec![0.0; channels], at: channels, tail }
+        let out = if self.pan.is_some() { 2 } else { channels };
+        Wet { inner: Some(inner), reverb, channels, rate, input: vec![0.0; channels], frame: vec![0.0; out], at: out, tail, pan: self.pan }
     }
 }
 
@@ -94,21 +97,24 @@ impl Decodable for Reverbed {
 pub struct Wet<I> {
     inner: Option<I>,
     reverb: Reverb,
+    /// Channels in the recording; `frame` is what goes out (2 when panned).
     channels: usize,
     rate: u32,
+    input: Vec<f32>,
     frame: Vec<f32>,
     at: usize,
     tail: usize,
+    pan: Option<[f32; 2]>,
 }
 
 impl<I: Source> Iterator for Wet<I> {
     type Item = bevy::audio::Sample;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.at == self.channels {
+        if self.at == self.frame.len() {
             let mut got = 0;
             if let Some(inner) = &mut self.inner {
-                for s in self.frame.iter_mut() {
+                for s in self.input.iter_mut() {
                     match inner.next() {
                         Some(x) => {
                             *s = x;
@@ -124,11 +130,23 @@ impl<I: Source> Iterator for Wet<I> {
                     return None;
                 }
                 self.tail -= 1;
-                self.frame.fill(0.0);
+                self.input.fill(0.0);
             }
-            let mono = self.frame.iter().sum::<f32>() / self.channels as f32;
+            let mono = self.input.iter().sum::<f32>() / self.channels as f32;
             let wet = self.reverb.process(mono);
-            self.frame.iter_mut().for_each(|s| *s += wet);
+            match self.pan {
+                // the room's echo comes from all round: both ears, at the sound's loudness
+                Some([l, r]) => {
+                    let echo = wet * (l + r) * 0.5;
+                    self.frame[0] = mono * l + echo;
+                    self.frame[1] = mono * r + echo;
+                }
+                None => {
+                    for (o, i) in self.frame.iter_mut().zip(&self.input) {
+                        *o = i + wet;
+                    }
+                }
+            }
             self.at = 0;
         }
         self.at += 1;
@@ -141,7 +159,7 @@ impl<I: Source> Source for Wet<I> {
         None
     }
     fn channels(&self) -> bevy::audio::ChannelCount {
-        std::num::NonZero::new(self.channels as u16).unwrap_or(std::num::NonZero::<u16>::MIN)
+        std::num::NonZero::new(self.frame.len() as u16).unwrap_or(std::num::NonZero::<u16>::MIN)
     }
     fn sample_rate(&self) -> bevy::audio::SampleRate {
         std::num::NonZero::new(self.rate).unwrap_or(std::num::NonZero::<u32>::MIN)

@@ -161,12 +161,14 @@ struct Play {
 }
 
 /// Play this frame's cues.
-fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settings>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>, mut wet: ResMut<Assets<crate::reverb::Reverbed>>) {
+fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settings>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>, mut wet: ResMut<Assets<crate::reverb::Reverbed>>, cam: Single<&GlobalTransform, With<crate::game::FlyCam>>) {
     let cues = std::mem::take(&mut w.cues);
     if cues.is_empty() {
         return;
     }
-    let ear = w.client.me().eye();
+    // You hear from where you see (your eyes, or whoever you watch).
+    let cam = cam.compute_transform();
+    let (ear, right) = ([cam.translation.x, -cam.translation.z, cam.translation.y], cam.right().as_vec3());
     let room = crate::reverb::current();
     for cue in cues {
         let mut plays: Vec<Play> = Vec::new();
@@ -322,16 +324,15 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                 Some(at) => {
                     // GoldSrc falloff: full at the source, silent at 1000 / attn units.
                     let d = ((at[0] - ear[0]).powi(2) + (at[1] - ear[1]).powi(2) + (at[2] - ear[2]).powi(2)).sqrt();
-                    let gain = settings.volume * p.volume * (1.0 - d * p.attn / 1000.0);
-                    if gain <= 0.01 {
+                    let gain = 1.0 - d * p.attn / 1000.0;
+                    if gain * settings.volume * p.volume <= 0.01 {
                         continue;
                     }
-                    play = play.with_volume(Volume::Linear(gain)).with_spatial(true);
-                    let place = Transform::from_translation(Vec3::from(map::to_y_up(at)));
-                    let e = match reverbed(&handle, room, &assets, &mut wet) {
-                        Some(h) => commands.spawn((AudioPlayer(h), play, place)).id(),
-                        None => commands.spawn((AudioPlayer(handle), play, place)).id(),
-                    };
+                    play = play.with_volume(Volume::Linear(settings.volume * p.volume));
+                    let to = (Vec3::from(map::to_y_up(at)) - cam.translation).normalize_or_zero();
+                    let pan = ears(gain, to.dot(right));
+                    let Some(source) = assets.get(&handle).cloned() else { continue };
+                    let e = commands.spawn((AudioPlayer(wet.add(crate::reverb::Reverbed { source, params: room, pan: Some(pan) })), play)).id();
                     if let Some(c) = p.channel {
                         sounds.weapon_channel.insert(c, e);
                     }
@@ -354,7 +355,14 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
 /// The sound through the room's reverb, when the room has any (open air: None, played dry).
 fn reverbed(h: &Handle<AudioSource>, room: crate::reverb::Params, assets: &Assets<AudioSource>, wet: &mut Assets<crate::reverb::Reverbed>) -> Option<Handle<crate::reverb::Reverbed>> {
     let source = assets.get(h).filter(|_| room.wet > 0.01)?.clone();
-    Some(wet.add(crate::reverb::Reverbed { source, params: room }))
+    Some(wet.add(crate::reverb::Reverbed { source, params: room, pan: None }))
+}
+
+/// Each ear's gain for a sound at distance gain `gain`, `side` (-1 left .. 1 right) of you:
+/// GoldSrc's `S_SpatializeOrigin` (1 -/+ side, capped at full), so a sound to one side is
+/// full in that ear and silent in the other.
+fn ears(gain: f32, side: f32) -> [f32; 2] {
+    [((1.0 - side) * gain).min(1.0), ((1.0 + side) * gain).min(1.0)]
 }
 
 pub struct SoundPlugin;
@@ -376,5 +384,12 @@ mod tests {
         assert_eq!(s.voiced(Some("female"), "player/death1.wav".into()), "player/female/death1.wav");
         assert_eq!(s.voiced(Some("female"), "player/pl_pain2.wav".into()), "player/pl_pain2.wav");
         assert_eq!(s.voiced(None, "player/die1.wav".into()), "player/die1.wav");
+    }
+
+    #[test]
+    fn sounds_pan_hard_like_goldsrc() {
+        assert_eq!(super::ears(1.0, 0.0), [1.0, 1.0]); // ahead: both full
+        assert_eq!(super::ears(0.5, 1.0), [0.0, 1.0]); // right: left ear silent, right doubled
+        assert_eq!(super::ears(0.5, -0.5), [0.75, 0.25]);
     }
 }
