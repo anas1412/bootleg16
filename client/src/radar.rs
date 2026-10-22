@@ -205,10 +205,8 @@ fn update(
             vis.set_if_neq(Visibility::Hidden);
             continue;
         }
-        node.left = percent(p.x * 100.0);
-        node.top = percent(p.y * 100.0);
-        node.margin = UiRect { left: vh(-5.0), top: vh(-5.0), ..default() };
-        node.border_radius = if mate { BorderRadius::MAX } else { BorderRadius::ZERO };
+        // only when it moved: a changed Node is laid out again
+        node.set_if_neq(Node { left: percent(p.x * 100.0), top: percent(p.y * 100.0), margin: UiRect { left: vh(-5.0), top: vh(-5.0), ..default() }, border_radius: if mate { BorderRadius::MAX } else { BorderRadius::ZERO }, ..node.clone() });
         bg.set_if_neq(BackgroundColor(if r.team == Team::T { T_COLOR } else { CT_COLOR }));
         // The teammate with the bomb gets an amber ring.
         border.set_if_neq(BorderColor::all(if carrier == Some(r.id) { AMBER } else { BG0 }));
@@ -224,8 +222,7 @@ fn update(
             continue;
         };
         let q = place(p[0], p[1], true);
-        node.left = percent(q.x * 100.0);
-        node.top = percent(q.y * 100.0);
+        node.set_if_neq(Node { left: percent(q.x * 100.0), top: percent(q.y * 100.0), ..node.clone() });
         vis.set_if_neq(Visibility::Inherited);
     }
 }

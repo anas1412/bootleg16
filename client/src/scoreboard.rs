@@ -22,7 +22,7 @@ impl Plugin for ScoreboardPlugin {
             .init_resource::<Reported>()
             .init_resource::<Kicked>()
             .add_systems(OnEnter(AppState::InGame), |mut r: ResMut<Reported>| r.0.clear())
-            .add_systems(Update, (mouse, report_actions, scoreboard).chain().in_set(Frame::Ui).run_if(resource_exists::<Walker>));
+            .add_systems(Update, (mouse, report_actions, scoreboard, stats).chain().in_set(Frame::Ui).run_if(resource_exists::<Walker>));
     }
 }
 
@@ -108,12 +108,54 @@ const SLOTS: usize = 24;
 /// known for your own team (blank for the other).
 const COLS: [(&str, f32); 8] = [("K", 56.0), ("D", 56.0), ("A", 56.0), ("ADR", 72.0), ("HS%", 72.0), ("MVP", 64.0), ("$", 96.0), ("PING", 72.0)];
 
+/// What the board is built from: who is on it and in what order (not their numbers, which
+/// change several times a second and are updated in place: `stats`), the rounds, the mouse.
 type Shown = (Vec<Score>, [u32; 2], usize, bool, Option<u8>, usize);
+
+/// A player's numbers zeroed out: the board's layout without them.
+fn layout(scores: &[Score]) -> Vec<Score> {
+    scores.iter().map(|s| Score { kills: 0, points: 0, deaths: 0, assists: 0, mvps: 0, headshots: 0, damage: 0, rounds: 0, ping: 0, money: s.money.map(|_| 0), ..s.clone() }).collect()
+}
+
+/// One number cell on the board: whose, which column.
+#[derive(Component)]
+struct Stat(u8, usize);
+
+/// A player's numbers, in `COLS` order (deathmatch: points where MVPs are).
+fn values(s: &Score, dm: bool) -> [String; 8] {
+    let pct = |n: u32, of: i32| if of > 0 { format!("{}", n * 100 / of as u32) } else { "0".into() };
+    [
+        s.kills.to_string(),
+        s.deaths.to_string(),
+        s.assists.to_string(),
+        (s.damage / s.rounds.max(1)).to_string(),
+        pct(s.headshots, s.kills),
+        if dm { s.points.to_string() } else { s.mvps.to_string() },
+        s.money.map(|m| format!("${m}")).unwrap_or_default(),
+        if s.bot { String::new() } else { s.ping.to_string() },
+    ]
+}
+
+/// The numbers change in place (kills, money, ping...), without building the board again.
+fn stats(w: Res<Walker>, mut cells: Query<(&Stat, &mut Text)>) {
+    if cells.is_empty() {
+        return;
+    }
+    let dm = crate::round_hud::deathmatch(&w);
+    for (Stat(id, col), mut t) in &mut cells {
+        if let Some(s) = w.client.scores.iter().find(|s| s.id == *id) {
+            let v = &values(s, dm)[*col];
+            if t.0 != *v {
+                t.0.clone_from(v);
+            }
+        }
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<KeyCode>>, Res<ButtonInput<MouseButton>>, Res<crate::binds::Binds>), w: Res<Walker>, kit: Res<Kit>, icons: Res<Icons>, m: Res<ScoreMouse>, (reported, kicked, voice): (Res<Reported>, Res<Kicked>, Res<crate::voice::VoiceSettings>), roots: Query<Entity, With<ScoresRoot>>, mic: Option<Res<crate::voice::MicIcon>>, mut shown: Local<Option<Shown>>) {
     let auto_show = std::env::var_os("BOOTLEG16_SCORES").is_some();
-    let want = (binds.held(crate::binds::Action::Scores, &keys, &buttons) || auto_show).then(|| (w.client.scores.clone(), w.client.round.score, w.client.round_history.len(), m.on, m.open, reported.0.len()));
+    let want = (binds.held(crate::binds::Action::Scores, &keys, &buttons) || auto_show).then(|| (layout(&w.client.scores), w.client.round.score, w.client.round_history.len(), m.on, m.open, reported.0.len()));
     // a voice volume changed: redraw too
     if *shown == want && !voice.is_changed() {
         return;
@@ -127,7 +169,8 @@ fn scoreboard(mut commands: Commands, (keys, buttons, binds): (Res<ButtonInput<K
             commands.entity(e).despawn();
         }
     }
-    let Some((scores, won, ..)) = want else { return };
+    let Some((_, won, ..)) = want else { return };
+    let scores = w.client.scores.clone();
     let me = w.client.id();
     let r = &w.client.round;
     let line = if w.client.practice { "PRACTICE".to_string() } else { format!("ROUND {}", r.round.max(1)) };
@@ -270,19 +313,8 @@ fn player_row(col: &mut ChildSpawnerCommands, kit: &Kit, s: &Score, ctx: &Ctx) {
         if reported {
             r.spawn((kit_text("REPORTED", 13.0, TX3, &kit.text), Node { margin: UiRect::right(vh(16.0)), ..default() }, Pickable::IGNORE));
         }
-        let pct = |n: u32, of: i32| if of > 0 { format!("{}", n * 100 / of as u32) } else { "0".into() };
-        let values = [
-            s.kills.to_string(),
-            s.deaths.to_string(),
-            s.assists.to_string(),
-            (s.damage / s.rounds.max(1)).to_string(),
-            pct(s.headshots, s.kills),
-            if ctx.dm { s.points.to_string() } else { s.mvps.to_string() },
-            s.money.map(|m| format!("${m}")).unwrap_or_default(),
-            if s.bot { String::new() } else { s.ping.to_string() },
-        ];
-        for (v, (_, w)) in values.into_iter().zip(COLS) {
-            r.spawn((kit_text(v, 18.0, c, &kit.num), Node { width: vh(w), justify_content: JustifyContent::FlexEnd, ..default() }, Pickable::IGNORE));
+        for (col, (v, (_, w))) in values(s, ctx.dm).into_iter().zip(COLS).enumerate() {
+            r.spawn((Stat(s.id, col), kit_text(v, 18.0, c, &kit.num), Node { width: vh(w), justify_content: JustifyContent::FlexEnd, ..default() }, Pickable::IGNORE));
         }
         // other people's rows: the handle that opens their menu (it lights once the mouse is free)
         r.spawn((Node { width: vh(MENU_COL), justify_content: JustifyContent::FlexEnd, ..default() }, Pickable::IGNORE)).with_children(|b| {

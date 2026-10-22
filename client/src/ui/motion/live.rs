@@ -166,13 +166,26 @@ fn meters(time: Res<Time>, mut q: Query<&mut Meter>, mut nodes: Query<(&mut Node
         } else if now >= m.drain_at {
             m.trail += (v - m.trail) * ease(dt, T_TRAIL / 3.0);
         }
+        // settle exactly, so a meter at rest stops touching its nodes (a changed Node is laid out again)
+        if (v - m.shown).abs() < 1e-3 {
+            m.shown = v;
+        }
+        if (v - m.trail).abs() < 1e-3 {
+            m.trail = v;
+        }
         let (shown, trail, color) = (m.shown, m.trail, m.color);
         if let Ok((mut n, mut bg)) = nodes.get_mut(m.fill) {
-            n.width = percent(shown * 100.0);
+            let w = percent(shown * 100.0);
+            if n.width != w {
+                n.width = w;
+            }
             bg.set_if_neq(BackgroundColor(color));
         }
         if let Ok((mut n, _)) = nodes.get_mut(m.trail_node) {
-            n.width = percent(trail * 100.0);
+            let w = percent(trail * 100.0);
+            if n.width != w {
+                n.width = w;
+            }
         }
     }
 }
