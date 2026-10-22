@@ -219,7 +219,7 @@ fn grenade_effects(
 pub struct GameNews(pub GameEvent);
 
 #[allow(clippy::too_many_arguments)]
-fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut<crate::tracers::Tracers>, mut shells: ResMut<crate::shells::Shells>, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>, mut blast: Local<Option<([f32; 3], bool)>>, characters: Res<crate::characters::Characters>) {
+fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut<crate::tracers::Tracers>, mut shells: ResMut<crate::shells::Shells>, mut hits: MessageWriter<Hit>, mut anims: MessageWriter<PlayerAnim>, mut round: MessageWriter<RoundNews>, mut news: MessageWriter<GameNews>, shot_assets: Option<Res<crate::game::ShotAssets>>, characters: Res<crate::characters::Characters>) {
     let me = w.client.id();
     let predicting = shot_assets.is_some();
     // Where a player is now (for sounds and the direction blood flies).
@@ -251,15 +251,11 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
             GameEvent::Footstep { player, at, step } if Some(player) != me => {
                 w.cues.push(sound::Cue::Footstep { feet: [at[0], at[1], at[2] - 36.0], who: Some(player), step });
             }
-            GameEvent::Damage { attacker, victim, sound, group, at, amount } => {
+            GameEvent::Damage { attacker, victim, sound, group, at, .. } => {
                 let victim_at = eye_of(&w, victim);
                 let voice = characters.voice_of(&w.client, victim);
                 w.cues.push(sound::Cue::Hit { sound, at: if Some(victim) == me { None } else { victim_at }, voice });
-                anims.write(PlayerAnim::Hurt(victim, group, amount));
-                // (the server sends a blast before the damage it does)
-                if let (net::protocol::HitSound::Explosion, Some((at, bomb))) = (sound, *blast) {
-                    anims.write(PlayerAnim::Blasted(victim, at, bomb));
-                }
+                anims.write(PlayerAnim::Hurt(victim, group));
                 // Knife hits have no exact point: their middle.
                 let at = at.or_else(|| (!matches!(sound, net::protocol::HitSound::Explosion | net::protocol::HitSound::Splat)).then_some(victim_at).flatten());
                 if let (Some(at), Some(from)) = (at, eye_of(&w, attacker)) {
@@ -304,7 +300,7 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                 let at = if Some(victim) == me { None } else { w.client.others().iter().find(|o| o.id == victim).map(|o| o.origin) };
                 let voice = characters.voice_of(&w.client, victim);
                 w.cues.push(sound::Cue::Death { at, voice });
-                anims.write(PlayerAnim::Died(victim, eye_of(&w, killer)));
+                anims.write(PlayerAnim::Died(victim));
                 // Name and team as the feed shows them ("the bomb" for the world).
                 let who = |id: u8| -> (String, Team) {
                     if id == net::protocol::WORLD {
@@ -317,7 +313,6 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                 feed.push(Kill { killer: by, victim: who(victim), weapon, headshot, mine });
             }
             GameEvent::Explosion { at } => {
-                *blast = Some((at, false));
                 w.cues.push(sound::Cue::Explosion { at });
                 hits.write(Hit::Scorch { at });
                 w.pending_fx.push(e);
@@ -344,7 +339,6 @@ fn events(mut w: ResMut<Walker>, mut feed: ResMut<KillFeed>, mut tracers: ResMut
                 round.write(RoundNews(e));
             }
             GameEvent::BombExploded { at } => {
-                *blast = Some((at, true));
                 // `CGrenade::Explode2`: the blast at ATTN 0.25, then debris (0.55).
                 w.cues.push(sound::Cue::Far { file: "weapons/c4_explode1.wav", at, attn: 0.25 });
                 w.cues.push(sound::Cue::Quiet { file: ["weapons/debris1.wav", "weapons/debris2.wav", "weapons/debris3.wav"][(at[0].abs() as usize) % 3], at, volume: 0.55 });

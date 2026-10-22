@@ -25,7 +25,7 @@ pub struct Limits {
 /// same timings as the server. `seed` drives spread and recoil randomness.
 #[allow(clippy::too_many_arguments)]
 pub fn step(s: &mut PlayerState, input: &Input, dt: f32, cmd_time: f64, seed: u64, limits: Limits, world: &World, vars: &MoveVars) -> (Events, Fired) {
-    s.movement.max_speed = s.loadout.max_speed();
+    s.movement.max_speed = s.loadout.max_speed() * if s.movement.carrying { crate::bodies::CARRY_SPEED } else { 1.0 };
     let frozen_input;
     // Planting the C4 holds you still (`CC4::PrimaryAttack`: max speed 1 while arming).
     let input = if limits.frozen || s.loadout.planting.is_some() {

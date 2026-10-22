@@ -2,6 +2,7 @@
 //! weapons from their inputs, resolves shots with lag compensation, and sends snapshots.
 mod admin;
 mod aimcheck;
+mod bodies;
 mod bomb;
 mod breakables;
 mod hits;
@@ -204,6 +205,9 @@ pub struct Server {
     /// Smoke clouds: where and until when (server seconds).
     smokes: Vec<([f32; 3], f64)>,
     ground: Vec<GroundGun>,
+    /// Dead bodies (`bodies`), and the last id given to one.
+    bodies: Vec<bodies::Body>,
+    next_body: u16,
     /// Defuse kits on the floor (a CT died with one).
     kits: Vec<[f32; 3]>,
     /// Kill events in `events` already counted (events are cleared at each snapshot).
@@ -275,6 +279,8 @@ impl Server {
             grenades: Vec::new(),
             smokes: Vec::new(),
             ground: Vec::new(),
+            bodies: Vec::new(),
+            next_body: 0,
             kits: Vec::new(),
             kills_settled: 0,
             round: Match::new(MatchConfig::default(), rate.hz()),
@@ -479,6 +485,7 @@ impl Server {
         self.ground_step();
         self.bomb_step();
         self.settle_deaths();
+        self.bodies_step();
         self.round_step();
         self.practice_step();
         self.deathmatch_step();

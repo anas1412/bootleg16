@@ -1,5 +1,6 @@
 //! Deterministic game simulation (GoldSrc units, Z up). No engine or rendering code.
 pub mod anim;
+pub mod bodies;
 pub mod breakables;
 pub mod collision;
 pub mod combat;

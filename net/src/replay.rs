@@ -118,6 +118,8 @@ impl Replay {
             grenades: f.grenades,
             smokes: f.smokes,
             ground: f.ground,
+            // ponytail: recordings don't keep bodies yet; record them when replays need them
+            bodies: Vec::new(),
             kits: Vec::new(),
             round: f.round,
             bomb: f.bomb,

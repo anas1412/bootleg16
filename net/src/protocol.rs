@@ -9,7 +9,7 @@ use sim::pmove::{Input, Player};
 use sim::weapons::{Id, Loadout};
 
 /// Bump when messages change; mismatched clients are turned away.
-pub const PROTOCOL_VERSION: u32 = 44;
+pub const PROTOCOL_VERSION: u32 = 45;
 pub const DEFAULT_PORT: u16 = 27015;
 /// Inputs repeated in every packet, so a few lost packets lose no keypresses.
 pub const INPUT_REDUNDANCY: usize = 8;
@@ -393,6 +393,24 @@ pub struct SmokeNet {
     pub left: f32,
 }
 
+/// A dead body (`sim::bodies`).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct BodyNet {
+    pub id: u16,
+    /// Whose body it is (their character).
+    pub owner: u8,
+    /// Its death animation (`sim::bodies::DEATHS`).
+    pub death: u8,
+    /// Its centre, as a player box (crouched: the small one).
+    pub origin: [f32; 3],
+    pub yaw: f32,
+    pub crouched: bool,
+    /// Who carries it as a shield.
+    pub carrier: Option<u8>,
+    /// The tick they died.
+    pub born: u32,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ServerMsg {
     /// `practice`: practice room rules (no rounds, free buys, infinite ammo, dummies).
@@ -434,6 +452,8 @@ pub enum ServerMsg {
         smokes: Vec<SmokeNet>,
         /// Guns lying on the ground.
         ground: Vec<(Id, [f32; 3])>,
+        /// Dead bodies (a carried one only while you see its carrier).
+        bodies: Vec<BodyNet>,
         /// Defuse kits lying where a CT died with one.
         kits: Vec<[f32; 3]>,
         round: RoundNet,

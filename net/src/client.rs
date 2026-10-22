@@ -97,6 +97,8 @@ pub struct Client {
     pub smokes: Vec<SmokeNet>,
     /// Guns on the ground.
     pub ground: Vec<(sim::weapons::Id, [f32; 3])>,
+    /// Dead bodies.
+    pub bodies: Vec<crate::protocol::BodyNet>,
     /// Defuse kits on the floor.
     pub kits: Vec<[f32; 3]>,
     /// Scoreboard as last sent.
@@ -165,6 +167,7 @@ impl Client {
             grenades: Vec::new(),
             smokes: Vec::new(),
             ground: Vec::new(),
+            bodies: Vec::new(),
             kits: Vec::new(),
             scores: Vec::new(),
             round_history: Vec::new(),
@@ -194,6 +197,11 @@ impl Client {
     }
 
     /// How many steps a second the server (and so this client) runs.
+    /// The newest server tick we have a snapshot of.
+    pub fn server_tick(&self) -> u32 {
+        self.latest_tick
+    }
+
     pub fn rate(&self) -> crate::tick::TickRate {
         self.rate
     }
@@ -330,7 +338,7 @@ impl Client {
                 self.status = Status::Rejected;
                 self.reject_reason = Some(reason);
             }
-            ServerMsg::Snapshot { tick, ack, players, you, doors, loadout, events, reliable, broken, grenades, smokes, ground, kits, round, bomb, me } => {
+            ServerMsg::Snapshot { tick, ack, players, you, doors, loadout, events, reliable, broken, grenades, smokes, ground, bodies, kits, round, bomb, me } => {
                 let Status::Connected { id } = self.status else { return };
                 if tick <= self.latest_tick {
                     return; // old or duplicate
@@ -355,6 +363,9 @@ impl Client {
                 self.grenades = grenades;
                 self.smokes = smokes;
                 self.ground = ground;
+                // Bodies on the floor are bumps to walk over: the same boxes as the server's.
+                self.world.boxes = bodies.iter().filter(|b| b.carrier.is_none()).map(|b| sim::bodies::rest_box(b.origin, if b.crouched { sim::collision::Hull::Crouched } else { sim::collision::Hull::Standing })).collect();
+                self.bodies = bodies;
                 self.kits = kits;
                 self.round = round;
                 self.bomb = bomb;

@@ -38,10 +38,11 @@ pub const OFF: u8 = ASSISTANTS.len() as u8;
 
 /// Every trigger the lines file must cover (checked by a test).
 #[cfg(test)]
-const TRIGGERS: [&str; 26] = [
+const TRIGGERS: [&str; 27] = [
     "greet_first", "greet_back", "hello", "practice_start", "match_start", "buy_low", "buy_rich", "round_won", "round_lost", "you_died", "streak",
     "bomb_planted", "bomb_defused", "last_alive", "halftime", "match_won", "match_lost", "teammate_down",
     "bomb_dropped", "bomb_yours", "enemy_spotted", "mvp", "flashed", "team_out", "clutch_won", "round_live",
+    "body_grabbed",
 ];
 
 /// Below this you can't buy a rifle and armor; at or above the other, you're rich.
@@ -70,6 +71,8 @@ pub struct Brain {
     team_out_said: bool,
     /// The round's phase last time we looked (freeze time ending: "round_live").
     last_phase: Option<net::rounds::Phase>,
+    /// Carrying a body last time we looked ("body_grabbed" when you pick one up).
+    carrying: bool,
     /// Round MVPs on the scoreboard last time we looked (None until the first scoreboard).
     mvps: Option<u32>,
     /// Last bomb state and visible enemies seen, to notice changes (same data as the HUD/radar).
@@ -93,6 +96,7 @@ impl Plugin for AssistantPlugin {
             mvps: None,
             last_bomb: None,
             last_phase: None,
+            carrying: false,
             seen_enemies: Vec::new(),
         })
         .init_resource::<view::Faces>()
@@ -156,6 +160,12 @@ fn in_game(mut news: MessageReader<GameNews>, w: Res<Walker>, settings: Res<Sett
         brain.practice_hello = true;
         brain.say("practice_start", Kind::Personal, now(), &settings, &[]);
     }
+    // You picked up a body (practice too: it's new to you).
+    let carrying = c.state.movement.carrying;
+    if carrying && !brain.carrying {
+        brain.say("body_grabbed", Kind::Personal, now(), &settings, &[]);
+    }
+    brain.carrying = carrying;
     // What the radar and scoreboard show, the assistant knows too.
     use net::protocol::BombNet;
     if !c.practice && my_team != Team::Spectator {

@@ -20,6 +20,7 @@
 //! `BOOTLEG16_SPECTATE=1` watches another player instead of playing (as when dead);
 //! `BOOTLEG16_SPECTATE=front` watches them from the front.
 mod binds;
+mod bodies;
 mod tracers;
 mod gamefiles;
 mod bomb;
@@ -135,7 +136,7 @@ fn main() {
             (bomb::BombPlugin, characters::CharactersPlugin, explosions::ExplosionsPlugin, gibs::GibsPlugin, glows::GlowsPlugin, studio::StudioPlugin, map_sounds::MapSoundsPlugin, status_screens::StatusScreensPlugin, loading::LoadingPlugin),
             (teammates::TeammatesPlugin, voice::VoicePlugin, smoke::SmokePlugin, sky::SkyPlugin, muzzle::MuzzlePlugin, assistant::AssistantPlugin, scoreboard::ScoreboardPlugin, radar::RadarPlugin, ui::UiPlugin, spectate::SpectatePlugin, vote::VotePlugin, binds::BindsPlugin),
         ))
-        .add_plugins((tracers::TracerPlugin, window::WindowPlugin, viewbob::ViewBobPlugin, shells::ShellsPlugin))
+        .add_plugins((tracers::TracerPlugin, window::WindowPlugin, viewbob::ViewBobPlugin, shells::ShellsPlugin, bodies::BodiesPlugin))
         .add_systems(Update, screenshot)
         .run();
 }

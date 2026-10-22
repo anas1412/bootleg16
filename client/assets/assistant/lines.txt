@@ -643,3 +643,15 @@ round_live | twins | smug | Move out. / Quietly, if you can.
 round_live | grumpk | annoyed | Go. Try not to die first.
 round_live | grumpk | neutral | Live. Walk, don't stomp.
 round_live | grumpk | smug | Off you go. Make it look easy.
+body_grabbed | claudette | thinking | Got them. They'll soak bullets from the front, not your head.
+body_grabbed | claudette | neutral | Carrying a body. You're slower. E to drop it.
+body_grabbed | claudette | happy | A shield with a story. Keep it between you and them.
+body_grabbed | childgbt | smug | Using the fallen as cover. Efficient.
+body_grabbed | childgbt | neutral | Body in hand. Front protected, head exposed, speed reduced.
+body_grabbed | childgbt | thinking | Interesting choice. Press E to let go.
+body_grabbed | twins | happy | Ooh, a shield! / Keep your head down.
+body_grabbed | twins | neutral | You're slower now. / E drops it.
+body_grabbed | twins | smug | Very dramatic. / Very useful.
+body_grabbed | grumpk | annoyed | Really? Fine. Keep it in front of you.
+body_grabbed | grumpk | neutral | Heavy, right? E to drop it when you need speed.
+body_grabbed | grumpk | smug | Bullets go in them, not you. Mostly.

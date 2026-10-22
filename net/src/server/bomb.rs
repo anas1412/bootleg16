@@ -164,7 +164,7 @@ impl Server {
                     let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
                     let (f, _, _) = bullets::view_vectors(c.view.1, c.view.0);
                     let look = if len > 1.0 { (d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / len } else { 1.0 };
-                    c.team == Team::Ct && c.vitals.alive() && c.use_held && near && look > DEFUSE_LOOK
+                    c.team == Team::Ct && c.vitals.alive() && c.use_held && !c.state.movement.carrying && near && look > DEFUSE_LOOK
                 };
                 match defuse {
                     Some((id, done)) => {

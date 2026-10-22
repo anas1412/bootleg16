@@ -368,7 +368,8 @@ impl Bot {
         let climb = p[2] - me.origin[2] > 18.0 && flat(me.origin, p) < 64.0;
         let bhop = self.mode == Mode::Bhop && me.on_ground;
         input.jump = ((climb || self.brain.stuck_on > 0) && t % self.secs(0.125) == 0) || (bhop && t % 2 == 0);
-        input.use_key = self.brain.stuck_on > 0 && t % self.secs(0.25) < 2;
+        // (E also picks up bodies: one picked up by accident is put straight down)
+        input.use_key = (self.brain.stuck_on > 0 || me.carrying) && t % self.secs(0.25) < 2;
         input.crouch = climb && !me.on_ground;
         input
     }

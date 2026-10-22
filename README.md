@@ -11,6 +11,7 @@ Counter-Strike 1.6 rebuilt in Rust with Bevy. CS 1.6 movement, guns, sounds and 
 - **Practice > Solo:** offline on your own machine, with standing dummies if you like.
 - **Maps:** de_dust2, de_inferno, de_nuke, de_train. Casual picks one at random.
 - **Parties:** open **Play** and share your party code, or invite Steam friends.
+- **Bodies:** the dead stay all match as a bump you step over. Press E on one to carry it as a shield: it takes most of a bullet from the front, your head stays open, and you move slower. E again drops it.
 - **Voice chat**, and an AI assistant instead of the radio.
 - **Fair matches:** no ranks, but a hidden skill rating balances every match.
 - **In a match:**

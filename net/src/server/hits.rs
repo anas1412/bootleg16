@@ -94,7 +94,12 @@ impl Server {
             }
             self.events.push(GameEvent::Shot { shooter: p.shooter, weapon: shot.weapon, silenced: shot.silenced, from: p.eye, to: end, holes });
             self.check_shot(p.shooter, p.eye, shot.angles);
-            hits.extend(r.hits.into_iter().map(|h| (h.victim, h.damage, h.group, shot.weapon, Some(h.point))));
+            // a body carried in front of them takes most of it
+            hits.extend(r.hits.into_iter().map(|h| {
+                let t = targets.iter().find(|t| t.id == h.victim);
+                let shield = t.is_some_and(|t| self.shielded(h.victim, t.origin, t.yaw, p.eye, h.point));
+                (h.victim, h.damage * if shield { sim::bodies::SHIELD_PASS } else { 1.0 }, h.group, shot.weapon, Some(h.point))
+            }));
         }
         if let Some(swing) = p.fired.swing {
             let range = if swing.stab { STAB_RANGE } else { SLASH_RANGE };
@@ -227,6 +232,7 @@ impl Server {
             }
             self.kill_limit(killer, victim, headshot);
             self.drop_on_death(victim);
+            self.make_body(victim);
             self.kills_settled += 1;
         }
     }

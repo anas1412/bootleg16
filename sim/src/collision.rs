@@ -4,7 +4,7 @@
 //! box. Tracing the player's centre point through that hull equals sweeping the
 //! box through the real world.
 use crate::doors::{angle_vectors, local_to_world, world_to_local, Actor, Doors};
-use crate::{add, dot, lerp, sub, Vec3};
+use crate::{add, dot, length, lerp, sub, Vec3};
 use goldsrc::bsp::Bsp;
 
 const CONTENTS_EMPTY: i32 = -1;
@@ -169,6 +169,9 @@ pub struct World {
     pub doors: Doors,
     /// Buy zones, bomb sites.
     pub zones: crate::zones::Zones,
+    /// Bodies lying on the floor (`bodies::rest_box`): boxes players bump into and step over
+    /// (not bullets). Set each tick from the bodies, the same on the server and the client.
+    pub boxes: Vec<(Vec3, Vec3)>,
     /// Faces on each point node, for finding the texture a bullet hit.
     node_faces: Vec<(u32, u32)>,
     surfaces: Vec<Surface>,
@@ -263,6 +266,7 @@ impl World {
             ladders,
             doors,
             zones: crate::zones::Zones::from_bsp(bsp),
+            boxes: Vec::new(),
             node_faces: bsp.nodes.iter().map(|n| (n.first_face as u32, n.num_faces as u32)).collect(),
             surfaces,
             textures: bsp.textures.iter().map(|t| t.name.clone()).collect(),
@@ -396,6 +400,7 @@ impl World {
     pub fn is_solid(&self, hull: Hull, origin: Vec3) -> bool {
         let (lo, hi) = (add(origin, hull.mins()), add(origin, hull.maxs()));
         self.models.iter().filter(|m| m.enabled && self.reaches(m, lo, hi)).any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
+            || self.boxes.iter().any(|(blo, bhi)| (0..3).all(|i| lo[i] < bhi[i] && hi[i] > blo[i]))
     }
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
@@ -425,6 +430,15 @@ impl World {
                 best.fraction = t.fraction;
                 best.normal = t.normal;
                 best.end = lerp(start, end, t.fraction);
+            }
+        }
+        for (blo, bhi) in &self.boxes {
+            if let Some((f, normal)) = sweep_box(hull, start, end, *blo, *bhi) {
+                if f < best.fraction {
+                    best.fraction = f;
+                    best.normal = normal;
+                    best.end = lerp(start, end, f);
+                }
             }
         }
         if best.start_solid {
@@ -565,11 +579,44 @@ impl World {
             ladders: Vec::new(),
             doors: Doors::default(),
             zones: Default::default(),
+            boxes: Vec::new(),
             node_faces: vec![(0, 0)],
             surfaces: Vec::new(),
             textures: Vec::new(),
         }
     }
+}
+
+/// The player box swept from `start` to `end` against a box: where it first touches and the
+/// face's normal. Starting inside it doesn't count (a body that lands on you never traps you).
+fn sweep_box(hull: Hull, start: Vec3, end: Vec3, lo: Vec3, hi: Vec3) -> Option<(f32, Vec3)> {
+    let (lo, hi): (Vec3, Vec3) = (std::array::from_fn(|i| lo[i] - hull.maxs()[i]), std::array::from_fn(|i| hi[i] - hull.mins()[i]));
+    if (0..3).all(|i| start[i] > lo[i] && start[i] < hi[i]) {
+        return None;
+    }
+    let (mut t0, mut t1, mut normal) = (0.0f32, 1.0f32, [0.0; 3]);
+    for i in 0..3 {
+        let d = end[i] - start[i];
+        if d.abs() < 1e-6 {
+            if start[i] <= lo[i] || start[i] >= hi[i] {
+                return None;
+            }
+            continue;
+        }
+        let (near, far, side) = if d > 0.0 { ((lo[i] - start[i]) / d, (hi[i] - start[i]) / d, -1.0) } else { ((hi[i] - start[i]) / d, (lo[i] - start[i]) / d, 1.0) };
+        if near > t0 {
+            t0 = near;
+            normal = [0.0; 3];
+            normal[i] = side;
+        }
+        t1 = t1.min(far);
+        if t0 >= t1 {
+            return None;
+        }
+    }
+    // stop just short, as GoldSrc's traces do (DIST_EPSILON)
+    let len = length(sub(end, start)).max(1e-3);
+    (normal != [0.0; 3]).then(|| ((t0 - 0.03125 / len).max(0.0), normal))
 }
 
 #[cfg(test)]

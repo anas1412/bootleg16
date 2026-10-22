@@ -140,6 +140,8 @@ pub struct Player {
     /// Getting shot slows you (CS 1.6 `m_flVelocityModifier`): 0.5 or 0.65 after a hit,
     /// back to 1 over about half a second while on the ground (`player::tagging`).
     pub velocity_modifier: f32,
+    /// Carrying a body (`bodies`): slower.
+    pub carrying: bool,
 }
 
 /// Things that happened during a step, for the game rules to act on.
@@ -209,6 +211,7 @@ impl Player {
             fall_velocity: 0.0,
             step_timer: 0.0,
             velocity_modifier: 1.0,
+            carrying: false,
         }
     }
 
@@ -727,6 +730,21 @@ mod tests {
         run(&mut p, Input { forward: 400.0, ..Default::default() }, 2.0, &w);
         let s = p.speed_2d();
         assert!((s - 250.0).abs() < 2.0, "speed {s}");
+    }
+
+    #[test]
+    fn you_step_over_a_body_but_a_tall_box_stops_you() {
+        let (mut p, mut w) = standing_on_floor();
+        let floor = p.origin[2] - 36.0;
+        // a body lying across the way, 12 high: you walk over it
+        w.boxes.push(([60.0, -40.0, floor], [100.0, 40.0, floor + 12.0]));
+        run(&mut p, Input { forward: 400.0, ..Default::default() }, 1.0, &w);
+        assert!(p.origin[0] > 150.0, "stuck at {:?}", p.origin);
+        // a wall-high box: you don't
+        let (mut p, mut w) = standing_on_floor();
+        w.boxes.push(([60.0, -40.0, floor], [100.0, 40.0, floor + 80.0]));
+        run(&mut p, Input { forward: 400.0, ..Default::default() }, 1.0, &w);
+        assert!(p.origin[0] < 60.0 - 15.0, "went through to {:?}", p.origin);
     }
 
     #[test]
