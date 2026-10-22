@@ -117,7 +117,6 @@ fn enter(mut commands: Commands, mut pending: ResMut<PendingClient>) {
             Transform::default(),
             FlyCam { yaw: 0.0, pitch: 0.0 },
             bevy::camera::visibility::RenderLayers::from_layers(&[0, crate::tracers::LAYER]),
-            SpatialListener::new(16.0),
             DespawnOnExit(AppState::InGame),
         ))
         .id();

@@ -4,8 +4,8 @@
 use crate::effects::GameNews;
 use crate::game::{Frame, Walker};
 use crate::impacts::Hit;
-use crate::map;
 use crate::menu::{AppState, Settings};
+use crate::reverb::Reverbed;
 use crate::sound::{Sounds, ATTN_NORM};
 use bevy::audio::{PlaybackSettings, Volume};
 use bevy::prelude::*;
@@ -78,6 +78,8 @@ struct Placed {
     at: [f32; 3],
     volume: f32,
     attn: f32,
+    /// Its ear gains, kept up to date as you move (None: heard everywhere, not placed).
+    live: Option<crate::reverb::LivePan>,
 }
 
 fn load(mut commands: Commands, map: Res<crate::loading::MapData>) {
@@ -125,17 +127,20 @@ fn load(mut commands: Commands, map: Res<crate::loading::MapData>) {
     commands.insert_resource(MapSounds { ambients, sparks, doors: Vec::new(), rng: 0x9E37_79B9_7F4A_7C15 });
 }
 
-/// Distance falloff, GoldSrc's: full at the source, silent at 1000 / attn.
-fn gain(at: [f32; 3], ear: [f32; 3], attn: f32) -> f32 {
-    let d = ((at[0] - ear[0]).powi(2) + (at[1] - ear[1]).powi(2) + (at[2] - ear[2]).powi(2)).sqrt();
-    (1.0 - d * attn / 1000.0).max(0.0)
-}
-
-fn spawn_loop(commands: &mut Commands, sounds: &mut Sounds, assets: &mut Assets<AudioSource>, file: &str, at: [f32; 3], volume: f32, attn: f32) -> Option<Entity> {
+/// A looping sound at `at` (`attn` 0: heard everywhere at full volume), panned live
+/// GoldSrc's way (`sound::placement`), no room echo.
+#[allow(clippy::too_many_arguments)]
+fn spawn_loop(commands: &mut Commands, sounds: &mut Sounds, assets: &mut Assets<AudioSource>, wet: &mut Assets<Reverbed>, file: &str, at: [f32; 3], volume: f32, attn: f32) -> Option<Entity> {
     let handle = sounds.get(file, assets)?;
-    let spatial = attn > 0.0;
-    let play = PlaybackSettings::LOOP.with_volume(Volume::Linear(0.0)).with_spatial(spatial);
-    Some(commands.spawn((AudioPlayer(handle), play, Placed { at, volume, attn }, Transform::from_translation(Vec3::from(map::to_y_up(at))), DespawnOnExit(AppState::InGame))).id())
+    let play = PlaybackSettings::LOOP.with_volume(Volume::Linear(0.0));
+    let placed = |live| Placed { at, volume, attn, live };
+    Some(if attn > 0.0 {
+        let live = crate::reverb::live_pan();
+        let source = Reverbed { source: assets.get(&handle)?.clone(), params: Default::default(), pan: None, live: Some(live.clone()) };
+        commands.spawn((AudioPlayer(wet.add(source)), play, placed(Some(live)), DespawnOnExit(AppState::InGame))).id()
+    } else {
+        commands.spawn((AudioPlayer(handle), play, placed(None), DespawnOnExit(AppState::InGame))).id()
+    })
 }
 
 /// Looping ambience on and off, one-shots when their name fires; every placed sound's volume
@@ -147,29 +152,25 @@ fn ambience(
     mut sounds: ResMut<Sounds>,
     mut assets: ResMut<Assets<AudioSource>>,
     mut news: MessageReader<GameNews>,
-    w: Res<Walker>,
     settings: Res<Settings>,
-    mut placed: Query<(&Placed, &mut Transform, Option<&mut AudioSink>, Option<&mut SpatialAudioSink>)>,
+    mut wet: ResMut<Assets<Reverbed>>,
+    cam: Single<&GlobalTransform, With<crate::game::FlyCam>>,
+    mut placed: Query<(&Placed, &mut AudioSink)>,
 ) {
-    let ear = w.client.me().eye();
+    let cam = cam.compute_transform();
     for GameNews(e) in news.read() {
         let GameEvent::Fired { name } = e else { continue };
         for a in ms.ambients.iter_mut().filter(|a| a.name.as_deref() == Some(name.as_str())) {
             if a.looping {
                 a.on = !a.on; // a named looping sound toggles
             } else {
-                let g = if a.attn > 0.0 { gain(a.at, ear, a.attn) } else { 1.0 };
-                let v = settings.volume * a.volume * g;
-                if let (true, Some(h)) = (v > 0.01, sounds.get(&a.file, &mut assets)) {
-                    let play = PlaybackSettings::DESPAWN.with_volume(Volume::Linear(v)).with_spatial(a.attn > 0.0);
-                    commands.spawn((AudioPlayer(h), play, Transform::from_translation(Vec3::from(map::to_y_up(a.at)))));
-                }
+                one_shot(&mut commands, &mut sounds, &mut assets, &mut wet, &a.file, a.at, a.attn, &cam, settings.volume * a.volume);
             }
         }
     }
     for a in ms.ambients.iter_mut() {
         match (a.on, a.playing) {
-            (true, None) => a.playing = spawn_loop(&mut commands, &mut sounds, &mut assets, &a.file, a.at, a.volume, a.attn),
+            (true, None) => a.playing = spawn_loop(&mut commands, &mut sounds, &mut assets, &mut wet, &a.file, a.at, a.volume, a.attn),
             (false, Some(e)) => {
                 commands.entity(e).try_despawn();
                 a.playing = None;
@@ -177,23 +178,19 @@ fn ambience(
             _ => {}
         }
     }
-    for (p, mut tf, sink, spatial) in &mut placed {
-        tf.translation = Vec3::from(map::to_y_up(p.at));
-        let v = Volume::Linear(settings.volume * p.volume * if p.attn > 0.0 { gain(p.at, ear, p.attn) } else { 1.0 });
-        if let Some(mut s) = sink {
-            s.set_volume(v);
+    for (p, mut sink) in &mut placed {
+        if let Some(live) = &p.live {
+            crate::reverb::set_live(live, crate::sound::placement(p.at, p.attn, &cam));
         }
-        if let Some(mut s) = spatial {
-            s.set_volume(v);
-        }
+        sink.set_volume(Volume::Linear(settings.volume * p.volume));
     }
 }
 
 /// Doors: the move sound loops while it moves, the stop sound plays when it gets there
 /// (`CHAN_STATIC`, volume 1, `ATTN_NORM`). A button clicks when pressed.
 #[allow(clippy::too_many_arguments)]
-fn doors(mut commands: Commands, mut ms: ResMut<MapSounds>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>, w: Res<Walker>, settings: Res<Settings>, mut placed: Query<&mut Placed>) {
-    let ear = w.client.me().eye();
+fn doors(mut commands: Commands, mut ms: ResMut<MapSounds>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>, mut wet: ResMut<Assets<Reverbed>>, cam: Single<&GlobalTransform, With<crate::game::FlyCam>>, w: Res<Walker>, settings: Res<Settings>, mut placed: Query<&mut Placed>) {
+    let cam = cam.compute_transform();
     let all = &w.client.world.doors.doors;
     if ms.doors.len() != all.len() {
         ms.doors = all.iter().map(|d| (d.state, None)).collect();
@@ -205,10 +202,10 @@ fn doors(mut commands: Commands, mut ms: ResMut<MapSounds>, mut sounds: ResMut<S
         if moving(d.state) && !moving(*last) {
             if d.is_button() {
                 if d.state == DoorState::Opening && d.move_sound > 0 {
-                    one_shot(&mut commands, &mut sounds, &mut assets, &format!("buttons/button{}.wav", d.move_sound), at, ear, settings.volume);
+                    one_shot(&mut commands, &mut sounds, &mut assets, &mut wet, &format!("buttons/button{}.wav", d.move_sound), at, ATTN_NORM, &cam, settings.volume);
                 }
             } else if d.move_sound > 0 {
-                *playing = spawn_loop(&mut commands, &mut sounds, &mut assets, &format!("doors/doormove{}.wav", d.move_sound), at, 1.0, ATTN_NORM);
+                *playing = spawn_loop(&mut commands, &mut sounds, &mut assets, &mut wet, &format!("doors/doormove{}.wav", d.move_sound), at, 1.0, ATTN_NORM);
             }
         }
         if !moving(d.state) && moving(*last) {
@@ -216,7 +213,7 @@ fn doors(mut commands: Commands, mut ms: ResMut<MapSounds>, mut sounds: ResMut<S
                 commands.entity(e).try_despawn();
             }
             if d.stop_sound > 0 {
-                one_shot(&mut commands, &mut sounds, &mut assets, &format!("doors/doorstop{}.wav", d.stop_sound), at, ear, settings.volume);
+                one_shot(&mut commands, &mut sounds, &mut assets, &mut wet, &format!("doors/doorstop{}.wav", d.stop_sound), at, ATTN_NORM, &cam, settings.volume);
             }
         }
         if let Some(mut p) = playing.and_then(|e| placed.get_mut(e).ok()) {
@@ -226,19 +223,26 @@ fn doors(mut commands: Commands, mut ms: ResMut<MapSounds>, mut sounds: ResMut<S
     }
 }
 
-fn one_shot(commands: &mut Commands, sounds: &mut Sounds, assets: &mut Assets<AudioSource>, file: &str, at: [f32; 3], ear: [f32; 3], volume: f32) {
-    let v = volume * gain(at, ear, ATTN_NORM);
-    if let (true, Some(h)) = (v > 0.01, sounds.get(file, assets)) {
-        commands.spawn((AudioPlayer(h), PlaybackSettings::DESPAWN.with_volume(Volume::Linear(v)).with_spatial(true), Transform::from_translation(Vec3::from(map::to_y_up(at)))));
+/// A sound played once at `at` (`attn` 0: everywhere, full), panned GoldSrc's way.
+#[allow(clippy::too_many_arguments)]
+fn one_shot(commands: &mut Commands, sounds: &mut Sounds, assets: &mut Assets<AudioSource>, wet: &mut Assets<Reverbed>, file: &str, at: [f32; 3], attn: f32, cam: &Transform, volume: f32) {
+    let Some(h) = sounds.get(file, assets) else { return };
+    let play = PlaybackSettings::DESPAWN.with_volume(Volume::Linear(volume));
+    if attn <= 0.0 {
+        commands.spawn((AudioPlayer(h), play));
+        return;
     }
+    let pan = crate::sound::placement(at, attn, cam);
+    let Some(source) = assets.get(&h).cloned().filter(|_| pan[0].max(pan[1]) * volume > 0.01) else { return };
+    commands.spawn((AudioPlayer(wet.add(Reverbed { source, params: Default::default(), pan: Some(pan), live: None })), play));
 }
 
 /// `env_spark` (`DoSpark`): sparks and a crackle at 0.25-0.75 x 0.4 volume, then again in
 /// 0.1 s plus up to `MaxDelay`.
 #[allow(clippy::too_many_arguments)]
-fn sparks(mut commands: Commands, mut ms: ResMut<MapSounds>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>, w: Res<Walker>, settings: Res<Settings>, time: Res<Time>, mut hits: MessageWriter<Hit>) {
+fn sparks(mut commands: Commands, mut ms: ResMut<MapSounds>, mut sounds: ResMut<Sounds>, mut assets: ResMut<Assets<AudioSource>>, mut wet: ResMut<Assets<Reverbed>>, cam: Single<&GlobalTransform, With<crate::game::FlyCam>>, settings: Res<Settings>, time: Res<Time>, mut hits: MessageWriter<Hit>) {
     let now = time.elapsed_secs();
-    let ear = w.client.me().eye();
+    let cam = cam.compute_transform();
     for i in 0..ms.sparks.len() {
         let r = ms.rand();
         let next = *ms.sparks[i].next.get_or_insert(now + 0.1 + r * 1.5); // first: 0.1-1.6 s in
@@ -250,6 +254,6 @@ fn sparks(mut commands: Commands, mut ms: ResMut<MapSounds>, mut sounds: ResMut<
         s.next = Some(now + 0.1 + r1 * s.max_delay);
         hits.write(Hit::Sparks { at: s.at });
         let file = format!("buttons/spark{}.wav", 1 + (r2 * 6.0).min(5.0) as u32);
-        one_shot(&mut commands, &mut sounds, &mut assets, &file, s.at, ear, settings.volume * (0.25 + r3 * 0.5) * 0.4);
+        one_shot(&mut commands, &mut sounds, &mut assets, &mut wet, &file, s.at, ATTN_NORM, &cam, settings.volume * (0.25 + r3 * 0.5) * 0.4);
     }
 }

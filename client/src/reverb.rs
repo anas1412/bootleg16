@@ -78,6 +78,22 @@ pub struct Reverbed {
     pub source: AudioSource,
     pub params: Params,
     pub pan: Option<[f32; 2]>,
+    /// Ear gains that change while it plays (a looping map sound as you move): f32 bits,
+    /// written by the game, read by the sound thread. Wins over `pan`.
+    pub live: Option<LivePan>,
+}
+
+/// Each ear's gain, live (`Reverbed::live`).
+pub type LivePan = std::sync::Arc<[std::sync::atomic::AtomicU32; 2]>;
+
+pub fn live_pan() -> LivePan {
+    std::sync::Arc::new([std::sync::atomic::AtomicU32::new(0), std::sync::atomic::AtomicU32::new(0)])
+}
+
+pub fn set_live(l: &LivePan, gains: [f32; 2]) {
+    for (a, g) in l.iter().zip(gains) {
+        a.store(g.to_bits(), std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl Decodable for Reverbed {
@@ -87,9 +103,10 @@ impl Decodable for Reverbed {
         let inner = self.source.decoder();
         let (rate, channels) = (inner.sample_rate().get(), inner.channels().get() as usize);
         let reverb = Reverb::new(rate, self.params);
-        let tail = (reverb.tail_secs(rate) * rate as f32) as usize;
-        let out = if self.pan.is_some() { 2 } else { channels };
-        Wet { inner: Some(inner), reverb, channels, rate, input: vec![0.0; channels], frame: vec![0.0; out], at: out, tail, pan: self.pan }
+        // (no echo, no tail: a loop must not gain a gap)
+        let tail = if self.params.wet > 0.01 { (reverb.tail_secs(rate) * rate as f32) as usize } else { 0 };
+        let out = if self.pan.is_some() || self.live.is_some() { 2 } else { channels };
+        Wet { inner: Some(inner), reverb, channels, rate, input: vec![0.0; channels], frame: vec![0.0; out], at: out, tail, pan: self.pan, live: self.live.clone() }
     }
 }
 
@@ -105,6 +122,7 @@ pub struct Wet<I> {
     at: usize,
     tail: usize,
     pan: Option<[f32; 2]>,
+    live: Option<LivePan>,
 }
 
 impl<I: Source> Iterator for Wet<I> {
@@ -133,8 +151,9 @@ impl<I: Source> Iterator for Wet<I> {
                 self.input.fill(0.0);
             }
             let mono = self.input.iter().sum::<f32>() / self.channels as f32;
-            let wet = self.reverb.process(mono);
-            match self.pan {
+            let wet = if self.reverb.params.wet > 0.01 { self.reverb.process(mono) } else { 0.0 };
+            let pan = self.live.as_ref().map(|l| l.each_ref().map(|a| f32::from_bits(a.load(std::sync::atomic::Ordering::Relaxed)))).or(self.pan);
+            match pan {
                 // the room's echo comes from all round: both ears, at the sound's loudness
                 Some([l, r]) => {
                     let echo = wet * (l + r) * 0.5;

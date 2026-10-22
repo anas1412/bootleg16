@@ -332,7 +332,7 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
                     let to = (Vec3::from(map::to_y_up(at)) - cam.translation).normalize_or_zero();
                     let pan = ears(gain, to.dot(right));
                     let Some(source) = assets.get(&handle).cloned() else { continue };
-                    let e = commands.spawn((AudioPlayer(wet.add(crate::reverb::Reverbed { source, params: room, pan: Some(pan) })), play)).id();
+                    let e = commands.spawn((AudioPlayer(wet.add(crate::reverb::Reverbed { source, params: room, pan: Some(pan), live: None })), play)).id();
                     if let Some(c) = p.channel {
                         sounds.weapon_channel.insert(c, e);
                     }
@@ -355,7 +355,15 @@ fn play_cues(mut commands: Commands, mut w: ResMut<Walker>, settings: Res<Settin
 /// The sound through the room's reverb, when the room has any (open air: None, played dry).
 fn reverbed(h: &Handle<AudioSource>, room: crate::reverb::Params, assets: &Assets<AudioSource>, wet: &mut Assets<crate::reverb::Reverbed>) -> Option<Handle<crate::reverb::Reverbed>> {
     let source = assets.get(h).filter(|_| room.wet > 0.01)?.clone();
-    Some(wet.add(crate::reverb::Reverbed { source, params: room, pan: None }))
+    Some(wet.add(crate::reverb::Reverbed { source, params: room, pan: None, live: None }))
+}
+
+/// Each ear's gain for a sound at `at` (GoldSrc units) heard from the camera `cam`, falling off
+/// by `attn` (silent at 1000 / attn units): `ears` of the distance gain and the side it's on.
+pub fn placement(at: [f32; 3], attn: f32, cam: &Transform) -> [f32; 2] {
+    let to = Vec3::from(map::to_y_up(at)) - cam.translation;
+    let gain = (1.0 - to.length() * attn / 1000.0).max(0.0);
+    ears(gain, to.normalize_or_zero().dot(cam.right().as_vec3()))
 }
 
 /// Each ear's gain for a sound at distance gain `gain`, `side` (-1 left .. 1 right) of you:

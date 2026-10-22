@@ -98,9 +98,6 @@ fn main() {
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin { primary_window: Some(Window { title: "bootleg16".into(), name: Some("bootleg16".into()), decorations: !menu::Settings::load().borderless, ..default() }), ..default() })
-                // Shrink audio space so rodio's 1/d^2 loudness never kicks in: it only pans,
-                // and `sound` applies GoldSrc's own distance falloff.
-                .set(bevy::audio::AudioPlugin { default_spatial_scale: bevy::audio::SpatialScale::new(1.0 / 4096.0), ..default() })
                 // How many threads Bevy's task pools use: 3, or BOOTLEG16_THREADS=n. One per core
                 // (Bevy's default, 8 here) spent most of its time handing tiny systems between
                 // threads: twice the CPU and fewer frames (53 vs 61 FPS) than 2 or 3 threads.
