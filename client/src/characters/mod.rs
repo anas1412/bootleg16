@@ -101,6 +101,10 @@ fn scan(images: &mut Assets<Image>) -> Characters {
                 continue; // the first data folder wins, like every other file
             }
             let text = std::fs::read_to_string(dir.join("character.cfg")).unwrap_or_default();
+            // `hidden = "yes"`: kept in the files, not offered or worn (the CS classes, for now)
+            if cfg(&text, "hidden").is_some_and(|v| v == "yes") {
+                continue;
+            }
             let name = cfg(&text, "name").unwrap_or_else(|| id.clone());
             let side = cfg_side(&text);
             let voice = cfg(&text, "voice").filter(|v| valid_id(v));
