@@ -10,6 +10,8 @@ on:
 
 env:
   BOOTLEG16_LOBBY: ${{ vars.BOOTLEG16_LOBBY }}
+  # Opus (audiopus_sys) builds with CMake: CMake 4 refuses its old minimum version without this
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
   # the version in the installers' names: the tag without its v, else the crate's
   VERSION: ${{ startsWith(github.ref_name, 'v') && github.ref_name || '' }}
 
