@@ -57,6 +57,9 @@ struct RadarRoot;
 struct Map;
 #[derive(Component)]
 struct Me;
+/// A small bomb diamond beside your arrow while you carry it.
+#[derive(Component)]
+struct MyBomb;
 #[derive(Component)]
 struct Dot(usize);
 #[derive(Component)]
@@ -129,6 +132,8 @@ fn spawn(mut commands: Commands, config: Res<GameConfig>, w: Option<Res<Walker>>
                 r.spawn((Dot(i), Visibility::Hidden, Node { position_type: PositionType::Absolute, width: vh(10.0), height: vh(10.0), border: UiRect::all(vh(2.0)), border_radius: BorderRadius::MAX, ..default() }, BorderColor::all(BG0), BackgroundColor(CT_COLOR)));
             }
             r.spawn((Bomb, Visibility::Hidden, Node { position_type: PositionType::Absolute, width: vh(12.0), height: vh(12.0), margin: UiRect { left: vh(-6.0), top: vh(-6.0), ..default() }, border: UiRect::all(vh(2.0)), ..default() }, UiTransform { rotation: Rot2::degrees(45.0), ..default() }, BorderColor::all(BG0), BackgroundColor(AMBER)));
+            // You carry the bomb: a small diamond up and right of your arrow (it doesn't turn).
+            r.spawn((MyBomb, Visibility::Hidden, Node { position_type: PositionType::Absolute, left: percent(50), top: percent(50), margin: UiRect { left: vh(8.0), top: vh(-15.0), ..default() }, width: vh(8.0), height: vh(8.0), border: UiRect::all(vh(1.5)), ..default() }, UiTransform { rotation: Rot2::degrees(45.0), ..default() }, BorderColor::all(BG0), BackgroundColor(AMBER)));
             // You: an amber wedge in the centre, pointing where you look.
             r.spawn((Me, UiTransform::default(), Node { position_type: PositionType::Absolute, left: percent(50), top: percent(50), margin: UiRect { left: vh(-7.0), top: vh(-9.0), ..default() }, width: vh(14.0), height: vh(18.0), ..default() }))
                 .with_children(|m| {
@@ -160,7 +165,8 @@ fn update(
     mut map: Query<&mut ImageNode, With<Map>>,
     mut me: Query<&mut UiTransform, With<Me>>,
     mut dots: Query<(&Dot, &mut Node, &mut Visibility, &mut BackgroundColor, &mut BorderColor), Without<Bomb>>,
-    mut bomb: Query<(&mut Node, &mut Visibility), With<Bomb>>,
+    mut bomb: Query<(&mut Node, &mut Visibility), (With<Bomb>, Without<MyBomb>)>,
+    mut my_bomb: Single<&mut Visibility, (With<MyBomb>, Without<Bomb>, Without<Dot>)>,
 ) {
     let Some(ov) = ov else { return };
     let c = &w.client;
@@ -187,6 +193,7 @@ fn update(
         BombNet::Carried(id) => Some(id),
         _ => None,
     };
+    my_bomb.set_if_neq(if carrier.is_some() && carrier == c.id() { Visibility::Inherited } else { Visibility::Hidden });
     // Position on the radar (0..1), with off-window players held on its edge.
     let place = |x: f32, y: f32, edge: bool| {
         let d = (ov.to_px(x, y) - centre) / (2.0 * half);
