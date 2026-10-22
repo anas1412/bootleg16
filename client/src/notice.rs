@@ -18,23 +18,15 @@ pub struct Notice {
     pub kind: NoticeKind,
     /// Retry joins the same match again (`GameConfig` is kept).
     pub retry: bool,
-    /// Closing it quits the game (nothing can be done without what it asks for).
-    pub quit: bool,
 }
 
 impl Notice {
     pub fn error(title: &str, body: impl Into<String>) -> Notice {
-        Notice { title: title.into(), body: body.into(), kind: NoticeKind::Error, retry: false, quit: false }
+        Notice { title: title.into(), body: body.into(), kind: NoticeKind::Error, retry: false }
     }
 
     pub fn info(title: &str, body: impl Into<String>) -> Notice {
-        Notice { title: title.into(), body: body.into(), kind: NoticeKind::Info, retry: false, quit: false }
-    }
-
-    /// Closing it quits the game.
-    pub fn quitting(mut self) -> Notice {
-        self.quit = true;
-        self
+        Notice { title: title.into(), body: body.into(), kind: NoticeKind::Info, retry: false }
     }
 
     pub fn with_retry(mut self) -> Notice {
@@ -53,7 +45,7 @@ pub(crate) fn keys(keys: Res<ButtonInput<KeyCode>>, notice: Res<Notice>, mut act
 }
 
 /// Take the notice's own actions out of the queue (the menu handles the rest).
-pub(crate) fn actions(mut commands: Commands, mut actions: ResMut<UiActions>, notice: Res<Notice>, mut next: ResMut<NextState<AppState>>, mut exit: MessageWriter<AppExit>) {
+pub(crate) fn actions(mut commands: Commands, mut actions: ResMut<UiActions>, notice: Res<Notice>, mut next: ResMut<NextState<AppState>>) {
     let mut close = false;
     actions.0.retain(|a| match a {
         UiAction::NoticeRetry if notice.retry => {
@@ -67,9 +59,7 @@ pub(crate) fn actions(mut commands: Commands, mut actions: ResMut<UiActions>, no
         }
         _ => true,
     });
-    if close && notice.quit {
-        exit.write(AppExit::Success);
-    } else if close {
+    if close {
         commands.remove_resource::<Notice>();
     }
 }

@@ -29,3 +29,7 @@ dev = ["bevy/dynamic_linking"]
 steam = ["dep:steamworks", "dep:steamworks-sys"]
 # Per-system timings: `cargo build -p client --features profile`, run, open trace-*.json in ui.perfetto.dev.
 profile = ["bevy/trace_chrome"]
+
+# The "Steam needed" message box on Windows (release builds without Steam).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging"] }

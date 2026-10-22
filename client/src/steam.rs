@@ -1,8 +1,8 @@
 //! Steam (built with the `steam` feature, on by default): your Steam name and id, your
 //! friends with their avatars, invites, and rich presence so friends see your party and can
 //! join it from Steam. App 480 (Valve's Spacewar test app) until we have our own App ID.
-//! Release builds need Steam: without it running and signed in, the game says so and quits
-//! (no match can start). Development builds (the `dev` feature) and builds without the
+//! Release builds need Steam: without it running and signed in, the game doesn't open (a
+//! system message box says why, then it exits before any window). Development builds (the `dev` feature) and builds without the
 //! `steam` feature play anonymously.
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -30,23 +30,35 @@ impl Plugin for SteamPlugin {
             Err(e) => {
                 warn!("Steam isn't running or refused us ({e})");
                 #[cfg(not(feature = "dev"))]
-                app.insert_resource(steam_needed()).add_systems(OnEnter(crate::menu::AppState::Connecting), no_play_without_steam);
+                refuse_without_steam();
             }
         }
     }
 }
 
-/// What a release build says when Steam isn't there.
+/// A release build doesn't open without Steam: say why in a system message box, then exit.
 #[cfg(all(feature = "steam", not(feature = "dev")))]
-fn steam_needed() -> crate::notice::Notice {
-    crate::notice::Notice::error("Steam needed", "bootleg16 plays with your Steam account. Open Steam, sign in, then start the game again.").quitting()
-}
-
-/// A match never starts without Steam (whatever got past the notice).
-#[cfg(all(feature = "steam", not(feature = "dev")))]
-fn no_play_without_steam(mut commands: Commands, mut next: ResMut<NextState<crate::menu::AppState>>) {
-    commands.insert_resource(steam_needed());
-    next.set(crate::menu::AppState::Menu);
+fn refuse_without_steam() -> ! {
+    const TITLE: &str = "bootleg16: Steam needed";
+    const TEXT: &str = "bootleg16 plays with your Steam account. Open Steam, sign in, then start the game again.";
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+        let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
+        unsafe { MessageBoxW(std::ptr::null_mut(), wide(TEXT).as_ptr(), wide(TITLE).as_ptr(), MB_OK | MB_ICONERROR) };
+    }
+    #[cfg(not(windows))]
+    {
+        // whichever dialog tool the desktop has (KDE, GNOME, ...)
+        use std::process::Command;
+        let shown = Command::new("kdialog").args(["--title", TITLE, "--error", TEXT]).status().is_ok_and(|s| s.success())
+            || Command::new("zenity").args(["--error", "--title", TITLE, "--text", TEXT]).status().is_ok_and(|s| s.success())
+            || Command::new("notify-send").args(["-u", "critical", TITLE, TEXT]).status().is_ok_and(|s| s.success());
+        if !shown {
+            eprintln!("{TITLE}: {TEXT}");
+        }
+    }
+    std::process::exit(1)
 }
 
 /// Present only when signed in to Steam.
