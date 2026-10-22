@@ -119,7 +119,7 @@ Everything runs in Docker. On the main machine:
 ./host.sh join <lobby-ip> <token>
 ```
 
-**Ports (UDP):** 27010 lobby, 27015 and up game servers.
+**Ports (UDP):** 27010 lobby, 27015 and up game servers. Open them in the provider's firewall, or forward them on your router at home.
 
 **Commands:** `./host.sh status | logs | update | stop`.
 - **`update`:** pulls and restarts without cutting matches. Lobby now, idle servers now, busy ones after their match.
