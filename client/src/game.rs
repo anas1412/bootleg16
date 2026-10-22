@@ -313,7 +313,8 @@ fn walk(
     // (`tracers`) start at the barrel.
     use sim::weapons::bullets::{fire_bullet, fire_pellets, view_vectors, Target};
     let me_id = w.client.id().unwrap_or(u8::MAX);
-    let targets: Vec<Target> = w.client.others().iter().filter(|o| o.alive).map(|o| Target { id: o.id, origin: o.origin, yaw: o.yaw, pitch: o.pitch, crouched: o.crouched, weapon: o.weapon, anim: None }).collect();
+    // (only when there's a shot: others() interpolates everyone)
+    let targets: Vec<Target> = if fired.shots.is_empty() { Vec::new() } else { w.client.others().iter().filter(|o| o.alive).map(|o| Target { id: o.id, origin: o.origin, yaw: o.yaw, pitch: o.pitch, crouched: o.crouched, weapon: o.weapon, anim: None }).collect() };
     for shot in fired.shots {
         let eye = w.client.me().eye();
         let (f, _, _) = view_vectors(shot.angles[0], shot.angles[1]);

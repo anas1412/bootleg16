@@ -17,6 +17,8 @@ pub struct Socket {
     outgoing: VecDeque<(u64, SocketAddr, Vec<u8>)>,
     incoming: VecDeque<(u64, SocketAddr, Vec<u8>)>,
     rng: u64,
+    /// One receive buffer, kept (a fresh 64 KiB each call cost a zeroed allocation a tick).
+    buf: Vec<u8>,
     /// Encrypted peers: their channel and its id (ticket).
     channels: HashMap<SocketAddr, (u64, Channel)>,
 }
@@ -25,7 +27,7 @@ impl Socket {
     pub fn bind(addr: SocketAddr) -> std::io::Result<Socket> {
         let udp = UdpSocket::bind(addr)?;
         udp.set_nonblocking(true)?;
-        Ok(Socket { udp, delay_ms: 0, hz: crate::tick::DEFAULT_TICK_RATE, loss: 0.0, now: 0, outgoing: VecDeque::new(), incoming: VecDeque::new(), rng: 0x9e37_79b9_7f4a_7c15, channels: HashMap::new() })
+        Ok(Socket { udp, delay_ms: 0, hz: crate::tick::DEFAULT_TICK_RATE, loss: 0.0, now: 0, outgoing: VecDeque::new(), incoming: VecDeque::new(), rng: 0x9e37_79b9_7f4a_7c15, buf: vec![0u8; 65536], channels: HashMap::new() })
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -103,7 +105,7 @@ impl Socket {
 
     /// Everything that has arrived (and finished its fake delay).
     pub fn recv_all(&mut self) -> Vec<(SocketAddr, Vec<u8>)> {
-        let mut buf = vec![0u8; 65536];
+        let mut buf = std::mem::take(&mut self.buf);
         // At most this many a call: a flood waits in (and overflows) the OS queue instead of
         // our memory. 32 players send a few each per tick; this is far more.
         let mut room = 4096;
@@ -115,6 +117,7 @@ impl Socket {
             }
             self.incoming.push_back((self.now + self.delay_ticks() as u64, from, buf[..n].to_vec()));
         }
+        self.buf = buf;
         let mut out = Vec::new();
         while self.incoming.front().is_some_and(|p| p.0 <= self.now) {
             let (_, from, b) = self.incoming.pop_front().unwrap();
