@@ -120,3 +120,51 @@ fn a_body_killed_against_a_wall_lies_clear_of_it() {
     }
     assert!(pushed > 4, "only {pushed} needed moving: is the wall there?");
 }
+
+/// B dies, comes back (practice), and A is given a body to work with.
+fn with_a_body() -> Option<(Game, u8, u8)> {
+    let bsp = dust2()?;
+    let mut g = setup(&bsp, 0, 0.0);
+    g.server.set_rules(net::server::Rules::practice(0));
+    g.server.set_give(vec![sim::weapons::Id::Ak47]);
+    g.connect_as(Some(Team::T), Some(Team::T));
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
+    g.server.slay(b);
+    while !g.server.vitals(b).unwrap().alive() || g.a.bodies.is_empty() {
+        g.tick(Input::default(), Input::default());
+    }
+    Some((g, a, b))
+}
+
+#[test]
+fn a_carried_body_takes_a_knife_from_the_front() {
+    let Some((mut g, a, b)) = with_a_body() else { return };
+    let idle = Input::default();
+    let (lo, hi) = g.a.bodies[0].lying().rest_box();
+    let mid = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2] + 6.0];
+    g.server.teleport(a, [mid[0] - 50.0, mid[1], mid[2] + 30.0]);
+    for _ in 0..16 {
+        g.tick(idle, idle);
+    }
+    let (yaw, pitch) = aim(g.server.player(a).unwrap().eye(), mid);
+    g.tick(Input { yaw, pitch, use_key: true, ..idle }, idle);
+    g.tick(Input { yaw: 0.0, ..idle }, idle);
+    assert!(g.server.player(a).unwrap().carrying, "A picked it up");
+    // B, knife out, slashes A from the front (the body between them), then from behind
+    let slash = |g: &mut Game, from: f32| -> f32 {
+        let at = g.server.player(a).unwrap().origin;
+        g.server.teleport(b, [at[0] + from * 44.0, at[1], at[2]]);
+        g.server.set_health(a, 100.0);
+        let k = Input { slot: 3, yaw: if from > 0.0 { 180.0 } else { 0.0 }, ..idle };
+        for _ in 0..128 {
+            g.tick(Input { yaw: 0.0, ..idle }, k);
+        }
+        g.tick(Input { yaw: 0.0, ..idle }, Input { attack: true, ..k });
+        for _ in 0..16 {
+            g.tick(Input { yaw: 0.0, ..idle }, k);
+        }
+        100.0 - g.server.vitals(a).unwrap().health
+    };
+    let (front, back) = (slash(&mut g, 1.0), slash(&mut g, -1.0));
+    assert!(back > 5.0 && front < back * 0.5, "front {front}, back {back}");
+}

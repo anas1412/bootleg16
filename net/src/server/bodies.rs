@@ -134,10 +134,20 @@ impl Server {
             .collect()
     }
 
-    /// Whether the carried body of `victim` (at `origin` facing `yaw` as the shooter saw
-    /// them) is in the way of a shot from `from` to `to`.
-    pub(super) fn shielded(&self, victim: u8, origin: [f32; 3], yaw: f32, from: [f32; 3], to: [f32; 3]) -> bool {
-        self.bodies.iter().any(|b| b.carrier == Some(victim)) && bodies::shield_blocks(&self.world, origin, yaw, from, to)
+    /// The share of a shot from `from` to `to` that reaches `victim` (at `origin` facing
+    /// `yaw` as the shooter saw them): their carried body takes most of it from the front,
+    /// each body lying in the way a little (`lying`: bullets, low enough to cross them).
+    pub(super) fn cover(&self, victim: u8, origin: [f32; 3], yaw: f32, from: [f32; 3], to: [f32; 3], lying: bool) -> f32 {
+        let shield = self.bodies.iter().any(|b| b.carrier == Some(victim)) && bodies::shield_blocks(&self.world, origin, yaw, from, to);
+        let crossed = if lying {
+            self.bodies.iter().filter(|b| b.still()).filter(|b| {
+                let (lo, hi) = b.lying().cover_box();
+                bodies::segment_hits_box(from, to, lo, hi)
+            }).count()
+        } else {
+            0
+        };
+        (if shield { bodies::SHIELD_PASS } else { 1.0 }) * bodies::LYING_PASS.powi(crossed as i32)
     }
 }
 

@@ -31,7 +31,11 @@ impl Server {
                             continue;
                         }
                         let m = &c.state.movement;
-                        let dmg = grenades::he_damage(blast, m.origin) * grenades::blast_share(&self.world, blast, m.origin, m.crouched);
+                        let mut dmg = grenades::he_damage(blast, m.origin) * grenades::blast_share(&self.world, blast, m.origin, m.crouched);
+                        // a body carried between them and the blast takes most of it
+                        if m.carrying && sim::bodies::shield_blocks(&self.world, m.origin, c.view.0, blast, m.origin) {
+                            dmg *= sim::bodies::SHIELD_BLAST_PASS;
+                        }
                         if dmg <= 0.0 {
                             continue;
                         }
@@ -97,8 +101,8 @@ impl Server {
             // a body carried in front of them takes most of it
             hits.extend(r.hits.into_iter().map(|h| {
                 let t = targets.iter().find(|t| t.id == h.victim);
-                let shield = t.is_some_and(|t| self.shielded(h.victim, t.origin, t.yaw, p.eye, h.point));
-                (h.victim, h.damage * if shield { sim::bodies::SHIELD_PASS } else { 1.0 }, h.group, shot.weapon, Some(h.point))
+                let cover = t.map_or(1.0, |t| self.cover(h.victim, t.origin, t.yaw, p.eye, h.point, true));
+                (h.victim, h.damage * cover, h.group, shot.weapon, Some(h.point))
             }));
         }
         if let Some(swing) = p.fired.swing {
@@ -118,7 +122,9 @@ impl Server {
                         }
                     }
                 }
-                hits.push((victim, dmg * combat::hitgroup_multiplier(group), group, Id::Knife, None));
+                // a body carried in front of them takes the blade too
+                let cover = targets.iter().find(|t| t.id == victim).map_or(1.0, |t| self.cover(victim, t.origin, t.yaw, p.eye, t.origin, false));
+                hits.push((victim, dmg * combat::hitgroup_multiplier(group) * cover, group, Id::Knife, None));
             }
             if let Some(c) = self.clients.values_mut().find(|c| c.id == p.shooter) {
                 c.state.loadout.knife_result(swing.stab, hit.is_some(), c.last_run as f64 * self.rate.tick() as f64);

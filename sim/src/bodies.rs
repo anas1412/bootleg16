@@ -9,8 +9,12 @@ use crate::{add, dot, length, scale, sub, Vec3};
 
 /// Carrying a body: this share of your normal speed.
 pub const CARRY_SPEED: f32 = 0.6;
-/// A bullet through the body you carry keeps this share of its damage.
+/// A bullet or knife through the body you carry keeps this share of its damage; a grenade's
+/// blast, which wraps around it, this much.
 pub const SHIELD_PASS: f32 = 0.25;
+pub const SHIELD_BLAST_PASS: f32 = 0.5;
+/// A bullet through a body lying on the floor keeps this share (each body it crosses).
+pub const LYING_PASS: f32 = 0.7;
 /// How far you reach for a body (your centre to the body's), and how straight at it you
 /// must look (cosine), like CS's use radius.
 pub const GRAB_REACH: f32 = 80.0;
@@ -26,6 +30,8 @@ const CARRY_FEET: f32 = 30.0;
 /// stands (under the 18 step height, so you walk over it).
 const REST_PAD: f32 = 8.0;
 const REST_HEIGHT: f32 = 12.0;
+/// How high a lying body stops bullets (torso and limbs, a bit over the bump you step on).
+const COVER_HEIGHT: f32 = 20.0;
 /// The shield: depth, half width, half height around the carried body's centre.
 const SHIELD: Vec3 = [8.0, 16.0, 30.0];
 
@@ -74,6 +80,14 @@ impl Lying {
         let hi = |i: usize| pts.iter().map(|p| p[i]).fold(f32::MIN, f32::max) + REST_PAD;
         let floor = self.floor();
         ([lo(0), lo(1), floor], [hi(0), hi(1), floor + REST_HEIGHT])
+    }
+
+    /// The box it stops bullets in (`LYING_PASS`): low, so only shots skimming the floor
+    /// (at someone crouched behind a pile) go through it.
+    pub fn cover_box(&self) -> (Vec3, Vec3) {
+        let (lo, mut hi) = self.rest_box();
+        hi[2] = lo[2] + COVER_HEIGHT;
+        (lo, hi)
     }
 
     /// Moved out of the walls: a body that would end up with its head or arms in a wall
@@ -355,6 +369,20 @@ mod tests {
         assert!(can_grab([0.0; 3], eye, [0.8, 0.0, -0.6], &body));
         assert!(!can_grab([0.0; 3], eye, [-1.0, 0.0, 0.0], &body));
         assert!(!can_grab([-200.0, 0.0, 0.0], [-200.0, 0.0, 28.0], [1.0, 0.0, 0.0], &body));
+    }
+
+    #[test]
+    fn a_lying_body_is_in_the_way_of_low_shots_only() {
+        // "forward" lies 20..73 ahead along +x; floor at -36
+        let body = Lying { origin: [0.0; 3], hull: Hull::Standing, yaw: 0.0, death: 8 };
+        let (lo, hi) = body.cover_box();
+        let crosses = |from: Vec3, to: Vec3| segment_hits_box(from, to, lo, hi);
+        // crouched behind it, shot from crouch height across the floor: through the body
+        assert!(crosses([300.0, 0.0, -6.0], [-20.0, 0.0, -20.0]));
+        // standing, chest high: over it
+        assert!(!crosses([300.0, 0.0, 28.0], [-20.0, 0.0, 0.0]));
+        // from the side of it
+        assert!(!crosses([40.0, 300.0, -20.0], [40.0, 100.0, -20.0]));
     }
 
     /// `SPRAWL` is what the CS player model's death animations really end in.
