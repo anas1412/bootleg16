@@ -141,7 +141,7 @@ impl Server {
             return true; // anywhere, any time
         }
         let side = if c.team == Team::Ct { sim::zones::Side::Ct } else { sim::zones::Side::T };
-        self.round.can_buy(self.tick) && self.world.zones.in_buy_zone(side, c.state.movement.origin)
+        self.round.can_buy(self.tick) && self.world.zones.in_buy_zone(side, c.state.movement.origin, c.state.movement.hull())
     }
 
     /// Buy for the player at `from`, if they may and can afford it.

@@ -37,7 +37,7 @@ fn carried(w: &Walker) -> Vec<Item> {
         }
     }
     if l.c4 {
-        let in_site = w.client.world.zones.in_bomb_site(w.client.me().origin);
+        let in_site = w.client.world.zones.in_bomb_site(w.client.me().origin, w.client.me().hull());
         out.push((weapon_icon(Id::C4), 1, if in_site { BAD } else { tint(l.active == Slot::Bomb) }));
     }
     if w.client.me_info.defuse_kit {

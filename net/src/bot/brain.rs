@@ -186,7 +186,7 @@ impl Bot {
         if team == Team::T {
             if self.client.state.loadout.c4 {
                 // Carrying it: to the site, then plant (hold attack with the C4 out, still).
-                if self.map.zones.in_bomb_site(me.origin) && flat(me.origin, site) < 400.0 {
+                if self.map.zones.in_bomb_site(me.origin, me.hull()) && flat(me.origin, site) < 400.0 {
                     if self.client.state.loadout.active != Slot::Bomb {
                         input.slot = Slot::Bomb as u8;
                     }
@@ -232,7 +232,7 @@ impl Bot {
     }
 
     fn planting(&self) -> bool {
-        self.client.state.loadout.c4 && self.client.state.loadout.active == Slot::Bomb && self.map.zones.in_bomb_site(self.client.me().origin)
+        self.client.state.loadout.c4 && self.client.state.loadout.active == Slot::Bomb && self.map.zones.in_bomb_site(self.client.me().origin, self.client.me().hull())
     }
 
     fn defusing(&self) -> bool {

@@ -25,7 +25,7 @@ fn site_spot(bsp: &goldsrc::bsp::Bsp) -> [f32; 3] {
     let z = sim::zones::Zones::from_bsp(bsp);
     let (lo, hi) = z.bomb_sites[0];
     let p = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2] + 40.0];
-    assert!(z.in_bomb_site(p));
+    assert!(z.in_bomb_site(p, sim::collision::Hull::Standing));
     p
 }
 

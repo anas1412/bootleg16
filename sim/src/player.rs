@@ -55,7 +55,7 @@ pub fn step(s: &mut PlayerState, input: &Input, dt: f32, cmd_time: f64, seed: u6
         slot: input.slot,
         drop: input.drop,
         can_shoot: !limits.no_attack,
-        in_bomb_site: world.zones.in_bomb_site(s.movement.origin),
+        in_bomb_site: world.zones.in_bomb_site(s.movement.origin, s.movement.hull()),
         seed,
     };
     let fired = s.loadout.update(&ctx);

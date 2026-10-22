@@ -1,6 +1,7 @@
 //! Map areas with rules attached: where each team can buy, where the bomb can be planted,
 //! and how big the bomb blast is. Read from the map's entities, so the server and the
 //! client's prediction agree.
+use crate::collision::Hull;
 use crate::Vec3;
 use goldsrc::bsp::Bsp;
 
@@ -13,8 +14,8 @@ pub enum Side {
 
 #[derive(Clone, Debug, Default)]
 pub struct Zones {
-    /// Buy areas per side: boxes (mins, maxs).
-    buy: Vec<(Side, Vec3, Vec3)>,
+    /// Buy areas: boxes (mins, maxs), for one side or (None, `team` 0) both.
+    buy: Vec<(Option<Side>, Vec3, Vec3)>,
     /// Maps without `func_buyzone`: you can buy near your own team's spawn points.
     spawn_buy: Vec<(Side, Vec3)>,
     /// Bomb sites (`func_bomb_target`): boxes.
@@ -43,7 +44,12 @@ impl Zones {
         for e in bsp.entity_list() {
             match e.get("classname").map(String::as_str) {
                 Some("func_buyzone") => {
-                    let side = if e.get("team").map(String::as_str) == Some("1") { Side::T } else { Side::Ct };
+                    // CBuyZone::BuyTouch: team 0 (or none) lets both sides buy
+                    let side = match e.get("team").map(String::as_str) {
+                        Some("1") => Some(Side::T),
+                        Some("2") => Some(Side::Ct),
+                        _ => None,
+                    };
                     if let Some((lo, hi)) = bounds(&e) {
                         z.buy.push((side, lo, hi));
                     }
@@ -71,11 +77,14 @@ impl Zones {
         z
     }
 
-    pub fn in_buy_zone(&self, side: Side, at: Vec3) -> bool {
+    /// Whether a player there (`hull`: their box) may buy. CS 1.6: the zone is a trigger, so
+    /// any part of the player touching it counts; without zones, within 200 units of one of
+    /// your team's spawn points (from the origin, `CBasePlayer::HandleSignals`).
+    pub fn in_buy_zone(&self, side: Side, at: Vec3, hull: Hull) -> bool {
         if self.buy.is_empty() {
             return self.spawn_buy.iter().any(|(s, o)| *s == side && (0..3).map(|i| (o[i] - at[i]).powi(2)).sum::<f32>() < SPAWN_BUY_RADIUS * SPAWN_BUY_RADIUS);
         }
-        self.buy.iter().any(|(s, lo, hi)| *s == side && inside(at, *lo, *hi))
+        self.buy.iter().any(|(s, lo, hi)| s.is_none_or(|s| s == side) && touches(at, hull, *lo, *hi))
     }
 
     /// The bomb sites' centres, A first. Names come from the map where it has them (de_dust2's
@@ -106,11 +115,32 @@ impl Zones {
         self.spawn_buy.iter().filter(|(s, _)| *s == side).map(|(_, o)| *o).collect()
     }
 
-    pub fn in_bomb_site(&self, at: Vec3) -> bool {
-        self.bomb_sites.iter().any(|(lo, hi)| inside(at, *lo, *hi))
+    /// Whether a player there (`hull`) is on a bomb site (touching its trigger, as CS 1.6).
+    pub fn in_bomb_site(&self, at: Vec3, hull: Hull) -> bool {
+        self.bomb_sites.iter().any(|(lo, hi)| touches(at, hull, *lo, *hi))
     }
 }
 
-fn inside(p: Vec3, lo: Vec3, hi: Vec3) -> bool {
-    (0..3).all(|i| p[i] >= lo[i] && p[i] <= hi[i])
+/// A player's box at `p` overlaps the box lo..hi (how a trigger is touched).
+fn touches(p: Vec3, hull: Hull, lo: Vec3, hi: Vec3) -> bool {
+    let (mins, maxs) = (hull.mins(), hull.maxs());
+    (0..3).all(|i| p[i] + maxs[i] >= lo[i] && p[i] + mins[i] <= hi[i])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_zone_counts_once_any_part_of_you_touches_it_and_team_0_is_both_sides() {
+        let z = Zones { buy: vec![(Some(Side::T), [0.0, 0.0, 0.0], [100.0, 100.0, 100.0]), (None, [500.0, 0.0, 0.0], [600.0, 100.0, 100.0])], ..Default::default() };
+        // centre 10 units outside, but the 16-unit half width reaches in
+        assert!(z.in_buy_zone(Side::T, [110.0, 50.0, 50.0], Hull::Standing));
+        assert!(!z.in_buy_zone(Side::T, [120.0, 50.0, 50.0], Hull::Standing));
+        assert!(!z.in_buy_zone(Side::Ct, [50.0, 50.0, 50.0], Hull::Standing));
+        assert!(z.in_buy_zone(Side::Ct, [550.0, 50.0, 50.0], Hull::Crouched));
+        // standing reaches 36 below its centre, crouched 18
+        assert!(z.in_buy_zone(Side::T, [50.0, 50.0, 130.0], Hull::Standing));
+        assert!(!z.in_buy_zone(Side::T, [50.0, 50.0, 130.0], Hull::Crouched));
+    }
 }

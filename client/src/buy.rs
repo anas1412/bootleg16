@@ -38,7 +38,7 @@ pub fn why_not(w: &Walker) -> Option<&'static str> {
         Some("") // nothing to say: you're dead or watching
     } else {
         let side = if team == Team::Ct { sim::zones::Side::Ct } else { sim::zones::Side::T };
-        Some(if w.client.world.zones.in_buy_zone(side, w.client.me().origin) { "Buy time is over" } else { "Not in a buy zone" })
+        Some(if w.client.world.zones.in_buy_zone(side, w.client.me().origin, w.client.me().hull()) { "Buy time is over" } else { "Not in a buy zone" })
     }
 }
 
