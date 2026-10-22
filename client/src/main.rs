@@ -82,8 +82,14 @@ fn game_dir() -> PathBuf {
     net::gamefiles::data_dir()
 }
 
-/// Bevy task pool threads by default (see the TaskPoolPlugin below).
-const THREADS: usize = 3;
+/// Bevy task pool threads: half the logical cores (about the physical ones), 2 to 4, as
+/// engines size their worker pools; BOOTLEG16_THREADS=n overrides it. Every core (Bevy's
+/// default) spent most of its time handing tiny systems between threads: on 8 cores, twice
+/// the CPU and fewer frames (53 vs 61 FPS) than 2 or 3 threads.
+fn threads() -> usize {
+    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+    std::env::var("BOOTLEG16_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or((cores / 2).clamp(2, 4))
+}
 
 fn main() {
     // NVIDIA's Vulkan on Wayland (driver 615, KDE) kills the game with "explicit sync is used,
@@ -98,12 +104,8 @@ fn main() {
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin { primary_window: Some(Window { title: "bootleg16".into(), name: Some("bootleg16".into()), decorations: !menu::Settings::load().borderless, ..default() }), ..default() })
-                // How many threads Bevy's task pools use: 3, or BOOTLEG16_THREADS=n. One per core
-                // (Bevy's default, 8 here) spent most of its time handing tiny systems between
-                // threads: twice the CPU and fewer frames (53 vs 61 FPS) than 2 or 3 threads.
-                .set(bevy::app::TaskPoolPlugin {
-                    task_pool_options: bevy::app::TaskPoolOptions::with_num_threads(std::env::var("BOOTLEG16_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(THREADS)),
-                }),
+                // How many threads Bevy's task pools use (`threads`).
+                .set(bevy::app::TaskPoolPlugin { task_pool_options: bevy::app::TaskPoolOptions::with_num_threads(threads()) }),
         )
         // GoldSrc lighting is fully baked into lightmaps; no extra ambient.
         .insert_resource(GlobalAmbientLight { brightness: 0.0, ..default() })
