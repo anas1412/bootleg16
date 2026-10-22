@@ -6,19 +6,29 @@
 //! client.so, read with REA): an additive `wall_puff` sprite drifting off the wall at 25 u/s,
 //! 0.4 to 0.6 size (wood 0.5 to 0.75), tinted by the surface (concrete lighter, wood brown),
 //! with sparks off concrete, metal, vents, grates, tiles and computers.
+//! The flying bits (dust, blood, sparks) are one entity a burst: `particles.wesl` flies and
+//! shrinks every bit on the GPU, so a hit costs one entity and nothing after.
 use crate::game::{Frame, Walker};
 use crate::level::rgba_image;
 use crate::map;
 use crate::menu::AppState;
+use bevy::asset::{embedded_asset, RenderAssetUsages};
+use bevy::camera::visibility::NoFrustumCulling;
+use bevy::light::NotShadowCaster;
+use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
+use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::prelude::*;
-use bevy::render::render_resource::TextureFormat;
+use bevy::render::render_resource::{AsBindGroup, ShaderType, TextureFormat};
+use bevy::shader::ShaderRef;
 use std::collections::VecDeque;
 
 pub struct ImpactsPlugin;
 
 impl Plugin for ImpactsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<Hit>()
+        embedded_asset!(app, "particles.wesl");
+        app.add_plugins(MaterialPlugin::<BurstMaterial>::default())
+            .add_message::<Hit>()
             .init_resource::<Decals>()
             .add_systems(Startup, load)
             .add_systems(OnEnter(AppState::InGame), |mut d: ResMut<Decals>| d.0.clear())
@@ -51,17 +61,18 @@ struct Decals(VecDeque<Entity>);
 #[derive(Resource)]
 struct Looks {
     quad: Handle<Mesh>,
-    ball: Handle<Mesh>,
+    /// `BITS` small spheres in one mesh, each tagged with its number (UV_1.x).
+    bits: Handle<Mesh>,
     /// Decals from decals.wad, each with its size in units (one texel each).
     shots: Vec<(Handle<StandardMaterial>, Vec2)>,
     bloods: Vec<(Handle<StandardMaterial>, Vec2)>,
     scorches: Vec<(Handle<StandardMaterial>, Vec2)>,
     /// The wad, for the maps' own `infodecal`s.
     wad: Option<goldsrc::wad::Wad>,
-    dust: Handle<StandardMaterial>,
-    blood: Handle<StandardMaterial>,
+    dust: StandardMaterial,
+    blood: StandardMaterial,
     /// Hot sparks (additive, bright).
-    spark: Handle<StandardMaterial>,
+    spark: StandardMaterial,
     /// The four wall puff sprites: frames and width (texels = units at scale 1).
     puffs: Vec<(Vec<Handle<Image>>, f32)>,
     materials: goldsrc::materials::Materials,
@@ -123,14 +134,14 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
     let wad = crate::gamefiles::paths("decals.wad").iter().find_map(|p| goldsrc::wad::Wad::load(p).ok());
     commands.insert_resource(Looks {
         quad: meshes.add(Rectangle::new(1.0, 1.0)),
-        ball: meshes.add(Sphere::new(1.0).mesh().ico(1).unwrap()),
+        bits: meshes.add(bits_mesh()),
         shots: load_decals(&wad, &["{shot1", "{shot2", "{shot3", "{shot4", "{shot5"], &mut images, &mut materials),
         bloods: load_decals(&wad, &["{blood1", "{blood2", "{blood3", "{blood4", "{blood5", "{blood6"], &mut images, &mut materials),
         scorches: load_decals(&wad, &["{scorch1", "{scorch2", "{scorch3"], &mut images, &mut materials),
         wad,
-        dust: materials.add(solid(Color::srgb(0.55, 0.5, 0.42))),
-        blood: materials.add(solid(Color::srgb(0.55, 0.02, 0.01))),
-        spark: materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.8, 0.35), unlit: true, alpha_mode: AlphaMode::Add, ..default() }),
+        dust: solid(Color::srgb(0.55, 0.5, 0.42)),
+        blood: solid(Color::srgb(0.55, 0.02, 0.01)),
+        spark: StandardMaterial { base_color: Color::srgb(1.0, 0.8, 0.35), unlit: true, alpha_mode: AlphaMode::Add, ..default() },
         // Additive: their texels are display values (see `explosions`), so no sRGB decode.
         puffs: (1..=4)
             .filter_map(|i| crate::gamefiles::paths(&format!("sprites/wall_puff{i}.spr")).iter().find_map(|p| goldsrc::spr::Sprite::load(p).ok()))
@@ -140,14 +151,76 @@ fn load(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials:
     });
 }
 
-/// A short-lived blob: velocity (GoldSrc units/s, Y-up), seconds left of `life`, falls if `gravity`.
+/// The most bits in one burst (a headshot sprays 22, sparks up to 31).
+const BITS: u32 = 32;
+
+/// `BITS` low-poly spheres of radius 1 at the origin, in one mesh; UV_1.x says which bit.
+fn bits_mesh() -> Mesh {
+    let ball = Sphere::new(1.0).mesh().ico(1).unwrap();
+    let get = |a| match ball.attribute(a) {
+        Some(VertexAttributeValues::Float32x3(v)) => v.clone(),
+        _ => Vec::new(),
+    };
+    let (pos, normal) = (get(Mesh::ATTRIBUTE_POSITION), get(Mesh::ATTRIBUTE_NORMAL));
+    let uv = match ball.attribute(Mesh::ATTRIBUTE_UV_0) {
+        Some(VertexAttributeValues::Float32x2(v)) => v.clone(),
+        _ => vec![[0.0; 2]; pos.len()],
+    };
+    let tris: Vec<u32> = ball.indices().map(|i| i.iter().map(|i| i as u32).collect()).unwrap_or_default();
+    let (mut p, mut n, mut u, mut which, mut idx) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for b in 0..BITS {
+        let base = p.len() as u32;
+        p.extend_from_slice(&pos);
+        n.extend_from_slice(&normal);
+        u.extend_from_slice(&uv);
+        which.extend(std::iter::repeat_n([b as f32, 0.0], pos.len()));
+        idx.extend(tris.iter().map(|i| base + i));
+    }
+    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, p)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, n)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, u)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, which)
+        .with_inserted_indices(Indices::U32(idx))
+}
+
+/// A burst's bits: the standard look (dust, blood, sparks) moved by `particles.wesl`.
+type BurstMaterial = ExtendedMaterial<StandardMaterial, BurstFlight>;
+
+/// Where and when a burst starts, which way, how fast, its bits' size, life and count
+/// (see `particles.wesl`).
+#[derive(ShaderType, Reflect, Debug, Clone, Copy, Default)]
+struct BurstData {
+    origin: Vec4,
+    dir: Vec4,
+    look: Vec4,
+    salt: Vec4,
+}
+
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+struct BurstFlight {
+    #[uniform(100)]
+    data: BurstData,
+}
+
+impl MaterialExtension for BurstFlight {
+    fn vertex_shader() -> ShaderRef {
+        "embedded://client/particles.wesl".into()
+    }
+    // the prepass and shadows would draw the bits unmoved: they have neither
+    fn enable_prepass() -> bool {
+        false
+    }
+    fn enable_shadows() -> bool {
+        false
+    }
+}
+
+/// A burst in flight: gone after `until` (seconds, `Time::elapsed_secs`), with its material.
 #[derive(Component)]
-struct Particle {
-    vel: Vec3,
-    left: f32,
-    life: f32,
-    size: f32,
-    gravity: bool,
+struct Burst {
+    until: f32,
+    material: Handle<BurstMaterial>,
 }
 
 fn y_up(v: [f32; 3]) -> Vec3 {
@@ -159,8 +232,10 @@ fn noise(i: u32, salt: f32) -> f32 {
     ((i as f32 * 12.9898 + salt * 78.233).sin() * 43758.547).fract()
 }
 
-fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<Looks>, mut decals: ResMut<Decals>, w: Res<Walker>, time: Res<Time>, mut mats: ResMut<Assets<StandardMaterial>>) {
-    let salt = time.elapsed_secs();
+#[allow(clippy::too_many_arguments)]
+fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<Looks>, mut decals: ResMut<Decals>, w: Res<Walker>, time: Res<Time>, mut mats: ResMut<Assets<StandardMaterial>>, mut bursts: ResMut<Assets<BurstMaterial>>) {
+    // (wrapped like the shaders' clock, so the noise stays precise)
+    let salt = time.elapsed_secs_wrapped();
     // One of a set of decals, picked by `k`.
     let mut decal = |commands: &mut Commands, at: Vec3, normal: Vec3, set: &[(Handle<StandardMaterial>, Vec2)], k: f32| {
         let Some((material, size)) = set.get(((k * set.len() as f32) as usize).min(set.len().saturating_sub(1))) else { return };
@@ -174,18 +249,25 @@ fn spawn_hits(mut commands: Commands, mut hits: MessageReader<Hit>, looks: Res<L
             }
         }
     };
-    let burst = |commands: &mut Commands, at: Vec3, dir: Vec3, n: u32, speed: f32, size: f32, life: f32, material: &Handle<StandardMaterial>, gravity: bool| {
-        for i in 0..n {
-            let jitter = Vec3::new(noise(i, salt) - 0.5, noise(i + 31, salt) - 0.5, noise(i + 77, salt) - 0.5);
-            let vel = (dir + jitter * 1.2).normalize_or_zero() * speed * (0.5 + noise(i + 5, salt));
-            commands.spawn((
-                Particle { vel, left: life, life, size, gravity },
-                Mesh3d(looks.ball.clone()),
-                MeshMaterial3d(material.clone()),
-                Transform::from_translation(at).with_scale(Vec3::splat(size)),
-                DespawnOnExit(AppState::InGame),
-            ));
-        }
+    // n bits flying out from `at` along `dir` (with jitter), shrinking over `life`
+    let mut burst = |commands: &mut Commands, at: Vec3, dir: Vec3, n: u32, speed: f32, size: f32, life: f32, look: &StandardMaterial, gravity: bool| {
+        let data = BurstData {
+            origin: at.extend(time.elapsed_secs_wrapped()),
+            dir: dir.extend(speed),
+            look: Vec4::new(size, life, if gravity { 1.0 } else { 0.0 }, n.min(BITS) as f32),
+            salt: Vec4::new(salt, 0.0, 0.0, 0.0),
+        };
+        let material = bursts.add(BurstMaterial { base: look.clone(), extension: BurstFlight { data } });
+        commands.spawn((
+            Burst { until: time.elapsed_secs() + life, material: material.clone() },
+            Mesh3d(looks.bits.clone()),
+            MeshMaterial3d(material),
+            Transform::IDENTITY,
+            // the mesh sits at the origin; its bits are wherever the burst is
+            NoFrustumCulling,
+            NotShadowCaster,
+            DespawnOnExit(AppState::InGame),
+        ));
     };
     for (k, hit) in hits.read().enumerate() {
         match *hit {
@@ -271,19 +353,14 @@ fn puffs(mut commands: Commands, time: Res<Time>, looks: Res<Looks>, cam: Single
     }
 }
 
-fn particles(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &mut Particle, &mut Transform)>) {
-    let dt = time.delta_secs();
-    for (e, mut p, mut tf) in &mut q {
-        p.left -= dt;
-        if p.left <= 0.0 {
+/// Bursts that have run out go (their bits move on the GPU, `particles.wesl`).
+fn particles(mut commands: Commands, time: Res<Time>, q: Query<(Entity, &Burst)>, mut bursts: ResMut<Assets<BurstMaterial>>) {
+    let now = time.elapsed_secs();
+    for (e, b) in &q {
+        if now >= b.until {
+            bursts.remove(&b.material);
             commands.entity(e).despawn();
-            continue;
         }
-        if p.gravity {
-            p.vel.y -= 800.0 * dt; // sv_gravity
-        }
-        tf.translation += p.vel * dt;
-        tf.scale = Vec3::splat(p.size * (p.left / p.life).sqrt());
     }
 }
 
