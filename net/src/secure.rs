@@ -50,9 +50,13 @@ impl Default for Cookies {
 /// never leaves half a file, and readers see the old one or the new one.
 pub fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
     let tmp = path.with_extension("tmp");
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create(true).truncate(true);
+    // (Windows: files under the user's profile are already private to them)
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
+    let mut f = o.open(&tmp)?;
     f.write_all(bytes)?;
     f.sync_all()?;
     std::fs::rename(tmp, path)
