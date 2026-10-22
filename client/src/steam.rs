@@ -1,8 +1,9 @@
 //! Steam (built with the `steam` feature, on by default): your Steam name and id, your
 //! friends with their avatars, invites, and rich presence so friends see your party and can
 //! join it from Steam. App 480 (Valve's Spacewar test app) until we have our own App ID.
-//! Without Steam running (or without the feature) the game plays anonymously; nothing here
-//! is required.
+//! Release builds need Steam: without it running and signed in, the game says so and quits
+//! (no match can start). Development builds (the `dev` feature) and builds without the
+//! `steam` feature play anonymously.
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -26,9 +27,26 @@ impl Plugin for SteamPlugin {
                 app.insert_resource(Steam { me, name, friends: Vec::new(), avatars: HashMap::new(), presence: String::new(), sdk: Some(Sdk { client, joins: std::sync::Mutex::new(rx), _join: join }), refresh: 0.0 })
                     .add_systems(Update, update);
             }
-            Err(e) => warn!("Steam isn't running or refused us ({e}): playing without Steam"),
+            Err(e) => {
+                warn!("Steam isn't running or refused us ({e})");
+                #[cfg(not(feature = "dev"))]
+                app.insert_resource(steam_needed()).add_systems(OnEnter(crate::menu::AppState::Connecting), no_play_without_steam);
+            }
         }
     }
+}
+
+/// What a release build says when Steam isn't there.
+#[cfg(all(feature = "steam", not(feature = "dev")))]
+fn steam_needed() -> crate::notice::Notice {
+    crate::notice::Notice::error("Steam needed", "bootleg16 plays with your Steam account. Open Steam, sign in, then start the game again.").quitting()
+}
+
+/// A match never starts without Steam (whatever got past the notice).
+#[cfg(all(feature = "steam", not(feature = "dev")))]
+fn no_play_without_steam(mut commands: Commands, mut next: ResMut<NextState<crate::menu::AppState>>) {
+    commands.insert_resource(steam_needed());
+    next.set(crate::menu::AppState::Menu);
 }
 
 /// Present only when signed in to Steam.

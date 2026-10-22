@@ -62,4 +62,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" files/* --repo "$GITHUB_REPOSITORY" --title "${GITHUB_REF_NAME#v}" --prerelease \
-            --notes "Alpha build. Linux: unpack the .tar.gz and run ./install.sh. Windows: run the setup .exe. Practice (solo, offline) works without a server."
+            --notes "Alpha build. Needs Steam running and signed in (without it the game says so and quits). Linux: unpack the .tar.gz and run ./install.sh. Windows: run the setup .exe. Practice (solo) works without a server."

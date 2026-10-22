@@ -24,4 +24,5 @@ Remove it:
   ./uninstall.sh            removes the game
   ./uninstall.sh --purge    also removes your settings
 
+Needs Steam running and signed in: without it the game says so and quits.
 Needs a Vulkan-capable graphics driver. Wayland and X11 both work.
