@@ -30,6 +30,8 @@ pub struct GameConfig {
 pub enum ServerChoice {
     /// A server inside the game.
     Local(net::server::Rules),
+    /// A server inside the game that friends join too (`host`).
+    Host(net::server::Rules),
     Remote(String),
 }
 
@@ -57,11 +59,11 @@ pub(super) fn start_connecting(mut commands: Commands, config: Res<GameConfig>) 
     commands.remove_resource::<PendingClient>();
     commands.remove_resource::<Notice>();
     commands.spawn((Camera2d, DespawnOnExit(AppState::Connecting)));
-    let practice = matches!(config.server, ServerChoice::Local(_));
+    let practice = !matches!(config.server, ServerChoice::Remote(_));
     commands.insert_resource(Loading {
         target: match &config.server {
             ServerChoice::Remote(a) => a.clone(),
-            ServerChoice::Local(_) => config.map.clone(),
+            ServerChoice::Local(_) | ServerChoice::Host(_) => config.map.clone(),
         },
         map: practice.then(|| config.map.clone()),
         practice,
@@ -73,19 +75,28 @@ pub(super) fn start_connecting(mut commands: Commands, config: Res<GameConfig>) 
         ServerChoice::Remote(a) => Job::spawn(move || {
             std::net::ToSocketAddrs::to_socket_addrs(&a).ok().and_then(|mut it| it.next()).ok_or_else(|| Notice::error("Can't find the server", format!("No server at '{a}'. Check the address.")).with_retry())
         }),
-        ServerChoice::Local(rules) => {
+        ServerChoice::Local(rules) | ServerChoice::Host(rules) => {
             // The stop flag exists before the thread: cancelling stops a server still starting.
             let stop = Arc::new(AtomicBool::new(false));
             commands.insert_resource(LocalServer(stop.clone()));
+            // Hosting: open to everyone on the game's port; else only to us, on any port.
+            let host = matches!(config.server, ServerChoice::Host(_));
+            if host {
+                commands.insert_resource(crate::host::Hosting::start());
+            }
+            let bind: SocketAddr = if host { ([0, 0, 0, 0], crate::host::PORT).into() } else { ([127, 0, 0, 1], 0).into() };
             let (map, give) = (config.map.clone(), config.give.clone());
             Job::spawn(move || {
                 let root = game_dir();
                 let bsp = goldsrc::bsp::Bsp::load(&root.join("maps").join(format!("{map}.bsp"))).map_err(|e| Notice::error("Map missing", format!("Can't load {map} ({e}).")))?;
                 let assets = net::server::Assets::load(&root).map_err(|e| Notice::error("Game files missing", format!("{e}. Verify your game files.")))?;
-                let mut server = net::Server::new(([127, 0, 0, 1], 0).into(), &map, &bsp, assets).map_err(|e| Notice::error("Couldn't start the game", format!("The built-in server didn't start ({e}).")).with_retry())?;
+                let mut server = net::Server::new(bind, &map, &bsp, assets).map_err(|e| match host {
+                    true => Notice::error("Couldn't host", format!("Port {} is taken ({e}). Close whatever uses it and try again.", crate::host::PORT)).with_retry(),
+                    false => Notice::error("Couldn't start the game", format!("The built-in server didn't start ({e}).")).with_retry(),
+                })?;
                 server.set_give(give);
                 server.set_rules(rules);
-                let addr = server.local_addr();
+                let addr = SocketAddr::from(([127, 0, 0, 1], server.local_addr().port()));
                 std::thread::spawn(move || server.run_until(&stop));
                 Ok(addr)
             })
@@ -162,7 +173,7 @@ pub(super) fn advance(
                 net::client::Status::Connecting if *waited > 10.0 => {
                     let body = match &config.server {
                         ServerChoice::Remote(a) => format!("{a} didn't answer in 10 seconds."),
-                        ServerChoice::Local(_) => "The built-in server didn't answer.".to_string(),
+                        ServerChoice::Local(_) | ServerChoice::Host(_) => "The built-in server didn't answer.".to_string(),
                     };
                     fail(&mut commands, &mut next, Notice::error("Can't reach the server", body).with_retry());
                 }
@@ -235,6 +246,7 @@ pub(super) fn stop_loading(mut commands: Commands, mut pending: Option<ResMut<Pe
         s.0.store(true, Ordering::Relaxed);
     }
     commands.remove_resource::<LocalServer>();
+    commands.remove_resource::<crate::host::Hosting>();
 }
 
 /// Leaving a match: say goodbye, stop the built-in server, back to the menu.
@@ -247,6 +259,7 @@ pub(super) fn leave_game(mut commands: Commands, walker: Option<ResMut<Walker>>,
     }
     commands.remove_resource::<Walker>();
     commands.remove_resource::<LocalServer>();
+    commands.remove_resource::<crate::host::Hosting>();
     commands.remove_resource::<MapData>();
     commands.remove_resource::<Loading>(); // left while still covered
 }

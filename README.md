@@ -7,6 +7,7 @@ Counter-Strike 1.6 rebuilt in Rust with Bevy. CS 1.6 movement, guns, sounds and 
 - **Casual:** party of 1 to 5, Find match. 10 players make a 5 v 5; a party always stays on one team.
 - **Custom game:** up to 10 friends. The leader puts people on team A or B and presses Start. A knife round decides who picks sides. Pick a map or veto (captains ban in turns).
 - **Deathmatch:** drop-in warm-up servers, up to 20 players. Instant respawn away from enemies, no rounds, timer or bomb, buy anything anywhere for free. First to 100 kills is announced and scores reset.
+- **Host:** a match or deathmatch on your own PC. Steam friends join from your name in their friends list (Join game), or type your address under Play. For friends outside your home, forward UDP port 27015 on your router.
 - **Practice > Solo:** offline on your own machine, with standing dummies if you like.
 - **Maps:** de_dust2, de_inferno, de_nuke, de_train. Casual picks one at random.
 - **Parties:** open **Play** and share your party code, or invite Steam friends.

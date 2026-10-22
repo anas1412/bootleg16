@@ -96,10 +96,11 @@ pub fn rebuild_menu(
             nav(col, &kit, "menu.nav", vec![
                 item("01", "Play", "プレイ", UiAction::Page(Page::Join), false),
                 item("02", "Practice", "練習", UiAction::Page(Page::Practice), st.page == Page::Practice),
-                item("03", "Characters", "キャラ", UiAction::Page(Page::Characters), st.page == Page::Characters),
-                item("04", "Settings", "設定", UiAction::Page(Page::Settings), st.page == Page::Settings),
-                item("05", "Voice", "音声", UiAction::Page(Page::Voice), st.page == Page::Voice),
-                item("06", "Quit", "終了", UiAction::Quit, false),
+                item("03", "Host", "ホスト", UiAction::Page(Page::Host), st.page == Page::Host),
+                item("04", "Characters", "キャラ", UiAction::Page(Page::Characters), st.page == Page::Characters),
+                item("05", "Settings", "設定", UiAction::Page(Page::Settings), st.page == Page::Settings),
+                item("06", "Voice", "音声", UiAction::Page(Page::Voice), st.page == Page::Voice),
+                item("07", "Quit", "終了", UiAction::Quit, false),
             ], false);
         });
         // Bottom left: the wordmark. The amber 16 block spans BOOTLEG's cap height exactly
@@ -133,6 +134,7 @@ pub fn rebuild_menu(
     page.with_children(|page| match st.page {
         Page::Main | Page::Join => {}
         Page::Practice => practice(page, &kit, &mut memory, st, &lobby),
+        Page::Host => host(page, &kit, st),
         Page::Settings => settings_page(page, &kit, &faces, &mut memory, &settings, steam, &binds, st.settings_tab, tune_page.then_some(delay)),
         Page::Voice => crate::voice::page(page, &kit, &mut memory, &voice, tune_page.then_some(delay)),
         Page::Characters => crate::characters::page(page, &kit, &settings, &characters, st.character_side),
@@ -167,6 +169,29 @@ fn practice(page: &mut ChildSpawnerCommands, kit: &Kit, memory: &mut UiMemory, s
     stepper(page, kit, memory, "practice.dummies", &st.dummies.to_string(), UiAction::Dummies(-1), UiAction::Dummies(1));
     page.spawn(Node { margin: UiRect::top(vh(40.0)), ..default() }).with_children(|b| {
         primary_button(b, kit, &format!("Start · {}", st.map), "Enter", UiAction::StartPractice);
+    });
+}
+
+/// Host: a match (or deathmatch) on your PC that Steam friends join.
+fn host(page: &mut ChildSpawnerCommands, kit: &Kit, st: &MenuState) {
+    page_title(page, kit, "On your PC · friends join from Steam", "Host", "ホスト");
+    label(page, kit, "Mode");
+    chips(page, kit, "host.mode", vec![Choice::new("Match · 5 v 5", UiAction::HostMode(false), !st.host_dm), Choice::new("Deathmatch", UiAction::HostMode(true), st.host_dm)]);
+    label(page, kit, "Map");
+    chips(page, kit, "host.map", st.maps.iter().map(|m| Choice::new(m, UiAction::PickMap(m.clone()), *m == st.map)).collect());
+    let port = crate::host::PORT;
+    for (i, line) in [
+        "Friends join from your name in Steam: Join game".to_string(),
+        "Or they type your address under Play".to_string(),
+        format!("Friends outside your home: forward UDP port {port} on your router"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        page.spawn((kit_text(line, 18.0, TX2, &kit.text), Node { margin: UiRect::top(vh(if i == 0 { 40.0 } else { 12.0 })), ..default() }));
+    }
+    page.spawn(Node { margin: UiRect::top(vh(40.0)), ..default() }).with_children(|b| {
+        primary_button(b, kit, &format!("Host · {}", st.map), "Enter", UiAction::StartHost);
     });
 }
 

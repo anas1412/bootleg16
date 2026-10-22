@@ -47,6 +47,8 @@ pub struct Lobby {
     /// A party to join once signed in (from `+party CODE` on the command line: Steam's "Join
     /// game" or an accepted invite when the game wasn't running).
     join_on_start: Option<String>,
+    /// A friend's hosted match to join at start (`+connect host:port`, from Steam).
+    connect_on_start: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -90,7 +92,7 @@ fn start(mut commands: Commands, settings: Res<Settings>, steam: Option<Res<Stea
         c
     });
     let args: Vec<String> = std::env::args().collect();
-    commands.insert_resource(Lobby { client, address, shown: None, notice: String::new(), invited: HashMap::new(), ignored: Vec::new(), join_on_start: crate::steam::party_code(&args) });
+    commands.insert_resource(Lobby { client, address, shown: None, notice: String::new(), invited: HashMap::new(), ignored: Vec::new(), join_on_start: crate::steam::party_code(&args), connect_on_start: crate::steam::server_address(&args) });
 }
 
 pub fn apply(lobby: &mut Lobby, st: &mut MenuState, steam: Option<&Steam>, a: LobbyAction) {
@@ -158,6 +160,11 @@ fn poll(mut commands: Commands, mut lobby: ResMut<Lobby>, mut dirty: ResMut<Menu
     });
     dirty.0 |= lobby.invited.len() != before;
     if *state.get() == AppState::Menu {
+        if let Some(addr) = lobby.connect_on_start.take() {
+            commands.insert_resource(GameConfig { map: String::new(), server: ServerChoice::Remote(addr), give: Vec::new(), ticket: 0, key: None });
+            next.set(AppState::Connecting);
+            return;
+        }
         if let Some((addr, ticket, key)) = c.found.take() {
             commands.insert_resource(GameConfig { map: String::new(), server: ServerChoice::Remote(addr.to_string()), give: Vec::new(), ticket, key: Some(key) });
             next.set(AppState::Connecting);
@@ -166,12 +173,20 @@ fn poll(mut commands: Commands, mut lobby: ResMut<Lobby>, mut dirty: ResMut<Menu
 }
 
 /// Steam friends see what we're doing and can join our party; their "Join game" lands here.
-fn steam_glue(steam: Option<ResMut<Steam>>, mut lobby: ResMut<Lobby>, state: Res<State<AppState>>) {
+fn steam_glue(steam: Option<ResMut<Steam>>, mut lobby: ResMut<Lobby>, state: Res<State<AppState>>, hosting: Option<Res<crate::host::Hosting>>) {
     let Some(mut steam) = steam else { return };
-    for code in steam.take_joins() {
-        if let Some(c) = &mut lobby.client {
+    for join in steam.take_joins() {
+        if let Some(addr) = crate::steam::server_address(&join) {
+            // a friend's hosted match: from the menu, at once (`poll`)
+            lobby.connect_on_start = Some(addr);
+        } else if let (Some(code), Some(c)) = (crate::steam::party_code(&join), &mut lobby.client) {
             c.send(Command::JoinParty { code });
         }
+    }
+    // Hosting: "Join game" brings friends into our match.
+    if let Some(addr) = hosting.and_then(|h| h.address()) {
+        steam.set_presence(&format!("+connect {addr}"), "Hosting a match");
+        return;
     }
     let Some(s) = &lobby.shown else { return };
     let status = match (*state.get(), s.searching) {
@@ -180,7 +195,7 @@ fn steam_glue(steam: Option<ResMut<Steam>>, mut lobby: ResMut<Lobby>, state: Res
         _ if s.members.len() > 1 => format!("In a party ({} of {})", s.members.len(), if s.mode == Mode::Custom { net::lobby::MAX_CUSTOM } else { net::lobby::MAX_PARTY }),
         _ => "In menus".to_string(),
     };
-    steam.set_presence(&s.code, &status);
+    steam.set_presence(&crate::steam::connect_string(&s.code), &status);
 }
 
 /// Esc on the Play page goes back to the main menu.

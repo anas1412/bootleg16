@@ -93,6 +93,8 @@ land, and add new ones here instead of leaving them only in chat.
 - [ ] Accounts: Steam (sign-in done with Valve's test app 480); our own App ID before release
 - [x] One-command hosting: ./host.sh (Docker, fleets, standby lobby, firewall, rolling updates)
 - [ ] Home hosting without port forwarding: UPnP from the server, relay through the lobby as fallback
+- [x] Host button: a match or deathmatch inside the game on UDP 27015, friends join via Steam "Join game" (rich presence `+connect <public ip>`, found by STUN) or by typing the address
+- [ ] Host: without port forwarding (Steam Datagram Relay / SteamNetworkingSockets would remove it), and Steam "Join game" when the friend's game isn't running launches App 480 (Spacewar), not us, until we have our own App ID
 - [x] Server protection: join cookie (stateless, no spoofed slots), per-IP packet budget, max 6 players per IP, 1400-byte cap, padded info/list requests (no amplification), lobby rate limits
 - [x] Kernel flood filtering: ./host.sh firewall (nftables)
 - [ ] Host-side DDoS filtering: choose a provider with game DDoS protection (OVH Game, Path.net); a user decision

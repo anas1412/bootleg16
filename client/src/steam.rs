@@ -115,7 +115,16 @@ pub fn connect_string(code: &str) -> String {
 
 /// The party code in a connect string or the game's command line (`+party CODE`).
 pub fn party_code<S: AsRef<str>>(args: &[S]) -> Option<String> {
-    let i = args.iter().position(|a| a.as_ref() == "+party")?;
+    arg_after(args, "+party")
+}
+
+/// A hosted match's address in a connect string or the command line (`+connect host:port`).
+pub fn server_address<S: AsRef<str>>(args: &[S]) -> Option<String> {
+    arg_after(args, "+connect")
+}
+
+fn arg_after<S: AsRef<str>>(args: &[S], key: &str) -> Option<String> {
+    let i = args.iter().position(|a| a.as_ref() == key)?;
     args.get(i + 1).map(|c| c.as_ref().to_string())
 }
 
@@ -144,9 +153,10 @@ impl Steam {
         let _ = (friend, code);
     }
 
-    /// Tell friends what we're doing (and let them join our party from Steam).
-    pub fn set_presence(&mut self, code: &str, status: &str) {
-        let key = format!("{code}|{status}");
+    /// Tell friends what we're doing, and what "Join game" does for them (`connect`: our
+    /// party's `connect_string`, or `+connect <address>` while hosting).
+    pub fn set_presence(&mut self, connect: &str, status: &str) {
+        let key = format!("{connect}|{status}");
         if self.presence == key {
             return;
         }
@@ -155,16 +165,17 @@ impl Steam {
         if let Some(sdk) = &self.sdk {
             let f = sdk.client.friends();
             f.set_rich_presence("status", Some(status));
-            f.set_rich_presence("connect", Some(&connect_string(code)));
+            f.set_rich_presence("connect", Some(connect));
         }
     }
 
-    /// Party codes from Steam "Join game" / accepted invites since last asked.
-    pub fn take_joins(&self) -> Vec<String> {
+    /// Connect strings from Steam "Join game" / accepted invites since last asked, split
+    /// into words (`party_code`, `server_address` read them).
+    pub fn take_joins(&self) -> Vec<Vec<String>> {
         #[cfg(feature = "steam")]
         if let Some(sdk) = &self.sdk {
             let rx = sdk.joins.lock().unwrap();
-            return rx.try_iter().filter_map(|c| party_code(&c.split_whitespace().collect::<Vec<_>>())).collect();
+            return rx.try_iter().map(|c| c.split_whitespace().map(String::from).collect()).collect();
         }
         Vec::new()
     }
@@ -232,6 +243,8 @@ mod tests {
         assert_eq!(super::party_code(&["+party", "KX7-42Q"]).as_deref(), Some("KX7-42Q"));
         assert_eq!(super::party_code(&["client", "+party", "ABC-DEF"]).as_deref(), Some("ABC-DEF"));
         assert_eq!(super::party_code(&["client"]), None);
+        assert_eq!(super::server_address(&["client", "+connect", "203.0.113.7:27015"]).as_deref(), Some("203.0.113.7:27015"));
+        assert_eq!(super::party_code(&["+connect", "203.0.113.7:27015"]), None);
         assert_eq!(super::party_code(&super::connect_string("ABC-DEF").split(' ').collect::<Vec<_>>()).as_deref(), Some("ABC-DEF"));
     }
 }

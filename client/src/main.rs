@@ -36,6 +36,7 @@ mod game;
 mod gibs;
 mod glows;
 mod found;
+mod host;
 mod hud;
 mod impacts;
 mod killfeed;

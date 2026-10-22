@@ -27,6 +27,7 @@ pub enum Page {
     #[default]
     Main,
     Practice,
+    Host,
     Join,
     Settings,
     Voice,
@@ -46,6 +47,8 @@ pub(crate) struct MenuState {
     pub(crate) dummies: i32,
     /// Practice page: deathmatch online (else solo, offline).
     pub(crate) deathmatch: bool,
+    /// Host page: deathmatch (else a match).
+    pub(crate) host_dm: bool,
     /// Settings page section (`UiAction::SettingsTab`).
     pub(crate) settings_tab: u8,
     /// Characters page: the side shown.
@@ -131,6 +134,7 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>) {
     };
     let page = match wanted.as_deref() {
         Ok("practice") => Page::Practice,
+        Ok("host") => Page::Host,
         Ok("join") => Page::Join,
         Ok("settings" | "crosshair" | "assistant" | "keys") => Page::Settings,
         Ok("voice") => Page::Voice,
@@ -143,6 +147,7 @@ fn enter_menu(mut commands: Commands, mut cursor: Single<&mut CursorOptions>) {
         maps,
         dummies: 5,
         deathmatch: false,
+        host_dm: false,
         settings_tab,
         character_side: net::protocol::Team::Ct,
         address: String::new(),
@@ -219,6 +224,8 @@ fn menu_actions(
             a if a.contains(['.', ':']) => UiAction::Connect,
             _ => UiAction::Lobby(crate::play::LobbyAction::JoinParty),
         });
+    } else if keys.just_pressed(KeyCode::Enter) && st.page == Page::Host {
+        actions.0.push(UiAction::StartHost);
     } else if keys.just_pressed(KeyCode::Enter) && st.page == Page::Practice {
         // the page's main button, as its key hint says
         if !st.deathmatch {
@@ -246,6 +253,12 @@ fn menu_actions(
                 }
             }
             UiAction::PracticeMode(dm) => st.deathmatch = dm,
+            UiAction::HostMode(dm) => st.host_dm = dm,
+            UiAction::StartHost => {
+                let rules = if st.host_dm { net::server::Rules::deathmatch() } else { net::server::Rules::default() };
+                commands.insert_resource(GameConfig { map: st.map.clone(), server: ServerChoice::Host(rules), give: Vec::new(), ticket: 0, key: None });
+                next.set(AppState::Connecting);
+            }
             UiAction::Dummies(d) => st.dummies = (st.dummies + d).clamp(0, 20),
             UiAction::StartPractice => {
                 commands.insert_resource(GameConfig {

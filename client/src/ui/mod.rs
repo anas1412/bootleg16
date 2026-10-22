@@ -33,6 +33,9 @@ pub enum UiAction {
     StartPractice,
     /// The Practice page's choice: deathmatch online (true) or solo.
     PracticeMode(bool),
+    /// The Host page's choice: deathmatch (true) or a match; and starting it.
+    HostMode(bool),
+    StartHost,
     Connect,
     Sensitivity(f32),
     Volume(f32),
