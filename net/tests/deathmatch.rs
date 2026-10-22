@@ -69,12 +69,15 @@ fn drop_in_fight_respawn_and_the_time_limit_resets_scores() {
     assert!(walk_in.id().is_none(), "no seat, no way in");
     assert!(protected, "a fresh spawn never showed as protected");
     // Back in the fight straight away, and the scores started over.
-    for _ in 0..3 * 128 {
+    // (they keep fighting, so wait for a moment when both are up)
+    let mut all_up = false;
+    for _ in 0..6 * 128 {
         server.step();
         bots.iter_mut().for_each(|b| b.tick());
         std::thread::sleep(Duration::from_micros(150));
+        all_up |= bots.iter().all(|b| b.client.vitals.alive());
     }
-    assert!(bots.iter().all(|b| b.client.vitals.alive()), "everyone respawned");
+    assert!(all_up, "everyone respawned");
     assert!(bots[0].client.scores.iter().all(|s| s.kills <= 3 && s.points <= 6), "scores started over: {:?}", bots[0].client.scores);
     // Everyone spawns with full armor and a helmet (CS2 deathmatch).
     assert!(bots.iter().all(|b| b.client.vitals.armor > 0.0), "armor on spawn");

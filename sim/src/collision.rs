@@ -340,6 +340,21 @@ impl World {
         m.door.map(|i| &self.doors.doors[i])
     }
 
+    /// Whether a move inside the box `lo..hi` can touch model `m` at all (its bounds where it
+    /// is now; a rotating door is always checked): far-off models are skipped without walking
+    /// their tree.
+    fn reaches(&self, m: &Model, lo: Vec3, hi: Vec3) -> bool {
+        let (mut bmin, mut bmax) = m.bounds;
+        if let Some(d) = self.door_of(m) {
+            let (off, ang) = d.transform();
+            if ang != [0.0; 3] {
+                return true;
+            }
+            (bmin, bmax) = (add(bmin, off), add(bmax, off));
+        }
+        (0..3).all(|i| lo[i] <= bmax[i] + 1.0 && hi[i] >= bmin[i] - 1.0)
+    }
+
     /// What a single point is in (water comes from the hull-0 tree and `func_water`).
     pub fn point_contents(&self, p: Vec3) -> Contents {
         if self.is_solid_point(p) {
@@ -379,13 +394,16 @@ impl World {
 
     /// Is the player box at `origin` stuck in something?
     pub fn is_solid(&self, hull: Hull, origin: Vec3) -> bool {
-        self.models.iter().filter(|m| m.enabled).any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
+        let (lo, hi) = (add(origin, hull.mins()), add(origin, hull.maxs()));
+        self.models.iter().filter(|m| m.enabled && self.reaches(m, lo, hi)).any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
     }
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
     pub fn trace(&self, hull: Hull, start: Vec3, end: Vec3) -> Trace {
         let mut best = Trace { start_solid: false, all_solid: false, fraction: 1.0, end, normal: [0.0; 3], hit_contents: CONTENTS_EMPTY };
-        for m in self.models.iter().filter(|m| m.enabled) {
+        let lo: Vec3 = std::array::from_fn(|i| start[i].min(end[i]) + hull.mins()[i]);
+        let hi: Vec3 = std::array::from_fn(|i| start[i].max(end[i]) + hull.maxs()[i]);
+        for m in self.models.iter().filter(|m| m.enabled && self.reaches(m, lo, hi)) {
             let head = m.heads[hull as usize];
             let door = self.door_of(m);
             let (s, e) = (to_local(m, door, start), to_local(m, door, end));
@@ -449,7 +467,9 @@ impl World {
     pub fn trace_line(&self, start: Vec3, end: Vec3) -> LineTrace {
         let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
         let mut best = LineTrace { fraction: 1.0, end, normal: [0.0; 3], start_solid: false, hit_sky: false, model: 0 };
-        for m in self.models.iter().filter(|m| m.enabled) {
+        let lo: Vec3 = std::array::from_fn(|i| start[i].min(end[i]));
+        let hi: Vec3 = std::array::from_fn(|i| start[i].max(end[i]));
+        for m in self.models.iter().filter(|m| m.enabled && self.reaches(m, lo, hi)) {
             let head = m.heads[0];
             if head < 0 {
                 continue;
