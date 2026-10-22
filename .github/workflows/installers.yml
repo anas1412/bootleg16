@@ -43,10 +43,12 @@ jobs:
         run: |
           mkdir -p dist/win/data && cp -r gamedata/. dist/win/data/
           cp target/release/client.exe dist/win/bootleg16.exe
-          cp target/release/steam_api64.dll dist/win/ || true
+          # (steamworks-sys leaves Steam's dll in its build dir; the game needs it next to the exe)
+          cp "$(ls target/release/build/steamworks-sys-*/out/steam_api64.dll | head -n1)" dist/win/
           version="${VERSION#v}"
           [ -n "$version" ] || version=$(sed -n 's/^version = "\(.*\)"/\1/p' client/Cargo.toml | head -n1)
-          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DVersion=$version" "/DStage=..\\..\\dist\\win" packaging/windows/bootleg16.iss
+          # (MSYS2_ARG_CONV_EXCL: Git Bash would turn /DVersion=.. into a path)
+          MSYS2_ARG_CONV_EXCL='*' "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DVersion=$version" "/DStage=..\\..\\dist\\win" packaging/windows/bootleg16.iss
       - uses: actions/upload-artifact@v4
         with: { name: bootleg16-windows, path: dist/bootleg16-*-windows-setup.exe }
 
