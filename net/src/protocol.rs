@@ -407,8 +407,17 @@ pub struct BodyNet {
     pub crouched: bool,
     /// Who carries it as a shield.
     pub carrier: Option<u8>,
+    /// Lying still (a bump to walk over).
+    pub still: bool,
     /// The tick they died.
     pub born: u32,
+}
+
+impl BodyNet {
+    pub fn lying(&self) -> sim::bodies::Lying {
+        let hull = if self.crouched { sim::collision::Hull::Crouched } else { sim::collision::Hull::Standing };
+        sim::bodies::Lying { origin: self.origin, hull, yaw: self.yaw, death: self.death }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

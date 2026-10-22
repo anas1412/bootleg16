@@ -1,6 +1,7 @@
 //! Dead bodies as the server has them (`sim::bodies`): each plays its death animation where
 //! it fell and then lies there, the whole match. One carried as a shield hangs limp in front
-//! of its carrier (yours in front of you), and falls again when let go.
+//! of its carrier (yours in front of you), arms down, leaning back against them, and falls
+//! again when let go.
 use crate::game::{Frame, Walker};
 use crate::menu::AppState;
 use crate::players::OtherPlayers;
@@ -28,8 +29,10 @@ struct Drawn {
     carried: bool,
 }
 
-/// How far into the death animation a carried body hangs (limp, still upright).
-const CARRIED_FRAME: f32 = 2.0;
+/// A carried body's pose: the first frame of "death3" (standing, arms hanging at its sides),
+/// leaning back against its carrier this much.
+const CARRIED_SEQ: &str = "death3";
+const CARRIED_LEAN: f32 = 0.25;
 
 #[allow(clippy::too_many_arguments)]
 fn draw(
@@ -62,11 +65,11 @@ fn draw(
         // where it is: in front of its carrier (as drawn), else where the server has it
         let carrier = b.carrier.and_then(|id| people.iter().find(|p| p.id == id));
         let (at, yaw) = match carrier {
-            Some(p) => (sim::bodies::carried_at(p.origin, p.yaw), p.yaw),
+            Some(p) => (sim::bodies::carried_at(&c.world, p.origin, p.yaw), p.yaw),
             None => (b.origin, b.yaw),
         };
         let target = Vec3::from(map::to_y_up(at));
-        let rot = Quat::from_rotation_y(yaw.to_radians());
+        let rot = Quat::from_rotation_y(yaw.to_radians()) * if carrier.is_some() { Quat::from_rotation_z(CARRIED_LEAN) } else { Quat::IDENTITY };
         if let Some((_, mut d, mut tf)) = drawn.iter_mut().find(|(_, d, _)| d.id == b.id) {
             // let go: it falls again
             if d.carried && carrier.is_none() {
@@ -78,9 +81,14 @@ fn draw(
             tf.translation = tf.translation.lerp(target, k);
             tf.rotation = rot;
             let model = &look.cs.model;
-            let sq = &model.sequences[d.seq];
-            let frame = if d.carried { CARRIED_FRAME } else { ((now - d.fell) * sq.fps).min(sq.frames as f32 - 1.0) };
-            d.character.set_pose(&d.body, &model.pose_at(d.seq, frame, 0.5), &mut bones);
+            let pose = match model.sequence(CARRIED_SEQ).filter(|_| d.carried) {
+                Some(held) => model.pose_at(held, 0.0, 0.5),
+                None => {
+                    let sq = &model.sequences[d.seq];
+                    model.pose_at(d.seq, ((now - d.fell) * sq.fps).min(sq.frames as f32 - 1.0), 0.5)
+                }
+            };
+            d.character.set_pose(&d.body, &pose, &mut bones);
             continue;
         }
         // new to us: its owner's character

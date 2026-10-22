@@ -364,7 +364,7 @@ impl Client {
                 self.smokes = smokes;
                 self.ground = ground;
                 // Bodies on the floor are bumps to walk over: the same boxes as the server's.
-                self.world.boxes = bodies.iter().filter(|b| b.carrier.is_none()).map(|b| sim::bodies::rest_box(b.origin, if b.crouched { sim::collision::Hull::Crouched } else { sim::collision::Hull::Standing })).collect();
+                self.world.boxes = bodies.iter().filter(|b| b.still).map(|b| b.lying().rest_box()).collect();
                 self.bodies = bodies;
                 self.kits = kits;
                 self.round = round;

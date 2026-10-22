@@ -52,7 +52,11 @@ impl Server {
             }
         }
         self.next_body = self.next_body.wrapping_add(1);
-        self.bodies.push(Body { id: self.next_body, owner: victim, death, origin: d.at, velocity, yaw: d.yaw, hull, carrier: None, born: self.tick });
+        let mut b = Body { id: self.next_body, owner: victim, death, origin: d.at, velocity, yaw: d.yaw, hull, carrier: None, born: self.tick };
+        if velocity == [0.0; 3] {
+            b.origin = b.lying().out_of_walls(&self.world).origin;
+        }
+        self.bodies.push(b);
     }
 
     /// Once a tick: E picks a body up or puts it down, carried ones follow their carrier,
@@ -65,10 +69,7 @@ impl Server {
         for b in &mut self.bodies {
             let Some(id) = b.carrier else { continue };
             match self.clients.values().find(|c| c.id == id) {
-                Some(c) if c.vitals.alive() && c.state.movement.carrying => {
-                    b.origin = bodies::carried_at(c.state.movement.origin, c.view.0);
-                    b.yaw = c.view.0;
-                }
+                Some(c) if c.vitals.alive() && c.state.movement.carrying => {}
                 c => {
                     b.carrier = None;
                     b.velocity = c.map(|c| c.state.movement.velocity).unwrap_or([0.0; 3]);
@@ -98,7 +99,7 @@ impl Server {
             let (f, _, _) = bullets::view_vectors(c.view.1, c.view.0);
             let (o, eye) = (m.origin, m.eye());
             let near = |b: &&mut Body| (0..3).map(|i| (b.origin[i] - o[i]).powi(2)).sum::<f32>();
-            let pick = self.bodies.iter_mut().filter(|b| b.carrier.is_none() && bodies::can_grab(o, eye, f, b.origin, b.hull)).min_by(|a, b| near(a).total_cmp(&near(b)));
+            let pick = self.bodies.iter_mut().filter(|b| b.carrier.is_none() && bodies::can_grab(o, eye, f, &b.lying())).min_by(|a, b| near(a).total_cmp(&near(b)));
             if let Some(b) = pick {
                 b.carrier = Some(id);
                 b.velocity = [0.0; 3];
@@ -110,13 +111,18 @@ impl Server {
         for b in &mut self.bodies {
             match b.carrier.and_then(|id| self.clients.values().find(|c| c.id == id)) {
                 Some(c) => {
-                    b.origin = bodies::carried_at(c.state.movement.origin, c.view.0);
+                    b.origin = bodies::carried_at(&self.world, c.state.movement.origin, c.view.0);
                     b.yaw = c.view.0;
                 }
-                None => bodies::fall(&mut b.origin, &mut b.velocity, b.hull, &self.world, dt, self.vars.gravity),
+                None => {
+                    // come to rest: its head and arms out of the walls
+                    if bodies::fall(&mut b.origin, &mut b.velocity, b.hull, &self.world, dt, self.vars.gravity) {
+                        b.origin = b.lying().out_of_walls(&self.world).origin;
+                    }
+                }
             }
         }
-        self.world.boxes = self.bodies.iter().filter(|b| b.carrier.is_none()).map(|b| bodies::rest_box(b.origin, b.hull)).collect();
+        self.world.boxes = self.bodies.iter().filter(|b| b.still()).map(|b| b.lying().rest_box()).collect();
     }
 
     /// The bodies a viewer gets: all lying ones, a carried one only while they see its carrier.
@@ -124,13 +130,24 @@ impl Server {
         self.bodies
             .iter()
             .filter(|b| b.carrier.is_none_or(|c| c == viewer || seen.contains(&c)))
-            .map(|b| BodyNet { id: b.id, owner: b.owner, death: b.death, origin: b.origin, yaw: b.yaw, crouched: b.hull == Hull::Crouched, carrier: b.carrier, born: b.born })
+            .map(|b| BodyNet { id: b.id, owner: b.owner, death: b.death, origin: b.origin, yaw: b.yaw, crouched: b.hull == Hull::Crouched, carrier: b.carrier, still: b.still(), born: b.born })
             .collect()
     }
 
     /// Whether the carried body of `victim` (at `origin` facing `yaw` as the shooter saw
     /// them) is in the way of a shot from `from` to `to`.
     pub(super) fn shielded(&self, victim: u8, origin: [f32; 3], yaw: f32, from: [f32; 3], to: [f32; 3]) -> bool {
-        self.bodies.iter().any(|b| b.carrier == Some(victim)) && bodies::shield_blocks(origin, yaw, from, to)
+        self.bodies.iter().any(|b| b.carrier == Some(victim)) && bodies::shield_blocks(&self.world, origin, yaw, from, to)
+    }
+}
+
+impl Body {
+    /// Lying still (only then is it a bump: a sliding one would bump into its own box).
+    fn still(&self) -> bool {
+        self.carrier.is_none() && self.velocity == [0.0; 3]
+    }
+
+    fn lying(&self) -> bodies::Lying {
+        bodies::Lying { origin: self.origin, hull: self.hull, yaw: self.yaw, death: self.death }
     }
 }

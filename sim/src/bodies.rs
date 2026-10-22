@@ -15,16 +15,91 @@ pub const SHIELD_PASS: f32 = 0.25;
 /// must look (cosine), like CS's use radius.
 pub const GRAB_REACH: f32 = 80.0;
 pub const GRAB_LOOK: f32 = 0.7;
-/// A carried body hangs this far in front of your centre, and this far lower (its head
-/// under your eyes: you see over it, and your own head stays open).
+/// A carried body hangs this far in front of your centre (less against a wall), and this
+/// far lower (its head under your eyes: you see over it, and your own head stays open).
 const CARRY_AHEAD: f32 = 28.0;
-const CARRY_DROP: f32 = 16.0;
-/// A body on the floor: half its width, and how high it stands (under the 18 step height,
-/// so you walk over it).
-const REST_HALF: f32 = 24.0;
+const CARRY_DROP: f32 = 8.0;
+/// Half a carried body's depth (kept out of walls), and its centre over its feet.
+const CARRY_HALF_DEPTH: f32 = 12.0;
+const CARRY_FEET: f32 = 30.0;
+/// A body on the floor: how far its box reaches past the points it lies on, and how high it
+/// stands (under the 18 step height, so you walk over it).
+const REST_PAD: f32 = 8.0;
 const REST_HEIGHT: f32 = 12.0;
 /// The shield: depth, half width, half height around the carried body's centre.
-const SHIELD: Vec3 = [8.0, 16.0, 34.0];
+const SHIELD: Vec3 = [8.0, 16.0, 30.0];
+
+/// Where each death animation leaves the body (its last frame, from the CS player model
+/// `arctic.mdl`, which every character is animated on): head, pelvis, feet and hands, x/y
+/// from where they died, facing +x. A body sprawls up to 80 units from that spot.
+const SPRAWL: [[[f32; 2]; 6]; 10] = [
+    [[-57.0, 33.0], [-38.0, 21.0], [-5.0, 20.0], [-18.0, -4.0], [-45.0, 56.0], [-73.0, 12.0]],
+    [[53.0, 29.0], [32.0, 18.0], [0.0, 23.0], [8.0, -3.0], [24.0, 34.0], [42.0, 3.0]],
+    [[-68.0, 7.0], [-45.0, 5.0], [-13.0, 7.0], [-15.0, -6.0], [-78.0, 24.0], [-81.0, -4.0]],
+    [[-35.0, 36.0], [-28.0, 15.0], [-20.0, -17.0], [-4.0, -4.0], [-46.0, 35.0], [-20.0, 39.0]],
+    [[45.0, -5.0], [23.0, -3.0], [-6.0, 11.0], [-8.0, -5.0], [27.0, 19.0], [19.0, -19.0]],
+    [[14.0, -50.0], [9.0, -28.0], [19.0, -3.0], [3.0, -2.0], [13.0, -29.0], [25.0, -30.0]],
+    [[41.0, -54.0], [32.0, -34.0], [20.0, -5.0], [5.0, -19.0], [59.0, -64.0], [24.0, -55.0]],
+    [[-77.0, 12.0], [-54.0, 11.0], [-23.0, 17.0], [-24.0, -1.0], [-52.0, 30.0], [-51.0, -6.0]],
+    [[73.0, -5.0], [51.0, 0.0], [20.0, 4.0], [19.0, -6.0], [59.0, 22.0], [48.0, -21.0]],
+    [[-55.0, -14.0], [-34.0, -6.0], [-12.0, 9.0], [-3.0, -10.0], [-37.0, 12.0], [-40.0, -7.0]],
+];
+
+/// A body lying still: where it died (its centre as a player box), facing, and how it fell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lying {
+    pub origin: Vec3,
+    pub hull: Hull,
+    pub yaw: f32,
+    pub death: u8,
+}
+
+impl Lying {
+    fn floor(&self) -> f32 {
+        self.origin[2] + self.hull.mins()[2]
+    }
+
+    /// Head, pelvis, feet and hands on the floor, in the world.
+    fn points(&self) -> [Vec3; 6] {
+        let (s, c) = self.yaw.to_radians().sin_cos();
+        let z = self.floor() + 6.0;
+        let sprawl = SPRAWL[(self.death as usize).min(SPRAWL.len() - 1)];
+        sprawl.map(|[x, y]| [self.origin[0] + c * x - s * y, self.origin[1] + s * x + c * y, z])
+    }
+
+    /// The low box you bump into: around where the body really lies.
+    pub fn rest_box(&self) -> (Vec3, Vec3) {
+        let pts = self.points();
+        let lo = |i: usize| pts.iter().map(|p| p[i]).fold(f32::MAX, f32::min) - REST_PAD;
+        let hi = |i: usize| pts.iter().map(|p| p[i]).fold(f32::MIN, f32::max) + REST_PAD;
+        let floor = self.floor();
+        ([lo(0), lo(1), floor], [hi(0), hi(1), floor + REST_HEIGHT])
+    }
+
+    /// Moved out of the walls: a body that would end up with its head or arms in a wall
+    /// lies that much further from it (CS lets them sink in).
+    pub fn out_of_walls(mut self, world: &World) -> Lying {
+        for _ in 0..3 {
+            let from = [self.origin[0], self.origin[1], self.floor() + 6.0];
+            // the deepest way into a wall, and how far
+            let worst = self
+                .points()
+                .iter()
+                .filter_map(|p| {
+                    let t = world.trace_line(from, *p);
+                    (t.fraction < 1.0).then(|| {
+                        let d = sub(*p, from);
+                        scale(d, -(1.0 - t.fraction) - 4.0 / length(d).max(1.0))
+                    })
+                })
+                .max_by(|a, b| length(*a).total_cmp(&length(*b)));
+            let Some(push) = worst else { break };
+            let to = add(self.origin, [push[0], push[1], 0.0]);
+            self.origin = world.trace(self.hull, self.origin, to).end;
+        }
+        self
+    }
+}
 
 /// The death animations (player model sequence names), CS's activities: ACT_DIE_HEADSHOT
 /// ("head"), _CHESTSHOT ("death1"), _GUTSHOT ("gutshot"), _BACKSHOT ("death3"), ACT_DIESIMPLE
@@ -149,10 +224,11 @@ fn flat_dir(v: Vec3) -> Vec3 {
 }
 
 /// A body falling and sliding (gravity, then PlayerDeathThink's friction: 2000 a second off
-/// its speed on the ground). `origin` is its centre as a player box of `hull`.
-pub fn fall(origin: &mut Vec3, velocity: &mut Vec3, hull: Hull, world: &World, dt: f32, gravity: f32) {
+/// its speed on the ground). `origin` is its centre as a player box of `hull` (CS 1.6: the
+/// dead player tossed with their box, `MOVETYPE_TOSS`). True when it just stopped.
+pub fn fall(origin: &mut Vec3, velocity: &mut Vec3, hull: Hull, world: &World, dt: f32, gravity: f32) -> bool {
     if *velocity == [0.0; 3] {
-        return;
+        return false;
     }
     velocity[2] -= gravity * dt;
     let to = add(*origin, scale(*velocity, dt));
@@ -168,24 +244,29 @@ pub fn fall(origin: &mut Vec3, velocity: &mut Vec3, hull: Hull, world: &World, d
         let speed = length(*velocity);
         *velocity = if speed > 2000.0 * dt { scale(*velocity, 1.0 - 2000.0 * dt / speed) } else { [0.0; 3] };
     }
+    *velocity == [0.0; 3]
 }
 
-/// A body on the floor as something you bump into: a low box around where it lies.
-pub fn rest_box(origin: Vec3, hull: Hull) -> (Vec3, Vec3) {
-    let floor = origin[2] + hull.mins()[2];
-    ([origin[0] - REST_HALF, origin[1] - REST_HALF, floor], [origin[0] + REST_HALF, origin[1] + REST_HALF, floor + REST_HEIGHT])
-}
-
-/// Where a carried body is (its centre): in front of its carrier.
-pub fn carried_at(carrier: Vec3, yaw: f32) -> Vec3 {
+/// Where a carried body is (its centre): in front of its carrier, pulled in against a wall,
+/// and standing on the floor (crouch behind it and it stays up).
+pub fn carried_at(world: &World, carrier: Vec3, yaw: f32) -> Vec3 {
     let (s, c) = yaw.to_radians().sin_cos();
-    [carrier[0] + c * CARRY_AHEAD, carrier[1] + s * CARRY_AHEAD, carrier[2] - CARRY_DROP]
+    let mid = [carrier[0], carrier[1], carrier[2] - CARRY_DROP];
+    let reach = CARRY_AHEAD + CARRY_HALF_DEPTH;
+    let t = world.trace_line(mid, [mid[0] + c * reach, mid[1] + s * reach, mid[2]]);
+    let ahead = (t.fraction * reach - CARRY_HALF_DEPTH).clamp(0.0, CARRY_AHEAD);
+    let mut at = [mid[0] + c * ahead, mid[1] + s * ahead, mid[2]];
+    let down = world.trace_line(at, [at[0], at[1], at[2] - 64.0]);
+    if down.fraction < 1.0 {
+        at[2] = at[2].max(down.end[2] + CARRY_FEET);
+    }
+    at
 }
 
 /// Whether the line `from`..`to` (a bullet) goes through the body carried by a player at
 /// `carrier` facing `yaw` (a box turned with them).
-pub fn shield_blocks(carrier: Vec3, yaw: f32, from: Vec3, to: Vec3) -> bool {
-    let centre = carried_at(carrier, yaw);
+pub fn shield_blocks(world: &World, carrier: Vec3, yaw: f32, from: Vec3, to: Vec3) -> bool {
+    let centre = carried_at(world, carrier, yaw);
     let (s, c) = yaw.to_radians().sin_cos();
     // into the shield's own frame: x forward, y left, z up
     let local = |p: Vec3| {
@@ -219,9 +300,9 @@ pub fn segment_hits_box(a: Vec3, b: Vec3, lo: Vec3, hi: Vec3) -> bool {
     true
 }
 
-/// Whether a player could pick this body up: close, and looking at it.
-pub fn can_grab(player: Vec3, eye: Vec3, forward: Vec3, body: Vec3, hull: Hull) -> bool {
-    let (lo, hi) = rest_box(body, hull);
+/// Whether a player could pick this body up: close to its middle, and looking at it.
+pub fn can_grab(player: Vec3, eye: Vec3, forward: Vec3, body: &Lying) -> bool {
+    let (lo, hi) = body.rest_box();
     let centre = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0];
     let to = sub(centre, eye);
     let d = length(to);
@@ -250,22 +331,46 @@ mod tests {
 
     #[test]
     fn the_carried_body_stops_shots_from_the_front_only() {
-        // carrier at the origin facing +x; the body hangs 28 ahead
-        let front = shield_blocks([0.0; 3], 0.0, [500.0, 0.0, 0.0], [0.0, 0.0, 0.0]);
-        let back = shield_blocks([0.0; 3], 0.0, [-500.0, 0.0, 0.0], [0.0, 0.0, 0.0]);
+        // carrier standing at the origin facing +x; the body hangs 28 ahead
+        let w = World::flat_floor(-36.0);
+        let front = shield_blocks(&w, [0.0; 3], 0.0, [500.0, 0.0, 0.0], [0.0, 0.0, 0.0]);
+        let back = shield_blocks(&w, [0.0; 3], 0.0, [-500.0, 0.0, 0.0], [0.0, 0.0, 0.0]);
         // your head (28 over your centre) shows over it
-        let over = shield_blocks([0.0; 3], 0.0, [500.0, 0.0, 26.0], [0.0, 0.0, 26.0]);
+        let over = shield_blocks(&w, [0.0; 3], 0.0, [500.0, 0.0, 26.0], [0.0, 0.0, 26.0]);
         assert!(front && !back && !over);
         // turned to face +y, a shot from +y hits it
-        assert!(shield_blocks([0.0; 3], 90.0, [0.0, 500.0, 0.0], [0.0, 0.0, 0.0]));
+        assert!(shield_blocks(&w, [0.0; 3], 90.0, [0.0, 500.0, 0.0], [0.0, 0.0, 0.0]));
+        // crouched (centre 18 off the floor), the body still stands on the floor in front
+        let at = carried_at(&w, [0.0, 0.0, -18.0], 0.0);
+        assert!((at[2] - (-36.0 + CARRY_FEET)).abs() < 0.1, "{at:?}");
     }
 
     #[test]
     fn you_grab_a_body_you_look_at_within_reach() {
-        let body = [50.0, 0.0, 0.0];
+        // "forward": it lies 20..73 ahead of where they died
+        let body = Lying { origin: [0.0; 3], hull: Hull::Standing, yaw: 0.0, death: 8 };
+        let (lo, hi) = body.rest_box();
+        assert!(lo[0] < 15.0 && hi[0] > 75.0, "{lo:?} {hi:?}");
         let eye = [0.0, 0.0, 28.0];
-        assert!(can_grab([0.0; 3], eye, [0.8, 0.0, -0.6], body, Hull::Standing));
-        assert!(!can_grab([0.0; 3], eye, [-1.0, 0.0, 0.0], body, Hull::Standing));
-        assert!(!can_grab([-200.0, 0.0, 0.0], [-200.0, 0.0, 28.0], [1.0, 0.0, 0.0], body, Hull::Standing));
+        assert!(can_grab([0.0; 3], eye, [0.8, 0.0, -0.6], &body));
+        assert!(!can_grab([0.0; 3], eye, [-1.0, 0.0, 0.0], &body));
+        assert!(!can_grab([-200.0, 0.0, 0.0], [-200.0, 0.0, 28.0], [1.0, 0.0, 0.0], &body));
+    }
+
+    /// `SPRAWL` is what the CS player model's death animations really end in.
+    #[test]
+    fn sprawl_matches_the_player_model() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../gamedata/models/player/arctic/arctic.mdl");
+        let Ok(m) = goldsrc::mdl::Model::load(path) else { return };
+        let names = ["Bip01 Head", "Bip01 Pelvis", "Bip01 L Foot", "Bip01 R Foot", "Bip01 L Hand", "Bip01 R Hand"];
+        for (d, name) in DEATHS.iter().enumerate() {
+            let q = m.sequence(name).unwrap();
+            let pose = m.pose_at(q, m.sequences[q].frames as f32 - 1.0, 0.5);
+            for (k, bone) in names.iter().enumerate() {
+                let p = pose[m.bones.iter().position(|b| b.name == *bone).unwrap()].pos;
+                let want = SPRAWL[d][k];
+                assert!((p[0] - want[0]).abs() < 1.5 && (p[1] - want[1]).abs() < 1.5, "{name} {bone}: {p:?} vs {want:?}");
+            }
+        }
     }
 }

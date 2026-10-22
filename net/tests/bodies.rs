@@ -31,13 +31,15 @@ fn a_body_is_picked_up_with_e_and_shields_its_carrier() {
     assert!(dist(body, spot) < 80.0 && g.a.bodies[0].carrier.is_none());
     assert_eq!(g.a.world.boxes.len(), 1, "A bumps into it");
     // A stands next to it, looks down at it and presses E
-    let stand = [body[0] - 50.0, body[1], body[2]];
+    let (lo, hi) = g.a.bodies[0].lying().rest_box();
+    let stand = [(lo[0] + hi[0]) / 2.0 - 50.0, (lo[1] + hi[1]) / 2.0, body[2]];
     g.server.teleport(a, stand);
     for _ in 0..16 {
         g.tick(idle, idle);
     }
     let a_at = g.server.player(a).unwrap();
-    let (yaw, pitch) = aim(a_at.eye(), [body[0], body[1], body[2] - 30.0]);
+    let (lo, hi) = g.a.bodies[0].lying().rest_box();
+    let (yaw, pitch) = aim(a_at.eye(), [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2] + 6.0]);
     let look = Input { yaw, pitch, ..idle };
     g.tick(Input { use_key: true, ..look }, idle);
     for _ in 0..16 {
@@ -71,4 +73,50 @@ fn a_body_is_picked_up_with_e_and_shields_its_carrier() {
     g.tick(Input { yaw: 0.0, ..idle }, idle);
     let open = hurt(&mut g, false);
     assert!(open > 15.0 && shielded < open * 0.5, "shielded {shielded}, open {open}");
+}
+
+#[test]
+fn a_body_killed_against_a_wall_lies_clear_of_it() {
+    let Some(bsp) = dust2() else { return };
+    let world = sim::collision::World::from_bsp(&bsp);
+    let mut g = setup(&bsp, 0, 0.0);
+    g.connect_as(Some(Team::T), Some(Team::T));
+    let b = g.b.id().unwrap();
+    // B stands with their back to the nearest wall, then dies
+    let at = g.server.player(b).unwrap().origin;
+    let (dir, hit) = (0..16)
+        .map(|k| {
+            let a = (k as f32 * 22.5f32).to_radians();
+            let d = [a.cos(), a.sin(), 0.0];
+            // (at the height a body lies: 6 over the floor)
+            let low = [at[0], at[1], at[2] - 30.0];
+            (d, world.trace_line(low, [low[0] + d[0] * 512.0, low[1] + d[1] * 512.0, low[2]]))
+        })
+        .min_by(|x, y| x.1.fraction.total_cmp(&y.1.fraction))
+        .unwrap();
+    assert!(hit.fraction < 1.0, "no wall near the spawn");
+    // (24 + a little: their box clear of even a corner)
+    g.server.teleport(b, [hit.end[0] - dir[0] * 26.0, hit.end[1] - dir[1] * 26.0, at[2]]);
+    for _ in 0..8 {
+        g.tick(Input::default(), Input { yaw: dir[1].atan2(dir[0]).to_degrees() + 180.0, ..Default::default() });
+    }
+    g.server.slay(b);
+    for _ in 0..256 {
+        g.tick(Input::default(), Input::default());
+    }
+    let body = g.a.bodies[0].lying();
+    let moved = body.out_of_walls(&world).origin;
+    assert!(dist(moved, body.origin) < 1.0, "its head or arms are in the wall: would move from {:?} to {moved:?}", body.origin);
+    // every way of falling there, facing either way: moved clear, and some had to be
+    let mut pushed = 0;
+    for death in 0..sim::bodies::DEATHS.len() as u8 {
+        let toward = dir[1].atan2(dir[0]).to_degrees();
+        for yaw in [toward, toward + 90.0, toward + 180.0, toward + 270.0] {
+            let l = sim::bodies::Lying { death, yaw, ..body };
+            let out = l.out_of_walls(&world);
+            assert!(dist(out.out_of_walls(&world).origin, out.origin) < 1.0, "death {death} yaw {yaw} still in the wall");
+            pushed += (dist(out.origin, l.origin) > 1.0) as u32;
+        }
+    }
+    assert!(pushed > 4, "only {pushed} needed moving: is the wall there?");
 }
