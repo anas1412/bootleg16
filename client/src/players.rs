@@ -59,6 +59,10 @@ const MAX_CORPSES: usize = 256;
 struct OtherPlayers {
     /// The CS skeleton everyone is animated on (the server's hitbox model).
     cs: Arc<models::Loaded>,
+    /// CS's C4 on the carrier's back (the player model's "backpack" sub-model) and the bone
+    /// it hangs on.
+    backpack: models::Parts,
+    bomb_bone: Option<usize>,
     /// Characters, loaded the first time someone wears one (by `Characters` index).
     looks: Vec<Option<Arc<crate::characters::look::Look>>>,
     /// Died, but the snapshot we draw from may still show them alive: don't redraw them yet.
@@ -71,12 +75,14 @@ struct OtherPlayers {
     blasted: HashMap<u8, ([f32; 3], bool)>,
 }
 
-fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>) {
+fn load_looks(mut commands: Commands, mut cache: ResMut<models::ModelCache>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<crate::studio::StudioMaterial>>, mut meshes: ResMut<Assets<Mesh>>) {
     let Some(cs) = cache.get("player/arctic/arctic.mdl", &mut images, &mut materials) else {
         error!("the game data is missing models/player/arctic/arctic.mdl: players can't be drawn");
         return;
     };
-    commands.insert_resource(OtherPlayers { cs, looks: Vec::new(), dying: HashSet::new(), last_hit: HashMap::new(), last_damage: HashMap::new(), blasted: HashMap::new() });
+    let backpack = models::sub_model_parts(&cs, "backpack", 1, &mut meshes);
+    let bomb_bone = cs.model.bones.iter().position(|b| b.name == "Bomb");
+    commands.insert_resource(OtherPlayers { cs, backpack, bomb_bone, looks: Vec::new(), dying: HashSet::new(), last_hit: HashMap::new(), last_damage: HashMap::new(), blasted: HashMap::new() });
 }
 
 impl OtherPlayers {
@@ -117,6 +123,8 @@ struct OtherPlayer {
     /// Muzzle flash quad (a child) and until when it shows.
     flash: Entity,
     flash_until: f32,
+    /// The C4 on their back while they carry it.
+    pack: Option<Entity>,
 }
 
 /// A dead player playing their death animation (then lying still).
@@ -222,6 +230,9 @@ fn anim_events(
                     g.despawn(&mut commands);
                 }
                 commands.entity(p.flash).despawn();
+                if let Some(pack) = p.pack {
+                    commands.entity(pack).try_despawn(); // the bomb drops with them
+                }
                 let model = &look.cs.model;
                 // CS 1.6 `CBasePlayer::SetAnimation(PLAYER_DIE)`: by where the last hit landed.
                 let roll = (now.to_bits() ^ (id as u32).wrapping_mul(2654435761)).wrapping_mul(2246822519) >> 8;
@@ -325,7 +336,7 @@ fn draw_others(
         });
         let flash = crate::muzzle::spawn(&mut commands, &flash_look);
         commands.entity(parent).add_child(flash);
-        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, character, weapon: o.weapon, body: joints, gun, anim: sim::anim::Anim::new(o.yaw), crouched: o.crouched, flash, flash_until: 0.0 });
+        commands.entity(parent).insert(OtherPlayer { id: o.id, look: *li, character, weapon: o.weapon, body: joints, gun, anim: sim::anim::Anim::new(o.yaw), crouched: o.crouched, flash, flash_until: 0.0, pack: None });
     }
 }
 
@@ -343,6 +354,7 @@ fn animate(
     mut vis: Query<&mut Visibility>,
     cam: Single<&GlobalTransform, With<crate::game::FlyCam>>,
     watch: Res<crate::spectate::Watch>,
+    mut studio: ResMut<Assets<crate::studio::StudioMaterial>>,
 ) {
     // Watching someone through their eyes: their own body isn't drawn.
     let in_eye = crate::spectate::in_eye(&w, &watch).map(|o| o.id);
@@ -370,11 +382,29 @@ fn animate(
         let posed = p.anim.pose(model, &d, now);
         *tf = Transform::from_translation(Vec3::from(map::to_y_up(o.origin))).with_rotation(Quat::from_rotation_y(posed.yaw.to_radians()));
         let lit = now < p.flash_until;
+        // The bomb carrier wears the C4 on their back (as you see them: enemies only learn
+        // who carries it from players they're sent).
+        let carrying = matches!(w.client.bomb, net::protocol::BombNet::Carried(id) if id == p.id);
+        match (carrying, p.pack) {
+            (true, None) => {
+                let pack = commands.spawn((Transform::default(), Visibility::default(), ChildOf(e))).id();
+                models::spawn_lit(&mut commands, pack, &look.backpack, &mut studio);
+                p.pack = Some(pack);
+            }
+            (false, Some(pack)) => {
+                commands.entity(pack).try_despawn();
+                p.pack = None;
+            }
+            _ => {}
+        }
         if me != Some(p.id) && behind(tf.translation) {
             continue;
         }
         let pose = posed.bones;
         p.character.set_pose(&p.body, &pose, &mut bones);
+        if let (Some(pack), Some(b)) = (p.pack, look.bomb_bone) {
+            models::set_pose(&[pack], &pose[b..=b], &mut bones);
+        }
         if let Some((wm, g)) = &p.gun {
             let gun_pose = wm.model.borrow_pose(model, &pose);
             models::set_pose(&g.joints, &gun_pose, &mut bones);

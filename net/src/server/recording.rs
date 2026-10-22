@@ -53,7 +53,7 @@ impl Server {
             smokes: smokes.to_vec(),
             ground: ground.to_vec(),
             round: *round,
-            bomb: self.bomb_net(Team::T),
+            bomb: self.bomb_net(Team::T, |_| true, [0.0; 3]),
             scores,
         };
         if let Err(e) = self.recorder.as_mut().unwrap().frame(&frame) {

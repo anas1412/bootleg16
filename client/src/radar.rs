@@ -1,7 +1,8 @@
 //! The radar (top left, direction E): the map's own overview image (`overviews/<map>.bmp`
 //! and its `.txt`), centred on you and cropped to a window. On it: your arrow, your
 //! teammates (circles), enemies the server shows you (squares; it only sends the ones you
-//! can see), and the bomb when it's dropped, planted, or carried by a teammate.
+//! can see), and for the Strays the bomb when it's dropped, planted, or carried by a teammate
+//! (CS 1.6 shows the bomb on the terrorists' radar only).
 use crate::game::{FlyCam, Frame, Walker};
 use crate::hud::SAFE;
 use crate::menu::{AppState, GameConfig};
@@ -208,12 +209,14 @@ fn update(
         // only when it moved: a changed Node is laid out again
         node.set_if_neq(Node { left: percent(p.x * 100.0), top: percent(p.y * 100.0), margin: UiRect { left: vh(-5.0), top: vh(-5.0), ..default() }, border_radius: if mate { BorderRadius::MAX } else { BorderRadius::ZERO }, ..node.clone() });
         bg.set_if_neq(BackgroundColor(if r.team == Team::T { T_COLOR } else { CT_COLOR }));
-        // The teammate with the bomb gets an amber ring.
-        border.set_if_neq(BorderColor::all(if carrier == Some(r.id) { AMBER } else { BG0 }));
+        // The teammate with the bomb gets an amber ring (never an enemy: CS marks the carrier
+        // for his own team only).
+        border.set_if_neq(BorderColor::all(if mate && carrier == Some(r.id) { AMBER } else { BG0 }));
         vis.set_if_neq(Visibility::Inherited);
     }
+    // CS 1.6: the bomb is on the terrorists' radar only (dropped or planted).
     let at = match c.bomb {
-        BombNet::Dropped(p) | BombNet::Planted { at: p, .. } => Some(p),
+        BombNet::Dropped(p) | BombNet::Planted { at: p, .. } if my_team != Team::Ct => Some(p),
         _ => None,
     };
     for (mut node, mut vis) in &mut bomb {

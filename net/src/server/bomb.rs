@@ -74,7 +74,23 @@ impl Server {
         self.world.trace_line(p, [p[0], p[1], p[2] - 4096.0]).end
     }
 
-    /// Carrier dropped it (G) or died: it falls where they stand.
+    /// Carrier threw it away (G): like a dropped gun (CS 1.6 `DropPlayerItem`) it lands a
+    /// little ahead of them, out of reach of the thrower for a second.
+    pub(super) fn throw_bomb(&mut self, id: u8) {
+        let Some(c) = self.clients.values().find(|c| c.id == id) else { return };
+        let (eye, (yaw, _)) = (c.state.movement.eye(), c.view);
+        let (s, co) = yaw.to_radians().sin_cos();
+        let ahead = self.world.trace_line(eye, [eye[0] + co * 64.0, eye[1] + s * 64.0, eye[2]]);
+        // (a little short of a wall it hits)
+        let at = [ahead.end[0] - co * 8.0 * (1.0 - ahead.fraction), ahead.end[1] - s * 8.0 * (1.0 - ahead.fraction), ahead.end[2]];
+        self.drop_bomb(id);
+        if matches!(self.bomb, Bomb::Dropped(_)) {
+            self.bomb = Bomb::Dropped(self.floor_under(at));
+            self.bomb_thrower = Some((id, self.tick + self.rate.secs(1.0)));
+        }
+    }
+
+    /// Carrier dropped it (died, left): it falls where they stand.
     pub(super) fn drop_bomb(&mut self, id: u8) {
         if self.bomb != Bomb::Carried(id) {
             return;
@@ -120,8 +136,12 @@ impl Server {
                 }
             }
             Bomb::Dropped(at) => {
+                let thrower = self.bomb_thrower.filter(|t| tick < t.1).map(|t| t.0);
                 let taker = self.clients.values_mut().find(|c| {
                     let o = c.state.movement.origin;
+                    if Some(c.id) == thrower {
+                        return false;
+                    }
                     let h = c.state.movement.hull();
                     c.team == Team::T && c.vitals.alive() && (0..3).all(|k| at[k] >= o[k] + h.mins()[k] - 16.0 && at[k] <= o[k] + h.maxs()[k] + 16.0)
                 });
@@ -207,12 +227,16 @@ impl Server {
         }
     }
 
-    /// The bomb as one client may see it (only terrorists are told who carries it).
-    pub(super) fn bomb_net(&self, viewer: Team) -> BombNet {
+    /// The bomb as one client may see it: terrorists (and spectators) always; the others
+    /// only what they can see: the carrier while they're sent that player (CS draws the C4
+    /// on their back), a dropped bomb in their line of sight from `eye`. A planted one goes to
+    /// everyone (its beeping gives it away; the HUD needs its timer).
+    pub(super) fn bomb_net(&self, viewer: Team, sees: impl Fn(u8) -> bool, eye: [f32; 3]) -> BombNet {
         let now = self.tick;
+        let knows = viewer != Team::Ct;
         match self.bomb {
-            Bomb::Carried(id) if viewer == Team::T => BombNet::Carried(id),
-            Bomb::Dropped(at) => BombNet::Dropped(at),
+            Bomb::Carried(id) if knows || sees(id) => BombNet::Carried(id),
+            Bomb::Dropped(at) if knows || !self.world.sight_blocked(eye, [at[0], at[1], at[2] + 8.0]) => BombNet::Dropped(at),
             Bomb::Planted { at, explode, defuse } => BombNet::Planted {
                 at,
                 left: explode.saturating_sub(now) as f32 * self.rate.tick(),

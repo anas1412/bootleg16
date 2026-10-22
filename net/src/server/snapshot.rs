@@ -77,7 +77,7 @@ impl Server {
                         .collect();
                     let you = Some((c.state.movement, c.vitals));
                     let events = self.events_for(c.id, seen, &events);
-                    (*a, c.last_run, c.state.loadout.clone(), self.bomb_net(c.team), me, players, you, events)
+                    (*a, c.last_run, c.state.loadout.clone(), self.bomb_net(c.team, |id| seen.contains(&id), c.state.movement.eye()), me, players, you, events)
                 })
                 .collect();
             for (addr, ack, loadout, bomb, me, players, you, events) in sends {

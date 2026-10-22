@@ -90,7 +90,7 @@ impl Server {
             self.bomb_planted(id, at);
         }
         for id in bomb_drops {
-            self.drop_bomb(id);
+            self.throw_bomb(id);
         }
         if self.rules.infinite_ammo {
             for c in self.clients.values_mut() {

@@ -212,6 +212,18 @@ pub fn part_mesh(p: &MeshPart, place: impl Fn([f32; 3]) -> [f32; 3], mirrored: b
 }
 
 /// A model posed once, as world-ready (Y-up) meshes with their materials.
+/// Body part `part`'s sub-model `sub` alone, in its bones' own space (to be placed on a bone:
+/// a player model's "backpack" 1 is the C4 on the `Bomb` bone).
+pub fn sub_model_parts(l: &Loaded, part: &str, sub: usize, meshes: &mut Assets<Mesh>) -> Parts {
+    let identity = BoneTransform { rot: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], pos: [0.0; 3] };
+    l.model
+        .posed_part(&vec![identity; l.model.bones.len()], part, sub)
+        .iter()
+        .filter(|p| !p.indices.is_empty())
+        .map(|p| (meshes.add(part_mesh(p, map::to_y_up, false)), l.materials.get(p.texture).cloned().unwrap_or_default()))
+        .collect()
+}
+
 pub fn static_parts(l: &Loaded, pose: &[BoneTransform], meshes: &mut Assets<Mesh>) -> Parts {
     l.model
         .posed_mesh(pose)

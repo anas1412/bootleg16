@@ -212,6 +212,8 @@ pub struct Server {
     bomb: Bomb,
     /// Who planted this round's bomb (for the MVP).
     planter: Option<u8>,
+    /// Who just threw the bomb away (G), and until when they can't pick it up again.
+    bomb_thrower: Option<(u8, u32)>,
     /// Practice: the tick everyone goes back to their spawn after the bomb decided (0: none).
     practice_reset: u32,
     /// Deathmatch: the tick this game ends.
@@ -279,6 +281,7 @@ impl Server {
             rate,
             bomb: Bomb::None,
             planter: None,
+            bomb_thrower: None,
             practice_reset: 0,
             dm_end: 0,
             practice_bomb: 0,

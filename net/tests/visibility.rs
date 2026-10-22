@@ -114,3 +114,35 @@ fn a_whole_team_dead_sees_nothing_of_the_enemy() {
     }
     assert!(!g.b.others().iter().any(|o| o.id == t && o.alive), "nobody alive on their team: nothing of the enemy");
 }
+
+#[test]
+fn a_dropped_bomb_is_sent_to_cts_only_in_their_sight() {
+    let Some(bsp) = dust2() else { return };
+    let mut g = setup(&bsp, 0, 0.0);
+    g.server.set_rules(net::server::Rules::practice(0)); // practice hands the Strays the bomb
+    g.connect_as(Some(Team::T), Some(Team::Ct));
+    let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
+    for _ in 0..128 * 5 {
+        g.tick(Input::default(), Input::default());
+        if g.a.bomb == net::protocol::BombNet::Carried(a) {
+            break;
+        }
+    }
+    assert_eq!(g.a.bomb, net::protocol::BombNet::Carried(a), "the terrorist has the bomb");
+    // The CT at his spawn across the map isn't told who has it.
+    assert_eq!(g.b.bomb, net::protocol::BombNet::None);
+    // The T drops it at his spawn: he knows where it is, the CT across the map doesn't.
+    for i in 0..128 {
+        let drop = Input { slot: if i < 8 { 5 } else { 0 }, drop: (96..104).contains(&i), ..Default::default() };
+        g.tick(drop, Input::default());
+    }
+    assert!(matches!(g.a.bomb, net::protocol::BombNet::Dropped(_)), "{:?}", g.a.bomb);
+    assert_eq!(g.b.bomb, net::protocol::BombNet::None, "the CT saw a bomb across the map");
+    // Standing over it, the CT sees it.
+    let net::protocol::BombNet::Dropped(at) = g.a.bomb else { unreachable!() };
+    g.server.teleport(b, [at[0] + 100.0, at[1], at[2] + 40.0]);
+    for _ in 0..64 {
+        g.tick(Input::default(), Input::default());
+    }
+    assert!(matches!(g.b.bomb, net::protocol::BombNet::Dropped(_)), "{:?}", g.b.bomb);
+}
