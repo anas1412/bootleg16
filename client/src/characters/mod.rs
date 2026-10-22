@@ -23,8 +23,9 @@ pub struct Entry {
     /// Shown in the menu (`name = "..."` in `character.cfg`; the id when missing).
     pub name: String,
     pub dir: PathBuf,
-    /// `portrait.png` in the folder: the character's picture in the menu (portrait shaped, about 3:4).
-    pub portrait: Option<Handle<Image>>,
+    /// `portrait.png` in the folder: the character's picture in the menu (best portrait shaped,
+    /// about 3:4; any other shape fits inside the frame), with its width over height.
+    pub portrait: Option<(Handle<Image>, f32)>,
     /// `side = "bureau"` (counter-terrorists) or `"strays"` (terrorists); none: either side.
     pub side: Option<Team>,
     /// `voice = "female"`: their hurt and death sounds come from `sound/player/<voice>/`
@@ -111,7 +112,10 @@ fn scan(images: &mut Assets<Image>) -> Characters {
             let portrait = std::fs::read(dir.join("portrait.png")).ok().and_then(|bytes| {
                 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
                 Image::from_buffer(&bytes, ImageType::Extension("png"), CompressedImageFormats::NONE, true, ImageSampler::linear(), bevy::asset::RenderAssetUsages::default()).ok()
-            }).map(|img| images.add(img));
+            }).map(|img| {
+                let aspect = img.width() as f32 / img.height().max(1) as f32;
+                (images.add(img), aspect)
+            });
             list.push(Entry { id, name, dir, portrait, side, voice });
         }
     }
@@ -176,9 +180,14 @@ pub fn page(page: &mut ChildSpawnerCommands, kit: &Kit, settings: &Settings, cha
         chip(row, kit, "‹", UiAction::CycleCharacter(-1), false);
         row.spawn(Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: vh(12.0), ..default() }).with_children(|col| {
             // the character's picture, or a quiet frame of the same size until it has one
-            let frame = Node { width: vh(330.0), height: vh(440.0), ..default() };
+            let (fw, fh) = (330.0, 440.0);
+            let frame = Node { width: vh(fw), height: vh(fh), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() };
             match &c.portrait {
-                Some(img) => _ = col.spawn((ImageNode::new(img.clone()), frame, Pickable::IGNORE)),
+                // fitted inside the frame, never stretched
+                Some((img, aspect)) => {
+                    let (w, h) = if *aspect > fw / fh { (fw, fw / aspect) } else { (fh * aspect, fh) };
+                    col.spawn((frame, Pickable::IGNORE)).with_child((ImageNode::new(img.clone()), Node { width: vh(w), height: vh(h), ..default() }, Pickable::IGNORE));
+                }
                 None => _ = col.spawn((frame, BackgroundColor(Color::BLACK.with_alpha(0.35)), Pickable::IGNORE)),
             }
             col.spawn(kit_text(c.name.to_uppercase(), 40.0, TX1, &kit.display));
