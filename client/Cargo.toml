@@ -9,10 +9,7 @@ sim = { path = "../sim" }
 client_core = { path = "../client_core" }
 net = { path = "../net" }
 bevy = { version = "0.20", features = ["wav"] }
-# Voice chat: microphone / output streams (same cpal Bevy's audio uses) and the Opus codec.
-cpal = "0.17"
-opus = "0.3"
-# AI assistant: shuffling its line decks.
+# Small randomness (the assistant's blinks, the voice level bars, host ids).
 fastrand = "2"
 # Steam: sign-in, friends, invites (feature `steam`).
 steamworks = { version = "0.13", optional = true }

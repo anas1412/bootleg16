@@ -1,4 +1,4 @@
-//! When the assistant may talk (the anti-Navi rules). Pure logic, no Bevy.
+//! When the assistant may talk (the anti-Navi rules). Pure logic.
 
 /// What kind of line it is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

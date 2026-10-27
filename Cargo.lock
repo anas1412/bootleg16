@@ -2255,11 +2255,9 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "client_core",
- "cpal",
  "fastrand",
  "goldsrc",
  "net",
- "opus",
  "sim",
  "steamworks",
  "steamworks-sys",
@@ -2269,6 +2267,12 @@ dependencies = [
 [[package]]
 name = "client_core"
 version = "0.1.0"
+dependencies = [
+ "cpal",
+ "fastrand",
+ "net",
+ "opus",
+]
 
 [[package]]
 name = "clipboard-win"

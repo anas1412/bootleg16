@@ -8,6 +8,7 @@ use crate::menu::{AppState, Overlay};
 use crate::ui::{feed_row, kit_text, vh, Anim, HudLayer, Kit, Outer, AMBER, CT_COLOR, TX1, TX2, T_COLOR};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
+use client_core::voice::LINGER;
 use net::protocol::{Team, VoiceChannel};
 use std::collections::HashMap;
 
@@ -21,9 +22,6 @@ impl Talking {
         self.0.get(&id).filter(|(_, at, _)| now - at < LINGER).map(|(_, _, l)| *l)
     }
 }
-
-/// Someone stays on the list this long after their last frame.
-const LINGER: f32 = 0.3;
 
 #[derive(Component)]
 pub(super) struct VoiceRoot;
