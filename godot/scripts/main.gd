@@ -15,6 +15,8 @@ func _ready() -> void:
 	Engine.max_physics_steps_per_frame = 16
 	for node in [$Player, $Others, $Hud/Speed]:
 		node.session = session
+	if OS.get_environment("BOOTLEG16_BENCH") != "":
+		add_child(preload("res://scripts/bench.gd").new())
 
 func _exit_tree() -> void:
 	session.stop()
