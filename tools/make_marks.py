@@ -18,7 +18,7 @@ FONTS = ROOT / "godot/fonts"
 OUT = ROOT / "design/identity/marks"
 
 AMBER, WHITE, CYAN, PINK, RED = "#ffa000", "#f2f2f0", "#49c6ff", "#ff4f8b", "#ff3b3b"
-BLACK_COND = FONTS / "barlow_condensed/BarlowCondensed-Black.ttf"
+DISPLAY = FONTS / "anton/Anton-Regular.ttf"  # the tall heavy letters of the board
 JP = FONTS / "noto_sans_jp/NotoSansJP[wght].ttf"
 
 
@@ -57,6 +57,12 @@ class Text:
         return r - l, b - t
 
 
+def fit_height(font, text, height, tracking=0.0):
+    """Text sized so its ink is exactly this tall."""
+    probe = Text(font, text, 100, tracking)
+    return Text(font, text, 100 * height / probe.size[1], tracking)
+
+
 def svg(w, h, body):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:g} {h:g}" width="{w:g}" height="{h:g}">{body}</svg>\n'
 
@@ -67,8 +73,8 @@ def poly(points, fill):
 
 def wordmark():
     # BOOTLEG white, 16 amber; amber rule 16 under the letters; katakana 16 under the rule.
-    boot = Text(BLACK_COND, "BOOTLEG", 192, tracking=4)
-    num = Text(BLACK_COND, "16", 192, tracking=4)
+    boot = fit_height(DISPLAY, "BOOTLEG", 160, tracking=4)
+    num = fit_height(DISPLAY, "16", 160, tracking=4)
     kana = Text(JP, "ブートレグ", 40, tracking=24, weight=700)
     gap_num = 8
     bw, bh = boot.size
@@ -99,8 +105,8 @@ def monogram():
     # straight sides and centred on the hexagon.
     size, r = 256, 128
     inner_width = 2 * (r - 16) * math.cos(math.radians(30))
-    probe = Text(BLACK_COND, "B16", 100, tracking=2)
-    letters = Text(BLACK_COND, "B16", 100 * (inner_width - 48) / probe.size[0], tracking=2)
+    probe = Text(DISPLAY, "B16", 100, tracking=2)
+    letters = Text(DISPLAY, "B16", 100 * (inner_width - 48) / probe.size[0], tracking=2)
     lw, lh = letters.size
     body = f'<path fill="{AMBER}" fill-rule="evenodd" d="{hexagon(r, r, r, r - 16)}"/>'
     body += letters.path((size - lw) / 2, (size - lh) / 2, AMBER)
@@ -138,14 +144,20 @@ def strays():
 
 
 def live_bug():
-    # The Channel 16 bug, used only as the live mark: 16 in a rounded square, red dot top right.
-    size = 128
-    num = Text(BLACK_COND, "16", 72, tracking=2)
+    # The Channel 16 bug, used only as the live mark: 16 in a rounded square frame (stroke 8, radius
+    # 16), the red dot (radius 12) on the frame's top right corner. The frame is open there: its
+    # round-capped ends stop 8 short of the dot. 16 is 56 tall, centred in the frame.
+    x0, y0, x1, y1, rr = 4, 12, 108, 116, 16  # stroke centre line: outer edges 0..112 by 8..120
+    dot, r = (x1, y0), 12
+    end = r + 8 + 4  # dot radius + gap + half the stroke (the round cap)
+    frame = (f"M{x1 - end},{y0} H{x0 + rr} A{rr},{rr} 0 0 0 {x0},{y0 + rr} V{y1 - rr} "
+             f"A{rr},{rr} 0 0 0 {x0 + rr},{y1} H{x1 - rr} A{rr},{rr} 0 0 0 {x1},{y1 - rr} V{y0 + end}")
+    body = f'<path d="{frame}" fill="none" stroke="{WHITE}" stroke-width="8" stroke-linecap="round"/>'
+    num = fit_height(DISPLAY, "16", 56, tracking=2)
     nw, nh = num.size
-    body = f'<rect x="4" y="12" width="112" height="112" rx="16" fill="none" stroke="{WHITE}" stroke-width="8"/>'
-    body += num.path(4 + (112 - nw) / 2, 12 + (112 - nh) / 2, WHITE)
-    body += f'<circle cx="116" cy="12" r="12" fill="{RED}"/>'
-    return svg(size, size + 8, f'<g transform="translate(0,4)">{body}</g>')
+    body += num.path((x0 + x1 - nw) / 2, (y0 + y1 - nh) / 2, WHITE)
+    body += f'<circle cx="{dot[0]}" cy="{dot[1]}" r="{r}" fill="{RED}"/>'
+    return svg(120, 120, body)
 
 
 if __name__ == "__main__":
