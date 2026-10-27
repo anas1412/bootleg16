@@ -7,12 +7,12 @@
 ## Everything here is in GoldSrc units (x east, y north, z up, 1 unit = 1 inch), as the
 ## measurements are. Areas are where players walk: a floor (solid down to the base), a ramp
 ## (its `z` is [height at the low corner, height at the high corner] along `axis`) or a bridge
-## (a thin slab over another area). Every 32-unit cell no area covers becomes wall. Over each
+## (a thin slab over another area). Every 16-unit cell no area covers becomes wall (every area edge is on that grid). Over each
 ## area its ceiling (CEILINGS): a roof indoors, the sky outdoors. Blocks are cover and door frames.
 extends SceneTree
 
 const METRES := 0.0254
-const CELL := 32
+const CELL := 16
 const BASE := -320
 const TOP := 512
 const OUT := "res://maps/data_center.tscn"
@@ -27,6 +27,7 @@ const AREAS := [
 	["dock", [-2304, -1024, -1024, -640], 128, {}],
 	["dock_north", [-1792, -640, -1024, -256], 128, {}],
 	["dock_east", [-1024, -1024, -512, -640], 128, {}],
+	["dock_gap", [-1792, -256, -1632, -128], 128, {}],
 	["dock_ramp", [-512, -1024, 0, -576], [128, 0], {"axis": "x"}],
 	["dock_lane", [0, -768, 256, -576], 0, {}],
 	# to B: the intake yard, then the cable crawlspace under the floor
@@ -85,36 +86,50 @@ const AREAS := [
 	["a_back", [1088, 2752, 1600, 3072], 112, {}],
 ]
 
-## Cover, racks and door frames: [name, [x0, y0, x1, y1], [z0, z1]]
+## Blocks: [name, [x0, y0, x1, y1], [z0, z1], what it is]. Each is something a data center
+## has, and looks it (PROPS); "" is part of the building (frames, headers, a column).
 const BLOCKS := [
 	# the spine's security doors: a frame 192 wide (its two panels are LEAVES), a header
-	["spine_door_w", [-512, 1592, -480, 1672], [-128, TOP]],
-	["spine_door_e", [-288, 1592, -256, 1672], [-128, TOP]],
-	["spine_door_head", [-480, 1592, -288, 1672], [0, TOP]],
+	["spine_door_w", [-512, 1592, -480, 1672], [-128, TOP], ""],
+	["spine_door_e", [-288, 1592, -256, 1672], [-128, TOP], ""],
+	["spine_door_head", [-480, 1592, -288, 1672], [0, TOP], ""],
 	# the archive doors (B): a frame 176 wide (its panels are LEAVES), a header
-	["b_door_s", [-1344, 2080, -1312, 2096], [0, TOP]],
-	["b_door_head", [-1344, 2096, -1312, 2272], [144, TOP]],
+	["b_door_s", [-1344, 2080, -1312, 2096], [0, TOP], ""],
+	["b_door_head", [-1344, 2096, -1312, 2272], [144, TOP], ""],
 	# a low header where the control room opens onto the ramp to A (under the walkway deck)
-	["control_head", [528, 2176, 560, 2304], [0, 96]],
+	["control_head", [528, 2176, 560, 2304], [0, 96], ""],
 	# the aisle doors: a header over the 320-unit passage
-	["aisle_door_head", [912, 768, 944, 1088], [144, TOP]],
-	# cover
-	["dock_rack", [-1152, -640, -1024, -448], [128, 256]],
-	["dock_crate", [-1792, -256, -1664, -128], [128, 192]],
-	["spine_rail", [-272, 768, -240, 1568], [-128, 32]],
-	["walkway_crate", [-224, 1440, -160, 1504], [0, 64]],
-	["walkway_end", [400, 1408, 496, 1520], [16, 96]],
-	["yard_rack", [768, 1088, 928, 1184], [0, 128]],
-	["aisle_crate", [1536, 1984, 1600, 2112], [0, 64]],
-	["mouth_crate", [960, 288, 1056, 384], [0, 64]],
-	["a_crate", [1024, 2432, 1152, 2560], [96, 160]],
-	["a_rail", [1280, 2304, 1344, 2752], [96, 128]],
-	["b_rack", [-1920, 2304, -1792, 2432], [0, 96]],
-	["b_crate", [-1664, 2560, -1536, 2688], [0, 64]],
-	["b_crate_low", [-1536, 2560, -1472, 2624], [0, 32]],
-	["link_crate", [-160, 2208, -32, 2304], [-128, -64]],
-	["crawl_pillar", [-896, 1280, -800, 1376], [-112, 32]],
+	["aisle_door_head", [912, 768, 944, 1088], [144, TOP], ""],
+	# a column holding up the floor over the low crawl
+	["crawl_pillar", [-896, 1280, -800, 1376], [-112, 32], ""],
+	# cover (the reference's), each a thing with a reason to be there
+	["dock_crates", [-1152, -640, -1024, -448], [128, 256], "delivery"],
+	["spine_kerb", [-272, 768, -240, 1568], [-128, 32], "kerb"],
+	["network_cabinet", [-224, 1440, -160, 1504], [0, 64], "cabinet"],
+	["walkway_ups", [400, 1408, 496, 1520], [16, 96], "ups"],
+	["aisle_boxes", [1536, 1984, 1600, 2112], [0, 64], "boxes"],
+	["sump_pump", [960, 288, 1056, 384], [0, 64], "pump"],
+	["core_servers", [1024, 2432, 1152, 2560], [96, 160], "core"],
+	["a_kerb", [1280, 2304, 1344, 2752], [96, 128], "kerb"],
+	["tape_library", [-1920, 2304, -1792, 2432], [0, 96], "cabinet"],
+	["archive_boxes", [-1664, 2560, -1536, 2688], [0, 64], "archive"],
+	["archive_box", [-1536, 2560, -1472, 2624], [0, 32], "archive"],
+	["bureau_barrier", [-160, 2208, -32, 2304], [-128, -64], "barrier"],
 ]
+
+## How each kind of block looks: [prop.gdshader kind, body colour, light colour].
+const PROPS := {
+	"cabinet": [0, Color(0.36, 0.38, 0.41), Color(0.25, 1.0, 0.55)],
+	"core": [0, Color(0.30, 0.31, 0.34), Color(1.0, 0.76, 0.24)],
+	"delivery": [1, Color(0.55, 0.43, 0.30), Color()],
+	"boxes": [1, Color(0.58, 0.48, 0.34), Color()],
+	"archive": [1, Color(0.46, 0.49, 0.52), Color()],
+	"ups": [2, Color(0.30, 0.32, 0.35), Color()],
+	"pump": [2, Color(0.34, 0.40, 0.48), Color()],
+	"barrier": [3, Color(0.55, 0.56, 0.56), Color()],
+	"kerb": [4, Color(0.40, 0.42, 0.45), Color()],
+	"door": [5, Color(0.40, 0.46, 0.54), Color(0.29, 0.78, 1.0)],
+}
 
 ## The height of each area's ceiling, measured on the reference (the median of 3 x 3 points
 ## over the area, mapstats sightlines straight up): ["roof", z] indoors, ["sky", z] outdoors
@@ -146,15 +161,15 @@ const CEILINGS := {
 ## What lines the walls of each area, and how tall (units): server racks in the halls and the
 ## aisle, cable bundles low along the crawlspace, condensers along the outdoor walls.
 const DRESS := {
-	"racks": ["aisle", "aisle_end", "aisle_entry", "aisle_mouth", "aisle_doors", "a_floor", "a_deck", "a_deck_west", "a_back", "hall_b", "hall_b_back", "lobby", "spine_north", "walkway_top"],
+	"racks": ["aisle", "aisle_end", "aisle_entry", "aisle_mouth", "aisle_doors", "sump_ramp", "a_floor", "a_ramp", "a_deck", "a_deck_west", "a_back", "hall_b", "hall_b_back", "lobby", "spine_north", "walkway_top"],
 	"cables": ["crawl_neck", "crawl_cross", "crawl_east", "crawl_up", "crawl_low"],
-	"condensers": ["dock", "dock_north", "dock_east", "intake", "yard_lot", "yard", "spine_top"],
+	"condensers": ["dock", "dock_north", "dock_east", "dock_gap", "dock_ramp", "dock_lane", "intake_ramp", "intake_steps", "intake", "crawl_mouth", "yard_south", "yard_lot", "yard_link", "yard", "spine_top"],
 }
 const DRESS_HEIGHT := {"racks": 84.0, "cables": 56.0, "condensers": 56.0}
 ## The landmark: cooling towers west of the dock, steaming (GoldSrc x, y, and their height).
 const TOWERS := [[-3000, -900, 1300], [-3050, -100, 1400], [-2950, 700, 1250]]
 
-## Door panels standing at an angle: [name, [x, y] one end, [x, y] the other, thickness, [z0, z1]].
+## Door panels standing at an angle (security doors, PROPS "door"): [name, [x, y] one end, [x, y] the other, thickness, [z0, z1]].
 ## Doors standing half open, parallel, leave a slanted gap between their panels.
 const LEAVES := [
 	["spine_leaf_w", [-480, 1632], [-392, 1591], 8, [-128, 0]],
@@ -194,6 +209,7 @@ var _lit: Node3D
 var _skies: Node3D
 var _lamp: StandardMaterial3D
 var _dress_mats := {}
+var _prop_mats := {}
 
 func _initialize() -> void:
 	_root = Node3D.new()
@@ -207,9 +223,14 @@ func _initialize() -> void:
 		"raised": _shader("raised_floor"),
 	}
 	_dress_mats = {"racks": _shader("rack"), "cables": _shader("cables"), "condensers": _shader("condenser")}
-	var floors := _group("Floors")
-	var walls := _group("Walls")
-	var blocks := _group("Blocks")
+	# one solid, drawn as the union of its boxes: no two faces in the same place flicker
+	# (z-fighting) and nothing hidden inside is drawn; the exporter still reads every box
+	var solid := CSGCombiner3D.new()
+	solid.name = "Solid"
+	_add(_root, solid)
+	var floors := _combiner(solid, "Floors")
+	var walls := _combiner(solid, "Walls")
+	var blocks := _combiner(solid, "Blocks")
 	_lit = _group("Lights")
 	_skies = _group("Skies")
 	_lamp = StandardMaterial3D.new()
@@ -218,10 +239,13 @@ func _initialize() -> void:
 	for a in AREAS:
 		_area(floors, a)
 	_walls(walls)
+	var props := _group("Props")
 	for b in BLOCKS:
-		_box(blocks, b[0], b[1][0], b[1][1], b[2][0], b[1][2], b[1][3], b[2][1], "cover", {"material": "M"})
+		var box := _box(blocks, b[0], b[1][0], b[1][1], b[2][0], b[1][2], b[1][3], b[2][1], "wall" if b[3] == "" else "cover", {"material": "C" if b[3] == "" else "M"})
+		if b[3] != "":
+			_prop(props, box, b[3])
 	for l in LEAVES:
-		_leaf(blocks, l)
+		_prop(props, _leaf(blocks, l), "door")
 	_sky()
 	_dress(_group("Dressing"))
 	_landmark(_group("Landmark"))
@@ -252,6 +276,12 @@ func _grid(base: Color) -> ShaderMaterial:
 	m.set_shader_parameter("line", base.darkened(0.3))
 	return m
 
+func _combiner(parent: Node, name: String) -> CSGCombiner3D:
+	var n := CSGCombiner3D.new()
+	n.name = name
+	_add(parent, n)
+	return n
+
 func _group(name: String) -> Node3D:
 	var n := Node3D.new()
 	n.name = name
@@ -279,7 +309,7 @@ func _box(parent: Node, name: String, x0: float, y0: float, z0: float, x1: float
 	return b
 
 ## A box along the line between two points (GoldSrc), turned to follow it.
-func _leaf(parent: Node, l: Array) -> void:
+func _leaf(parent: Node, l: Array) -> CSGBox3D:
 	var a := Vector2(l[1][0], l[1][1])
 	var b := Vector2(l[2][0], l[2][1])
 	var z: Array = l[4]
@@ -288,6 +318,26 @@ func _leaf(parent: Node, l: Array) -> void:
 	box.position = _p(mid.x, mid.y, (z[0] + z[1]) / 2.0)
 	# GoldSrc's angle from x towards y is a turn around Godot's up the same way
 	box.rotation.y = (b - a).angle()
+	return box
+
+## A block's look: a box just bigger than it (half a unit all round), with its kind's pattern.
+func _prop(parent: Node3D, box: CSGBox3D, kind: String) -> void:
+	var look: Array = PROPS[kind]
+	if not _prop_mats.has(kind):
+		var m := _shader("prop")
+		m.set_shader_parameter("kind", look[0])
+		m.set_shader_parameter("body", look[1])
+		m.set_shader_parameter("accent", look[2])
+		_prop_mats[kind] = m
+	var mesh := BoxMesh.new()
+	mesh.size = box.size + Vector3.ONE * METRES
+	mesh.material = _prop_mats[kind]
+	var skin := MeshInstance3D.new()
+	skin.name = box.name
+	skin.mesh = mesh
+	skin.transform = box.transform
+	skin.set_instance_shader_parameter("size", mesh.size)
+	_add(parent, skin)
 
 func _area(parent: Node, a: Array) -> void:
 	var name: String = a[0]
@@ -428,10 +478,7 @@ func _dress(parent: Node3D) -> void:
 	for kind in DRESS:
 		for name in DRESS[kind]:
 			var a: Array = _area_named(name)
-			if a[2] is Array:
-				continue
 			var r: Array = a[1]
-			var z: float = a[2]
 			var h: float = DRESS_HEIGHT[kind]
 			# [along x?, the fixed coordinate, the cell centre just outside, which way is in]
 			for edge in [[true, r[1], r[1] - CELL / 2.0, 1.0], [true, r[3], r[3] + CELL / 2.0, -1.0], [false, r[0], r[0] - CELL / 2.0, 1.0], [false, r[2], r[2] + CELL / 2.0, -1.0]]:
@@ -444,7 +491,7 @@ func _dress(parent: Node3D) -> void:
 					if wall and is_nan(start):
 						start = t
 					elif not wall and not is_nan(start):
-						_panel(parent, kind, edge, start, t, z, h)
+						_run(parent, kind, edge, start, t, a, h)
 						start = NAN
 					t += CELL
 	for name in CEILINGS:
@@ -453,6 +500,29 @@ func _dress(parent: Node3D) -> void:
 		if c[0] != "roof" or a[2] is Array or c[1] - a[2] < 200:
 			continue
 		_tray(parent, name, a[1], c[1] - 56)
+
+## A run of panels along one edge of an area. Along a ramp's slope it steps up in 48-unit
+## pieces, each standing on the floor where it's lowest.
+func _run(parent: Node3D, kind: String, edge: Array, start: float, end: float, a: Array, h: float) -> void:
+	var at := func(t: float) -> float:
+		return _floor_z(a, t, edge[1]) if edge[0] else _floor_z(a, edge[1], t)
+	var sloped: bool = a[2] is Array and ((a[3].axis == "x") == edge[0])
+	if not sloped:
+		_panel(parent, kind, edge, start, end, at.call(start), h)
+		return
+	var t := start
+	while t < end:
+		var e := minf(t + 48.0, end)
+		_panel(parent, kind, edge, t, e, minf(at.call(t), at.call(e)), h)
+		t = e
+
+## An area's floor height at a point (ramps: along their slope).
+func _floor_z(a: Array, x: float, y: float) -> float:
+	if not (a[2] is Array):
+		return a[2]
+	var r: Array = a[1]
+	var k: float = (x - r[0]) / (r[2] - r[0]) if a[3].axis == "x" else (y - r[1]) / (r[3] - r[1])
+	return lerpf(a[2][0], a[2][1], clampf(k, 0.0, 1.0))
 
 func _area_named(name: String) -> Array:
 	for a in AREAS:

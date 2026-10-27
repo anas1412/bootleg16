@@ -181,5 +181,13 @@ trays under the high roofs, cable bundles low along the crawlspace walls (`cable
 fan condensers along the outdoor walls (`condenser.gdshader`), and the landmark: three cooling
 towers west of the dock, steaming over its wall. 119 fps at 1080p Medium at the spawn.
 
+**Every block is something** (`BLOCKS`, `PROPS`, `prop.gdshader`): delivery crates at the
+dock, a network cabinet and a UPS on the walkway, the sump's pump, boxes of servers in the
+aisle, the core servers on A, a tape library and archive boxes on B, a Bureau barrier by the
+control room, hazard-striped kerbs on the ledges, metal security-door panels with a status
+light. Frames, headers and the crawl's column are the building. The map's boxes are drawn
+as one solid (a CSG union, built in a quarter of a second at load): no two faces in the same
+place, so nothing flickers.
+
 Spawns: 10 a side (Dust2 has 20); sites the same size as Dust2's (A 256 × 320, B 384 × 384).
 Not in the grey box yet: B's window from the lobby, most small cover, ladders.
