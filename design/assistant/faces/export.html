@@ -4,7 +4,7 @@
 <script src="faces.js"></script>
 <script>
 // One sheet per face for the game: columns are the rig layers, rows the nine moods, 256 px
-// cells cropped like the portrait tiles (TILE_VIEW in ui.js).
+// cells, each cropped to the face (viewBox 44 42 112 112).
 const LAYERS = ['back', 'body', 'head', 'extra', 'eyes', 'shut', 'brows', 'mouth', 'talk', 'fx', 'front'];
 const C = { claudette: '#E8875F', childgbt: '#6FE3C1', sister: '#A98BFF', brother: '#A98BFF', grumpk: '#D4FF3A' };
 const w = new URLSearchParams(location.search).get('w');

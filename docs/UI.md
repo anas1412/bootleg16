@@ -1,4 +1,9 @@
-# UI design system: Interference
+# UI design system: Interference (v1, the Bevy client)
+
+**Replaced.** This is the first Interference, still drawn by the frozen Bevy client
+(`client/src/ui`). Its mockups were removed on 2026-10-27 and v2 is being designed from
+scratch for the Godot client, from the reference board picks (Godot port plan, P2). Don't
+build v2 on anything below.
 
 The spec is the mockup, `design/mockups/ui` (serve `design/`, open `mockups/ui/index.html`;
 `system.html` is the whole system on one sheet). The code is `client/src/ui`. The two use the

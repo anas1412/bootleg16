@@ -149,7 +149,7 @@ land, and add new ones here instead of leaving them only in chat.
       drawn in view for a frame or so)
 - [x] Smoke as CS 1.6 (`5bed563`, not yet seen on screen). Was: Smoke grenade cloud is far too transparent: should block sight like CS 1.6's
 
-### UI (Interference: docs/UI.md, design/mockups/ui is the spec)
+### UI (Interference v1, the Bevy client: docs/UI.md; its mockups were removed, v2 is redone for Godot)
 - [x] Scoreboard data: `Score` has assists, MVPs, headshots, damage and rounds (ADR), server-measured
       ping, money (own team only)
 - [x] Scoreboard columns for them (K D A ADR HS% MVP $ PING)
