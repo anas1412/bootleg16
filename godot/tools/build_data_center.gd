@@ -142,6 +142,18 @@ const CEILINGS := {
 	"a_ramp": ["roof", 352], "a_deck": ["roof", 352], "a_back": ["roof", 352],
 }
 
+## Dressing (looks only: meshes the exporter skips, nothing players or bullets touch).
+## What lines the walls of each area, and how tall (units): server racks in the halls and the
+## aisle, cable bundles low along the crawlspace, condensers along the outdoor walls.
+const DRESS := {
+	"racks": ["aisle", "aisle_end", "aisle_entry", "aisle_mouth", "aisle_doors", "a_floor", "a_deck", "a_deck_west", "a_back", "hall_b", "hall_b_back", "lobby", "spine_north", "walkway_top"],
+	"cables": ["crawl_neck", "crawl_cross", "crawl_east", "crawl_up", "crawl_low"],
+	"condensers": ["dock", "dock_north", "dock_east", "intake", "yard_lot", "yard", "spine_top"],
+}
+const DRESS_HEIGHT := {"racks": 84.0, "cables": 56.0, "condensers": 56.0}
+## The landmark: cooling towers west of the dock, steaming (GoldSrc x, y, and their height).
+const TOWERS := [[-3000, -900, 1300], [-3050, -100, 1400], [-2950, 700, 1250]]
+
 ## Door panels standing at an angle: [name, [x, y] one end, [x, y] the other, thickness, [z0, z1]].
 ## Doors standing half open, parallel, leave a slanted gap between their panels.
 const LEAVES := [
@@ -181,6 +193,7 @@ var _root: Node3D
 var _lit: Node3D
 var _skies: Node3D
 var _lamp: StandardMaterial3D
+var _dress_mats := {}
 
 func _initialize() -> void:
 	_root = Node3D.new()
@@ -191,7 +204,9 @@ func _initialize() -> void:
 		"wall": _grid(Color(0.47, 0.48, 0.50)),
 		"cover": _grid(Color(0.40, 0.43, 0.48)),
 		"roof": _grid(Color(0.26, 0.27, 0.29)),
+		"raised": _shader("raised_floor"),
 	}
+	_dress_mats = {"racks": _shader("rack"), "cables": _shader("cables"), "condensers": _shader("condenser")}
 	var floors := _group("Floors")
 	var walls := _group("Walls")
 	var blocks := _group("Blocks")
@@ -208,6 +223,8 @@ func _initialize() -> void:
 	for l in LEAVES:
 		_leaf(blocks, l)
 	_sky()
+	_dress(_group("Dressing"))
+	_landmark(_group("Landmark"))
 	_spawns()
 	_zones()
 	_marks()
@@ -217,6 +234,16 @@ func _initialize() -> void:
 	print("%s: %d areas, %d wall boxes, %d blocks (%s)" % [OUT, AREAS.size(), walls.get_child_count(), BLOCKS.size(), error_string(err)])
 	_root.free()
 	quit(0 if err == OK else 1)
+
+func _shader(name: String) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/%s.gdshader" % name)
+	return m
+
+## Indoors (under a roof) the floor is raised tiles; outdoors and in the crawlspace, concrete.
+func _floor_mat(name: String) -> String:
+	var c: Array = CEILINGS.get(name, [])
+	return "raised" if not c.is_empty() and c[0] == "roof" and not name.begins_with("crawl") else "floor"
 
 func _grid(base: Color) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
@@ -269,9 +296,9 @@ func _area(parent: Node, a: Array) -> void:
 	if a[2] is Array:
 		_ramp(parent, name, r, a[2], extra)
 	elif extra.get("bridge", false):
-		_box(parent, name, r[0], r[1], a[2] - 32, r[2], r[3], a[2], "floor")
+		_box(parent, name, r[0], r[1], a[2] - 32, r[2], r[3], a[2], _floor_mat(name))
 	else:
-		_box(parent, name, r[0], r[1], BASE, r[2], r[3], a[2], "floor")
+		_box(parent, name, r[0], r[1], BASE, r[2], r[3], a[2], _floor_mat(name))
 	if CEILINGS.has(name):
 		var c: Array = CEILINGS[name]
 		if c.size() > 2:
@@ -286,7 +313,7 @@ func _area(parent: Node, a: Array) -> void:
 ## edge to z1 at the other.
 func _ramp(parent: Node, name: String, r: Array, z: Array, extra: Dictionary) -> void:
 	var lo_z: float = min(z[0], z[1])
-	_box(parent, name, r[0], r[1], BASE, r[2], r[3], lo_z, "floor")
+	_box(parent, name, r[0], r[1], BASE, r[2], r[3], lo_z, _floor_mat(name))
 	var along_x: bool = extra.axis == "x"
 	var z0: float = z[0]
 	var z1: float = z[1]
@@ -304,7 +331,7 @@ func _ramp(parent: Node, name: String, r: Array, z: Array, extra: Dictionary) ->
 	b.name = name + "_slope"
 	b.size = Vector3(width, thick, (end - start).length())
 	b.transform = Transform3D(Basis(x_axis, up, along), (start + end) / 2.0 - up * thick / 2.0)
-	b.material = _mats.floor
+	b.material = _mats[_floor_mat(name)]
 	_add(parent, b)
 
 func _covered(x: float, y: float) -> bool:
@@ -394,6 +421,167 @@ func _sky_over(name: String, r: Array, z: float) -> void:
 	shape.shape = box
 	shape.position = _p((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0, (z + TOP) / 2.0)
 	_add(body, shape)
+
+## Panels on every stretch of wall around the dressed areas, facing in, a unit off the wall,
+## from the floor up; and a cable tray under each high roof.
+func _dress(parent: Node3D) -> void:
+	for kind in DRESS:
+		for name in DRESS[kind]:
+			var a: Array = _area_named(name)
+			if a[2] is Array:
+				continue
+			var r: Array = a[1]
+			var z: float = a[2]
+			var h: float = DRESS_HEIGHT[kind]
+			# [along x?, the fixed coordinate, the cell centre just outside, which way is in]
+			for edge in [[true, r[1], r[1] - CELL / 2.0, 1.0], [true, r[3], r[3] + CELL / 2.0, -1.0], [false, r[0], r[0] - CELL / 2.0, 1.0], [false, r[2], r[2] + CELL / 2.0, -1.0]]:
+				var from: float = r[0] if edge[0] else r[1]
+				var to: float = r[2] if edge[0] else r[3]
+				var start := NAN
+				var t := from
+				while t <= to:
+					var wall := t < to and not (_covered(t + CELL / 2.0, edge[2]) if edge[0] else _covered(edge[2], t + CELL / 2.0))
+					if wall and is_nan(start):
+						start = t
+					elif not wall and not is_nan(start):
+						_panel(parent, kind, edge, start, t, z, h)
+						start = NAN
+					t += CELL
+	for name in CEILINGS:
+		var c: Array = CEILINGS[name]
+		var a: Array = _area_named(name)
+		if c[0] != "roof" or a[2] is Array or c[1] - a[2] < 200:
+			continue
+		_tray(parent, name, a[1], c[1] - 56)
+
+func _area_named(name: String) -> Array:
+	for a in AREAS:
+		if a[0] == name:
+			return a
+	return []
+
+## One run of panels: wall from `start` to `end` along an edge, `h` tall from the floor `z`.
+func _panel(parent: Node3D, kind: String, edge: Array, start: float, end: float, z: float, h: float) -> void:
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(end - start, h) * METRES
+	mesh.material = _dress_mats[kind]
+	var m := MeshInstance3D.new()
+	m.name = "%s%d" % [kind, parent.get_child_count()]
+	m.mesh = mesh
+	m.set_instance_shader_parameter("size", mesh.size)
+	var mid := (start + end) / 2.0
+	var inward: float = edge[3]
+	# a quad faces +z; turn it to face into the area
+	if edge[0]:
+		m.position = _p(mid, edge[1] + inward, z + h / 2.0)
+		m.rotation.y = 0.0 if inward < 0 else PI
+	else:
+		m.position = _p(edge[1] + inward, mid, z + h / 2.0)
+		m.rotation.y = PI / 2.0 if inward > 0 else -PI / 2.0
+	_add(parent, m)
+
+## A cable tray along an area's long side, a third of the way across, hung from the roof.
+func _tray(parent: Node3D, name: String, r: Array, z: float) -> void:
+	var along_x: bool = r[2] - r[0] >= r[3] - r[1]
+	var length: float = (r[2] - r[0] if along_x else r[3] - r[1]) - 32.0
+	var at: float = (r[1] + (r[3] - r[1]) / 3.0) if along_x else (r[0] + (r[2] - r[0]) / 3.0)
+	var mid: float = (r[0] + r[2]) / 2.0 if along_x else (r[1] + r[3]) / 2.0
+	var tray := MeshInstance3D.new()
+	tray.name = name + "_tray"
+	var box := BoxMesh.new()
+	box.size = Vector3(length if along_x else 14.0, 3.0, 14.0 if along_x else length) * METRES
+	box.material = _tray_mat()
+	tray.mesh = box
+	tray.position = _p(mid, at, z) if along_x else _p(at, mid, z)
+	_add(parent, tray)
+
+var _tray_material: StandardMaterial3D
+func _tray_mat() -> StandardMaterial3D:
+	if _tray_material == null:
+		_tray_material = StandardMaterial3D.new()
+		_tray_material.albedo_color = Color(0.42, 0.44, 0.46)
+		_tray_material.metallic = 0.6
+		_tray_material.roughness = 0.45
+	return _tray_material
+
+## Cooling towers outside the walls west of the dock, seen over them, steam rising off the top.
+func _landmark(parent: Node3D) -> void:
+	var concrete := StandardMaterial3D.new()
+	concrete.albedo_color = Color(0.62, 0.62, 0.60)
+	concrete.roughness = 0.95
+	for i in TOWERS.size():
+		var t: Array = TOWERS[i]
+		var height: float = t[2]
+		var waist := height * 0.7
+		for part in [[0.0, waist, 330.0, 220.0], [waist, height, 220.0, 250.0]]:
+			var c := CylinderMesh.new()
+			c.bottom_radius = part[2] * METRES
+			c.top_radius = part[3] * METRES
+			c.height = (part[1] - part[0]) * METRES
+			c.radial_segments = 32
+			c.rings = 1
+			c.cap_top = false
+			c.material = concrete
+			var m := MeshInstance3D.new()
+			m.name = "Tower%d_%d" % [i, int(part[0])]
+			m.mesh = c
+			m.position = _p(t[0], t[1], (part[0] + part[1]) / 2.0)
+			_add(parent, m)
+		_add(parent, _steam("Steam%d" % i, _p(t[0], t[1], height + 20)))
+
+func _steam(name: String, at: Vector3) -> GPUParticles3D:
+	var p := GPUParticles3D.new()
+	p.name = name
+	p.position = at
+	p.amount = 48
+	p.lifetime = 10.0
+	p.preprocess = 10.0
+	p.visibility_aabb = AABB(Vector3(-30, -5, -30), Vector3(60, 70, 60))
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3.UP
+	pm.spread = 10.0
+	pm.initial_velocity_min = 2.5
+	pm.initial_velocity_max = 4.0
+	pm.gravity = Vector3(0.5, 0.3, 0.2)
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 4.0
+	pm.scale_min = 0.8
+	pm.scale_max = 1.3
+	var grow := Curve.new()
+	grow.add_point(Vector2(0, 0.4))
+	grow.add_point(Vector2(1, 1.6))
+	var grow_tex := CurveTexture.new()
+	grow_tex.curve = grow
+	pm.scale_curve = grow_tex
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 0))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	fade.add_point(0.15, Color(1, 1, 1, 0.55))
+	fade.add_point(0.6, Color(1, 1, 1, 0.3))
+	var fade_tex := GradientTexture1D.new()
+	fade_tex.gradient = fade
+	pm.color_ramp = fade_tex
+	p.process_material = pm
+	var puff := Gradient.new()
+	puff.set_color(0, Color(1, 1, 1, 1))
+	puff.set_color(1, Color(1, 1, 1, 0))
+	var puff_tex := GradientTexture2D.new()
+	puff_tex.gradient = puff
+	puff_tex.fill = GradientTexture2D.FILL_RADIAL
+	puff_tex.fill_from = Vector2(0.5, 0.5)
+	puff_tex.fill_to = Vector2(1.0, 0.5)
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.vertex_color_use_as_albedo = true
+	mat.albedo_color = Color(0.93, 0.95, 0.97)
+	mat.albedo_texture = puff_tex
+	var quad := QuadMesh.new()
+	quad.size = Vector2(12, 12)
+	quad.material = mat
+	p.draw_pass_1 = quad
+	return p
 
 ## The sky over everything: stops grenades and bullets leaving the map (not drawn).
 func _sky() -> void:
