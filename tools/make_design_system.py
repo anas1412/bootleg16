@@ -22,7 +22,8 @@ CSS_FONT = {  # family var, weight, extra css
 }
 SAMPLES = {
     "takeover": "Operation ready", "name": "Vera", "page": "Locker", "action": "Deploy",
-    "tab": "Play", "body": "Nadia joined your squad", "label": "Your squad 2/5", "kana": "ヴェラ", "tab_kana": "出撃",
+    "tab": "Play", "body": "Nadia joined your squad", "label": "Your squad 2/5", "moment": "Strays win", "alert": "Bomb planted", "hud_value": "64",
+    "hud_timer": "1:12", "hud_small": "$3,250", "hud_name": "Nadia", "hud_tag": "Team", "kana": "ヴェラ", "tab_kana": "出撃",
 }
 COLOUR_GROUPS = (
     ("Ground", ("bg", "panel", "panel_hi", "line")),
@@ -38,6 +39,9 @@ MOTION = (
     ("hover_ms", "ms", "Hover in and out."), ("enter_ms", "ms", "Things arriving."),
     ("exit_ms", "ms", "Things leaving, faster than arriving."), ("takeover_ms", "ms", "Takeover bands sliding in."),
     ("stagger_ms", "ms", "Between rows entering."), ("glitch_ms", "ms", "Channel split, then clean."),
+    ("glitch_tear", "px", "How far the worst torn slice moves."),
+    ("hurt_ms", "ms", "The glitch when you're hit or low: longer."), ("hurt_split", "px", "Its channel split."),
+    ("hurt_tear", "px", "Its torn slices."),
     ("blur_behind", "px", "Blur of the game behind a menu or popup."),
     ("slide", "px", "How far things travel as they arrive."),
 )
@@ -146,7 +150,8 @@ def tokens_gd():
     out += [f"const FONT_CAP := {gd_value({k: v['cap'] for k, v in T['font'].items()})}"]
     out += ["", f"const TYPE := {gd_value(T['type'])}", ""]
     out += [f"const {k.upper().replace('_MS', '')} := {v / 1000:g}  # seconds" for k, v in m.items() if k.endswith("_ms")]
-    out += [f"const SLIDE := {m['slide']}", f"const GLITCH_SPLIT := {m['glitch_split']}", f"const BLUR_BEHIND := {m['blur_behind']}",
+    out += [f"const SLIDE := {m['slide']}", f"const GLITCH_SPLIT := {m['glitch_split']}", f"const GLITCH_TEAR := {m['glitch_tear']}",
+            f"const HURT_SPLIT := {m['hurt_split']}", f"const HURT_TEAR := {m['hurt_tear']}", f"const BLUR_BEHIND := {m['blur_behind']}",
             "const EASE_TRANS := Tween.TRANS_EXPO", "const EASE_TYPE := Tween.EASE_OUT", ""]
     return "\n".join(out)
 

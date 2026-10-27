@@ -4,8 +4,10 @@ class_name Motion
 extends RefCounted
 
 const GLITCH := preload("res://ui/glitch.gdshader")
-## How far past a control's sides a glitch reaches (its tears move up to 10).
+## How far past a control's sides a glitch reaches (its tears move up to GLITCH_TEAR, or
+## HURT_TEAR when it's a hit).
 const REACH := 16
+const HURT_REACH := 32
 
 static func tween(node: Node) -> Tween:
 	return node.create_tween().set_trans(Tokens.EASE_TRANS).set_ease(Tokens.EASE_TYPE)
@@ -44,14 +46,16 @@ static func exit(c: Control) -> Tween:
 	return t
 
 ## A moment of channel split over a control, then clean.
-static func glitch(c: Control) -> void:
+## `hurt`: the same glitch, harder and longer (a hit, low health).
+static func glitch(c: Control, hurt := false) -> void:
 	if not c.is_inside_tree() or c.has_meta("glitching"):
 		return
 	var over := ColorRect.new()
 	over.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	over.material = ShaderMaterial.new()
 	over.material.shader = GLITCH
-	over.material.set_shader_parameter("split_px", float(Tokens.GLITCH_SPLIT))
+	over.material.set_shader_parameter("split_px", float(Tokens.HURT_SPLIT if hurt else Tokens.GLITCH_SPLIT))
+	over.material.set_shader_parameter("tear_px", float(Tokens.HURT_TEAR if hurt else Tokens.GLITCH_TEAR))
 	over.material.set_shader_parameter("left_color", Tokens.BUREAU)
 	over.material.set_shader_parameter("right_color", Tokens.STRAYS)
 	over.material.set_shader_parameter("seed", randf() * 100.0)  # a different tear each time
@@ -65,11 +69,12 @@ static func glitch(c: Control) -> void:
 	c.add_child(over)
 	over.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# wider than the control by the furthest a tear moves, so ghosts and tears aren't cut off
-	over.offset_left = -REACH
-	over.offset_right = REACH
+	var reach := HURT_REACH if hurt else REACH
+	over.offset_left = -reach
+	over.offset_right = reach
 	c.set_meta("glitching", true)
 	var t := c.create_tween()
-	t.tween_property(over.material, "shader_parameter/amount", 0.0, Tokens.GLITCH)
+	t.tween_property(over.material, "shader_parameter/amount", 0.0, Tokens.HURT if hurt else Tokens.GLITCH)
 	t.tween_callback(func():
 		over.queue_free()
 		copy.queue_free()

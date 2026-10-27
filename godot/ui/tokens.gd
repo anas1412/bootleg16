@@ -37,7 +37,7 @@ const FONT_FILES := {"display": "res://fonts/anton/Anton-Regular.ttf", "ui": "re
 const FONT_AXES := {"kana": {"wght": 500}}
 const FONT_CAP := {"display": 0.859, "ui": 0.7, "ui_bold": 0.7, "mono": 0.7, "kana": 0.8}
 
-const TYPE := {"takeover": {"font": "display", "size": 96, "line": 96, "track": 0.01, "upper": true, "use": "Full-screen moments: OPERATION READY, BOMB PLANTED."}, "name": {"font": "display", "size": 168, "line": 136, "track": 0, "upper": true, "use": "Your character's name card in the lobby."}, "page": {"font": "display", "size": 48, "line": 56, "track": 0.01, "upper": true, "use": "Page titles: LOCKER, SETTINGS."}, "action": {"font": "ui_bold", "size": 40, "line": 48, "track": 0.06, "upper": true, "use": "The main button: DEPLOY."}, "tab": {"font": "ui_bold", "size": 24, "line": 32, "track": 0.12, "upper": true, "use": "Top tabs and secondary buttons."}, "body": {"font": "ui", "size": 24, "line": 32, "track": 0, "upper": false, "use": "Names in lists, settings rows, sentences."}, "label": {"font": "mono", "size": 16, "line": 24, "track": 0.14, "upper": true, "use": "Small headers and readouts: YOUR SQUAD 2/5, ping, timers."}, "kana": {"font": "kana", "size": 24, "line": 32, "track": 0.3, "upper": false, "use": "The katakana line under a name or title, in text_dim."}, "tab_kana": {"font": "kana", "size": 16, "line": 24, "track": 0.3, "upper": false, "use": "The katakana under a tab name."}}
+const TYPE := {"takeover": {"font": "display", "size": 96, "line": 96, "track": 0.01, "upper": true, "use": "Full-screen moments: OPERATION READY, BOMB PLANTED."}, "name": {"font": "display", "size": 168, "line": 136, "track": 0, "upper": true, "use": "Your character's name card in the lobby."}, "page": {"font": "display", "size": 48, "line": 56, "track": 0.01, "upper": true, "use": "Page titles: LOCKER, SETTINGS."}, "action": {"font": "ui_bold", "size": 40, "line": 48, "track": 0.06, "upper": true, "use": "The main button: DEPLOY."}, "tab": {"font": "ui_bold", "size": 24, "line": 32, "track": 0.12, "upper": true, "use": "Top tabs and secondary buttons."}, "body": {"font": "ui", "size": 24, "line": 32, "track": 0, "upper": false, "use": "Names in lists, settings rows, sentences."}, "label": {"font": "mono", "size": 16, "line": 24, "track": 0.14, "upper": true, "use": "Small headers and readouts: YOUR SQUAD 2/5, ping, timers."}, "kana": {"font": "kana", "size": 24, "line": 32, "track": 0.3, "upper": false, "use": "The katakana line under a name or title, in text_dim."}, "tab_kana": {"font": "kana", "size": 16, "line": 24, "track": 0.3, "upper": false, "use": "The katakana under a tab name."}, "moment": {"font": "display", "size": 128, "line": 128, "track": 0.01, "upper": true, "use": "Over the game, the round's result: STRAYS WIN, MATCH POINT."}, "alert": {"font": "display", "size": 88, "line": 88, "track": 0.01, "upper": true, "use": "Over the game, what just changed everything: BOMB PLANTED, LAST ALIVE."}, "hud_value": {"font": "ui_bold", "size": 52, "line": 52, "track": 0, "upper": false, "use": "Health and ammo: the two numbers you check mid-fight."}, "hud_timer": {"font": "mono", "size": 34, "line": 44, "track": 0, "upper": false, "use": "The round timer and the bomb's fuse."}, "hud_small": {"font": "mono", "size": 20, "line": 28, "track": 0, "upper": false, "use": "Money, the reserve ammo."}, "hud_name": {"font": "ui", "size": 20, "line": 28, "track": 0, "upper": false, "use": "Names over the game: the kill feed, who's talking."}, "hud_tag": {"font": "mono", "size": 12, "line": 16, "track": 0.14, "upper": true, "use": "Tags over the game: TEAM, NEAR, slot keys."}}
 
 const HOVER := 0.12  # seconds
 const ENTER := 0.24  # seconds
@@ -45,8 +45,12 @@ const EXIT := 0.16  # seconds
 const TAKEOVER := 0.4  # seconds
 const STAGGER := 0.04  # seconds
 const GLITCH := 0.16  # seconds
+const HURT := 0.32  # seconds
 const SLIDE := 16
 const GLITCH_SPLIT := 4
+const GLITCH_TEAR := 10
+const HURT_SPLIT := 9
+const HURT_TEAR := 26
 const BLUR_BEHIND := 16
 const EASE_TRANS := Tween.TRANS_EXPO
 const EASE_TYPE := Tween.EASE_OUT
