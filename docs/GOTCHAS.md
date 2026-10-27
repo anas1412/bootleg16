@@ -213,3 +213,18 @@ The menu blur is depth of field on the world camera (`ui/motion/blur.rs`). With 
 
 ## Bevy UI blends in linear light (2026-10-21)
 A translucent colour over a dark surface shows much brighter in the game than in the browser (which blends in sRGB): white at .05 over BG1 came out ~4x too bright. And a gradient from clear white to black passes through grey, which drew a dark band across every lit card. `panels::lit` uses .005 for the mockup's .045 and a clear *black* middle stop; colour washes (`side_card`) need about a quarter of the mockup's alpha. Check washes in a game screenshot, not just the mockup.
+
+## Our maps and the bots (2026-10-27)
+- **Bots lost every spot whose standing box just touched a wall.** A trace that starts
+  exactly on a brush's edge counts as stuck, and our maps' blocks sit on round numbers that
+  the bots' 48-unit grid hit all the time (a whole column of a doorway went missing). The
+  grid is now offset 7 units (`net/src/bot/nav.rs`), off every multiple of 8.
+- **Angled thin boxes (half-open doors) decide whether the bots' grid fits through.** A
+  corner a few units too far into a 70-wide slanted gap and no link crosses it; check each
+  door with `mapstats` walks through it after moving a panel.
+- **Bot guards stopped anywhere within 250 units across, at any height,** so on data_center
+  they stood on the ramp under A in everyone's way. Guarding a site now means on its level
+  (the site box's bottom is its floor). Bots still don't step around bodies.
+- **Measure the reference with the same tool and the same points** (`tools/compare_maps.py`):
+  bot-navigation path lengths, not straight lines; endpoints snap to the 48-unit grid, so
+  moving a spawn less than 48 can change nothing.

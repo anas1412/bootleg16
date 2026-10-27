@@ -1,7 +1,8 @@
 //! Matches with test bots, the way players get one: 10 bots queue for casual on the lobby
 //! and get booked onto the official server. Then: a whole short match to the end; a round
 //! where the bomb is taken to A, planted and defused (on orders); bots leaving pause the
-//! match and coming back resumes it.
+//! match and coming back resumes it. On data_center: a whole match with nobody stuck, and the
+//! bomb planted and defused at each site.
 mod common;
 use common::*;
 use net::bot::{Bot, BotMap, Difficulty, Profile};
@@ -33,6 +34,12 @@ fn booked(map: &Arc<BotMap>, cfg: impl Fn(SocketAddr) -> net::config::MatchConfi
     let mut server = map.server(SocketAddr::from(LOCAL), "test", assets()).unwrap();
     server.set_config(cfg(lobby));
     let mut queue: Vec<LobbyClient> = (0..10).map(|i| accepting(LobbyClient::new(lobby, &format!("bot{i}")).unwrap())).collect();
+    // on a pool map of ours, they say they have it (as the Godot game does)
+    if let net::bot::Source::Map(m, _) = &map.source {
+        if net::config::MAP_POOL.contains(&m.name.as_str()) {
+            queue.iter_mut().for_each(|c| c.maps = vec![m.name.clone()]);
+        }
+    }
     let mut bots: Vec<Bot> = Vec::new();
     let mut asked = [false; 10];
     let start = Instant::now();
@@ -125,4 +132,76 @@ fn bots_leaving_pause_the_match_and_coming_back_resumes_it() {
     play("paused after leaving", &mut server, &mut bots, 30, &mut events, |b, _| b[t].client.round.paused);
     net::bot::command(&mut bots, "ct rejoin").unwrap();
     play("resumed after rejoining", &mut server, &mut bots, 30, &mut events, |b, _| !b[t].client.round.paused);
+}
+
+/// Per round and bot: where it was when the round went live, the furthest it got from there,
+/// and how long it was alive (ticks).
+#[derive(Default)]
+struct Moves(std::collections::HashMap<(u32, usize), ([f32; 3], f32, u32)>);
+
+impl Moves {
+    fn watch(&mut self, bots: &[Bot]) {
+        for b in bots {
+            let r = &b.client.round;
+            if r.phase != net::rounds::Phase::Live || !b.client.vitals.alive() {
+                continue;
+            }
+            let at = b.client.me().origin;
+            let e = self.0.entry((r.round, b.index)).or_insert((at, 0.0, 0));
+            e.1 = e.1.max(dist(at, e.0));
+            e.2 += 1;
+        }
+    }
+
+    /// Bots alive for 15 seconds of a round that never got 300 units from where they began it.
+    fn stuck(&self) -> Vec<(u32, usize, [f32; 3])> {
+        self.0.iter().filter(|(_, (_, far, alive))| *alive > 15 * 128 && *far < 300.0).map(|((r, i), (at, _, _))| (*r, *i, *at)).collect()
+    }
+}
+
+#[test]
+fn ten_bots_play_a_whole_match_on_data_center() {
+    let map = data_center_map().bots();
+    let (mut server, mut bots) = booked(&map, short);
+    let mut events = Vec::new();
+    let moves = std::cell::RefCell::new(Moves::default());
+    let secs = play("whole match", &mut server, &mut bots, 6 * 60, &mut events, |b, _| {
+        moves.borrow_mut().watch(b);
+        b.iter().all(|b| b.client.match_ended)
+    });
+    let count = |f: fn(&GameEvent) -> bool| events.iter().filter(|e| f(e)).count();
+    let (kills, rounds, plants) = (count(|e| matches!(e, GameEvent::Kill { .. })), count(|e| matches!(e, GameEvent::RoundEnd { .. })), count(|e| matches!(e, GameEvent::BombPlanted { .. })));
+    println!("data_center: {rounds} rounds, {kills} kills, {plants} plants, {secs:.0} game seconds");
+    assert!(events.iter().any(|e| matches!(e, GameEvent::MatchOver { .. })));
+    assert!(rounds >= 3 && kills > 0, "{rounds} rounds, {kills} kills");
+    let moves = moves.borrow();
+    let least = moves.0.values().filter(|(_, _, alive)| *alive > 15 * 128).map(|(_, far, _)| *far).fold(f32::MAX, f32::min);
+    println!("{} bot-rounds watched, the least travelled got {least:.0} units", moves.0.len());
+    let stuck = moves.stuck();
+    assert!(stuck.is_empty(), "stuck bots (round, bot, where the round began): {stuck:?}");
+}
+
+/// Nobody shoots: the terrorists take the bomb to `site`, the counter-terrorists come from their
+/// spawn to defuse it.
+fn plant_and_defuse_on_data_center(site: usize) {
+    let map = data_center_map().bots();
+    let (mut server, mut bots) = booked(&map, short);
+    net::bot::command(&mut bots, &format!("all peaceful; all plant {}", ["a", "b"][site])).unwrap();
+    let mut events = Vec::new();
+    play("until planted", &mut server, &mut bots, 90, &mut events, |_, e| e.iter().any(|e| matches!(e, GameEvent::BombPlanted { .. })));
+    let at = events.iter().find_map(|e| if let GameEvent::BombPlanted { at, .. } = e { Some(*at) } else { None }).unwrap();
+    let s = map.sites[site];
+    assert!(((at[0] - s[0]).powi(2) + (at[1] - s[1]).powi(2)).sqrt() < 600.0, "planted at {at:?}, the site is {s:?}");
+    play("until defused or exploded", &mut server, &mut bots, 60, &mut events, |_, e| e.iter().any(|e| matches!(e, GameEvent::BombDefused { .. } | GameEvent::BombExploded { .. })));
+    assert!(events.iter().any(|e| matches!(e, GameEvent::BombDefused { .. })), "a counter-terrorist should make it to the site in time");
+}
+
+#[test]
+fn data_center_bomb_at_a_gets_defused() {
+    plant_and_defuse_on_data_center(0);
+}
+
+#[test]
+fn data_center_bomb_at_b_gets_defused() {
+    plant_and_defuse_on_data_center(1);
 }

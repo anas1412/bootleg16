@@ -77,6 +77,9 @@ game="${BOOTLEG16_DIR:-gamedata}"
 for m in de_inferno de_nuke de_train; do
   [ -f "hosting/game/maps/$m.bsp" ] || { [ -f "$game/maps/$m.bsp" ] && mkdir -p hosting/game/maps && cp "$game/maps/$m.bsp" hosting/game/maps/; } || true
 done
+# Our own maps, always the current export (a server with a different file than the players'
+# turns them away).
+mkdir -p hosting/game/maps && cp godot/maps/data_center.bmap hosting/game/maps/
 for f in maps/de_dust2.bsp models/player/arctic/arctic.mdl sound/materials.txt; do
   if [ ! -f "hosting/game/$f" ]; then
     [ -f "$game/$f" ] || { echo "Missing $f. Set BOOTLEG16_DIR to the game data folder (the one with maps/ in it), or copy hosting/game/ from a machine that has it."; exit 1; }
