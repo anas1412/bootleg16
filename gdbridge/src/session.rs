@@ -200,6 +200,19 @@ impl Session {
         self.client.as_ref().map_or_else(PackedInt32Array::new, |c| c.broken.iter().map(|m| *m as i32).collect())
     }
 
+    /// How far each door has slid from where it was placed (Godot metres), in the map
+    /// file's door order.
+    #[func]
+    fn door_offsets(&self) -> PackedVector3Array {
+        self.client.as_ref().map_or_else(PackedVector3Array::new, |c| c.world.doors.doors.iter().map(|d| to_godot(d.transform().0)).collect())
+    }
+
+    /// How far each door has swung (radians, around the vertical), in door order.
+    #[func]
+    fn door_turns(&self) -> PackedFloat32Array {
+        self.client.as_ref().map_or_else(PackedFloat32Array::new, |c| c.world.doors.doors.iter().map(|d| d.transform().1[1].to_radians()).collect())
+    }
+
     /// Leave and stop the server.
     #[func]
     fn stop(&mut self) {

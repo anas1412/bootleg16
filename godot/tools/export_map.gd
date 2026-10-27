@@ -11,6 +11,11 @@
 ##   `breaks` = "glass" (default), "wood", "metal", "concrete", "computer", "rocks",
 ##   "ceilingtile", "flesh" (its sound and debris); `trigger_only` = true: only the bomb at a
 ##   site naming its `targetname` breaks it.
+## - Doors: a Node3D with `door` metadata = "slide" or "swing"; its CSGBox3D children are the
+##   door, and the node's position is its hinge (swing) or reference point (slide). `open`:
+##   how far it slides (Vector3, metres) or `angle`: how far it swings (degrees, around the
+##   vertical); `speed` (metres or degrees a second), `wait` (seconds open; -1 stays open),
+##   `name` (opened by a trigger of that name), `use_only`, `toggle`, `start_open`, `one_way`.
 ## - Spawns: Marker3D nodes in group "spawn_t" (Strays) or "spawn_ct" (Bureau); they face
 ##   the way the marker faces (its -z).
 ## - Zones: Area3D nodes in group "buy_t", "buy_ct", "buy" (both sides), "site_a", "site_b"
@@ -50,7 +55,7 @@ func _process(_delta: float) -> bool:
 	var path := _path
 	var map := {
 		"name": path.get_file().get_basename(),
-		"brushes": [], "spawns": [], "buy_zones": [], "bomb_sites": [], "ladders": [], "breakables": [],
+		"brushes": [], "spawns": [], "buy_zones": [], "bomb_sites": [], "ladders": [], "breakables": [], "doors": [],
 		"bomb_radius": scene.get_meta("bomb_radius", 500.0),
 	}
 	_walk(scene, map)
@@ -63,6 +68,9 @@ func _process(_delta: float) -> bool:
 	return true
 
 func _walk(node: Node, map: Dictionary) -> void:
+	if node is Node3D and node.has_meta("door"):
+		_door(node, map)
+		return
 	if node is CSGBox3D:
 		map.brushes.append(_brush(node.global_transform, node.size, node, map))
 	elif node is CollisionShape3D and node.shape is BoxShape3D and node.get_parent() is StaticBody3D:
@@ -89,9 +97,30 @@ func _walk(node: Node, map: Dictionary) -> void:
 	for child in node.get_children():
 		_walk(child, map)
 
+## A door: its boxes as brushes relative to its pivot, numbered as one piece.
+func _door(node: Node3D, map: Dictionary) -> void:
+	var model := _next_model
+	_next_model += 1
+	var pivot := _point(node.global_position)
+	var swing: bool = node.get_meta("door") == "swing"
+	for box in node.find_children("*", "CSGBox3D"):
+		var b := _brush(box.global_transform, box.size, box, map, pivot)
+		b["model"] = model
+		map.brushes.append(b)
+	var open := Vector3(0, float(node.get_meta("angle", 90.0)), 0) if swing else _direction(node.get_meta("open", Vector3(0, 2.2, 0))) / METRES
+	var speed: float = node.get_meta("speed", 90.0 if swing else 2.5)
+	map.doors.append({
+		"model": model, "kind": "swing" if swing else "slide", "pivot": _arr(pivot), "open": _arr(open),
+		"speed": speed if swing else speed / METRES,
+		"wait": float(node.get_meta("wait", 3.0)), "name": node.get_meta("name", ""),
+		"use_only": bool(node.get_meta("use_only", false)), "toggle": bool(node.get_meta("toggle", false)),
+		"start_open": bool(node.get_meta("start_open", false)), "one_way": bool(node.get_meta("one_way", false)),
+		"node": str(_scene.get_path_to(node)),
+	})
+
 ## A box placed by `t` as a brush: its six faces as planes, its corners' bounds.
-func _brush(t: Transform3D, size: Vector3, node: Node, map: Dictionary) -> Dictionary:
-	var corners := _corners(t, size)
+func _brush(t: Transform3D, size: Vector3, node: Node, map: Dictionary, origin := Vector3.ZERO) -> Dictionary:
+	var corners := _corners(t, size).map(func(c): return c - origin)
 	var planes := []
 	var normals := t.basis.inverse().transposed()
 	for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:

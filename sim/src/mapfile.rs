@@ -24,6 +24,10 @@ pub struct MapFile {
     /// Pieces that break (their brushes carry the same `model`).
     #[serde(default)]
     pub breakables: Vec<BreakableDef>,
+    /// Doors (their brushes carry the same `model` and are relative to the door's pivot).
+    /// Their order is the order the server sends their positions in.
+    #[serde(default)]
+    pub doors: Vec<DoorDef>,
     /// The bomb's blast reaches 3.5 times this (CS: `info_map_parameters bombradius`).
     #[serde(default = "bomb_radius")]
     pub bomb_radius: f32,
@@ -118,6 +122,44 @@ pub struct Site {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DoorDef {
+    pub model: usize,
+    /// "slide" or "swing".
+    pub kind: String,
+    pub pivot: Vec3,
+    /// Sliding: how far it moves (units). Swinging: degrees it turns (around the vertical).
+    pub open: Vec3,
+    /// Units (sliding) or degrees (swinging) a second.
+    #[serde(default = "door_speed")]
+    pub speed: f32,
+    /// Seconds open before it closes; negative: stays open.
+    #[serde(default = "door_wait")]
+    pub wait: f32,
+    /// Opened by a button or trigger with this name (else by walking into it or E).
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub use_only: bool,
+    #[serde(default)]
+    pub toggle: bool,
+    #[serde(default)]
+    pub start_open: bool,
+    #[serde(default)]
+    pub one_way: bool,
+    /// Its node in the map scene (the client moves it).
+    #[serde(default)]
+    pub node: String,
+}
+
+fn door_speed() -> f32 {
+    100.0
+}
+
+fn door_wait() -> f32 {
+    3.0
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BreakableDef {
     /// Its brushes' `model`.
     pub model: usize,
@@ -164,6 +206,29 @@ impl MapFile {
         let mut w = World::from_brushes(brushes);
         w.ladders = self.ladders.iter().map(|l| Ladder { mins: l.lo, maxs: l.hi }).collect();
         w.zones = self.zones();
+        for d in &self.doors {
+            let (mins, maxs) = self.model_bounds(d.model);
+            let rotating = d.kind == "swing";
+            w.doors.add(crate::doors::DoorSpec {
+                model: d.model,
+                name: (!d.name.is_empty()).then(|| d.name.clone()),
+                pivot: d.pivot,
+                mins,
+                maxs,
+                rotating,
+                // (a swing turns around the vertical: GoldSrc's yaw)
+                open_delta: if rotating { [0.0, d.open[1], 0.0] } else { d.open },
+                speed: d.speed,
+                wait: d.wait,
+                use_only: d.use_only,
+                toggle: d.toggle,
+                start_open: d.start_open,
+                one_way: d.one_way,
+                move_sound: 1,
+                stop_sound: 1,
+            });
+        }
+        w.link_brush_doors();
         w
     }
 
@@ -176,19 +241,25 @@ impl MapFile {
         )
     }
 
+    /// The bounds of a piece's brushes (a door's: relative to its pivot).
+    fn model_bounds(&self, model: usize) -> (Vec3, Vec3) {
+        let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+        for r in self.brushes.iter().filter(|r| r.model == model) {
+            for i in 0..3 {
+                lo[i] = lo[i].min(r.lo[i]);
+                hi[i] = hi[i].max(r.hi[i]);
+            }
+        }
+        (lo, hi)
+    }
+
     /// The pieces that break, with their middles (from their brushes).
     pub fn breakables(&self) -> Vec<Breakable> {
         use crate::breakables::Material::*;
         self.breakables
             .iter()
             .map(|b| {
-                let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
-                for r in self.brushes.iter().filter(|r| r.model == b.model) {
-                    for i in 0..3 {
-                        lo[i] = lo[i].min(r.lo[i]);
-                        hi[i] = hi[i].max(r.hi[i]);
-                    }
-                }
+                let (lo, hi) = self.model_bounds(b.model);
                 let material = match b.material.as_str() {
                     "wood" => Wood,
                     "metal" => Metal,
@@ -259,4 +330,42 @@ mod tests {
         assert!(w.zones.in_buy_zone(Side::T, [10.0, 0.0, 36.0], crate::collision::Hull::Standing));
         assert_ne!(hash(text.as_bytes()), hash(b"other"));
     }
+
+    /// A door 64 wide filling a gap in a wall at x 200 (between y -32 and 32).
+    fn door_map(kind: &str, open: &str) -> World {
+        let text = format!(
+            r#"{{"name": "doors", "spawns": [],
+            "brushes": [
+                {{"planes": [], "lo": [-512, -512, -64], "hi": [512, 512, 0]}},
+                {{"planes": [], "lo": [200, -512, 0], "hi": [216, -32, 128]}},
+                {{"planes": [], "lo": [200, 32, 0], "hi": [216, 512, 128]}},
+                {{"planes": [], "lo": [0, 0, 0], "hi": [16, 64, 112], "model": 1}}
+            ],
+            "doors": [{{"model": 1, "kind": "{kind}", "pivot": [200, -32, 0], "open": {open}, "speed": 400, "wait": 5}}]}}"#
+        );
+        MapFile::parse(&text).unwrap().world()
+    }
+
+    fn walk_through(mut w: World) -> bool {
+        use crate::pmove::{step, Input, MoveVars, Player};
+        let mut p = Player::new([100.0, 0.0, 40.0]);
+        for _ in 0..(3 * 128) {
+            step(&mut p, &Input { forward: 400.0, ..Default::default() }, 1.0 / 128.0, &w, &MoveVars::default());
+            let (mins, maxs) = (crate::add(p.origin, p.hull().mins()), crate::add(p.origin, p.hull().maxs()));
+            w.update(1.0 / 128.0, &[crate::doors::Actor { mins, maxs, eye: p.eye(), forward: [1.0, 0.0, 0.0], using: false }]);
+        }
+        p.origin[0] > 260.0
+    }
+
+    #[test]
+    fn doors_block_until_they_open_and_you_walk_through() {
+        // shut, the doorway stops a line; walking into it opens it (touch) and you pass
+        let w = door_map("slide", "[0, 0, 110]");
+        assert!(w.trace_line([100.0, 0.0, 50.0], [300.0, 0.0, 50.0]).fraction < 1.0);
+        assert!(walk_through(w), "the sliding door let nobody through");
+        let w = door_map("swing", "[0, 90, 0]");
+        assert!(w.trace_line([100.0, 0.0, 50.0], [300.0, 0.0, 50.0]).fraction < 1.0);
+        assert!(walk_through(w), "the swinging door let nobody through");
+    }
 }
+

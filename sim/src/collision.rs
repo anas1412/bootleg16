@@ -134,6 +134,17 @@ fn to_local(m: &Model, door: Option<&crate::doors::Door>, p: Vec3) -> Vec3 {
     world_to_local(rel, f, r, u)
 }
 
+/// Point `p` in a door's own space (relative to its pivot, as if closed).
+fn door_local(d: &crate::doors::Door, p: Vec3) -> Vec3 {
+    let (off, ang) = d.transform();
+    let rel = sub(p, add(d.pivot, off));
+    if ang == [0.0; 3] {
+        return rel;
+    }
+    let (f, r, u) = angle_vectors(ang);
+    world_to_local(rel, f, r, u)
+}
+
 fn contents(nodes: &[Node], mut num: i32, p: Vec3) -> i32 {
     while num >= 0 {
         let n = &nodes[num as usize];
@@ -175,6 +186,9 @@ pub struct World {
     pub boxes: Vec<(Vec3, Vec3)>,
     /// The convex brushes of a map that isn't a BSP (`from_brushes`): walls, glass, sky, water.
     brushes: Vec<Brush>,
+    /// Each brush's door (index into `doors`), if it moves with one: its planes are then in
+    /// the door's own space (relative to the door's pivot, closed).
+    brush_doors: Vec<Option<usize>>,
     /// Faces on each point node, for finding the texture a bullet hit.
     node_faces: Vec<(u32, u32)>,
     surfaces: Vec<Surface>,
@@ -271,6 +285,7 @@ impl World {
             zones: crate::zones::Zones::from_bsp(bsp),
             boxes: Vec::new(),
             brushes: Vec::new(),
+            brush_doors: Vec::new(),
             node_faces: bsp.nodes.iter().map(|n| (n.first_face as u32, n.num_faces as u32)).collect(),
             surfaces,
             textures: bsp.textures.iter().map(|t| t.name.clone()).collect(),
@@ -329,7 +344,7 @@ impl World {
 
     /// Advance doors and triggers one tick.
     pub fn update(&mut self, dt: f32, actors: &[Actor]) {
-        let (nodes, models) = (&self.nodes, &self.models);
+        let (nodes, models, brushes) = (&self.nodes, &self.models, &self.brushes);
         self.doors.update(dt, actors, |door, a| {
             let origin = crate::scale(add(a.mins, a.maxs), 0.5);
             let hull = if a.maxs[2] - a.mins[2] > 40.0 { Hull::Standing } else { Hull::Crouched };
@@ -337,11 +352,53 @@ impl World {
                 .iter()
                 .filter(|m| m.bsp_model == door.model)
                 .any(|m| contents(nodes, m.heads[hull as usize], to_local(m, Some(door), origin)) == CONTENTS_SOLID)
+                || brushes.iter().filter(|b| b.blocks() && b.model == door.model).any(|b| b.overlaps(door_local(door, origin), brush::half(hull)))
         });
     }
 
     fn contents(&self, num: i32, p: Vec3) -> i32 {
         contents(&self.nodes, num, p)
+    }
+
+    /// Doors on a brush map: link each door's brushes (same `model`) to it.
+    pub fn link_brush_doors(&mut self) {
+        self.brush_doors = self.brushes.iter().map(|b| if b.model == 0 { None } else { self.doors.door_for_model(b.model) }).collect();
+    }
+
+    fn brush_door(&self, i: usize) -> Option<&crate::doors::Door> {
+        self.brush_doors.get(i).copied().flatten().map(|d| &self.doors.doors[d])
+    }
+
+    /// A sweep against brush `i` where it is now (moved with its door).
+    fn brush_clip(&self, i: usize, start: Vec3, end: Vec3, half: Vec3) -> Clip {
+        let b = &self.brushes[i];
+        let Some(door) = self.brush_door(i) else { return b.clip(start, end, half) };
+        match b.clip(door_local(door, start), door_local(door, end), half) {
+            Clip::Hit(mut h) => {
+                let (f, r, u) = angle_vectors(door.transform().1);
+                h.normal = local_to_world(h.normal, f, r, u);
+                Clip::Hit(h)
+            }
+            c => c,
+        }
+    }
+
+    fn brush_overlaps(&self, i: usize, p: Vec3, half: Vec3) -> bool {
+        match self.brush_door(i) {
+            Some(door) => self.brushes[i].overlaps(door_local(door, p), half),
+            None => self.brushes[i].overlaps(p, half),
+        }
+    }
+
+    /// Whether brush `i` can be touched inside `lo..hi` (a door's: where its door is now).
+    fn brush_near(&self, i: usize, lo: Vec3, hi: Vec3) -> bool {
+        match self.brush_door(i) {
+            Some(door) => {
+                let (blo, bhi) = door.bounds();
+                (0..3).all(|k| lo[k] <= bhi[k] + 1.0 && hi[k] >= blo[k] - 1.0)
+            }
+            None => self.brushes[i].near(lo, hi, [0.0; 3]),
+        }
     }
 
     fn door_of(&self, m: &Model) -> Option<&crate::doors::Door> {
@@ -368,7 +425,7 @@ impl World {
         if self.is_solid_point(p) {
             return Contents::Solid;
         }
-        if self.brushes.iter().any(|b| b.enabled && b.contents == BrushContents::Water && b.overlaps(p, [0.0; 3])) {
+        if (0..self.brushes.len()).any(|i| self.brushes[i].enabled && self.brushes[i].contents == BrushContents::Water && self.brush_overlaps(i, p, [0.0; 3])) {
             return Contents::Water;
         }
         for &(root, offset) in &self.water_roots {
@@ -389,7 +446,7 @@ impl World {
     }
 
     fn is_solid_point(&self, p: Vec3) -> bool {
-        if self.brushes.iter().any(|b| b.blocks() && b.overlaps(p, [0.0; 3])) {
+        if (0..self.brushes.len()).any(|i| self.brushes[i].blocks() && self.brush_overlaps(i, p, [0.0; 3])) {
             return true;
         }
         let Some(&(mut num, _)) = self.water_roots.first() else { return false };
@@ -411,7 +468,7 @@ impl World {
         let (lo, hi) = (add(origin, hull.mins()), add(origin, hull.maxs()));
         self.models.iter().filter(|m| m.enabled && self.reaches(m, lo, hi)).any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
             || self.boxes.iter().any(|(blo, bhi)| (0..3).all(|i| lo[i] < bhi[i] && hi[i] > blo[i]))
-            || self.brushes.iter().any(|b| b.blocks() && b.near(lo, hi, [0.0; 3]) && b.overlaps(origin, brush::half(hull)))
+            || (0..self.brushes.len()).any(|i| self.brushes[i].blocks() && self.brush_near(i, lo, hi) && self.brush_overlaps(i, origin, brush::half(hull)))
     }
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
@@ -452,8 +509,8 @@ impl World {
                 }
             }
         }
-        for b in self.brushes.iter().filter(|b| b.blocks() && b.near(lo, hi, [0.0; 3])) {
-            match b.clip(start, end, brush::half(hull)) {
+        for i in (0..self.brushes.len()).filter(|&i| self.brushes[i].blocks() && self.brush_near(i, lo, hi)) {
+            match self.brush_clip(i, start, end, brush::half(hull)) {
                 Clip::Inside { all } => {
                     best.start_solid = true;
                     best.all_solid |= all;
@@ -493,7 +550,8 @@ impl World {
     pub fn sight_blocked(&self, start: Vec3, end: Vec3) -> bool {
         // (see-through brushes don't hide anyone; water doesn't either)
         let (lo, hi): (Vec3, Vec3) = (std::array::from_fn(|i| start[i].min(end[i])), std::array::from_fn(|i| start[i].max(end[i])));
-        if self.brushes.iter().filter(|b| b.enabled && matches!(b.contents, BrushContents::Solid | BrushContents::Sky) && b.near(lo, hi, [0.0; 3])).any(|b| !matches!(b.clip(start, end, [0.0; 3]), Clip::Miss)) {
+        let opaque = |b: &Brush| b.enabled && matches!(b.contents, BrushContents::Solid | BrushContents::Sky);
+        if (0..self.brushes.len()).filter(|&i| opaque(&self.brushes[i]) && self.brush_near(i, lo, hi)).any(|i| !matches!(self.brush_clip(i, start, end, [0.0; 3]), Clip::Miss)) {
             return true;
         }
         let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
@@ -538,8 +596,9 @@ impl World {
                 best.model = m.bsp_model;
             }
         }
-        for b in self.brushes.iter().filter(|b| b.blocks() && b.near(lo, hi, [0.0; 3])) {
-            match b.clip(start, end, [0.0; 3]) {
+        for i in (0..self.brushes.len()).filter(|&i| self.brushes[i].blocks() && self.brush_near(i, lo, hi)) {
+            let b = &self.brushes[i];
+            match self.brush_clip(i, start, end, [0.0; 3]) {
                 Clip::Inside { .. } => best.start_solid = true,
                 Clip::Hit(h) if h.fraction < best.fraction => {
                     (best.fraction, best.normal, best.end) = (h.fraction, h.normal, lerp(start, end, h.fraction));
@@ -622,6 +681,7 @@ impl World {
             doors: Doors::default(),
             zones: Default::default(),
             boxes: Vec::new(),
+            brush_doors: vec![None; brushes.len()],
             brushes,
             node_faces: Vec::new(),
             surfaces: Vec::new(),
@@ -648,6 +708,7 @@ impl World {
             zones: Default::default(),
             boxes: Vec::new(),
             brushes: Vec::new(),
+            brush_doors: Vec::new(),
             node_faces: vec![(0, 0)],
             surfaces: Vec::new(),
             textures: Vec::new(),

@@ -12,7 +12,9 @@ func _ready() -> void:
 	var scene: Node = load(MAP + ".tscn").instantiate()
 	$Room.add_child(scene)
 	var text := FileAccess.get_file_as_string(MAP + ".bmap")
-	$Pieces.setup(scene, JSON.parse_string(text))
+	var map: Dictionary = JSON.parse_string(text)
+	$Pieces.setup(scene, map)
+	$Doors.setup(scene, map)
 	if not session.start_practice(text, 3):
 		push_error("bootleg16: practice didn't start (see the log)")
 		return
@@ -20,7 +22,7 @@ func _ready() -> void:
 	# rate when it welcomes us); frames are drawn between them
 	Engine.physics_ticks_per_second = session.tick_rate()
 	Engine.max_physics_steps_per_frame = 16
-	for node in [$Player, $Others, $Pieces, $Hud/Speed]:
+	for node in [$Player, $Others, $Pieces, $Doors, $Hud/Speed]:
 		node.session = session
 	if OS.get_environment("BOOTLEG16_BENCH") != "":
 		add_child(preload("res://scripts/bench.gd").new())

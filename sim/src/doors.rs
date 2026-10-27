@@ -258,7 +258,60 @@ fn overlaps(amin: Vec3, amax: Vec3, bmin: Vec3, bmax: Vec3) -> bool {
     (0..3).all(|i| amin[i] <= bmax[i] && amax[i] >= bmin[i])
 }
 
+/// A door from our own map file (`mapfile::DoorDef`), in the simulation's units.
+pub struct DoorSpec {
+    pub model: usize,
+    pub name: Option<String>,
+    /// Hinge (swinging) or reference point (sliding); its brushes are relative to it.
+    pub pivot: Vec3,
+    /// Its brushes' bounds, relative to the pivot.
+    pub mins: Vec3,
+    pub maxs: Vec3,
+    /// Swings (else slides).
+    pub rotating: bool,
+    /// Sliding: offset when open. Swinging: angles (pitch, yaw, roll) when open.
+    pub open_delta: Vec3,
+    pub speed: f32,
+    /// Seconds open before closing; negative: stays open.
+    pub wait: f32,
+    pub use_only: bool,
+    pub toggle: bool,
+    pub start_open: bool,
+    /// Swings one way only (not away from whoever opens it).
+    pub one_way: bool,
+    pub move_sound: u8,
+    pub stop_sound: u8,
+}
+
 impl Doors {
+    /// Add a door from our own map file.
+    pub fn add(&mut self, s: DoorSpec) {
+        let flags = if s.use_only { SF_USE_ONLY } else { 0 } | if s.toggle { SF_TOGGLE } else { 0 } | if s.one_way { SF_ONE_WAY } else { 0 };
+        let mut door = Door {
+            model: s.model,
+            name: s.name,
+            pivot: s.pivot,
+            mins: s.mins,
+            maxs: s.maxs,
+            rotating: s.rotating,
+            open_delta: s.open_delta,
+            speed: s.speed.max(1.0),
+            wait: s.wait,
+            flags,
+            progress: 0.0,
+            button: None,
+            move_sound: s.move_sound,
+            stop_sound: s.stop_sound,
+            sign: 1.0,
+            state: DoorState::Closed,
+        };
+        if s.start_open {
+            door.progress = 1.0;
+            door.state = DoorState::Open(f32::INFINITY);
+        }
+        self.doors.push(door);
+    }
+
     pub fn from_bsp(bsp: &goldsrc::bsp::Bsp) -> Doors {
         let mut out = Doors::default();
         for e in bsp.entity_list() {

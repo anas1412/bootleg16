@@ -32,9 +32,9 @@ fn you_spawn_onto_the_floor_and_run() {
     let mut p = Player::new(spawn.origin);
     run(&mut p, Input::default(), 1.0, &w);
     assert!(p.on_ground && (p.origin[2] - 36.0).abs() < 0.1, "{:?}", p.origin);
-    // facing into the room (yaw 90: towards Godot's -z)
-    run(&mut p, Input { forward: 400.0, yaw: spawn.yaw, ..Default::default() }, 2.0, &w);
-    assert!((p.speed_2d() - 250.0).abs() < 2.0 && p.origin[1] > spawn.origin[1] + 300.0, "{:?}", p.origin);
+    // east along the open south side (north is the door, which needs the doors running)
+    run(&mut p, Input { forward: 400.0, yaw: 0.0, ..Default::default() }, 2.0, &w);
+    assert!((p.speed_2d() - 250.0).abs() < 2.0 && p.origin[0] > spawn.origin[0] + 300.0, "{:?}", p.origin);
 }
 
 #[test]

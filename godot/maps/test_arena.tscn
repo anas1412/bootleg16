@@ -163,6 +163,34 @@ metadata/breaks = "wood"
 metadata/trigger_only = true
 metadata/targetname = "tgt_b"
 
+[node name="DoorWallW" type="CSGBox3D" parent="Brushes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 1.25, 12)
+size = Vector3(4, 2.5, 0.2)
+material = SubResource("concrete")
+
+[node name="DoorWallE" type="CSGBox3D" parent="Brushes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 1.25, 12)
+size = Vector3(4, 2.5, 0.2)
+material = SubResource("concrete")
+
+[node name="DoorLintel" type="CSGBox3D" parent="Brushes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.35, 12)
+size = Vector3(2, 0.3, 0.2)
+material = SubResource("concrete")
+
+[node name="Door" type="Node3D" parent="Brushes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, 12)
+metadata/door = "swing"
+metadata/angle = 90.0
+metadata/speed = 180.0
+metadata/wait = 3.0
+
+[node name="Panel" type="CSGBox3D" parent="Brushes/Door"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1.1, 0)
+size = Vector3(1.96, 2.18, 0.08)
+material = SubResource("wood")
+metadata/material = "W"
+
 [node name="Spawns" type="Node3D" parent="."]
 
 [node name="T1" type="Marker3D" parent="Spawns" groups=["spawn_t"]]
