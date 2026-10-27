@@ -69,30 +69,103 @@ architecture come from the real place, never from the original map.
   - high_rise: the tower crane.
 
 ## Status
-**Not started.** We play on the CS 1.6 maps until the game itself is finished.
-This is the plan for after that.
+- **data_center:** grey box built and in the match pool (2026-10-27). Matches the
+  reference within 5 % on every walk, sightline and door measured (below). Art pass next.
+- high_rise, port, bank: not started.
 
 ## Build plan (same structure, new build)
-1. **Measure:** a tool reads the base BSP and records numbers only:
-   - floor plan, floor/ceiling heights;
-   - door and corridor widths, site zones, spawns.
-
-   No Valve geometry or textures carry over.
-2. **Greybox:** a generator rebuilds the structure from our own modular blocks.
-   - It writes a TrenchBroom `.map`, which VHLT compiles to BSP v30.
-   - The existing `goldsrc` loader, collision hulls and `sim` movement work unchanged.
-3. **Verify** against the base, each within ±5 %:
-   - walk times spawn → each site;
+1. **Measure:** `net/examples/mapstats.rs` reads the base BSP and prints numbers only:
+   - spawns, buy zones, site boxes;
+   - walking distances (the bots' navigation: stairs, drops and doors count), sightlines,
+     door and corridor widths at named points;
+   - `--plan`: the floor heights on a 16-unit grid, to read the layout from. It stays in a
+     scratch folder; no Valve geometry or textures carry over.
+2. **Greybox:** a Godot tool script lays the structure out again from our own blocks
+   (`godot/tools/build_data_center.gd`: areas with a floor height or a ramp, every cell no
+   area covers is wall, cover and door frames as boxes) and writes the map scene;
+   `godot/tools/export_map.gd` writes its `.bmap`.
+3. **Verify** against the base, each within ±5 % (`tools/compare_maps.py`):
+   - walk times spawn → each site, the routes between, the rotations;
    - main sightline lengths;
    - door widths.
 4. **Art pass:**
-   - a modular kit per map, CC0 PBR textures overriding WAD textures by name, glTF props;
-   - renderer upgrade: fog, bloom, colour grading.
+   - a modular kit per map (Quaternius sci-fi pieces, Kenney kits, Poly Haven textures), lighting;
+   - renderer: fog, bloom, colour grading. Budget: 60 fps at 1080p medium on a GTX 1650.
    - Landmark pieces come from an artist or an asset store (CC0/Fab).
-5. **Hand polish** in TrenchBroom, which opens the same `.map`.
-
-**Tools needed then:** VHLT (build from source), plus TrenchBroom and Blender for hand work. None are installed yet.
+5. **Hand polish** in the Godot editor.
 
 **Mirage base:** not in the stock 1.6 install. The 1.6 community `de_mirage` (by BubkeZ, 2010) was installed 2026-10-16 from the user's download and loads in the client.
 
 **Order:** data_center (Dust2 is our test map) → high_rise → port → bank.
+
+## data_center
+The structure of Dust2, laid out in its frame (x east, y north, GoldSrc units), so the same
+points measure both. Strays spawn south at the loading dock, the Bureau north in the
+control room.
+
+| Ours | Dust2 | What it is |
+|---|---|---|
+| Dock | T spawn | loading dock, 128 up; ramps east and down to the spine |
+| Intake | outside tunnels | yard down from the dock to the crawlspace |
+| Crawlspace (mouth, neck, cross, up) | upper B tunnels | cable crawlspace under the floor, roofed 144 high |
+| Low crawl | lower tunnels | crawlspace branch down to the spine |
+| Hall B (archive hall) | B site | |
+| Archive doors | B doors | two half-open panels, slanted gap |
+| Lobby | CT mid | from the spine's doors west down to B, east to the control room |
+| Control room | CT spawn | under the walkway deck |
+| Spine | mid | central corridor, ramps down 128 northwards; a rail 32 high to its side, climbable only at the south end |
+| Security doors | mid doors | two half-open panels, slanted gap ~70 wide |
+| Walkway | catwalk / short | raised-floor walkway from the spine up to A's deck |
+| Yard, aisle doors | outside long, long doors | 320-wide passage |
+| Main aisle, sump | long A, pit | the main server aisle |
+| Hall A (core hall): deck, ramp, back | A site | |
+
+**Changing it:** edit the layout in `godot/tools/build_data_center.gd`, then
+```
+godot --headless --path godot --script res://tools/build_data_center.gd
+godot --headless --path godot --script res://tools/export_map.gd -- res://maps/data_center.tscn
+python3 tools/compare_maps.py
+```
+(the map scene is generated: edits made to it in the editor are lost on the next build).
+
+**Measured against Dust2** (`tools/compare_maps.py`, 2026-10-27; walks are bot-navigation
+path lengths, seconds at 250 units/s with a knife):
+
+| Check | Dust2 | data_center | Off |
+|---|---|---|---|
+| Strays spawn → A | 4749 (19.0 s) | 4661 (18.6 s) | −1.9 % |
+| Strays spawn → B | 4425 (17.7 s) | 4525 (18.1 s) | +2.3 % |
+| Bureau spawn → A | 1859 (7.4 s) | 1824 (7.3 s) | −1.9 % |
+| Bureau spawn → B | 2367 (9.5 s) | 2363 (9.5 s) | −0.2 % |
+| Strays spawn → Bureau spawn | 3939 | 3874 | −1.7 % |
+| Strays → A by the aisle (long) | 5323 | 5178 | −2.7 % |
+| Strays → A by the walkway (short) | 4820 | 4813 | −0.1 % |
+| Strays → B by the crawlspace | 4624 | 4684 | +1.3 % |
+| Strays → B by low crawl and lobby | 5473 | 5465 | −0.1 % |
+| Strays → security doors | 2800 | 2727 | −2.6 % |
+| Bureau → security doors | 1139 | 1147 | +0.7 % |
+| Bureau → B by the lobby | 2446 | 2442 | −0.2 % |
+| Strays → aisle doors | 2784 | 2819 | +1.3 % |
+| Bureau → aisle doors by A | 3897 | 3741 | −4.0 % |
+| Bureau rotates A → B | 3464 | 3497 | +1.0 % |
+| Strays rotate aisle doors → crawlspace | 4213 | 4218 | +0.1 % |
+| Strays → walkway | 2681 | 2625 | −2.1 % |
+| Bureau → walkway by the doors | 2871 | 2967 | +3.3 % |
+| Sight: main aisle | 1796 | 1796 | 0 % |
+| Sight: spine | 1900 | 1892 | −0.4 % |
+| Sight: across the security doors | 228 | 228 | 0 % |
+| Sight: walkway | 616 | 600 | −2.6 % |
+| Sight: crawlspace exit into B | 1740 | 1772 | +1.8 % |
+| Sight: through the archive doors | 338 | 337 | −0.3 % |
+| Sight: control room to the A ramp | 956 | 940 | −1.7 % |
+| Width: aisle doors | 320 | 320 | 0 % |
+| Width: security doors | 112 | 114 | +1.8 % |
+| Width: archive doors | 110 | 109 | −0.9 % |
+| Width: crawlspace | 128 | 128 | 0 % |
+| Width: low crawl | 160 | 160 | 0 % |
+| Width: walkway | 160 | 160 | 0 % |
+| Width: main aisle | 320 | 320 | 0 % |
+| Width: lobby to control room | 160 | 160 | 0 % |
+
+Spawns: 10 a side (Dust2 has 20); sites the same size as Dust2's (A 256 × 320, B 384 × 384).
+Not in the grey box yet: B's window from the lobby, most small cover, ladders.

@@ -4,7 +4,7 @@
 ## failed join or the match's end go back to the menu.
 extends Node3D
 
-const PRACTICE_MAP := "test_arena"
+const PRACTICE_MAP := "data_center"
 ## A server that hasn't welcomed us in this long isn't coming.
 const JOIN_WAIT := 10.0
 

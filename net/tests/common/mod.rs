@@ -70,6 +70,12 @@ pub fn arena() -> (sim::mapfile::MapFile, u64) {
     sim::mapfile::MapFile::load(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../godot/maps/test_arena.bmap"))).expect("the exported test arena")
 }
 
+/// Our first real map (`godot/maps/data_center`, the grey box): what the bot match tests play on.
+pub fn data_center_map() -> TestMap {
+    let (m, h) = sim::mapfile::MapFile::load(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../godot/maps/data_center.bmap"))).expect("the exported data_center");
+    TestMap::Ours(m, h)
+}
+
 pub fn assets() -> net::server::Assets {
     let dir = game_dir().unwrap();
     let model = goldsrc::mdl::Model::load(format!("{dir}/models/player/arctic/arctic.mdl")).expect("player model");

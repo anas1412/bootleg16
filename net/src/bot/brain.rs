@@ -197,7 +197,7 @@ impl Bot {
             }
             match bomb {
                 BombNet::Dropped(at) => return self.walk(input, at),
-                BombNet::Planted { at, .. } => return self.guard(input, at, yaw_hold),
+                BombNet::Planted { at, .. } => return self.guard(input, at, 48.0, yaw_hold),
                 _ => {}
             }
             if let Some(at) = self.noise() {
@@ -209,7 +209,7 @@ impl Bot {
         if let BombNet::Planted { at, left, defuse } = bomb {
             let mine = defuse.is_some_and(|(by, _)| Some(by) == self.client.id());
             if defuse.is_some() && !mine {
-                return self.guard(input, at, yaw_hold);
+                return self.guard(input, at, 48.0, yaw_hold);
             }
             // Can we make it? Running there plus the defuse, with a little spare.
             let need = flat(me.origin, at) / 250.0 + if self.client.me_info.defuse_kit { 5.0 } else { 10.0 } + 0.5;
@@ -228,7 +228,7 @@ impl Bot {
         if self.brain.push {
             return self.walk(input, self.map.spawns.0);
         }
-        self.guard(input, site, yaw_hold)
+        self.guard(input, site, 24.0, yaw_hold)
     }
 
     fn planting(&self) -> bool {
@@ -259,10 +259,12 @@ impl Bot {
         }
     }
 
-    /// Stand near a spot looking out for trouble (to it first).
-    fn guard(&mut self, input: Input, at: [f32; 3], out: f32) -> Input {
+    /// Stand near a spot looking out for trouble (to it first). Near means on its level too,
+    /// within `level` up or down: not on a ramp or floor under it, in the way of the others
+    /// going there (a bomb lies on the floor: 36 under a standing player).
+    fn guard(&mut self, input: Input, at: [f32; 3], level: f32, out: f32) -> Input {
         let me = self.client.me().origin;
-        if flat(me, at) > 250.0 {
+        if flat(me, at) > 250.0 || (me[2] - at[2]).abs() > level {
             return self.walk(input, at);
         }
         let sweep = ((self.brain.t / self.secs(1.5)) % 3) as f32 * 35.0 - 35.0;

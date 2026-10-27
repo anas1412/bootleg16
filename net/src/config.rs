@@ -162,7 +162,10 @@ impl MatchConfig {
 
 /// The maps matches are played on (each server has the ones it finds in its game files).
 /// (de_mirage: on hold, decided 2026-10-16; it's a community map not every install has.)
-pub const MAP_POOL: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"];
+/// data_center is ours (`godot/maps`, built in Godot): Godot players report only our maps and
+/// the Bevy client only BSPs, so each gets matched on maps it can load, until the Bevy client
+/// and Valve's maps go (P6).
+pub const MAP_POOL: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train", "data_center"];
 /// The pool maps every CS 1.6 install has; any others only some players have, so a match
 /// only gets a map all its players reported having.
 pub const STOCK_MAPS: &[&str] = &["de_dust2", "de_inferno", "de_nuke", "de_train"];

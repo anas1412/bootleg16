@@ -7,6 +7,10 @@ use std::collections::{BinaryHeap, HashMap};
 
 /// Grid spacing (units).
 const STEP: f32 = 48.0;
+/// Where the grid sits: off the round numbers our maps' blocks are placed on, so a standing
+/// box never just touches a wall (a trace from there counts as stuck, and the spot or the
+/// way past it would be lost).
+const OFFSET: f32 = 7.0;
 /// The most a link may climb (a jump is 45 units).
 const CLIMB: f32 = 40.0;
 /// The furthest a link may drop.
@@ -20,7 +24,7 @@ pub struct Nav {
 }
 
 fn cell(p: [f32; 3]) -> (i32, i32) {
-    ((p[0] / STEP).round() as i32, (p[1] / STEP).round() as i32)
+    (((p[0] - OFFSET) / STEP).round() as i32, ((p[1] - OFFSET) / STEP).round() as i32)
 }
 
 impl Nav {
@@ -33,7 +37,7 @@ impl Nav {
         let (y0, y1) = ((mins[1] / STEP).ceil() as i32, (maxs[1] / STEP).floor() as i32);
         for cx in x0..=x1 {
             for cy in y0..=y1 {
-                let (x, y) = (cx as f32 * STEP, cy as f32 * STEP);
+                let (x, y) = (cx as f32 * STEP + OFFSET, cy as f32 * STEP + OFFSET);
                 // From the top down: each stretch of open space ends on a floor.
                 let mut z = maxs[2] - 40.0;
                 while z > mins[2] + 40.0 {
