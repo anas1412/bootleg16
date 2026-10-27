@@ -167,5 +167,12 @@ path lengths, seconds at 250 units/s with a knife):
 | Width: main aisle | 320 | 320 | 0 % |
 | Width: lobby to control room | 160 | 160 | 0 % |
 
+**Indoors and out:** the loading dock, the intake yard, the yards outside the aisle doors
+and the Strays' end of the spine are outdoors; everything else is the building. Each area's
+ceiling is at Dust2's height over it (`CEILINGS` in the generator): a roof with ceiling lamps
+indoors, an invisible sky outdoors that stops grenades as Dust2's sky does. Room above eye
+height, Dust2 and ours alike: dock 228, main aisle 324, spine 416, A 224, B 356, control
+room 164, crawlspace 164. 108 fps at 1080p on Medium on the GTX 1650 (bench, at the spawn).
+
 Spawns: 10 a side (Dust2 has 20); sites the same size as Dust2's (A 256 × 320, B 384 × 384).
 Not in the grey box yet: B's window from the lobby, most small cover, ladders.
