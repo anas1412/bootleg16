@@ -1,4 +1,5 @@
-// A data center's raised floor: 0.6 m tiles with thin seams, one in four perforated (the cold
+// A data center's raised floor: tiles 32 units (0.81 m) on the map's own grid, so seams meet
+// the walls and edges, with thin seams, one in four perforated (the cold
 // air comes up through them). Sides of a floor (ledges, steps) are plain. Seams and holes fade
 // out where they'd get finer than a pixel (fwidth), so far floors don't shimmer.
 shader_type spatial;
@@ -7,7 +8,7 @@ uniform vec3 tile : source_color = vec3(0.46, 0.48, 0.50);
 uniform vec3 seam : source_color = vec3(0.28, 0.30, 0.32);
 uniform vec3 side : source_color = vec3(0.30, 0.32, 0.34);
 
-const float TILE = 0.6;
+const float TILE = 32.0 * 0.0254;
 
 varying vec3 world_pos;
 varying vec3 world_normal;

@@ -1,6 +1,7 @@
 // The look of a map's blocks (cover, door panels), so each reads as the thing it is: a cabinet
 // (rack doors and status lights), a crate (slats), a machine (vent slots, a striped base), a
-// barrier (hazard stripes), a kerb (a striped top edge), a door (a metal panel, a status light).
+// barrier (hazard stripes), a kerb or plinth (a striped top edge), a door (a metal panel, a
+// status light).
 // On a box mesh whose size (metres) comes per instance; worked out in the box's own space, so
 // each face's pattern starts at its bottom edge. Patterns fade where they'd shimmer (fwidth).
 shader_type spatial;
@@ -51,14 +52,17 @@ void fragment() {
 	vec3 glow = vec3(0.0);
 	float metal = 0.2;
 	if (kind == 0) {
-		// rack doors 0.6 m wide with a frame, perforation, two to four status lights
+		// rack doors about 0.6 m wide (a whole number across each face) with a frame,
+		// perforation, two to four status lights
 		metal = 0.35;
 		if (top) {
 			col = body * 0.55;
 		} else {
-			float i = floor(f.x / 0.6);
-			vec2 q = vec2(f.x - i * 0.6, f.y);
-			float frame = max(max(step(q.x, 0.03), step(0.57, q.x)), max(step(q.y, 0.05), step(h - 0.04, q.y)));
+			float w = n.x > 0.5 ? size.z : size.x;
+			float rack = w / max(1.0, round(w / 0.6));
+			float i = floor(f.x / rack);
+			vec2 q = vec2(f.x - i * rack, f.y);
+			float frame = max(max(step(q.x, 0.03), step(rack - 0.03, q.x)), max(step(q.y, 0.05), step(h - 0.04, q.y)));
 			vec2 d = q * 40.0;
 			float fw = max(fwidth(d.x), fwidth(d.y));
 			float hole = 1.0 - smoothstep(0.28 - fw, 0.28 + fw, length(fract(d) - 0.5));
@@ -94,8 +98,9 @@ void fragment() {
 		// a barrier: hazard stripes all over its sides
 		col = top ? body : mix(DARK, HAZARD, stripes(f, 0.18));
 	} else if (kind == 4) {
-		// a kerb: the top and its top edge striped
-		if (top || f.y > h - 0.08) {
+		// a kerb or a plinth: a striped band round its top edge
+		float edge = top ? min(min(f.x, size.x - f.x), min(f.y, size.z - f.y)) : h - f.y;
+		if (edge < 0.08) {
 			col = mix(DARK, HAZARD, stripes(top ? f : vec2(f.x, 0.0), 0.12));
 		}
 	} else {

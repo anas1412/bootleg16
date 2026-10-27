@@ -96,8 +96,9 @@ const BLOCKS := [
 	# the archive doors (B): a frame 176 wide (its panels are LEAVES), a header
 	["b_door_s", [-1344, 2080, -1312, 2096], [0, TOP], ""],
 	["b_door_head", [-1344, 2096, -1312, 2272], [144, TOP], ""],
-	# a low header where the control room opens onto the ramp to A (under the walkway deck)
-	["control_head", [528, 2176, 560, 2304], [0, 96], ""],
+	# a low header where the control room opens onto the ramp to A (under the walkway deck),
+	# striped: mind your head
+	["control_head", [528, 2176, 560, 2304], [0, 96], "beam"],
 	# the aisle doors: a header over the 320-unit passage
 	["aisle_door_head", [912, 768, 944, 1088], [144, TOP], ""],
 	# a column holding up the floor over the low crawl
@@ -110,15 +111,35 @@ const BLOCKS := [
 	# from the lane); the kerb is open beside it and a smaller crate stands in front, so you
 	# climb from the lane to the walkway side in three jumps (48, 48, 32), as in CS2
 	["spine_crates", [-384, 1344, -240, 1488], [-128, -32], "delivery"],
-	["spine_crate_step", [-384, 1296, -320, 1344], [-128, -80], "delivery"],
-	["walkway_ups", [400, 1408, 496, 1520], [16, 96], "ups"],
+	["spine_crate_step", [-336, 1296, -272, 1344], [-128, -80], "delivery"],
+	["walkway_ups", [416, 1408, 512, 1520], [16, 96], "ups"],
 	["aisle_boxes", [1536, 1984, 1600, 2112], [0, 64], "boxes"],
 	["sump_pump", [960, 288, 1056, 384], [0, 64], "pump"],
-	["core_servers", [1024, 2432, 1152, 2560], [96, 160], "core"],
 	["a_kerb", [1280, 2304, 1344, 2752], [96, 128], "kerb"],
-	["tape_library", [-1920, 2304, -1792, 2432], [0, 96], "cabinet"],
-	["archive_boxes", [-1664, 2560, -1536, 2688], [0, 64], "archive"],
-	["archive_box", [-1536, 2560, -1472, 2624], [0, 32], "archive"],
+	# A, the core hall (the reference's site cover): new core servers crated two high in the
+	# corner, two core cabinets, a crate at the back; a crate at the deck's edge on the ramp
+	# from the control room to jump up onto the site (as in CS2)
+	["a_crates", [1032, 2328, 1096, 2392], [96, 160], "delivery"],
+	["a_crates_top", [1036, 2332, 1092, 2388], [160, 224], "delivery"],
+	["core_servers", [1048, 2408, 1112, 2456], [96, 160], "core"],
+	["core_servers_2", [1192, 2472, 1256, 2536], [96, 160], "core"],
+	["a_back_crate", [1088, 3000, 1136, 3032], [112, 176], "delivery"],
+	["a_jump_crate", [1184, 2272, 1248, 2304], [0, 48], "delivery"],
+	# B, the archive hall (the reference's site cover): a raised plinth at the back with a low
+	# partition along its edge, the tape library where the reference has its car, archive
+	# boxes stacked two high in the site and by the east wall, cabinets
+	["b_plinth", [-2112, 2440, -1752, 2936], [0, 32], "plinth"],
+	["b_plinth_back", [-2048, 2936, -1792, 3072], [0, 32], "plinth"],
+	["b_partition", [-1752, 2440, -1736, 2808], [0, 64], "kerb"],
+	["b_plinth_boxes", [-2112, 2440, -2056, 2504], [32, 96], "archive"],
+	["b_plinth_cabinet", [-2072, 2816, -2024, 2880], [32, 128], "cabinet"],
+	["b_back_cabinet", [-1992, 3024, -1928, 3072], [32, 128], "cabinet"],
+	["tape_library", [-1864, 2328, -1768, 2424], [0, 96], "cabinet"],
+	["b_stack", [-1672, 2504, -1608, 2568], [0, 64], "archive"],
+	["b_stack_top", [-1668, 2508, -1612, 2564], [64, 128], "archive"],
+	["b_east_boxes", [-1480, 2584, -1416, 2648], [0, 64], "archive"],
+	["b_east_cabinet", [-1416, 2648, -1376, 2712], [0, 128], "cabinet"],
+	["b_hatch_cabinet", [-1864, 1792, -1800, 1856], [0, 128], "cabinet"],
 	["bureau_barrier", [-160, 2208, -32, 2304], [-128, -64], "barrier"],
 ]
 
@@ -133,6 +154,8 @@ const PROPS := {
 	"pump": [2, Color(0.34, 0.40, 0.48), Color()],
 	"barrier": [3, Color(0.55, 0.56, 0.56), Color()],
 	"kerb": [4, Color(0.40, 0.42, 0.45), Color()],
+	"plinth": [4, Color(0.44, 0.46, 0.48), Color()],
+	"beam": [3, Color(0.40, 0.42, 0.45), Color()],
 	"door": [5, Color(0.40, 0.46, 0.54), Color(0.29, 0.78, 1.0)],
 }
 

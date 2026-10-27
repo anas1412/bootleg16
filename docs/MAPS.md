@@ -185,6 +185,15 @@ towers west of the dock, steaming over its wall. 119 fps at 1080p Medium at the 
 on their way in, with a smaller crate in front and the kerb open beside it: lane, crate, xbox,
 walkway side in three jumps (48, 48, 32), as in CS2. Bots don't take it (they climb 40 at most).
 
+**Site cover** is Dust2's, measured (`--plan` tops of boxes; a box is the standable area less
+16 all round, since a player stands on anything under any part of their 32-wide box): A has a
+two-high stack of server crates, two core cabinets and a crate at the back; B (the archive)
+a raised plinth at the back with a low partition along it, the tape library where Dust2 has
+its car, a double stack of archive boxes, boxes and a cabinet by the east wall, a cabinet at
+the crawlspace hatch. A crate at the deck's edge on the ramp from the control room lets you
+jump up onto A (as in CS2; bots don't, they climb 40 at most). Walks to a point end on the
+bots' spot nearest it on its own level (not on top of a box).
+
 **Every block is something** (`BLOCKS`, `PROPS`, `prop.gdshader`): delivery crates at the
 dock and in mid (the xbox), a UPS on the walkway, the sump's pump, boxes of servers in the
 aisle, the core servers on A, a tape library and archive boxes on B, a Bureau barrier by the
