@@ -21,7 +21,7 @@ const DROP: i64 = 128;
 #[derive(GodotClass)]
 #[class(base = RefCounted)]
 pub struct Session {
-    client: Option<net::Client>,
+    pub(crate) client: Option<net::Client>,
     /// Stops our server thread (also when the session goes away).
     stop: Option<Arc<AtomicBool>>,
     joined: bool,
@@ -29,13 +29,28 @@ pub struct Session {
     /// The eye and recoil punch before the last tick (frames are drawn between ticks).
     prev_eye: [f32; 3],
     prev_punch: [f32; 3],
+    /// The longest defuse time left seen since a defuse began: the client only hears what's
+    /// left, and the HUD's ring needs the whole length (`game::hud`).
+    pub(crate) defuse_seen: std::cell::Cell<f32>,
+    /// Who we heard last and when, by player id (`game::voices`).
+    pub(crate) heard: std::collections::HashMap<u8, crate::game::Heard>,
     base: Base<RefCounted>,
 }
 
 #[godot_api]
 impl IRefCounted for Session {
     fn init(base: Base<RefCounted>) -> Self {
-        Session { client: None, stop: None, joined: false, view: View::default(), prev_eye: [0.0; 3], prev_punch: [0.0; 3], base }
+        Session {
+            client: None,
+            stop: None,
+            joined: false,
+            view: View::default(),
+            prev_eye: [0.0; 3],
+            prev_punch: [0.0; 3],
+            defuse_seen: Default::default(),
+            heard: Default::default(),
+            base,
+        }
     }
 }
 
@@ -76,6 +91,35 @@ impl Session {
         let s = stop.clone();
         std::thread::spawn(move || server.run_until(&s));
         match net::Client::connect(addr, "player", file.world()) {
+            Ok(c) => self.client = Some(c),
+            Err(e) => {
+                godot_error!("bootleg16: can't open a connection ({e})");
+                stop.store(true, Ordering::Relaxed);
+                return false;
+            }
+        }
+        self.stop = Some(stop);
+        self.joined = false;
+        self.view.reset();
+        true
+    }
+
+    /// Start a practice match on this machine on a map (the text of its `.bmap`): the real
+    /// rules (`practice::config`), you (`name`) on the Strays (attackers) and bots filling both teams.
+    /// False (and an error in the log) if it can't start.
+    #[func]
+    fn start_match(&mut self, map: GString, name: GString) -> bool {
+        self.stop();
+        let text = map.to_string();
+        let (addr, stop) = match crate::practice::start(&text, Team::T) {
+            Ok(host) => host,
+            Err(e) => {
+                godot_error!("bootleg16: {e}");
+                return false;
+            }
+        };
+        let world = sim::mapfile::MapFile::parse(&text).map(|f| f.world()).unwrap_or_else(|_| sim::collision::World::flat_floor(-100_000.0));
+        match net::Client::connect(addr, &name.to_string(), world) {
             Ok(c) => self.client = Some(c),
             Err(e) => {
                 godot_error!("bootleg16: can't open a connection ({e})");

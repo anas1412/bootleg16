@@ -1,8 +1,11 @@
 //! bootleg16's GDExtension: Godot loads this library and gets the `Session` and `Lobby` classes.
 use godot::prelude::*;
 
+mod game;
 mod lobby;
+mod practice;
 mod session;
+mod shop;
 mod units;
 
 struct Bootleg16;
