@@ -258,14 +258,21 @@ pub struct Server {
 
 impl Server {
     pub fn new(bind: SocketAddr, map: &str, bsp: &Bsp, assets: Assets) -> std::io::Result<Server> {
+        let mut server = Server::with_world(bind, map, World::from_bsp(bsp), bsp.hash, assets)?;
+        server.pieces = breakables::Pieces::from_bsp(bsp);
+        Ok(server)
+    }
+
+    /// A server on a map that isn't a BSP: its `world` (spawns in `world.zones`) and an id
+    /// for the map file (`hash`, checked by clients).
+    pub fn with_world(bind: SocketAddr, map: &str, world: World, hash: u64, assets: Assets) -> std::io::Result<Server> {
         let rate = crate::tick::TickRate::default();
-        let zones = sim::zones::Zones::from_bsp(bsp);
-        let (spawns_t, spawns_ct) = (zones.spawns(sim::zones::Side::T), zones.spawns(sim::zones::Side::Ct));
+        let (spawns_t, spawns_ct) = (world.zones.spawns(sim::zones::Side::T), world.zones.spawns(sim::zones::Side::Ct));
         Ok(Server {
             socket: Socket::bind(bind)?,
             map: map.to_string(),
-            map_hash: bsp.hash,
-            world: World::from_bsp(bsp),
+            map_hash: hash,
+            world,
             assets,
             vars: MoveVars::default(),
             clients: HashMap::new(),
@@ -292,7 +299,7 @@ impl Server {
             dm_end: 0,
             practice_bomb: 0,
             last_seen: HashMap::new(),
-            pieces: breakables::Pieces::from_bsp(bsp),
+            pieces: breakables::Pieces::default(),
             snapshot_bytes: 0,
             guard: guard::Guard::new(rate),
             reserved: None,

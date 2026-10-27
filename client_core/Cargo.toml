@@ -1,0 +1,8 @@
+[package]
+name = "client_core"
+version = "0.1.0"
+edition = "2021"
+
+# What any bootleg16 client needs besides drawing: the camera's feel today, more as the Godot
+# port moves logic out of the Bevy client. No engine types.
+[dependencies]

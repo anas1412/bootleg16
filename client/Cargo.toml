@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 goldsrc = { path = "../goldsrc" }
 sim = { path = "../sim" }
+client_core = { path = "../client_core" }
 net = { path = "../net" }
 bevy = { version = "0.20", features = ["wav"] }
 # Voice chat: microphone / output streams (same cpal Bevy's audio uses) and the Opus codec.

@@ -172,6 +172,9 @@ pub struct World {
     /// Bodies lying on the floor (`bodies::rest_box`): boxes players bump into and step over
     /// (not bullets). Set each tick from the bodies, the same on the server and the client.
     pub boxes: Vec<(Vec3, Vec3)>,
+    /// Solid boxes of a map that isn't a BSP (`from_boxes`): they block players, bullets and
+    /// sight like walls.
+    solids: Vec<(Vec3, Vec3)>,
     /// Faces on each point node, for finding the texture a bullet hit.
     node_faces: Vec<(u32, u32)>,
     surfaces: Vec<Surface>,
@@ -267,6 +270,7 @@ impl World {
             doors,
             zones: crate::zones::Zones::from_bsp(bsp),
             boxes: Vec::new(),
+            solids: Vec::new(),
             node_faces: bsp.nodes.iter().map(|n| (n.first_face as u32, n.num_faces as u32)).collect(),
             surfaces,
             textures: bsp.textures.iter().map(|t| t.name.clone()).collect(),
@@ -382,7 +386,10 @@ impl World {
     }
 
     fn is_solid_point(&self, p: Vec3) -> bool {
-        let mut num = self.water_roots[0].0;
+        if self.solids.iter().any(|(lo, hi)| inside(p, *lo, *hi)) {
+            return true;
+        }
+        let Some(&(mut num, _)) = self.water_roots.first() else { return false };
         while num >= 0 {
             let n = &self.point_nodes[num as usize];
             num = n.children[(dot(n.normal, p) - n.dist < 0.0) as usize];
@@ -400,7 +407,7 @@ impl World {
     pub fn is_solid(&self, hull: Hull, origin: Vec3) -> bool {
         let (lo, hi) = (add(origin, hull.mins()), add(origin, hull.maxs()));
         self.models.iter().filter(|m| m.enabled && self.reaches(m, lo, hi)).any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
-            || self.boxes.iter().any(|(blo, bhi)| (0..3).all(|i| lo[i] < bhi[i] && hi[i] > blo[i]))
+            || self.boxes.iter().chain(&self.solids).any(|(blo, bhi)| (0..3).all(|i| lo[i] < bhi[i] && hi[i] > blo[i]))
     }
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
@@ -441,6 +448,19 @@ impl World {
                 }
             }
         }
+        for (blo, bhi) in &self.solids {
+            let (lo, hi) = expand(hull, *blo, *bhi);
+            if inside(start, lo, hi) {
+                best.start_solid = true;
+                best.all_solid |= inside(end, lo, hi);
+            } else if let Some((f, normal)) = sweep_aabb(start, end, lo, hi) {
+                if f < best.fraction {
+                    best.fraction = f;
+                    best.normal = normal;
+                    best.end = lerp(start, end, f);
+                }
+            }
+        }
         if best.start_solid {
             // GoldSrc's player trace: starting inside solid counts as blocked at once.
             best.fraction = 0.0;
@@ -463,6 +483,9 @@ impl World {
     /// crates (as they are now: open doors and broken pieces don't). For hiding players you
     /// can't see: anything see-through (glass, fences) must not count.
     pub fn sight_blocked(&self, start: Vec3, end: Vec3) -> bool {
+        if self.solids.iter().any(|(lo, hi)| inside(start, *lo, *hi) || sweep_aabb(start, end, *lo, *hi).is_some()) {
+            return true;
+        }
         let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
         let near = |m: &Model| (0..3).all(|i| start[i].min(end[i]) <= m.bounds.1[i] && start[i].max(end[i]) >= m.bounds.0[i]);
         self.models.iter().filter(|m| m.enabled && m.opaque && m.heads[0] >= 0).any(|m| {
@@ -503,6 +526,15 @@ impl World {
                 best.end = lerp(start, end, t.fraction);
                 best.hit_sky = t.hit_contents == CONTENTS_SKY;
                 best.model = m.bsp_model;
+            }
+        }
+        for (lo, hi) in &self.solids {
+            if inside(start, *lo, *hi) {
+                best.start_solid = true;
+            } else if let Some((f, normal)) = sweep_aabb(start, end, *lo, *hi) {
+                if f < best.fraction {
+                    (best.fraction, best.normal, best.end, best.hit_sky, best.model) = (f, normal, lerp(start, end, f), false, 0);
+                }
             }
         }
         best
@@ -562,6 +594,26 @@ impl World {
         false
     }
 
+    /// A map made of solid boxes (mins, maxs), not a BSP: what Godot maps give until they
+    /// carry full brushes. No water, ladders, doors or sky yet.
+    pub fn from_boxes(solids: Vec<(Vec3, Vec3)>) -> World {
+        World {
+            nodes: Vec::new(),
+            models: Vec::new(),
+            point_nodes: Vec::new(),
+            leaf_contents: Vec::new(),
+            water_roots: Vec::new(),
+            ladders: Vec::new(),
+            doors: Doors::default(),
+            zones: Default::default(),
+            boxes: Vec::new(),
+            solids,
+            node_faces: Vec::new(),
+            surfaces: Vec::new(),
+            textures: Vec::new(),
+        }
+    }
+
     /// Test helper: an infinite floor at height `z` (solid below).
     pub fn flat_floor(z: f32) -> World {
         // One node per hull: plane z = floor + half the hull height; below is solid.
@@ -580,6 +632,7 @@ impl World {
             doors: Doors::default(),
             zones: Default::default(),
             boxes: Vec::new(),
+            solids: Vec::new(),
             node_faces: vec![(0, 0)],
             surfaces: Vec::new(),
             textures: Vec::new(),
@@ -590,11 +643,28 @@ impl World {
 /// The player box swept from `start` to `end` against a box: where it first touches and the
 /// face's normal. Starting inside it doesn't count (a body that lands on you never traps you).
 fn sweep_box(hull: Hull, start: Vec3, end: Vec3, lo: Vec3, hi: Vec3) -> Option<(f32, Vec3)> {
-    let (lo, hi): (Vec3, Vec3) = (std::array::from_fn(|i| lo[i] - hull.maxs()[i]), std::array::from_fn(|i| hi[i] - hull.mins()[i]));
-    if (0..3).all(|i| start[i] > lo[i] && start[i] < hi[i]) {
+    let (lo, hi) = expand(hull, lo, hi);
+    if inside(start, lo, hi) {
         return None;
     }
-    let (mut t0, mut t1, mut normal) = (0.0f32, 1.0f32, [0.0; 3]);
+    sweep_aabb(start, end, lo, hi)
+}
+
+/// A box grown by the player box (Minkowski sum), so the player is a point against it.
+fn expand(hull: Hull, lo: Vec3, hi: Vec3) -> (Vec3, Vec3) {
+    (std::array::from_fn(|i| lo[i] - hull.maxs()[i]), std::array::from_fn(|i| hi[i] - hull.mins()[i]))
+}
+
+/// Strictly inside the box (touching a face is outside: standing on a floor isn't stuck).
+fn inside(p: Vec3, lo: Vec3, hi: Vec3) -> bool {
+    (0..3).all(|i| p[i] > lo[i] && p[i] < hi[i])
+}
+
+/// A point moving from `start` to `end` against a box it starts outside of: where it first
+/// touches (stopping DIST_EPSILON short, as GoldSrc does) and that face's normal.
+fn sweep_aabb(start: Vec3, end: Vec3, lo: Vec3, hi: Vec3) -> Option<(f32, Vec3)> {
+    // (entering from a face it starts exactly on counts: t0 may be 0)
+    let (mut t0, mut t1, mut normal) = (f32::NEG_INFINITY, f32::INFINITY, [0.0; 3]);
     for i in 0..3 {
         let d = end[i] - start[i];
         if d.abs() < 1e-6 {
@@ -610,13 +680,13 @@ fn sweep_box(hull: Hull, start: Vec3, end: Vec3, lo: Vec3, hi: Vec3) -> Option<(
             normal[i] = side;
         }
         t1 = t1.min(far);
-        if t0 >= t1 {
-            return None;
-        }
+    }
+    if t0 >= t1 || t0 < 0.0 || t0 > 1.0 || normal == [0.0; 3] {
+        return None;
     }
     // stop just short, as GoldSrc's traces do (DIST_EPSILON)
     let len = length(sub(end, start)).max(1e-3);
-    (normal != [0.0; 3]).then(|| ((t0 - 0.03125 / len).max(0.0), normal))
+    Some(((t0 - 0.03125 / len).max(0.0), normal))
 }
 
 #[cfg(test)]

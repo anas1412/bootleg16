@@ -732,6 +732,56 @@ mod tests {
         assert!((s - 250.0).abs() < 2.0, "speed {s}");
     }
 
+    /// A box-built room (no BSP): floor top at z 0, plus `extra` boxes; a player standing at x 0.
+    fn box_room(extra: &[(Vec3, Vec3)]) -> (Player, World) {
+        let mut solids = vec![([-2000.0, -2000.0, -64.0], [2000.0, 2000.0, 0.0])];
+        solids.extend_from_slice(extra);
+        let w = World::from_boxes(solids);
+        let mut p = Player::new([0.0, 0.0, 40.0]);
+        run(&mut p, Input::default(), 1.0, &w);
+        (p, w)
+    }
+
+    #[test]
+    fn a_box_built_room_walks_like_a_bsp_map() {
+        // standing on the floor box
+        let (mut p, w) = box_room(&[]);
+        assert!(p.on_ground && (p.origin[2] - 36.0).abs() < 0.1, "{:?}", p.origin);
+        run(&mut p, Input { forward: 400.0, ..Default::default() }, 2.0, &w);
+        assert!((p.speed_2d() - 250.0).abs() < 2.0, "speed {}", p.speed_2d());
+        // a wall stops you
+        let (mut p, w) = box_room(&[([100.0, -500.0, 0.0], [132.0, 500.0, 200.0])]);
+        run(&mut p, Input { forward: 400.0, ..Default::default() }, 2.0, &w);
+        assert!(p.origin[0] < 100.0 - 15.9 && p.origin[0] > 100.0 - 17.0, "{:?}", p.origin);
+        // a 16 high stair is walked up, a 24 high block isn't
+        let (mut p, w) = box_room(&[([100.0, -500.0, 0.0], [400.0, 500.0, 16.0])]);
+        run(&mut p, Input { forward: 400.0, ..Default::default() }, 1.0, &w);
+        assert!(p.origin[0] > 150.0 && (p.origin[2] - 52.0).abs() < 0.1, "{:?}", p.origin);
+        let (mut p, w) = box_room(&[([100.0, -500.0, 0.0], [400.0, 500.0, 24.0])]);
+        run(&mut p, Input { forward: 400.0, ..Default::default() }, 1.0, &w);
+        assert!(p.origin[0] < 100.0, "{:?}", p.origin);
+        // a ledge 60 up: only crouched do you get under it
+        let ledge = ([100.0, -500.0, 60.0], [400.0, 500.0, 100.0]);
+        let (mut p, w) = box_room(&[ledge]);
+        run(&mut p, Input { forward: 400.0, ..Default::default() }, 1.0, &w);
+        assert!(p.origin[0] < 100.0, "standing went under: {:?}", p.origin);
+        run(&mut p, Input { crouch: true, ..Default::default() }, 1.0, &w);
+        run(&mut p, Input { forward: 400.0, crouch: true, ..Default::default() }, 2.0, &w);
+        assert!(p.origin[0] > 150.0, "crouched stayed out: {:?}", p.origin);
+        // a jump lands back on the floor
+        let (mut p, w) = box_room(&[]);
+        let z = p.origin[2];
+        step(&mut p, &Input { jump: true, ..Default::default() }, DT, &w, &MoveVars::default());
+        run(&mut p, Input::default(), 1.0, &w);
+        assert!(p.on_ground && (p.origin[2] - z).abs() < 0.1);
+        // bullets and sight: stopped by a box, not by thin air
+        let w = World::from_boxes(vec![([100.0, -50.0, -50.0], [110.0, 50.0, 50.0])]);
+        let t = w.trace_line([0.0; 3], [300.0, 0.0, 0.0]);
+        assert!((t.end[0] - 100.0).abs() < 0.1 && t.normal == [-1.0, 0.0, 0.0], "{t:?}");
+        assert!(w.sight_blocked([0.0; 3], [300.0, 0.0, 0.0]) && !w.sight_blocked([0.0, 0.0, 0.0], [0.0, 300.0, 0.0]));
+        assert_eq!(w.point_contents([105.0, 0.0, 0.0]), crate::collision::Contents::Solid);
+    }
+
     #[test]
     fn you_step_over_a_body_but_a_tall_box_stops_you() {
         let (mut p, mut w) = standing_on_floor();

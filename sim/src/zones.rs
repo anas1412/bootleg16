@@ -109,6 +109,13 @@ impl Zones {
         sites.into_iter().map(|(c, _)| c).collect()
     }
 
+    /// Just spawn points (a map that isn't a BSP, until it carries zones of its own): you buy
+    /// near your own side's, as CS does on maps without buy zones.
+    pub fn with_spawns(t: Vec<Vec3>, ct: Vec<Vec3>) -> Zones {
+        let spawn_buy = t.into_iter().map(|o| (Side::T, o)).chain(ct.into_iter().map(|o| (Side::Ct, o))).collect();
+        Zones { spawn_buy, bomb_radius: 500.0, ..Default::default() }
+    }
+
     /// A side's spawn points (`info_player_deathmatch`: terrorists, `info_player_start`:
     /// counter-terrorists), in map order.
     pub fn spawns(&self, side: Side) -> Vec<Vec3> {

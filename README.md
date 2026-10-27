@@ -77,6 +77,20 @@ Tests (run the ones for what you changed; they skip without the game data):
 cargo test -p net -p sim
 ```
 
+### Godot client (in progress)
+
+The game is moving to Godot 4. The Rust core stays: `sim`, `net`, `server` and `lobby`. `gdbridge` is the GDExtension that gives Godot our simulation and netcode, `client_core` the client logic shared by both clients, and `godot/` the Godot project. Phase P0 is a grey test room on our real movement:
+
+```bash
+systemd-run --user --scope -q -p MemoryMax=3G -- cargo build -p gdbridge -j 2
+```
+
+```bash
+godot --path godot
+```
+
+Headless check: `godot --headless --path godot --script res://tests/session_check.gd`.
+
 ### Releasing
 
 Push a `v*` tag. `.github/workflows/installers.yml` builds both installers and publishes a GitHub prerelease. The workflow can also be run from the Actions tab. Set the repo variable `BOOTLEG16_LOBBY` to bake the lobby address in.

@@ -1,0 +1,15 @@
+[package]
+name = "gdbridge"
+version = "0.1.0"
+edition = "2021"
+
+# The Godot client's Rust half (a GDExtension): our simulation, netcode and client logic
+# behind a few Godot classes. Godot draws; this decides.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+godot = { version = "0.5.5", features = ["api-4-7"] }
+sim = { path = "../sim" }
+net = { path = "../net" }
+client_core = { path = "../client_core" }

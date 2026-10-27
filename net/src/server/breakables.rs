@@ -4,6 +4,7 @@
 use super::*;
 use sim::breakables::Breakable;
 
+#[derive(Default)]
 pub(super) struct Pieces {
     list: Vec<Breakable>,
     health: Vec<f32>,
