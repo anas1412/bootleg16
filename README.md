@@ -1,6 +1,6 @@
 # bootleg16
 
-Counter-Strike 1.6 rebuilt in Rust with Bevy. CS 1.6 movement, guns, sounds and economy; CS2's match format and timers.
+A tactical 5 v 5 shooter in Rust: CS 1.6 movement, guns and economy; CS2's match format and timers. The game is moving from its Bevy client to Godot 4, with our own maps, look and characters (see [Godot client](#godot-client-in-progress)).
 
 ## The game
 
@@ -9,7 +9,7 @@ Counter-Strike 1.6 rebuilt in Rust with Bevy. CS 1.6 movement, guns, sounds and 
 - **Deathmatch:** drop-in warm-up servers, up to 20 players. Instant respawn away from enemies, no rounds, timer or bomb, buy anything anywhere for free. First to 100 kills is announced and scores reset.
 - **Host:** a match or deathmatch on your own PC. Steam friends join from your name in their friends list (Join game), or type your address under Play. For friends outside your home, forward UDP port 27015 on your router.
 - **Practice > Solo:** offline on your own machine, with standing dummies if you like.
-- **Maps:** de_dust2, de_inferno, de_nuke, de_train. Casual picks one at random.
+- **Maps:** de_dust2, de_inferno, de_nuke, de_train (Bevy client) and data_center, our own (Godot client). Casual picks one at random.
 - **Parties:** open **Play** and share your party code, or invite Steam friends.
 - **Bodies:** the dead stay all match as a bump you step over. Press E on one to carry it as a shield: it takes 75% of a bullet or knife from the front and half of a grenade's blast, your head stays open, and you move slower. E again drops it. Lying bodies take a little (30%) of a low shot through them, so a pile is cover when you crouch.
 - **Voice chat**, and an AI assistant instead of the radio.
@@ -38,7 +38,10 @@ Download from [Releases](https://github.com/anas1412/bootleg16/releases).
 
 | Folder | What |
 |---|---|
-| `client/` | The game: menus, HUD, rendering, sound, voice, Steam |
+| `godot/` | The Godot 4 client: scenes, maps, menus, UI kit, headless checks |
+| `gdbridge/` | GDExtension that gives Godot our simulation, netcode and lobby |
+| `client_core/` | Client logic shared by both clients |
+| `client/` | The Bevy client (frozen, replaced by `godot/`): menus, HUD, rendering, sound, voice, Steam |
 | `server/` | Game server program (also replays recordings) |
 | `lobby/` | Lobby program: parties, matchmaking, the server pool |
 | `net/` | Networking shared by all three: server and lobby logic, encryption, recordings, test bots |
@@ -46,7 +49,7 @@ Download from [Releases](https://github.com/anas1412/bootleg16/releases).
 | `goldsrc/` | Readers for CS 1.6 files: maps, models, textures |
 | `config/` | `server.cfg`: match rules |
 | `docs/` | Design notes, rules, `TODO.md`, `GOTCHAS.md` |
-| `design/` | UI mockups |
+| `design/` | Identity marks, design system tokens, character scripts |
 | `tools/` | Helper scripts |
 | `packaging/` | Linux and Windows installers |
 
@@ -79,7 +82,7 @@ cargo test -p net -p sim
 
 ### Godot client (in progress)
 
-The game is moving to Godot 4. The Rust core stays: `sim`, `net`, `server` and `lobby`. `gdbridge` is the GDExtension that gives Godot our simulation and netcode, `client_core` the client logic shared by both clients, and `godot/` the Godot project. Phase P0 is a grey test room on our real movement:
+The game is moving to Godot 4. The Rust core stays: `sim`, `net`, `server` and `lobby`. Done so far: our own map format (`.bmap`, exported from Godot scenes), the identity and design system, the menus, settings and lobby, and the data_center map (measured against Dust2's timings, played by bots). Build the bridge, then open the project:
 
 ```bash
 systemd-run --user --scope -q -p MemoryMax=3G -- cargo build -p gdbridge -j 2
@@ -89,7 +92,7 @@ systemd-run --user --scope -q -p MemoryMax=3G -- cargo build -p gdbridge -j 2
 godot --path godot
 ```
 
-Headless check: `godot --headless --path godot --script res://tests/session_check.gd`.
+Headless checks: `godot --headless --path godot --script res://tests/session_check.gd` (also `menu_check.gd`; `lobby_check.gd` needs a lobby running).
 
 ### Releasing
 
