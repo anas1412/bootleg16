@@ -7,18 +7,21 @@
 ## Everything here is in GoldSrc units (x east, y north, z up, 1 unit = 1 inch), as the
 ## measurements are. Areas are where players walk: a floor (solid down to the base), a ramp
 ## (its `z` is [height at the low corner, height at the high corner] along `axis`) or a bridge
-## (a thin slab over another area). Every 32-unit cell no area covers becomes wall. `roof`: a
-## ceiling that high over the area's floor (the crawlspace). Blocks are cover and door frames.
+## (a thin slab over another area). Every 32-unit cell no area covers becomes wall. Over each
+## area its ceiling (CEILINGS): a roof indoors, the sky outdoors. Blocks are cover and door frames.
 extends SceneTree
 
 const METRES := 0.0254
 const CELL := 32
 const BASE := -320
-const TOP := 448
+const TOP := 512
 const OUT := "res://maps/data_center.tscn"
+## Ceiling lamps: their colour, how far apart (units).
+const LAMP := Color(0.85, 0.93, 1.0)
+const LAMP_EVERY := 384.0
 
 ## [name, [x0, y0, x1, y1], z or [z0, z1], extra]
-## extra: {"axis": "x" | "y"} for ramps, {"bridge": true}, {"roof": height}.
+## extra: {"axis": "x" | "y"} for ramps, {"bridge": true}.
 const AREAS := [
 	# Strays side: the loading dock (spawn) and its ramps
 	["dock", [-2304, -1024, -1024, -640], 128, {}],
@@ -30,13 +33,13 @@ const AREAS := [
 	["intake_ramp", [-2048, -640, -1792, -128], [128, 0], {"axis": "y"}],
 	["intake_steps", [-1632, -256, -1536, 32], [128, 0], {"axis": "y"}],
 	["intake", [-2048, -128, -1536, 512], 0, {}],
-	["crawl_mouth", [-2048, 512, -1536, 704], 0, {"roof": 144}],
-	["crawl_neck", [-1792, 704, -1664, 1024], 0, {"roof": 144}],
-	["crawl_cross", [-2048, 1024, -1408, 1280], 0, {"roof": 144}],
-	["crawl_east", [-1408, 1088, -1184, 1248], 0, {"roof": 144}],
-	["crawl_drop", [-1184, 1088, -1056, 1280], [0, -112], {"axis": "y", "roof": 144}],
-	["crawl_low", [-1184, 1280, -512, 1536], -112, {"roof": 144}],
-	["crawl_up", [-2048, 1280, -1920, 1792], 0, {"roof": 144}],
+	["crawl_mouth", [-2048, 512, -1536, 704], 0, {}],
+	["crawl_neck", [-1792, 704, -1664, 1024], 0, {}],
+	["crawl_cross", [-2048, 1024, -1408, 1280], 0, {}],
+	["crawl_east", [-1408, 1088, -1184, 1248], 0, {}],
+	["crawl_drop", [-1184, 1088, -1056, 1280], [0, -112], {"axis": "y"}],
+	["crawl_low", [-1184, 1280, -512, 1536], -112, {}],
+	["crawl_up", [-2048, 1280, -1920, 1792], 0, {}],
 	# B: the archive hall
 	["hall_b", [-2112, 1792, -1376, 2944], 0, {}],
 	["hall_b_back", [-2048, 2944, -1792, 3072], 0, {}],
@@ -90,7 +93,7 @@ const BLOCKS := [
 	["spine_door_head", [-480, 1592, -288, 1672], [0, TOP]],
 	# the archive doors (B): a frame 176 wide (its panels are LEAVES), a header
 	["b_door_s", [-1344, 2080, -1312, 2096], [0, TOP]],
-	["b_door_head", [-1344, 2096, -1312, 2272], [128, TOP]],
+	["b_door_head", [-1344, 2096, -1312, 2272], [144, TOP]],
 	# a low header where the control room opens onto the ramp to A (under the walkway deck)
 	["control_head", [528, 2176, 560, 2304], [0, 96]],
 	# the aisle doors: a header over the 320-unit passage
@@ -112,6 +115,32 @@ const BLOCKS := [
 	["link_crate", [-160, 2208, -32, 2304], [-128, -64]],
 	["crawl_pillar", [-896, 1280, -800, 1376], [-112, 32]],
 ]
+
+## The height of each area's ceiling, measured on the reference (the median of 3 x 3 points
+## over the area, mapstats sightlines straight up): ["roof", z] indoors, ["sky", z] outdoors
+## (the dock and the yards; not drawn, it stops grenades as the reference's sky does); a third
+## item: over that part of the area only (the rest is under the walkway bridge). Areas not
+## named here are open to the sky over everything (TOP).
+const CEILINGS := {
+	"dock_east": ["sky", 384], "dock_ramp": ["sky", 384], "dock_lane": ["sky", 384],
+	"spine_stem": ["sky", 384], "spine_south": ["sky", 384], "spine_top": ["sky", 384],
+	"yard_south": ["sky", 384], "yard_lot": ["sky", 384], "yard": ["sky", 352],
+	"yard_link": ["roof", 192],
+	"crawl_neck": ["roof", 192], "crawl_cross": ["roof", 192], "crawl_east": ["roof", 192],
+	"crawl_drop": ["roof", 192], "crawl_up": ["roof", 192], "crawl_low": ["roof", 32],
+	"hall_b": ["roof", 384], "hall_b_back": ["roof", 384], "b_doors": ["roof", 146],
+	"lobby_west": ["roof", 384], "lobby": ["roof", 384], "lobby_link": ["roof", 64],
+	"control": ["roof", 64, [64, 2048, 288, 2496]], "walkway_bridge": ["roof", 352],
+	"control_ramp": ["roof", 352],
+	"spine": ["roof", 384], "spine_ramp": ["roof", 384], "spine_low": ["roof", 384],
+	"spine_north": ["roof", 384], "spine_side": ["roof", 384],
+	"walkway": ["roof", 384], "walkway_turn": ["roof", 384], "walkway_stairs": ["roof", 384],
+	"walkway_top": ["roof", 352], "a_deck_west": ["roof", 352],
+	"aisle_doors": ["roof", 352], "aisle_mouth": ["roof", 352], "aisle_entry": ["roof", 352],
+	"sump": ["roof", 352], "sump_ramp": ["roof", 352], "aisle_ledge": ["roof", 352],
+	"aisle": ["roof", 352], "aisle_end": ["roof", 352], "a_floor": ["roof", 352],
+	"a_ramp": ["roof", 352], "a_deck": ["roof", 352], "a_back": ["roof", 352],
+}
 
 ## Door panels standing at an angle: [name, [x, y] one end, [x, y] the other, thickness, [z0, z1]].
 ## Doors standing half open, parallel, leave a slanted gap between their panels.
@@ -143,12 +172,15 @@ const ZONES := [
 ## Site marks: [letter, colour, light (x, y, z), painted letter (x, y), wall letter (x, y, z),
 ## the way the wall letter faces (GoldSrc yaw)]
 const SITES := [
-	["A", Color(1.0, 0.76, 0.24), [1152, 2464, 320], [1216, 2368], [1344, 3070, 320], 270],
+	["A", Color(1.0, 0.76, 0.24), [1152, 2464, 300], [1216, 2368], [1344, 3070, 250], 270],
 	["B", Color(0.24, 1.0, 0.63), [-1536, 2688, 224], [-1504, 2784], [-2110, 2688, 192], 0],
 ]
 
 var _mats := {}
 var _root: Node3D
+var _lit: Node3D
+var _skies: Node3D
+var _lamp: StandardMaterial3D
 
 func _initialize() -> void:
 	_root = Node3D.new()
@@ -163,6 +195,11 @@ func _initialize() -> void:
 	var floors := _group("Floors")
 	var walls := _group("Walls")
 	var blocks := _group("Blocks")
+	_lit = _group("Lights")
+	_skies = _group("Skies")
+	_lamp = StandardMaterial3D.new()
+	_lamp.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_lamp.albedo_color = LAMP
 	for a in AREAS:
 		_area(floors, a)
 	_walls(walls)
@@ -232,12 +269,18 @@ func _area(parent: Node, a: Array) -> void:
 	if a[2] is Array:
 		_ramp(parent, name, r, a[2], extra)
 	elif extra.get("bridge", false):
-		_box(parent, name, r[0], r[1], a[2] - 24, r[2], r[3], a[2], "floor")
+		_box(parent, name, r[0], r[1], a[2] - 32, r[2], r[3], a[2], "floor")
 	else:
 		_box(parent, name, r[0], r[1], BASE, r[2], r[3], a[2], "floor")
-	if extra.has("roof"):
-		var top: float = a[2] if not (a[2] is Array) else max(a[2][0], a[2][1])
-		_box(parent, name + "_roof", r[0], r[1], top + extra.roof, r[2], r[3], TOP, "roof")
+	if CEILINGS.has(name):
+		var c: Array = CEILINGS[name]
+		if c.size() > 2:
+			r = c[2]
+		if c[0] == "roof":
+			_box(parent, name + "_roof", r[0], r[1], c[1], r[2], r[3], TOP, "roof")
+			_lights(name, r, c[1], a[2] if not (a[2] is Array) else min(a[2][0], a[2][1]))
+		else:
+			_sky_over(name, r, c[1])
 
 ## A ramp: solid up to its low end, and a slab whose top runs from z0 at the low-coordinate
 ## edge to z1 at the other.
@@ -312,6 +355,45 @@ func _walls(parent: Node) -> void:
 					used[(r + dr) * cols + c + k] = true
 			n += 1
 			_box(parent, "Wall%d" % n, lo.x + c * CELL, lo.y + r * CELL, BASE, lo.x + (c + w) * CELL, lo.y + (r + h) * CELL, TOP, "wall")
+
+## Lamps under a roof, about LAMP_EVERY apart: a light and a bar to show where it comes from.
+func _lights(name: String, r: Array, ceiling: float, floor_z: float) -> void:
+	var nx := maxi(1, ceili((r[2] - r[0]) / LAMP_EVERY))
+	var ny := maxi(1, ceili((r[3] - r[1]) / LAMP_EVERY))
+	var reach := clampf((ceiling - floor_z) * 1.8, 160.0, 420.0)
+	for i in nx:
+		for j in ny:
+			var x: float = r[0] + (r[2] - r[0]) * (i + 0.5) / nx
+			var y: float = r[1] + (r[3] - r[1]) * (j + 0.5) / ny
+			var light := OmniLight3D.new()
+			light.name = "%s_lamp%d" % [name, i * ny + j]
+			light.light_color = LAMP
+			light.light_energy = 1.2
+			light.omni_range = reach * METRES
+			light.position = _p(x, y, ceiling - 24)
+			_add(_lit, light)
+			var bar := MeshInstance3D.new()
+			bar.name = "Bar"
+			var mesh := BoxMesh.new()
+			mesh.size = Vector3(64, 4, 12) * METRES
+			mesh.material = _lamp
+			bar.mesh = mesh
+			bar.position = Vector3(0, 22, 0) * METRES
+			_add(light, bar)
+
+## The sky over an outdoor area, as low as the reference's (not drawn).
+func _sky_over(name: String, r: Array, z: float) -> void:
+	var body := StaticBody3D.new()
+	body.name = name + "_sky"
+	body.set_meta("contents", "sky")
+	_add(_skies, body)
+	var shape := CollisionShape3D.new()
+	shape.name = "Box"
+	var box := BoxShape3D.new()
+	box.size = Vector3(r[2] - r[0], TOP - z, r[3] - r[1]) * METRES
+	shape.shape = box
+	shape.position = _p((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0, (z + TOP) / 2.0)
+	_add(body, shape)
 
 ## The sky over everything: stops grenades and bullets leaving the map (not drawn).
 func _sky() -> void:
