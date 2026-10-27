@@ -258,6 +258,8 @@ Now: one server box, the game server as a systemd service. Only when we run seve
 - [x] data_center dressing from our own materials: racks, raised floor, cable trays, crawlspace cables, condensers, cooling towers with steam (the landmark)
 - [ ] data_center: B's window from the lobby, more cover, the control room (screens, desks), the sides' spawns (Bureau vans and barriers, Strays bikes and graffiti), the art pass with kits (Quaternius sci-fi, Kenney, Poly Haven textures; ask before downloading), 60 fps at 1080p medium on the GTX 1650 measured inside the halls too
 - [ ] Godot Play page: a map choice for Practice (it plays data_center; test_arena only in tests)
+- [ ] Godot home screen redesign: three versions over the faction bases on the artifact (2026-10-27), waiting for the user's pick; then build it (play_page, squad_panel, menu.tscn on `base_strays.tscn` / `base_bureau.tscn`), with `leave_party` and the Practice map in the lobby bridge
+- [ ] Faction bases are grey boxes (`godot/tools/build_bases.gd`): clothes are painted on the Quaternius bodies by `outfit.gdshader` until the Locker brings real outfits; walking around the base is P4
 - [ ] Bots don't step around bodies: a teammate or a peaceful enemy standing in a narrow way holds them up (seen on data_center's A ramp before guards had to stand on the site's level)
 - [ ] Godot: player name setting (until Steam names), Steam in the Godot client (overlay invites, presence, auth ticket), first-launch graphics preset from `scripts/bench.gd`
 - [ ] P4: tests still load Valve's player model (hitboxes) and `materials.txt`
