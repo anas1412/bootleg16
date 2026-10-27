@@ -11,8 +11,6 @@ const PAGES := [["Play", "出撃"], ["Settings", "設定"]]
 var _blur := ColorRect.new()
 var _tabs := TopTabs.new()
 var _mark: TextureRect
-var _quit := FrameButton.new("Quit")
-var _quit_armed := false
 var _pages: Array[Control] = []
 var _current := 0
 
@@ -40,8 +38,6 @@ func _ready() -> void:
 	_tabs.picked.connect(_open)
 	add_child(_tabs)
 	_mark = mark
-	_quit.pressed.connect(_on_quit)
-	add_child(_quit)
 	_place_top()
 	_tabs.minimum_size_changed.connect(_place_top)
 
@@ -56,7 +52,7 @@ func _ready() -> void:
 		_pages.append(page)
 	_pages[0].visible = true
 	_pages[0].enter()
-	Motion.enter_all([mark, _tabs, _quit])
+	Motion.enter_all([mark, _tabs])
 
 	var start_page := int(OS.get_environment("BOOTLEG16_PAGE"))
 	if start_page:
@@ -75,10 +71,6 @@ func _place_top() -> void:
 	_mark.position = Vector2(Grid.x(0), Tokens.MARGIN_Y)
 	_mark.size = Vector2(bar.y * aspect, bar.y)
 	_tabs.position = Vector2(roundf((Tokens.CANVAS.x - bar.x) / 2.0), Tokens.MARGIN_Y)
-	# Quit ends on the right margin, centred on the bar's height
-	var q := _quit.get_combined_minimum_size()
-	_quit.size = q
-	_quit.position = Vector2(Grid.x(9) + Grid.w(3) - q.x, Tokens.MARGIN_Y + roundf((bar.y - q.y) / 2.0))
 
 func _open(i: int) -> void:
 	if i == _current:
@@ -101,20 +93,6 @@ func _set_blur(on: bool) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and _current != 0:
 		_tabs.pick(0)
-
-## The first click asks, the second (within 3 seconds) closes the game.
-func _on_quit() -> void:
-	if _quit_armed:
-		get_tree().quit()
-		return
-	_quit_armed = true
-	_quit.text = "SURE? CLICK AGAIN"
-	Motion.glitch(_quit)
-	_place_top()
-	await get_tree().create_timer(3.0).timeout
-	_quit_armed = false
-	_quit.text = "QUIT"
-	_place_top()
 
 func _deploy(mode: int) -> void:
 	if mode == 2:  # practice
