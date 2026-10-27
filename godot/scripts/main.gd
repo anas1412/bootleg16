@@ -68,6 +68,9 @@ func _process(delta: float) -> void:
 			_ when _waited > JOIN_WAIT:
 				_back("The match server didn't answer.")
 	elif not _readers.is_empty():
+		# voice: talk keys count only while you're playing (not paused, no menu over the game)
+		var free := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		session.voice_frame(free and Input.is_action_pressed("team_voice"), free and Input.is_action_pressed("near_voice"), not free)
 		var hud := session.hud()
 		for node in _readers:
 			if node.has_method("on_hud"):

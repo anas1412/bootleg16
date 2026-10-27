@@ -75,6 +75,7 @@ func on_hud(hud: Dictionary) -> void:
 	_last = hud
 	_top.refresh(session.players(), hud)
 	_voices.refresh(session.voices())
+	_assistant()
 	_vitals.refresh(hud)
 	_gun.refresh(hud)
 	_ring.refresh(hud)
@@ -124,6 +125,17 @@ func notice(text: String) -> void:
 	_notice_tween.tween_interval(NOTICE_SECONDS)
 	_notice_tween.tween_property(_notice, "modulate:a", 0.0, Tokens.EXIT)
 
-## The assistant says a line (the brain lands with the voice and assistant port).
+## The assistant says a line: `who` as the uplink counts its faces (0 Claudette, 1 ChildGBT,
+## 2 the sister, 3 the brother, 4 Grumpk).
 func say(who: int, mood: int, text: String) -> void:
 	_uplink.say(who, mood, text)
+
+## Your assistant's newest line, from the brain (`Session.assistant_lines`).
+func _assistant() -> void:
+	var lines: Array = session.assistant_lines(Settings.assistant, LobbyLink.player_name(), Settings.assistant_in_round, Settings.chattiness, Settings.relay)
+	if lines.is_empty():
+		return
+	var l: Dictionary = lines.back()
+	# the brain counts four assistants; the uplink has the Twins as two faces
+	var face: int = l.who if l.who < 2 else (2 + int(l.second) if l.who == 2 else 4)
+	say(face, l.mood, l.text)

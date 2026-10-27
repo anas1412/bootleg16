@@ -33,6 +33,13 @@ var vsync := 2
 var fps_cap := 0
 var sensitivity := 2.0
 var volume := 0.8
+## Your assistant in matches (0 Claudette, 1 ChildGBT, 2 the Twins, 3 Grumpk, ASSISTANT_OFF
+## none), how chatty (0 to 2), whether it talks during live rounds and relays team news.
+const ASSISTANT_OFF := 4
+var assistant := 0
+var chattiness := 1
+var assistant_in_round := true
+var relay := true
 
 func _ready() -> void:
 	_set_preset_values(preset)
@@ -124,6 +131,8 @@ func _save() -> void:
 		cf.set_value("display", key, get(key))
 	cf.set_value("controls", "sensitivity", sensitivity)
 	cf.set_value("audio", "volume", volume)
+	for key in ["assistant", "chattiness", "assistant_in_round", "relay"]:
+		cf.set_value("assistant", key, get(key))
 	cf.save(path)
 
 func _load() -> void:
@@ -138,4 +147,8 @@ func _load() -> void:
 	vsync = clampi(cf.get_value("display", "vsync", vsync), 0, VSYNC.size() - 1)
 	fps_cap = clampi(cf.get_value("display", "fps_cap", fps_cap), 0, FPS.size() - 1)
 	sensitivity = clampf(cf.get_value("controls", "sensitivity", sensitivity), 0.1, 10.0)
+	assistant = clampi(cf.get_value("assistant", "assistant", assistant), 0, ASSISTANT_OFF)
+	chattiness = clampi(cf.get_value("assistant", "chattiness", chattiness), 0, 2)
+	assistant_in_round = cf.get_value("assistant", "assistant_in_round", assistant_in_round)
+	relay = cf.get_value("assistant", "relay", relay)
 	volume = clampf(cf.get_value("audio", "volume", volume), 0.0, 1.0)

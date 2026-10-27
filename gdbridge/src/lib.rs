@@ -6,6 +6,7 @@ mod lobby;
 mod practice;
 mod session;
 mod shop;
+mod talk;
 mod units;
 
 struct Bootleg16;

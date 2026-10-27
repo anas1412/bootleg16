@@ -3,23 +3,11 @@
 use crate::session::Session;
 use crate::units::{to_godot, yaw_to_godot};
 use godot::prelude::*;
-use net::protocol::{BombNet, GameEvent, Team, VoiceChannel};
-use std::time::{Duration, Instant};
-
-/// A voice stays "talking" this long after its last packet (packets come every 20 ms).
-const HEARD_FOR: Duration = Duration::from_millis(250);
-
-/// Someone we heard: on which channel, through a wall or not, how loud (1 to 255), when.
-pub(crate) struct Heard {
-    channel: VoiceChannel,
-    muffled: bool,
-    gain: u8,
-    at: Instant,
-}
+use net::protocol::{BombNet, GameEvent, Team};
 use net::rounds::{EndReason, Phase};
 
 /// A side as Godot names it: "t" (the Strays), "ct" (the Bureau), "" (watching).
-fn side(t: Team) -> &'static str {
+pub(crate) fn side(t: Team) -> &'static str {
     match t {
         Team::T => "t",
         Team::Ct => "ct",
@@ -133,6 +121,10 @@ impl Session {
         let Some(c) = &mut self.client else { return out };
         let me = c.id();
         let events = c.take_events();
+        // the assistant hears them too (`talk::assistant_lines`); kept short if nobody asks
+        self.brain_events.extend(events.iter().cloned());
+        let excess = self.brain_events.len().saturating_sub(256);
+        self.brain_events.drain(..excess);
         let name = |id: u8| c.scores.iter().find(|s| s.id == id).map_or(String::new(), |s| s.name.clone());
         let team = |id: u8| c.scores.iter().find(|s| s.id == id).map_or("", |s| side(s.team));
         for e in events {
@@ -239,29 +231,6 @@ impl Session {
         if let Some(c) = &mut self.client {
             c.undo_buys();
         }
-    }
-
-    /// Who you hear now: `id`, `name`, `team`, `channel` ("team" or "near"), `muffled` (a
-    /// wall between you), `level` (0 to 1, near voice fades with distance). Until this
-    /// client plays voice, the sound itself is dropped here.
-    #[func]
-    fn voices(&mut self) -> Array<VarDictionary> {
-        let Some(c) = &mut self.client else { return Array::new() };
-        let now = Instant::now();
-        for h in c.take_voice() {
-            self.heard.insert(h.from, Heard { channel: h.channel, muffled: h.muffled, gain: h.gain, at: now });
-        }
-        self.heard.retain(|_, h| now - h.at < HEARD_FOR);
-        let mut out = Array::new();
-        for (id, h) in &self.heard {
-            let Some(s) = c.scores.iter().find(|s| s.id == *id) else { continue };
-            let channel = if h.channel == VoiceChannel::Team { "team" } else { "near" };
-            out.push(&vdict! {
-                "id" => *id as i64, "name" => s.name.as_str(), "team" => side(s.team), "channel" => channel,
-                "muffled" => h.muffled, "level" => h.gain as f32 / 255.0,
-            });
-        }
-        out
     }
 
     /// Grenades in the air (`kind`: he, flash, smoke; `at`) and smoke clouds (`at`, the

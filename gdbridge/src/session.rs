@@ -32,8 +32,13 @@ pub struct Session {
     /// The longest defuse time left seen since a defuse began: the client only hears what's
     /// left, and the HUD's ring needs the whole length (`game::hud`).
     pub(crate) defuse_seen: std::cell::Cell<f32>,
-    /// Who we heard last and when, by player id (`game::voices`).
-    pub(crate) heard: std::collections::HashMap<u8, crate::game::Heard>,
+    /// Voice chat (`talk`): made on the first frame of a match (it opens the sound card).
+    pub(crate) voice: Option<client_core::voice::Voice>,
+    /// Your assistant, and the game's events it hasn't heard yet (`talk::assistant_lines`).
+    pub(crate) brain: client_core::assistant::Brain,
+    pub(crate) brain_events: Vec<net::protocol::GameEvent>,
+    /// When this session began (the assistant's clock).
+    pub(crate) started: std::time::Instant,
     /// In a practice match: the bots' names (they join like players, so the server doesn't
     /// flag them; `game::players` does).
     pub(crate) bots: &'static [&'static str],
@@ -51,7 +56,10 @@ impl IRefCounted for Session {
             prev_eye: [0.0; 3],
             prev_punch: [0.0; 3],
             defuse_seen: Default::default(),
-            heard: Default::default(),
+            voice: None,
+            brain: client_core::assistant::Brain::new(),
+            brain_events: Vec::new(),
+            started: std::time::Instant::now(),
             bots: &[],
             base,
         }
@@ -354,7 +362,12 @@ impl Session {
         }
         self.client = None;
         self.bots = &[];
-        self.heard.clear();
+        // a new match: the assistant starts over, and per-match mutes clear
+        self.brain.new_match();
+        self.brain_events.clear();
+        if let Some(v) = &mut self.voice {
+            v.settings_mut().new_match();
+        }
         if let Some(s) = self.stop.take() {
             s.store(true, Ordering::Relaxed);
         }

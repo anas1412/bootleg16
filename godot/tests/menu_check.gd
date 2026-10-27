@@ -58,7 +58,7 @@ func _initialize() -> void:
 	for f in 30:
 		await process_frame
 	_check(current_scene.name == "Main", "Deploy starts practice")
-	var pause: Node = current_scene.find_children("*", "CanvasLayer", false, false).filter(func(n): return n.has_signal("leave")).front()
+	var pause: Node = current_scene.find_children("*", "CanvasLayer", false, false).filter(func(n): return n.has_signal("leave") and n.has_method("open")).front()
 	pause.open()
 	_check(pause.is_open() and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "Esc pauses and frees the mouse")
 	pause.leave.emit()
