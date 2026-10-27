@@ -71,13 +71,19 @@ func _init(title := "") -> void:
 	row.add_child(name_label)
 	add_child(row)
 	mouse_filter = Control.MOUSE_FILTER_PASS
-	mouse_entered.connect(func(): _light(1.0))
+	mouse_entered.connect(func():
+		_light(1.0)
+		Motion.glitch(self))
 	mouse_exited.connect(func(): _light(0.0))
 
-## Sets a stepper's choice without reporting it (used when a preset changes many rows).
+## Sets a stepper's choice without reporting it (a preset changing many rows); a value that
+## really changed glitches, as any change of state does.
 func set_index(i: int) -> void:
+	if i == _index:
+		return
 	_index = i
 	_show()
+	Motion.glitch(_value_label)
 
 func set_value(v: float) -> void:
 	_slider.set_value_no_signal(v)
@@ -99,6 +105,7 @@ func _arrow(glyph: String, dir: int) -> Button:
 	b.add_theme_color_override("font_color", Tokens.TEXT_DIM)
 	b.add_theme_color_override("font_hover_color", Tokens.YOU)
 	b.pressed.connect(func(): _step(dir))
+	b.mouse_entered.connect(func(): Motion.glitch(b))
 	return b
 
 func _step(dir: int) -> void:

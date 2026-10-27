@@ -4,6 +4,8 @@ class_name Motion
 extends RefCounted
 
 const GLITCH := preload("res://ui/glitch.gdshader")
+## How far past a control's sides a glitch reaches (its tears move up to 10).
+const REACH := 16
 
 static func tween(node: Node) -> Tween:
 	return node.create_tween().set_trans(Tokens.EASE_TRANS).set_ease(Tokens.EASE_TYPE)
@@ -50,15 +52,25 @@ static func glitch(c: Control) -> void:
 	over.material = ShaderMaterial.new()
 	over.material.shader = GLITCH
 	over.material.set_shader_parameter("split_px", float(Tokens.GLITCH_SPLIT))
+	over.material.set_shader_parameter("left_color", Tokens.BUREAU)
+	over.material.set_shader_parameter("right_color", Tokens.STRAYS)
+	over.material.set_shader_parameter("seed", randf() * 100.0)  # a different tear each time
 	over.material.set_shader_parameter("amount", 1.0)
+	# a fresh copy of the screen under it, taken right here in draw order: Godot otherwise
+	# copies once for the first reader in a frame, and a second glitch would read a copy
+	# taken before its own control was drawn (and paint it out)
+	var copy := BackBufferCopy.new()
+	copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	c.add_child(copy)
 	c.add_child(over)
 	over.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# a little wider than the control, so split edges aren't cut off
-	over.offset_left = -Tokens.GLITCH_SPLIT
-	over.offset_right = Tokens.GLITCH_SPLIT
+	# wider than the control by the furthest a tear moves, so ghosts and tears aren't cut off
+	over.offset_left = -REACH
+	over.offset_right = REACH
 	c.set_meta("glitching", true)
 	var t := c.create_tween()
 	t.tween_property(over.material, "shader_parameter/amount", 0.0, Tokens.GLITCH)
 	t.tween_callback(func():
 		over.queue_free()
+		copy.queue_free()
 		c.remove_meta("glitching"))

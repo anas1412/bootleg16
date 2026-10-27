@@ -49,7 +49,10 @@ func add_tab(name_text: String, kana: String) -> void:
 	fit.call()
 	var i := _row.get_child_count()
 	b.pressed.connect(func(): pick(i))
-	b.mouse_entered.connect(func(): if i != current: _tint(b, Tokens.TEXT))
+	b.mouse_entered.connect(func():
+		if i != current:
+			_tint(b, Tokens.TEXT)
+			Motion.glitch(b))
 	b.mouse_exited.connect(func(): if i != current: _tint(b, Tokens.TEXT_DIM))
 	b.set_meta("title", title)
 	b.set_meta("sub", sub)
