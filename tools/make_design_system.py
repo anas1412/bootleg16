@@ -15,7 +15,7 @@ T = json.loads((SYSTEM / "tokens.json").read_text())
 
 CSS_FONT = {  # family var, weight, extra css
     "display": ("var(--f-display)", 400, ""),
-    "title": ("var(--f-title)", 900, "font-stretch:62.5%;font-variation-settings:'wdth' 62.5;"),
+    "title": ("var(--f-title)", 900, ""),
     "ui": ("var(--f-ui)", 600, ""),
     "ui_bold": ("var(--f-ui)", 700, ""),
     "mono": ("var(--f-mono)", 500, ""),
