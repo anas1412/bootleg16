@@ -1,11 +1,11 @@
 ## Headless check that the GDExtension loads and a practice session works: it connects,
-## spawns, walks forward and falls onto the floor box. Run:
+## spawns on the test arena, walks forward and stays on the floor. Run:
 ##   godot --headless --path godot --script res://tests/session_check.gd
 extends SceneTree
 
 func _initialize() -> void:
 	var s := Session.new()
-	if not s.start_practice(TestRoom.BOXES, PackedVector3Array(TestRoom.PLAYER_SPAWNS), PackedVector3Array(TestRoom.DUMMY_SPAWNS), 2):
+	if not s.start_practice(FileAccess.get_file_as_string("res://maps/test_arena.bmap"), 2):
 		_fail("practice didn't start")
 		return
 	var dt := 1.0 / s.tick_rate()

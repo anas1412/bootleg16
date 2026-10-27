@@ -109,6 +109,13 @@ impl Zones {
         sites.into_iter().map(|(c, _)| c).collect()
     }
 
+    /// A map's zones from our map file: buy boxes (per side, or both), spawns, bomb sites with
+    /// their letters, the bomb's radius.
+    pub fn from_parts(buy: Vec<(Option<Side>, Vec3, Vec3)>, spawns: Vec<(Side, Vec3)>, sites: Vec<((Vec3, Vec3), Option<char>)>, bomb_radius: f32) -> Zones {
+        let (bomb_sites, site_names) = sites.into_iter().unzip();
+        Zones { buy, spawn_buy: spawns, bomb_sites, site_names, bomb_radius }
+    }
+
     /// Just spawn points (a map that isn't a BSP, until it carries zones of its own): you buy
     /// near your own side's, as CS does on maps without buy zones.
     pub fn with_spawns(t: Vec<Vec3>, ct: Vec<Vec3>) -> Zones {

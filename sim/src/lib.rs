@@ -9,6 +9,7 @@ pub mod crowd;
 pub mod doors;
 pub mod grenades;
 pub mod hitbox;
+pub mod mapfile;
 pub mod player;
 pub mod pmove;
 pub mod weapons;

@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 goldsrc = { path = "../goldsrc" }
 serde = { version = "1", features = ["derive"] }
+# Our map files (`.bmap`) are JSON.
+serde_json = "1"

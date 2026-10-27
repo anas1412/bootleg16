@@ -1,7 +1,8 @@
 //! Dedicated server. Usage: `server [map] [port] [--config server.cfg] [--give ak47,awp] [--tick 64]`
 //! (defaults: de_dust2, 27015). Match rules come from the config file (see `config/server.cfg`);
 //! without `--config`, `server.cfg` in the current directory is used if it exists.
-//! Reads the map from the CS 1.6 install in `BOOTLEG16_DIR` (default: Steam's).
+//! Reads the map from `maps/<map>.bmap` (ours, built in Godot) or `maps/<map>.bsp` under the
+//! game data folder (`BOOTLEG16_DIR`).
 //! `--give` hands every player extra weapons on spawn.
 //! `--practice <dummies>` runs the practice room (infinite ammo, quick respawn, standing dummies).
 //! There are no bots: matches are people only.
@@ -55,11 +56,19 @@ fn main() {
     let map = positional.first().cloned().unwrap_or_else(|| "de_dust2".into());
     let port: u16 = positional.get(1).and_then(|p| p.parse().ok()).unwrap_or(net::protocol::DEFAULT_PORT);
     let dir = net::gamefiles::data_dir();
-    let path = dir.join("maps").join(format!("{map}.bsp"));
-    let bsp = goldsrc::bsp::Bsp::load(&path).unwrap_or_else(|e| panic!("loading {}: {e}", path.display()));
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let assets = net::server::Assets::load(&dir).unwrap_or_else(|e| panic!("loading game files: {e}"));
-    let mut server = net::Server::new(addr, &map, &bsp, assets).unwrap_or_else(|e| panic!("binding {addr}: {e}"));
+    // our own map format (built in Godot) if there is one, else a GoldSrc BSP
+    let ours = dir.join("maps").join(format!("{map}.bmap"));
+    let mut server = if ours.exists() {
+        let (file, hash) = sim::mapfile::MapFile::load(&ours).unwrap_or_else(|e| panic!("loading {}: {e}", ours.display()));
+        net::Server::with_world(addr, &map, file.world(), hash, assets)
+    } else {
+        let path = dir.join("maps").join(format!("{map}.bsp"));
+        let bsp = goldsrc::bsp::Bsp::load(&path).unwrap_or_else(|e| panic!("loading {}: {e}", path.display()));
+        net::Server::new(addr, &map, &bsp, assets)
+    }
+    .unwrap_or_else(|e| panic!("binding {addr}: {e}"));
     server.set_game_dir(dir.clone());
     server.set_give(give);
     let config = config.or_else(|| Some(PathBuf::from("server.cfg")).filter(|p| p.exists()));

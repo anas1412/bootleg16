@@ -6,6 +6,7 @@ use godot::prelude::*;
 pub const METRES: f32 = 0.0254;
 
 /// A Godot position (metres, y up) in GoldSrc units (z up).
+#[cfg(test)]
 pub fn to_sim(v: Vector3) -> [f32; 3] {
     [v.x / METRES, -v.z / METRES, v.y / METRES]
 }
@@ -13,12 +14,6 @@ pub fn to_sim(v: Vector3) -> [f32; 3] {
 /// A GoldSrc position in Godot metres.
 pub fn to_godot(v: [f32; 3]) -> Vector3 {
     Vector3::new(v[0] * METRES, v[2] * METRES, -v[1] * METRES)
-}
-
-/// A Godot box as GoldSrc mins and maxs.
-pub fn box_to_sim(b: Aabb) -> ([f32; 3], [f32; 3]) {
-    let (a, c) = (to_sim(b.position), to_sim(b.position + b.size));
-    (std::array::from_fn(|i| a[i].min(c[i])), std::array::from_fn(|i| a[i].max(c[i])))
 }
 
 /// A Godot camera's yaw and pitch (radians; yaw 0 looks down -z, pitch up is positive) as

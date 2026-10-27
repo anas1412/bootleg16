@@ -1,11 +1,10 @@
 //! A practice session: our own game server on this machine (as the Bevy client's Solo
 //! practice) on a box-built map, and the client playing on it with prediction. Godot calls
 //! `tick` at the server's rate from `_physics_process` and reads where to put the camera.
-use crate::units::{box_to_sim, to_godot, to_sim, view_to_sim, yaw_to_godot};
+use crate::units::{to_godot, view_to_sim, yaw_to_godot};
 use client_core::view::{punch_at, vertical_fov, View};
 use godot::prelude::*;
 use net::protocol::Team;
-use sim::collision::World;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -40,23 +39,22 @@ impl IRefCounted for Session {
     }
 }
 
-/// The world both sides collide with: these boxes, spawns at these points.
-fn world(boxes: &Array<Aabb>, t: &PackedVector3Array, ct: &PackedVector3Array) -> World {
-    let mut w = World::from_boxes(boxes.iter_shared().map(box_to_sim).collect());
-    let points = |a: &PackedVector3Array| a.as_slice().iter().map(|p| to_sim(*p)).collect();
-    w.zones = sim::zones::Zones::with_spawns(points(t), points(ct));
-    w
-}
-
 #[godot_api]
 impl Session {
-    /// Start a practice server on this machine and join it as a terrorist, with `dummies`
-    /// standing targets. `boxes` are the map's solid boxes (Godot metres), spawns where
-    /// players start (a point at about waist height). False (and an error in the log) if it
-    /// can't start.
+    /// Start a practice server on this machine on a map (the text of its `.bmap`, written by
+    /// `tools/export_map.gd`) and join it as a terrorist, with `dummies` standing targets.
+    /// False (and an error in the log) if it can't start.
     #[func]
-    fn start_practice(&mut self, boxes: Array<Aabb>, t_spawns: PackedVector3Array, ct_spawns: PackedVector3Array, dummies: i64) -> bool {
+    fn start_practice(&mut self, map: GString, dummies: i64) -> bool {
         self.stop();
+        let text = map.to_string();
+        let file = match sim::mapfile::MapFile::parse(&text) {
+            Ok(m) => m,
+            Err(e) => {
+                godot_error!("bootleg16: {e}");
+                return false;
+            }
+        };
         let assets = match net::server::Assets::load(&net::gamefiles::data_dir()) {
             Ok(a) => a,
             Err(e) => {
@@ -64,8 +62,8 @@ impl Session {
                 return false;
             }
         };
-        let w = world(&boxes, &t_spawns, &ct_spawns);
-        let mut server = match net::Server::with_world(([127, 0, 0, 1], 0).into(), "test_room", w, 0, assets) {
+        let hash = sim::mapfile::hash(text.as_bytes());
+        let mut server = match net::Server::with_world(([127, 0, 0, 1], 0).into(), &file.name, file.world(), hash, assets) {
             Ok(s) => s,
             Err(e) => {
                 godot_error!("bootleg16: the practice server didn't start ({e})");
@@ -77,7 +75,7 @@ impl Session {
         let stop = Arc::new(AtomicBool::new(false));
         let s = stop.clone();
         std::thread::spawn(move || server.run_until(&s));
-        match net::Client::connect(addr, "player", world(&boxes, &t_spawns, &ct_spawns)) {
+        match net::Client::connect(addr, "player", file.world()) {
             Ok(c) => self.client = Some(c),
             Err(e) => {
                 godot_error!("bootleg16: can't open a connection ({e})");
