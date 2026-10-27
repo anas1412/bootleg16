@@ -11,6 +11,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 [autoload]
 
 Settings="*res://scripts/settings.gd"
+LobbyLink="*res://scripts/lobby_link.gd"
 
 [display]
 

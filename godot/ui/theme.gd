@@ -75,6 +75,27 @@ static func theme() -> Theme:
 	th.set_stylebox("grabber_area_highlight", "HSlider", filled)
 	th.set_icon("grabber", "HSlider", _square(Tokens.SPACE_M, Tokens.TEXT))
 	th.set_icon("grabber_highlight", "HSlider", _square(Tokens.SPACE_M, Tokens.YOU))
+	# text fields: a resting 2 frame that brightens while you type, an amber caret
+	var field := StyleBoxFlat.new()
+	field.bg_color = Color.TRANSPARENT
+	field.border_color = Tokens.LINE
+	field.set_border_width_all(Tokens.STROKE_HAIR)
+	field.content_margin_left = Tokens.SPACE_M
+	field.content_margin_right = Tokens.SPACE_M
+	field.content_margin_top = Tokens.SPACE_S
+	field.content_margin_bottom = Tokens.SPACE_S
+	var field_on := field.duplicate()
+	field_on.border_color = Tokens.TEXT_DIM
+	th.set_stylebox("normal", "LineEdit", field)
+	th.set_stylebox("focus", "LineEdit", field_on)
+	th.set_stylebox("read_only", "LineEdit", field)
+	th.set_font("font", "LineEdit", font("body"))
+	th.set_font_size("font_size", "LineEdit", size("body"))
+	th.set_color("font_color", "LineEdit", Tokens.TEXT)
+	th.set_color("font_placeholder_color", "LineEdit", Tokens.TEXT_OFF)
+	th.set_color("caret_color", "LineEdit", Tokens.YOU)
+	th.set_color("selection_color", "LineEdit", Color(Tokens.YOU, 0.3))
+
 	# scrollbars: a 2 wide line, a dim bar you can grab, brighter under the pointer
 	var bar := StyleBoxFlat.new()
 	bar.bg_color = Tokens.LINE

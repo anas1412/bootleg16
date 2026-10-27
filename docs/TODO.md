@@ -251,5 +251,8 @@ Now: one server box, the game server as a systemd service. Only when we run seve
 - [ ] P0: Windows export needs `gdbridge.dll` built on Windows (CI, P6)
 - [x] P1: map format (.bmap: convex brushes, glass, sky, water, ladders, zones, breakables, doors) made in Godot (`godot/tools/export_map.gd`), server, bots and client on it; the network tests play on our test arena
 - [ ] P1 leftovers: buttons and triggers in .bmap; convex shapes other than boxes in the exporter; the BSP format tests (`sim/tests/maps.rs`, nuke glass) go with the BSP loader in P6
+- [x] P2: identity marks, design system (`design/system/tokens.json` -> `godot/ui/tokens.gd` + the page), Godot menu (Play, Settings with graphics presets), pause, lobby connection (`Lobby` class + `LobbyLink`: party, casual queue, custom, codes, invites, ready check, rejoin)
+- [ ] Matches can't start for Godot players yet: `MAP_POOL` (net/src/config.rs) is Valve's maps and the Godot game only has `test_arena.bmap`, so the lobby finds no map everyone has. Moves to our own maps in P3 (de_datacenter)
+- [ ] Godot: player name setting (until Steam names), Steam in the Godot client (overlay invites, presence, auth ticket), first-launch graphics preset from `scripts/bench.gd`
 - [ ] P4: tests still load Valve's player model (hitboxes) and `materials.txt`
 - [ ] Factions bound to characters (user, 2026-10-27): team = your character's faction (Bureau defends, Strays attack), no halftime swap, no knife round for sides, no team select; queue parties on one faction, custom games across factions; per-map side balance from bot-match win rates

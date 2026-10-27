@@ -1,6 +1,6 @@
-//! A practice session: our own game server on this machine (as the Bevy client's Solo
-//! practice) on a box-built map, and the client playing on it with prediction. Godot calls
-//! `tick` at the server's rate from `_physics_process` and reads where to put the camera.
+//! A game session: practice on our own server on this machine (as the Bevy client's Solo
+//! practice), or a match the lobby found. The client plays with prediction; Godot calls `tick`
+//! at the server's rate from `_physics_process` and reads where to put the camera.
 use crate::units::{to_godot, view_to_sim, yaw_to_godot};
 use client_core::view::{punch_at, vertical_fov, View};
 use godot::prelude::*;
@@ -87,6 +87,90 @@ impl Session {
         self.joined = false;
         self.view.reset();
         true
+    }
+
+    /// Go to a match the lobby found (`Lobby.take_found`): the server's address, your seat's
+    /// ticket and key. The server names the map once it welcomes us (`map_name`); load that
+    /// map and hand it over with `set_map` before playing. False if the address is bad.
+    #[func]
+    fn connect_match(&mut self, address: GString, ticket: i64, key: PackedByteArray, name: GString) -> bool {
+        self.stop();
+        let Ok(addr) = address.to_string().parse::<std::net::SocketAddr>() else {
+            godot_error!("bootleg16: bad server address {address}");
+            return false;
+        };
+        let Ok(key) = <[u8; 32]>::try_from(key.as_slice()) else {
+            godot_error!("bootleg16: a seat key is 32 bytes");
+            return false;
+        };
+        // no map yet: a floor far below until the server says which map it is
+        match net::Client::connect(addr, &name.to_string(), sim::collision::World::flat_floor(-100_000.0)) {
+            Ok(mut c) => {
+                c.ticket = ticket as u64;
+                c.key = Some(key);
+                self.client = Some(c);
+            }
+            Err(e) => {
+                godot_error!("bootleg16: can't open a connection ({e})");
+                return false;
+            }
+        }
+        // a reserved match puts us on our team itself
+        self.joined = true;
+        self.view.reset();
+        true
+    }
+
+    /// "connecting", "connected", "rejected" (see `reject_reason`) or "" with no session.
+    #[func]
+    fn status(&self) -> GString {
+        match self.client.as_ref().map(|c| &c.status) {
+            Some(net::client::Status::Connecting) => "connecting",
+            Some(net::client::Status::Connected { .. }) => "connected",
+            Some(net::client::Status::Rejected) => "rejected",
+            None => "",
+        }
+        .into()
+    }
+
+    /// Why the server refused us ("" if it didn't).
+    #[func]
+    fn reject_reason(&self) -> GString {
+        GString::from(self.client.as_ref().and_then(|c| c.reject_reason.clone()).unwrap_or_default().as_str())
+    }
+
+    /// The map the server is running ("" until it welcomes us).
+    #[func]
+    fn map_name(&self) -> GString {
+        GString::from(self.client.as_ref().and_then(|c| c.map.clone()).unwrap_or_default().as_str())
+    }
+
+    /// The map the rules collide with: the text of its `.bmap`. False if it isn't the same
+    /// file the server runs (another version of the map: we'd walk through its walls).
+    #[func]
+    fn set_map(&mut self, text: GString) -> bool {
+        let Some(c) = &mut self.client else { return false };
+        let text = text.to_string();
+        if c.map_hash != 0 && sim::mapfile::hash(text.as_bytes()) != c.map_hash {
+            godot_error!("bootleg16: this map isn't the version the server runs");
+            return false;
+        }
+        match sim::mapfile::MapFile::parse(&text) {
+            Ok(file) => {
+                c.world = file.world();
+                true
+            }
+            Err(e) => {
+                godot_error!("bootleg16: {e}");
+                false
+            }
+        }
+    }
+
+    /// The match is over (back to the menu).
+    #[func]
+    fn match_ended(&self) -> bool {
+        self.client.as_ref().is_some_and(|c| c.match_ended)
     }
 
     /// The server has sent us the game at least once.
