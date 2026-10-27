@@ -1,0 +1,311 @@
+<meta charset="utf-8">
+<title>Main Menu Versions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wdth,wght@62.5..100,100..900&family=Noto+Serif+JP:wght@900&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: three versions of the main menu, each a 1920 x 1080 artboard scaled to fit; tabs pick the version, a state switch shows idle, searching and match found. Single dark look (the game's). */
+:root {
+  --bg0: #050608;
+  --bg1: #0c0f13;
+  --bg2: #13181e;
+  --line: rgba(205, 225, 240, 0.12);
+  --line2: rgba(205, 225, 240, 0.28);
+  --tx1: #eef3f7;
+  --tx2: #8f9aa5;
+  --tx3: #545e68;
+  --you: #ffa000;
+  --you-ink: #160c00;
+  --bureau: #49c6ff;
+  --strays: #ff4f8b;
+  --bad: #ff3b3b;
+  --ok: #4fe39a;
+  --title: "Noto Serif Display", "Times New Roman", serif;
+  --jp: "Noto Serif JP", serif;
+  --ui: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --num: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #020304; color: var(--tx1); font-family: var(--ui); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.top { max-width: 1400px; margin: 0 auto 14px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+.top h1 { margin: 0; font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 34px; letter-spacing: .01em; }
+.top p { margin: 0; color: var(--tx2); font-size: 14px; max-width: 60ch; }
+.seg { display: flex; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
+.seg button { font: 600 13px var(--ui); letter-spacing: .12em; text-transform: uppercase; color: var(--tx2); background: none; border: 0; padding: 9px 16px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line2); }
+.seg button[aria-pressed="true"] { background: var(--you); color: var(--you-ink); }
+.seg button:focus-visible { outline: 2px solid var(--you); outline-offset: -2px; }
+.controls { display: flex; gap: 12px; flex-wrap: wrap; }
+.stage { max-width: 1400px; margin: 0 auto; }
+.frame { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--bg0); }
+.board { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; background: var(--bg0); }
+.note { max-width: 1400px; margin: 14px auto 0; color: var(--tx2); font-size: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 10px 28px; }
+.note b { color: var(--tx1); font-weight: 600; }
+
+/* ===== shared parts, at 1080p sizes ===== */
+.abs { position: absolute; }
+.label { font: 600 15px var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--tx2); }
+.jp { font-family: var(--jp); font-weight: 900; letter-spacing: .3em; }
+.num { font-family: var(--num); font-weight: 700; font-variant-numeric: tabular-nums; }
+.mark { display: flex; align-items: flex-end; gap: 14px; }
+.mark .w { font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 64px; line-height: .8; letter-spacing: .01em; }
+.mark .b16 { background: var(--you); color: var(--you-ink); font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 54px; line-height: 1; padding: 0 10px; }
+.mark .jp { font-size: 15px; color: var(--tx2); padding-bottom: 6px; }
+.who { display: flex; align-items: center; gap: 16px; }
+.who .av { width: 64px; height: 64px; border-radius: 4px; background: linear-gradient(160deg, #2a3138, #151a1f); border: 1px solid var(--line2); }
+.who .n { font: 700 24px var(--ui); }
+.who .s { font: 500 16px var(--ui); color: var(--tx2); }
+.who .s .on { color: var(--ok); }
+.btn-main { display: inline-flex; align-items: center; justify-content: center; gap: 18px; border: 2px solid var(--you); color: var(--you); background: rgba(255, 160, 0, .06); border-radius: 4px; font: 700 26px var(--ui); letter-spacing: .22em; text-transform: uppercase; padding: 0 40px; height: 76px; cursor: pointer; transition: background .14s; }
+.btn-main:hover { background: rgba(255, 160, 0, .16); }
+.btn-main .k { font: 600 14px var(--num); color: rgba(255, 160, 0, .7); letter-spacing: .05em; border: 1px solid rgba(255, 160, 0, .5); border-radius: 3px; padding: 2px 8px; }
+.btn-main.cancel { border-color: var(--line2); color: var(--tx1); background: transparent; }
+.btn-main.cancel .k { color: var(--tx2); border-color: var(--line2); }
+.btn-main.accept { background: var(--you); color: var(--you-ink); }
+.btn-main.accept .k { color: var(--you-ink); border-color: rgba(22, 12, 0, .4); }
+
+/* emergency banner (board 1): match found */
+.emer { position: absolute; left: 0; right: 0; top: 300px; height: 360px; background: rgba(18, 4, 4, .96); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 5; }
+.emer .st { position: absolute; left: 0; right: 0; height: 26px; background: repeating-linear-gradient(-45deg, var(--you) 0 18px, transparent 18px 36px); opacity: .85; }
+.emer .st.t { top: 0; } .emer .st.b { bottom: 0; }
+.emer .w { font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 120px; line-height: .8; color: var(--you); }
+.emer .jp { font-size: 20px; color: #ffd28a; }
+.emer .row { display: flex; gap: 40px; align-items: center; font: 600 22px var(--ui); color: var(--tx1); letter-spacing: .1em; }
+.emer .row .num { color: var(--you); font-size: 30px; }
+.emer .acc { display: flex; gap: 6px; }
+.emer .acc i { width: 22px; height: 8px; background: var(--line2); }
+.emer .acc i.y { background: var(--ok); }
+[data-state="found"] .emer { display: flex; }
+[data-state="found"] .dim { opacity: .25; transition: opacity .3s; }
+
+/* signal tune-in (board 6): plays when the board changes */
+.tune-in { animation: tuneIn .32s steps(6, end); }
+@keyframes tuneIn { 0% { clip-path: inset(0 0 70% 0); filter: drop-shadow(-8px 0 0 var(--bureau)) drop-shadow(8px 0 0 var(--strays)); } 40% { clip-path: inset(30% 0 15% 0); filter: drop-shadow(-5px 0 0 var(--bureau)) drop-shadow(5px 0 0 var(--strays)); } 100% { clip-path: inset(0 0 0 0); filter: none; } }
+@media (prefers-reduced-motion: reduce) { .tune-in { animation: none; } }
+
+/* ===== Version A: status deck ===== */
+.A .mark { left: 96px; top: 72px; }
+.A .who { right: 96px; top: 72px; }
+.A .deck { left: 96px; top: 220px; width: 1060px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.A .blk { border: 1px solid var(--line2); border-radius: 4px; padding: 22px 24px 20px; height: 250px; display: flex; flex-direction: column; justify-content: space-between; background: var(--bg1); position: relative; cursor: pointer; transition: border-color .14s, background .14s; }
+.A .blk:hover { border-color: rgba(205, 225, 240, .5); }
+.A .blk .hd { display: flex; justify-content: space-between; align-items: baseline; }
+.A .blk .t { font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 52px; line-height: .9; }
+.A .blk .jp { font-size: 13px; color: var(--tx3); }
+.A .blk .d { font: 500 18px var(--ui); color: var(--tx2); line-height: 1.45; }
+.A .blk .d b { color: var(--tx1); font-weight: 600; }
+.A .blk.on { border-color: var(--you); background: rgba(255, 160, 0, .06); }
+.A .blk.on::before { content: ""; position: absolute; left: -1px; top: 18px; bottom: 18px; width: 4px; background: var(--you); }
+.A .blk.on .t { color: var(--you); }
+.A .side { right: 96px; top: 220px; width: 560px; height: 516px; border: 1px solid var(--line); border-radius: 4px; display: grid; grid-template-rows: auto 1fr; background: var(--bg1); }
+.A .side .tabs { display: grid; grid-template-columns: 1fr; border-bottom: 1px solid var(--line); }
+.A .side .tabs.one .sr { background: rgba(255, 79, 139, .07); }
+.A .side .meta .others { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 16px; }
+.A .side .meta .bu-t { color: var(--bureau); font-weight: 600; }
+.A .side .tabs div { padding: 16px 20px; display: flex; flex-direction: column; gap: 2px; }
+.A .side .tabs div + div { border-left: 1px solid var(--line); }
+.A .side .tabs .nm { font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 40px; line-height: .9; }
+.A .side .tabs .bu .nm { color: var(--bureau); } .A .side .tabs .sr .nm { color: var(--strays); }
+.A .side .tabs .k { font: 600 13px var(--ui); letter-spacing: .18em; color: var(--tx2); }
+.A .side .look { position: relative; padding: 22px 24px; display: flex; gap: 22px; }
+.A .side .fig { width: 190px; height: 340px; border-radius: 4px; background: linear-gradient(180deg, #1b2229, #0e1216); border: 1px solid var(--line); position: relative; overflow: hidden; }
+.A .side .fig::after { content: ""; position: absolute; left: 50%; top: 36px; width: 70px; height: 70px; margin-left: -35px; border-radius: 50%; background: #232b33; box-shadow: 0 150px 0 40px #232b33; }
+.A .side .meta { display: flex; flex-direction: column; gap: 10px; font: 500 18px var(--ui); color: var(--tx2); }
+.A .side .meta .nm { font: 700 30px var(--ui); color: var(--tx1); }
+.A .side .meta b { color: var(--tx1); font-weight: 600; }
+.A .party { left: 96px; top: 812px; display: flex; gap: 10px; align-items: center; }
+.A .party .slot { width: 210px; height: 64px; border: 1px solid var(--line2); border-radius: 4px; display: flex; align-items: center; gap: 12px; padding: 0 14px; font: 600 18px var(--ui); }
+.A .party .slot i { width: 36px; height: 36px; border-radius: 3px; background: #1d242b; }
+.A .party .slot.empty { border-style: dashed; color: var(--tx3); font-weight: 500; }
+.A .party .slot.lead { border-color: var(--you); }
+.A .action { right: 96px; top: 806px; display: flex; gap: 28px; align-items: center; }
+.A .count { display: none; flex-direction: column; align-items: flex-end; gap: 4px; }
+.A .count .t { font-size: 56px; line-height: 1; color: var(--you); }
+.A .count .r { width: 300px; height: 10px; background: repeating-linear-gradient(90deg, var(--line2) 0 1px, transparent 1px 10px); position: relative; }
+.A .count .r i { position: absolute; left: 0; top: 0; bottom: 0; width: 60%; background: rgba(255, 160, 0, .45); }
+.A .count .l { font: 600 14px var(--ui); letter-spacing: .18em; color: var(--tx2); }
+[data-state="searching"] .A .count { display: flex; }
+.A .quit { left: 96px; bottom: 56px; font: 600 15px var(--ui); letter-spacing: .2em; color: var(--tx3); }
+.A .net { right: 96px; bottom: 56px; font: 500 15px var(--num); color: var(--tx3); }
+
+/* ===== Version B: broadcast ===== */
+.B .mark { left: 96px; bottom: 80px; }
+.B .who { right: 96px; top: 72px; }
+.B .list { left: 96px; top: 150px; display: flex; flex-direction: column; gap: 4px; }
+.B .it { display: flex; align-items: baseline; gap: 22px; padding-left: 26px; position: relative; cursor: pointer; }
+.B .it .w { font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 96px; line-height: .98; color: var(--tx3); transition: color .14s; }
+.B .it .jp { font-size: 16px; color: var(--tx3); }
+.B .it:hover .w { color: var(--tx2); }
+.B .it.on .w { color: var(--tx1); }
+.B .it.on .jp { color: var(--you); }
+.B .it.on::before { content: ""; position: absolute; left: 0; top: 18px; bottom: 14px; width: 6px; background: var(--you); }
+.B .read { left: 900px; right: 96px; top: 190px; bottom: 210px; border-left: 1px solid var(--line2); padding-left: 56px; display: flex; flex-direction: column; gap: 30px; }
+.B .read .lab { display: flex; justify-content: space-between; align-items: baseline; }
+.B .read h2 { margin: 0; font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 64px; line-height: .9; }
+.B .read .rows { display: grid; grid-template-columns: 220px 1fr; row-gap: 14px; font: 500 22px var(--ui); color: var(--tx2); }
+.B .read .rows b { color: var(--tx1); font-weight: 600; }
+.B .read .rows .num { color: var(--tx1); font-size: 22px; }
+.B .read .slots { display: flex; gap: 10px; }
+.B .read .slots span { width: 84px; height: 84px; border-radius: 4px; border: 1px solid var(--line2); background: #151b21; display: grid; place-items: center; font: 600 15px var(--ui); color: var(--tx3); }
+.B .read .slots span.f { border-color: var(--you); color: var(--tx1); background: #1d242b; }
+.B .read .slots span.e { border-style: dashed; }
+.B .go { right: 96px; bottom: 96px; display: flex; align-items: center; gap: 30px; }
+.B .go .hexwrap { position: absolute; right: -60px; bottom: -60px; width: 720px; height: 260px; pointer-events: none; display: none; }
+[data-state="searching"] .B .go .hexwrap { display: block; }
+.B .go .count { display: none; flex-direction: column; align-items: flex-end; }
+.B .go .count .t { font-size: 52px; line-height: 1; color: var(--you); }
+.B .go .count .l { font: 600 14px var(--ui); letter-spacing: .18em; color: var(--tx2); }
+[data-state="searching"] .B .go .count { display: flex; }
+
+/* ===== Version C: ring ===== */
+.C .mark { left: 96px; top: 72px; }
+.C .who { right: 96px; top: 72px; }
+.C .ringwrap { left: 50%; top: 520px; width: 520px; height: 520px; margin: -260px 0 0 -260px; display: grid; place-items: center; cursor: pointer; }
+.C .ringwrap svg { position: absolute; inset: 0; }
+.C .ringwrap .in { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; position: relative; }
+.C .ringwrap .in .w { font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 84px; line-height: .85; color: var(--you); }
+.C .ringwrap .in .s { font: 600 16px var(--ui); letter-spacing: .2em; color: var(--tx2); text-transform: uppercase; }
+.C .ringwrap .in .t { font-size: 64px; color: var(--tx1); line-height: 1; display: none; }
+[data-state="searching"] .C .ringwrap .in .t { display: block; }
+[data-state="searching"] .C .ringwrap .in .w { font-size: 40px; }
+.C .hexwrap { left: 50%; top: 520px; width: 1100px; height: 700px; margin: -350px 0 0 -550px; pointer-events: none; display: none; }
+[data-state="found"] .C .hexwrap, [data-state="searching"] .C .hexwrap { display: block; }
+.C .sides { left: 96px; top: 330px; width: 380px; display: flex; flex-direction: column; gap: 14px; }
+.C .sides .p { border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px; background: var(--bg1); display: flex; flex-direction: column; gap: 6px; }
+.C .sides .p .k { font: 600 13px var(--ui); letter-spacing: .18em; color: var(--tx2); }
+.C .sides .p .v { font: 600 22px var(--ui); }
+.C .sides .p .v .num { font-size: 22px; }
+.C .sides .p.you { border-color: var(--you); }
+.C .info { right: 96px; top: 330px; width: 380px; display: flex; flex-direction: column; gap: 14px; }
+.C .nav { left: 96px; right: 96px; bottom: 72px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
+.C .nav .n { border: 1px solid var(--line2); border-radius: 4px; height: 92px; padding: 12px 16px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: border-color .14s; }
+.C .nav .n:hover { border-color: rgba(205, 225, 240, .5); }
+.C .nav .n .t { font-family: var(--title); font-stretch: 62.5%; font-weight: 900; font-size: 34px; line-height: .9; }
+.C .nav .n .d { font: 500 14px var(--ui); color: var(--tx2); }
+.C .nav .n.on { border-color: var(--you); background: rgba(255, 160, 0, .06); }
+.C .nav .n.on .t { color: var(--you); }
+</style>
+
+<div class="top">
+  <div>
+    <h1>Main menu, three versions</h1>
+    <p>From your board picks. Same real information in all three: your party, what each page is set to, matchmaking. Switch the state to see searching and a found match.</p>
+  </div>
+  <div class="controls">
+    <div class="seg" id="ver" role="group" aria-label="Version">
+      <button type="button" id="v-a" data-v="A" aria-pressed="true">A · Status deck</button>
+      <button type="button" id="v-b" data-v="B" aria-pressed="false">B · Broadcast</button>
+      <button type="button" id="v-c" data-v="C" aria-pressed="false">C · Ring</button>
+    </div>
+    <div class="seg" id="st" role="group" aria-label="State">
+      <button type="button" id="s-idle" data-s="idle" aria-pressed="true">Idle</button>
+      <button type="button" id="s-search" data-s="searching" aria-pressed="false">Searching</button>
+      <button type="button" id="s-found" data-s="found" aria-pressed="false">Match found</button>
+    </div>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="frame" id="frame"><div class="board" id="board" data-state="idle"></div></div>
+</div>
+
+<div class="note" id="note"></div>
+
+<script>
+const mark = `<div class="mark abs"><span class="w">BOOTLEG</span><span class="b16">16</span><span class="jp">ブートレグ</span></div>`;
+const who = `<div class="who abs"><div><div class="n">Anas</div><div class="s"><span class="on">online</span> · party KX7-42Q</div></div><div class="av"></div></div>`;
+const emer = `<div class="emer"><div class="st t"></div><div class="w">MATCH FOUND</div><div class="jp">試合発見</div><div class="row"><span>CASUAL · DE_DATACENTER · YOU ATTACK</span><span class="num" id="acc-t">0:18</span><span class="acc"><i class="y"></i><i class="y"></i><i class="y"></i><i class="y"></i><i class="y"></i><i class="y"></i><i></i><i></i><i></i><i></i></span><span>6 / 10 ready</span></div><button class="btn-main accept">Accept<span class="k">ENTER</span></button><div class="st b"></div></div>`;
+const button = s => s === "searching" ? `<button class="btn-main cancel">Cancel<span class="k">ESC</span></button>` : `<button class="btn-main">Find match<span class="k">ENTER</span></button>`;
+
+const versions = {
+  A: s => `<div class="A">${mark}${who}
+    <div class="deck abs dim">
+      <div class="blk on"><div class="hd"><span class="t">PLAY</span><span class="jp">プレイ</span></div><div class="d"><b>Casual</b> · party 2 / 5 · <span style="color:var(--strays)">Strays</span><br>EU · <span class="num">42</span> ms</div></div>
+      <div class="blk"><div class="hd"><span class="t">PRACTICE</span><span class="jp">練習</span></div><div class="d">Test arena · 3 dummies<br>or deathmatch, 14 online</div></div>
+      <div class="blk"><div class="hd"><span class="t">HOST</span><span class="jp">ホスト</span></div><div class="d">Off<br>port 27015</div></div>
+      <div class="blk"><div class="hd"><span class="t">LOCKER</span><span class="jp">ロッカー</span></div><div class="d"><b>Vera</b> · 3 items on<br>gloves, ring, watch</div></div>
+      <div class="blk"><div class="hd"><span class="t">SETTINGS</span><span class="jp">設定</span></div><div class="d"><b>High</b> preset<br><span class="num">180</span> fps · mailbox</div></div>
+      <div class="blk"><div class="hd"><span class="t">VOICE</span><span class="jp">音声</span></div><div class="d">Push to talk · <b>V</b><br>mic: USB headset</div></div>
+    </div>
+    <div class="side abs dim"><div class="tabs one"><div class="sr"><span class="k">YOUR FACTION · ATTACK</span><span class="nm">Strays</span></div></div>
+      <div class="look"><div class="fig"></div><div class="meta"><span class="nm">Vera</span><span>Plants the bomb, every round</span><span>Wearing <b>3 items</b></span><span class="others">Your other characters<br><b>Mei</b> · <span class="bu-t">Bureau</span></span></div></div></div>
+    <div class="party abs dim"><div class="slot lead"><i></i>Anas · Vera</div><div class="slot"><i></i>Nadia · Kiki</div><div class="slot empty">invite</div><div class="slot empty">invite</div><div class="slot empty">invite</div></div>
+    <div class="action abs dim"><div class="count"><span class="t num" id="q-t">0:42</span><div class="r"><i></i></div><span class="l">IN QUEUE · USUALLY 1:10</span></div>${button(s)}</div>
+    <div class="quit abs">QUIT · ALT+F4</div><div class="net abs">EU 42 ms · 180 fps</div>${emer}</div>`,
+  B: s => `<div class="B">${mark}${who}
+    <div class="list abs dim">
+      ${[["PLAY", "プレイ", 1], ["PRACTICE", "練習"], ["HOST", "ホスト"], ["LOCKER", "ロッカー"], ["SETTINGS", "設定"], ["VOICE", "音声"], ["QUIT", "終了"]].map(([w, j, on]) => `<div class="it${on ? " on" : ""}"><span class="w">${w}</span><span class="jp">${j}</span></div>`).join("")}
+    </div>
+    <div class="read abs dim"><div class="lab"><h2>Play</h2><span class="label">casual queue</span></div>
+      <div class="slots"><span class="f">Anas</span><span class="f">Nadia</span><span class="e">+</span><span class="e">+</span><span class="e">+</span></div>
+      <div class="rows"><span>Party</span><b>2 of 5 · code KX7-42Q</b><span>Faction</span><b style="color:var(--strays)">Strays · you attack</b><span>Mode</span><b>Casual 5 v 5</b><span>Region</span><b>EU · <span class="num">42</span> ms</b><span>Maps</span><b>de_datacenter, de_reactor</b></div></div>
+    <div class="go abs dim"><div class="hexwrap"><canvas class="hex" width="720" height="260"></canvas></div><div class="count"><span class="t num">0:42</span><span class="l">IN QUEUE · USUALLY 1:10</span></div>${button(s)}</div>
+    ${emer}</div>`,
+  C: s => `<div class="C">${mark}${who}
+    <div class="hexwrap abs"><canvas class="hex" width="1100" height="700"></canvas></div>
+    <div class="sides abs dim"><div class="p you"><span class="k">YOUR PARTY · 2 / 5</span><span class="v">Anas, Nadia</span></div><div class="p"><span class="k">YOU PLAY · ATTACK</span><span class="v">Vera · <span style="color:var(--strays)">Strays</span></span></div><div class="p"><span class="k">MODE</span><span class="v">Casual 5 v 5</span></div></div>
+    <div class="ringwrap abs dim"><svg viewBox="0 0 520 520"><circle cx="260" cy="260" r="236" fill="none" stroke="rgba(205,225,240,.12)" stroke-width="10"/><circle id="arc" cx="260" cy="260" r="236" fill="none" stroke="#ffa000" stroke-width="10" stroke-dasharray="1483" stroke-dashoffset="${s === "idle" ? 1483 : s === "found" ? 0 : 590}" transform="rotate(-90 260 260)" style="transition:stroke-dashoffset .6s ease"/><circle cx="260" cy="260" r="206" fill="none" stroke="rgba(205,225,240,.12)" stroke-width="1" stroke-dasharray="3 7"/></svg>
+      <div class="in"><span class="w">${s === "searching" ? "SEARCHING" : "FIND MATCH"}</span><span class="t num">0:42</span><span class="s">${s === "searching" ? "usually 1:10 · esc cancels" : "enter · casual · eu 42 ms"}</span></div></div>
+    <div class="info abs dim"><div class="p" style="border:1px solid var(--line);border-radius:4px;padding:16px 18px;background:var(--bg1)"><span class="label">REGION</span><div style="font:600 22px var(--ui);margin-top:6px">EU · <span class="num">42</span> ms</div></div><div class="p" style="border:1px solid var(--line);border-radius:4px;padding:16px 18px;background:var(--bg1)"><span class="label">MAPS</span><div style="font:600 22px var(--ui);margin-top:6px">de_datacenter, de_reactor</div></div></div>
+    <div class="nav abs dim">${[["PLAY", "casual · 2 / 5", 1], ["PRACTICE", "arena · dm"], ["HOST", "off"], ["LOCKER", "Vera · 3 items"], ["SETTINGS", "High · 180 fps"], ["VOICE", "push to talk · V"], ["QUIT", "alt + f4"]].map(([t, d, on]) => `<div class="n${on ? " on" : ""}"><span class="t">${t}</span><span class="d">${d}</span></div>`).join("")}</div>
+    ${emer}</div>`,
+};
+const notes = {
+  A: `<div><b>Status deck.</b> Every page is a block that tells you what it's set to before you open it (board 7). Your character and its faction on the right (board 11): fixed for that character, with your other characters under it.</div><div><b>Searching:</b> the countdown readout with its draining ruler (board 4). <b>Found:</b> the emergency banner (board 1); the rest dims.</div>`,
+  B: `<div><b>Broadcast.</b> The big serif list with katakana (board 5), the selected page read out in full on the right.</div><div><b>Searching:</b> the hex field pulses behind Find match (board 2) next to the countdown (4). <b>Found:</b> the emergency banner (1).</div>`,
+  C: `<div><b>Ring.</b> Find match is the sync ring itself (board 9): it fills while you wait, full when a match is found. Pages along the bottom as status blocks (7).</div><div><b>Searching and found:</b> the hex field behind the ring (2), the emergency banner on found (1).</div>`,
+};
+
+const board = document.getElementById("board");
+let ver = "A", state = "idle";
+function render() {
+  board.dataset.state = state;
+  board.innerHTML = versions[ver](state);
+  board.classList.remove("tune-in"); void board.offsetWidth; board.classList.add("tune-in");
+  document.getElementById("note").innerHTML = notes[ver];
+  board.querySelectorAll("canvas.hex").forEach(hexField);
+}
+function fit() {
+  const w = document.getElementById("frame").clientWidth;
+  board.style.transform = `scale(${w / 1920})`;
+}
+document.querySelectorAll("#ver button").forEach(b => b.addEventListener("click", () => {
+  ver = b.dataset.v;
+  document.querySelectorAll("#ver button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+document.querySelectorAll("#st button").forEach(b => b.addEventListener("click", () => {
+  state = b.dataset.s;
+  document.querySelectorAll("#st button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+addEventListener("resize", fit);
+
+// the hex field (board 2): a slow pulse outwards, only while searching or found
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let frames = [];
+function hexField(c) {
+  const x = c.getContext("2d"), r = 26, w = Math.sqrt(3) * r, t0 = performance.now();
+  const step = now => {
+    if (!c.isConnected) return;
+    const k = reduce ? 0.4 : ((now - t0) / 2400) % 1;
+    x.clearRect(0, 0, c.width, c.height);
+    const cx0 = c.width / 2, cy0 = c.height / 2, far = Math.hypot(cx0, cy0);
+    for (let row = 0; row * r * 1.5 < c.height + r; row++) for (let col = 0; col * w < c.width + w; col++) {
+      const cx = col * w + (row % 2 ? w / 2 : 0), cy = row * r * 1.5;
+      const d = Math.hypot(cx - cx0, cy - cy0) / far;
+      const fade = Math.max(0, 1 - d);
+      const a = Math.max(0, 1 - Math.abs(d - k) * 5) * 0.3 * fade;
+      x.beginPath();
+      for (let i = 0; i < 6; i++) { const an = Math.PI / 6 + i * Math.PI / 3; x.lineTo(cx + r * 0.9 * Math.cos(an), cy + r * 0.9 * Math.sin(an)); }
+      x.closePath();
+      x.fillStyle = `rgba(255,160,0,${a})`; x.fill();
+      x.strokeStyle = `rgba(255,160,0,${0.12 * fade})`; x.lineWidth = 1.5; x.stroke();
+    }
+    if (!reduce) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+render(); fit();
+</script>

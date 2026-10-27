@@ -252,3 +252,4 @@ Now: one server box, the game server as a systemd service. Only when we run seve
 - [x] P1: map format (.bmap: convex brushes, glass, sky, water, ladders, zones, breakables, doors) made in Godot (`godot/tools/export_map.gd`), server, bots and client on it; the network tests play on our test arena
 - [ ] P1 leftovers: buttons and triggers in .bmap; convex shapes other than boxes in the exporter; the BSP format tests (`sim/tests/maps.rs`, nuke glass) go with the BSP loader in P6
 - [ ] P4: tests still load Valve's player model (hitboxes) and `materials.txt`
+- [ ] Factions bound to characters (user, 2026-10-27): team = your character's faction (Bureau defends, Strays attack), no halftime swap, no knife round for sides, no team select; queue parties on one faction, custom games across factions; per-map side balance from bot-match win rates
