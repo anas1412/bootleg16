@@ -145,19 +145,22 @@ def strays():
 
 def live_bug():
     # The Channel 16 bug, used only as the live mark: 16 in a rounded square frame (stroke 8, radius
-    # 16), the red dot (radius 12) on the frame's top right corner. The frame is open there: its
-    # round-capped ends stop 8 short of the dot. 16 is 56 tall, centred in the frame.
-    x0, y0, x1, y1, rr = 4, 12, 108, 116, 16  # stroke centre line: outer edges 0..112 by 8..120
-    dot, r = (x1, y0), 12
-    end = r + 8 + 4  # dot radius + gap + half the stroke (the round cap)
-    frame = (f"M{x1 - end},{y0} H{x0 + rr} A{rr},{rr} 0 0 0 {x0},{y0 + rr} V{y1 - rr} "
-             f"A{rr},{rr} 0 0 0 {x0 + rr},{y1} H{x1 - rr} A{rr},{rr} 0 0 0 {x1},{y1 - rr} V{y0 + end}")
+    # 16) with the red dot (radius 12) in its top right corner, flush with the frame's outer top and
+    # right edges. The frame is open there: its round-capped ends stop 8 short of the dot.
+    # 16 is 56 tall, centred in the frame.
+    size, half, rr, r = 112, 4, 16, 12
+    x0, y0, x1, y1 = half, half, size - half, size - half  # stroke centre line; outer edges 0..112
+    dot = (size - r, r)
+    top_end = dot[0] - r - 8 - half  # cap tip 8 left of the dot
+    side_end = dot[1] + r + 8 + half  # cap tip 8 below the dot
+    frame = (f"M{top_end},{y0} H{x0 + rr} A{rr},{rr} 0 0 0 {x0},{y0 + rr} V{y1 - rr} "
+             f"A{rr},{rr} 0 0 0 {x0 + rr},{y1} H{x1 - rr} A{rr},{rr} 0 0 0 {x1},{y1 - rr} V{side_end}")
     body = f'<path d="{frame}" fill="none" stroke="{WHITE}" stroke-width="8" stroke-linecap="round"/>'
     num = fit_height(DISPLAY, "16", 56, tracking=2)
     nw, nh = num.size
-    body += num.path((x0 + x1 - nw) / 2, (y0 + y1 - nh) / 2, WHITE)
+    body += num.path((size - nw) / 2, (size - nh) / 2, WHITE)
     body += f'<circle cx="{dot[0]}" cy="{dot[1]}" r="{r}" fill="{RED}"/>'
-    return svg(120, 120, body)
+    return svg(size, size, body)
 
 
 if __name__ == "__main__":
