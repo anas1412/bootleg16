@@ -3,18 +3,13 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <!-- Template: tools/make_design_system.py fills the {{...}} slots from tokens.json and writes index.html. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Sans+JP:wght@500&family=Noto+Serif+JP:wght@900&display=swap">
-<style>
-/* the title face is our own build (tools/make_title_font.py); Noto Serif JP is its unsqueezed fallback */
-@font-face { font-family: "Noto Serif JP Title"; font-weight: 900; src: url("../../godot/fonts/noto_serif_jp/NotoSerifJPTitle-Black.otf") format("opentype"); }
-</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Sans+JP:wght@500&display=swap">
 <style>
 /* Layout: one 1200 column of sections; game screens shown on a 1920x1080 stage scaled to fit. */
 :root {
   color-scheme: dark;
 /*{{tokens_css}}*/
   --f-display: "Anton", Impact, "Arial Narrow", sans-serif;
-  --f-title: "Noto Serif JP Title", "Noto Serif JP", Georgia, serif;
   --f-ui: "Barlow Condensed", "Arial Narrow", sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, monospace;
   --f-kana: "Noto Sans JP", sans-serif;

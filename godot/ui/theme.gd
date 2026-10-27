@@ -26,7 +26,8 @@ static func font(role: String) -> Font:
 	# a line the font's whole ascent and descent, far taller than the type scale's lines)
 	var ascent := v.get_ascent(t.size)
 	var descent := v.get_descent(t.size)
-	var cap: float = t.size * (0.8 if face == "kana" else 0.7)
+	# (the font's capital height as a share of its size: OS/2 sCapHeight / unitsPerEm; kana: glyph height)
+	var cap: float = t.size * Tokens.FONT_CAP[face]
 	v.spacing_top = roundi((t.line + cap) / 2.0 - ascent)
 	v.spacing_bottom = roundi((t.line - cap) / 2.0 - descent)
 	_fonts[role] = v

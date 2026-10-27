@@ -15,7 +15,6 @@ T = json.loads((SYSTEM / "tokens.json").read_text())
 
 CSS_FONT = {  # family var, weight, extra css
     "display": ("var(--f-display)", 400, ""),
-    "title": ("var(--f-title)", 900, ""),
     "ui": ("var(--f-ui)", 600, ""),
     "ui_bold": ("var(--f-ui)", 700, ""),
     "mono": ("var(--f-mono)", 500, ""),
@@ -144,6 +143,7 @@ def tokens_gd():
     out += ["", "const FONT_FILES := {" + ", ".join(f'"{k}": "res://fonts/{v["file"]}"' for k, v in T["font"].items()) + "}"]
     axes = {k: {a: v[a] for a in ("wdth", "wght") if a in v} for k, v in T["font"].items()}
     out += [f"const FONT_AXES := {gd_value({k: v for k, v in axes.items() if v})}"]
+    out += [f"const FONT_CAP := {gd_value({k: v['cap'] for k, v in T['font'].items()})}"]
     out += ["", f"const TYPE := {gd_value(T['type'])}", ""]
     out += [f"const {k.upper().replace('_MS', '')} := {v / 1000:g}  # seconds" for k, v in m.items() if k.endswith("_ms")]
     out += [f"const SLIDE := {m['slide']}", f"const GLITCH_SPLIT := {m['glitch_split']}", f"const BLUR_BEHIND := {m['blur_behind']}",
