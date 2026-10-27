@@ -147,7 +147,7 @@ struct Mixer {
 pub struct Speakers {
     _stream: cpal::Stream,
     mixer: Arc<Mutex<Mixer>>,
-    /// The sound card side reported an error (the stream is dead: `Audio` opens a new one).
+    /// The sound card side reported an error (the stream is dead: `Voice` opens a new one).
     failed: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -160,7 +160,7 @@ impl Speakers {
         // Device rate differs from 48 kHz: step through each voice at 48k/rate per output frame.
         let step = VOICE_RATE as f64 / rate as f64;
         // An error usually means the stream is gone (device switched, sound server restarted):
-        // say so once, and let `Audio` open a fresh one instead of logging every callback.
+        // say so once, and let `Voice` open a fresh one instead of logging every callback.
         let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let f2 = failed.clone();
         let err = move |e| {

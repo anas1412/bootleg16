@@ -15,7 +15,8 @@
 //! - After the last word a timer line on the bottom edge shrinks to the centre for 4 s; then
 //!   a lower chirp, the light retracts and it all tunes out.
 use super::view::{face_for, portrait, Faces, Rig, BROTHER_FACE};
-use super::{lines::Mood, Brain, ASSISTANTS};
+use super::{Brain, ASSISTANTS};
+use client_core::assistant::Mood;
 use crate::menu::AppState;
 use crate::ui::{edge, hud_panel, kit_text, vh, Anim, Covered, Edge, EdgeColor, Kit, UiSound, SAFE, TX1, TX2};
 use bevy::prelude::*;

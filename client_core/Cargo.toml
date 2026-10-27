@@ -3,6 +3,13 @@ name = "client_core"
 version = "0.1.0"
 edition = "2021"
 
-# What any bootleg16 client needs besides drawing: the camera's feel today, more as the Godot
-# port moves logic out of the Bevy client. No engine types.
+# What any bootleg16 client needs besides drawing: the camera's feel, voice chat and the AI
+# assistant's brain today, more as the Godot port moves logic out of the Bevy client. No
+# engine types.
 [dependencies]
+net = { path = "../net" }
+# Voice chat: microphone / output streams and the Opus codec.
+cpal = "0.17"
+opus = "0.3"
+# AI assistant: shuffling its line decks.
+fastrand = "2"

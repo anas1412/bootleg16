@@ -5,7 +5,7 @@
 //! from design/mockups/ui/faces.js): turning the head moves each layer by its depth, the head
 //! tilts on the neck, eyes blink, the mouth moves while talking, each mood has a pose, and
 //! the assistant's personality scales all of it.
-use super::lines::Mood;
+use client_core::assistant::Mood;
 use crate::ui::{vh, Anim, BG1};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
