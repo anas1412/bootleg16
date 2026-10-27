@@ -230,6 +230,8 @@ A translucent colour over a dark surface shows much brighter in the game than in
   area edges put walls 16 units into the areas. Walls are now on a 16-unit grid that every
   area edge sits on, and the map's boxes are children of one `CSGCombiner3D`, drawn as their
   union; the exporter still reads every box.
+- **Reading box sizes from where players can stand overshoots by 16 each side**: a 32-wide
+  player stands on a box with any part of them over it. Take the standable area less 16.
 - **Measure the reference with the same tool and the same points** (`tools/compare_maps.py`):
   bot-navigation path lengths, not straight lines; endpoints snap to the 48-unit grid, so
   moving a spawn less than 48 can change nothing.

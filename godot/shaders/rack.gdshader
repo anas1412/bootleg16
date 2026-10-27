@@ -1,5 +1,6 @@
 // Server rack fronts along a wall: doors 0.6 m wide with a perforated mesh, a frame, a few
 // small status lights near the top. Kept mid-dark and quiet so players stand out against it.
+// Doors are stretched a little so a whole number of them fills the panel (no half doors).
 // The panel's size (metres) comes per instance; the perforation fades out where it would
 // shimmer (fwidth), as the grid does.
 shader_type spatial;
@@ -10,8 +11,6 @@ uniform vec3 door_color : source_color = vec3(0.38, 0.40, 0.43);
 uniform vec3 led_green : source_color = vec3(0.25, 1.0, 0.55);
 uniform vec3 led_blue : source_color = vec3(0.35, 0.7, 1.0);
 
-const float RACK = 0.6;
-
 float hash(float n) {
 	return fract(sin(n * 127.1 + 3.7) * 43758.5453);
 }
@@ -19,9 +18,10 @@ float hash(float n) {
 void fragment() {
 	// metres along the panel, up from its bottom
 	vec2 p = vec2(UV.x * size.x, (1.0 - UV.y) * size.y);
-	float i = floor(p.x / RACK);
-	vec2 q = vec2(p.x - i * RACK, p.y);
-	float frame = max(max(step(q.x, 0.03), step(RACK - 0.03, q.x)), max(step(q.y, 0.07), step(size.y - 0.05, q.y)));
+	float rack = size.x / max(1.0, round(size.x / 0.6));
+	float i = min(floor(p.x / rack), round(size.x / rack) - 1.0);
+	vec2 q = vec2(p.x - i * rack, p.y);
+	float frame = max(max(step(q.x, 0.03), step(rack - 0.03, q.x)), max(step(q.y, 0.07), step(size.y - 0.05, q.y)));
 	// the perforated door: holes 2.5 cm apart, faded to their average far away
 	vec2 d = q * 40.0;
 	float fw = max(fwidth(d.x), fwidth(d.y));
@@ -29,7 +29,7 @@ void fragment() {
 	float near = 1.0 - smoothstep(0.25, 0.6, fw);
 	float dark = mix(0.25, hole, near) * 0.45;
 	// a handle on each door
-	float handle = step(abs(q.x - (RACK - 0.07)), 0.008) * step(abs(q.y - 1.05), 0.12);
+	float handle = step(abs(q.x - (rack - 0.07)), 0.008) * step(abs(q.y - 1.05), 0.12);
 	vec3 col = mix(door_color * (1.0 - dark), frame_color, max(frame, handle));
 	// two to four status lights per rack, some blinking slowly
 	vec3 glow = vec3(0.0);

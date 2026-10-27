@@ -112,13 +112,22 @@ fn report(label: &str, d: Option<f32>) {
 
 /// The length of the bots' path from one point to another (None: no way).
 fn walk(map: &BotMap, from: [f32; 3], to: [f32; 3]) -> Option<f32> {
-    let (a, b) = (map.nav.nearest(from)?, map.nav.nearest(to)?);
+    let (a, b) = (on_floor(map, from)?, on_floor(map, to)?);
     let path = map.nav.path(a, b, &HashSet::new());
     if path.is_empty() {
         return None;
     }
     let p = &map.nav.points;
     Some(path.windows(2).map(|w| dist(p[w[0] as usize], p[w[1] as usize])).sum())
+}
+
+/// The bots' spot nearest a point on its own level (within 24 up or down: on the floor there,
+/// not on top of a crate beside it, which would turn a walk into a climb).
+fn on_floor(map: &BotMap, p: [f32; 3]) -> Option<u32> {
+    let level = |q: &[f32; 3]| (q[2] - p[2]).abs() <= 24.0;
+    let flat = |q: &[f32; 3]| (q[0] - p[0]).powi(2) + (q[1] - p[1]).powi(2);
+    let pts = &map.nav.points;
+    (0..pts.len() as u32).filter(|&i| level(&pts[i as usize]) && flat(&pts[i as usize]) < 128.0 * 128.0).min_by(|&i, &j| flat(&pts[i as usize]).total_cmp(&flat(&pts[j as usize]))).or_else(|| map.nav.nearest(p))
 }
 
 fn bounds(map: &BotMap) -> ([f32; 3], [f32; 3]) {
