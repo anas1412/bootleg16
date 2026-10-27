@@ -38,7 +38,6 @@ func _ready() -> void:
 	var looks: Array = LOOKS[side]
 	for slot in $Slots.get_children():
 		var f := preload("res://scripts/menu/figure.gd").new()
-		f.side = side
 		f.look = looks[slot.get_index()].duplicate()
 		f.look.pose = slot.get_meta("pose", "Idle")
 		slot.add_child(f)
