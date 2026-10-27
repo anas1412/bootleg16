@@ -181,8 +181,12 @@ trays under the high roofs, cable bundles low along the crawlspace walls (`cable
 fan condensers along the outdoor walls (`condenser.gdshader`), and the landmark: three cooling
 towers west of the dock, steaming over its wall. 119 fps at 1080p Medium at the spawn.
 
+**The xbox:** Dust2's box in mid (96 up from the lane, against the rail), here crated servers
+on their way in, with a smaller crate in front and the kerb open beside it: lane, crate, xbox,
+walkway side in three jumps (48, 48, 32), as in CS2. Bots don't take it (they climb 40 at most).
+
 **Every block is something** (`BLOCKS`, `PROPS`, `prop.gdshader`): delivery crates at the
-dock, a network cabinet and a UPS on the walkway, the sump's pump, boxes of servers in the
+dock and in mid (the xbox), a UPS on the walkway, the sump's pump, boxes of servers in the
 aisle, the core servers on A, a tape library and archive boxes on B, a Bureau barrier by the
 control room, hazard-striped kerbs on the ledges, metal security-door panels with a status
 light. Frames, headers and the crawl's column are the building. The map's boxes are drawn

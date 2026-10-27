@@ -104,8 +104,13 @@ const BLOCKS := [
 	["crawl_pillar", [-896, 1280, -800, 1376], [-112, 32], ""],
 	# cover (the reference's), each a thing with a reason to be there
 	["dock_crates", [-1152, -640, -1024, -448], [128, 256], "delivery"],
-	["spine_kerb", [-272, 768, -240, 1568], [-128, 32], "kerb"],
-	["network_cabinet", [-224, 1440, -160, 1504], [0, 64], "cabinet"],
+	["spine_kerb", [-272, 768, -240, 1344], [-128, 32], "kerb"],
+	["spine_kerb_north", [-272, 1488, -240, 1568], [-128, 32], "kerb"],
+	# the xbox: crated servers on their way in, against the kerb (the reference's box, 96 up
+	# from the lane); the kerb is open beside it and a smaller crate stands in front, so you
+	# climb from the lane to the walkway side in three jumps (48, 48, 32), as in CS2
+	["spine_crates", [-384, 1344, -240, 1488], [-128, -32], "delivery"],
+	["spine_crate_step", [-384, 1296, -320, 1344], [-128, -80], "delivery"],
 	["walkway_ups", [400, 1408, 496, 1520], [16, 96], "ups"],
 	["aisle_boxes", [1536, 1984, 1600, 2112], [0, 64], "boxes"],
 	["sump_pump", [960, 288, 1056, 384], [0, 64], "pump"],
