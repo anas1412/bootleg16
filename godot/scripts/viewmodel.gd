@@ -42,6 +42,16 @@ const BOMB := [
 	[Vector3(0.1, 0.004, 0.04), Vector3(0, 0.032, -0.05), "glow"],
 ]
 const GRENADE_COLOURS := {"hegrenade": Color(0.3, 0.34, 0.2), "flashbang": Color(0.5, 0.52, 0.55), "smokegrenade": Color(0.7, 0.72, 0.74)}
+## The Quaternius gun for each weapon (`weapons/quaternius`, CC0, used as they are) and how
+## long it is in your hands (metres along the barrel). Grenades and the bomb have none in the
+## pack: they stay the box shapes above.
+const MODELS := {
+	"ak47": ["AssaultRifle_4", 0.62], "galil": ["AssaultRifle_5", 0.6], "m4a1": ["AssaultRifle2_1", 0.6],
+	"famas": ["Bullpup_1", 0.5], "p90": ["Bullpup_2", 0.45], "scout": ["SniperRifle_1", 0.75], "awp": ["SniperRifle_3", 0.8],
+	"mac10": ["SubmachineGun_1", 0.3], "tmp": ["SubmachineGun_2", 0.32], "mp5navy": ["SubmachineGun_3", 0.45], "ump45": ["SubmachineGun_4", 0.45],
+	"glock18": ["Pistol_5", 0.19], "usp": ["Pistol_6", 0.22], "p228": ["Pistol_1", 0.19], "deagle": ["Pistol_4", 0.25],
+	"knife": ["Bayonet", 0.28],
+}
 ## Where each family rests in front of the eye.
 const REST := {"rifle": Vector3(0.2, -0.2, -0.36), "pistol": Vector3(0.2, -0.19, -0.4), "knife": Vector3(0.2, -0.19, -0.34), "grenade": Vector3(0.19, -0.19, -0.34), "bomb": Vector3(0.08, -0.24, -0.38)}
 
@@ -127,6 +137,10 @@ func _build(weapon: String, team: String) -> void:
 	_raise = 0.0
 	for c in get_children():
 		c.queue_free()
+	var model := _model(weapon)
+	if model:
+		add_child(model)
+		return
 	var parts: Array
 	match _family:
 		"knife":
@@ -159,3 +173,43 @@ func _build(weapon: String, team: String) -> void:
 		part.position = p[1] * big
 		part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(part)
+
+## The weapon's gun model, its barrel pointing ahead, its middle a little ahead of the grip,
+## drawn with the hands' shader (never into a wall) in the colours it came with. Null when the
+## pack has none for it.
+func _model(weapon: String) -> Node3D:
+	if not MODELS.has(weapon):
+		return null
+	var spec: Array = MODELS[weapon]
+	var m: Node3D = load("res://weapons/quaternius/%s.fbx" % spec[0]).instantiate()
+	var box := AABB()
+	var first := true
+	for mi in m.find_children("*", "MeshInstance3D", true, false):
+		var mesh := mi as MeshInstance3D
+		# the mesh's place in the model as the file turns it (it isn't in the tree yet: no
+		# global transforms), so the box's x is the barrel whatever the file's root holds
+		var to_model := Transform3D()
+		var n: Node = mesh
+		while n != m:
+			to_model = (n as Node3D).transform * to_model
+			n = n.get_parent()
+		to_model = Transform3D(m.basis, Vector3.ZERO) * to_model
+		var b := to_model * mesh.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for i in mesh.mesh.get_surface_count():
+			var src := mesh.get_active_material(i)
+			var paint := ShaderMaterial.new()
+			paint.shader = SHADER
+			paint.set_shader_parameter("albedo", (src as BaseMaterial3D).albedo_color if src is BaseMaterial3D else METAL)
+			mesh.set_surface_override_material(i, paint)
+	var length: float = spec[1]
+	var s := length / maxf(box.size.x, 0.001)
+	var holder := Node3D.new()
+	holder.add_child(m)
+	# the files lie along +x: a quarter turn points them ahead (-z)
+	var turn := Basis(Vector3.UP, PI / 2.0).scaled(Vector3.ONE * s)
+	m.basis = turn * m.basis
+	m.position = -(turn * box.get_center()) + Vector3(0, 0, -length * 0.15)
+	return holder

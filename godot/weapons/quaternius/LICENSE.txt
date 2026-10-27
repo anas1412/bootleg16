@@ -1,0 +1,4 @@
+Ultimate Gun Pack (July 2019) by Quaternius, https://quaternius.com/packs/ultimategun.html
+CC0 1.0 Universal (public domain dedication), free for personal and commercial use.
+Downloaded from https://opengameart.org/content/low-poly-guns-pack (ultimate_gun_pack_by_quaternius.zip),
+the FBX files used as they are (the 16 the game uses; the rest of the pack is left out).
