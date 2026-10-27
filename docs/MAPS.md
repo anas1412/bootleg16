@@ -174,5 +174,12 @@ indoors, an invisible sky outdoors that stops grenades as Dust2's sky does. Room
 height, Dust2 and ours alike: dock 228, main aisle 324, spine 416, A 224, B 356, control
 room 164, crawlspace 164. 108 fps at 1080p on Medium on the GTX 1650 (bench, at the spawn).
 
+**Dressing** (looks only: meshes the exporter skips, so the `.bmap` doesn't change): server
+racks along the hall and aisle walls (`shaders/rack.gdshader`, 2.1 m, mid-dark, a few small
+status lights), raised-floor tiles with vent tiles indoors (`raised_floor.gdshader`), cable
+trays under the high roofs, cable bundles low along the crawlspace walls (`cables.gdshader`),
+fan condensers along the outdoor walls (`condenser.gdshader`), and the landmark: three cooling
+towers west of the dock, steaming over its wall. 119 fps at 1080p Medium at the spawn.
+
 Spawns: 10 a side (Dust2 has 20); sites the same size as Dust2's (A 256 × 320, B 384 × 384).
 Not in the grey box yet: B's window from the lobby, most small cover, ladders.
