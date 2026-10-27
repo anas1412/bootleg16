@@ -4,6 +4,7 @@
 //! box. Tracing the player's centre point through that hull equals sweeping the
 //! box through the real world.
 use crate::doors::{angle_vectors, local_to_world, world_to_local, Actor, Doors};
+use crate::brush::{self, Brush, Clip, Contents as BrushContents};
 use crate::{add, dot, length, lerp, sub, Vec3};
 use goldsrc::bsp::Bsp;
 
@@ -172,9 +173,8 @@ pub struct World {
     /// Bodies lying on the floor (`bodies::rest_box`): boxes players bump into and step over
     /// (not bullets). Set each tick from the bodies, the same on the server and the client.
     pub boxes: Vec<(Vec3, Vec3)>,
-    /// Solid boxes of a map that isn't a BSP (`from_boxes`): they block players, bullets and
-    /// sight like walls.
-    solids: Vec<(Vec3, Vec3)>,
+    /// The convex brushes of a map that isn't a BSP (`from_brushes`): walls, glass, sky, water.
+    brushes: Vec<Brush>,
     /// Faces on each point node, for finding the texture a bullet hit.
     node_faces: Vec<(u32, u32)>,
     surfaces: Vec<Surface>,
@@ -270,7 +270,7 @@ impl World {
             doors,
             zones: crate::zones::Zones::from_bsp(bsp),
             boxes: Vec::new(),
-            solids: Vec::new(),
+            brushes: Vec::new(),
             node_faces: bsp.nodes.iter().map(|n| (n.first_face as u32, n.num_faces as u32)).collect(),
             surfaces,
             textures: bsp.textures.iter().map(|t| t.name.clone()).collect(),
@@ -368,6 +368,9 @@ impl World {
         if self.is_solid_point(p) {
             return Contents::Solid;
         }
+        if self.brushes.iter().any(|b| b.contents == BrushContents::Water && b.overlaps(p, [0.0; 3])) {
+            return Contents::Water;
+        }
         for &(root, offset) in &self.water_roots {
             let mut num = root;
             let q = sub(p, offset);
@@ -386,7 +389,7 @@ impl World {
     }
 
     fn is_solid_point(&self, p: Vec3) -> bool {
-        if self.solids.iter().any(|(lo, hi)| inside(p, *lo, *hi)) {
+        if self.brushes.iter().any(|b| b.contents != BrushContents::Water && b.overlaps(p, [0.0; 3])) {
             return true;
         }
         let Some(&(mut num, _)) = self.water_roots.first() else { return false };
@@ -407,7 +410,8 @@ impl World {
     pub fn is_solid(&self, hull: Hull, origin: Vec3) -> bool {
         let (lo, hi) = (add(origin, hull.mins()), add(origin, hull.maxs()));
         self.models.iter().filter(|m| m.enabled && self.reaches(m, lo, hi)).any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
-            || self.boxes.iter().chain(&self.solids).any(|(blo, bhi)| (0..3).all(|i| lo[i] < bhi[i] && hi[i] > blo[i]))
+            || self.boxes.iter().any(|(blo, bhi)| (0..3).all(|i| lo[i] < bhi[i] && hi[i] > blo[i]))
+            || self.brushes.iter().any(|b| b.contents != BrushContents::Water && b.near(lo, hi, [0.0; 3]) && b.overlaps(origin, brush::half(hull)))
     }
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
@@ -448,17 +452,18 @@ impl World {
                 }
             }
         }
-        for (blo, bhi) in &self.solids {
-            let (lo, hi) = expand(hull, *blo, *bhi);
-            if inside(start, lo, hi) {
-                best.start_solid = true;
-                best.all_solid |= inside(end, lo, hi);
-            } else if let Some((f, normal)) = sweep_aabb(start, end, lo, hi) {
-                if f < best.fraction {
-                    best.fraction = f;
-                    best.normal = normal;
-                    best.end = lerp(start, end, f);
+        for b in self.brushes.iter().filter(|b| b.contents != BrushContents::Water && b.near(lo, hi, [0.0; 3])) {
+            match b.clip(start, end, brush::half(hull)) {
+                Clip::Inside { all } => {
+                    best.start_solid = true;
+                    best.all_solid |= all;
                 }
+                Clip::Hit(h) if h.fraction < best.fraction => {
+                    best.fraction = h.fraction;
+                    best.normal = h.normal;
+                    best.end = lerp(start, end, h.fraction);
+                }
+                _ => {}
             }
         }
         if best.start_solid {
@@ -483,7 +488,9 @@ impl World {
     /// crates (as they are now: open doors and broken pieces don't). For hiding players you
     /// can't see: anything see-through (glass, fences) must not count.
     pub fn sight_blocked(&self, start: Vec3, end: Vec3) -> bool {
-        if self.solids.iter().any(|(lo, hi)| inside(start, *lo, *hi) || sweep_aabb(start, end, *lo, *hi).is_some()) {
+        // (see-through brushes don't hide anyone; water doesn't either)
+        let (lo, hi): (Vec3, Vec3) = (std::array::from_fn(|i| start[i].min(end[i])), std::array::from_fn(|i| start[i].max(end[i])));
+        if self.brushes.iter().filter(|b| matches!(b.contents, BrushContents::Solid | BrushContents::Sky) && b.near(lo, hi, [0.0; 3])).any(|b| !matches!(b.clip(start, end, [0.0; 3]), Clip::Miss)) {
             return true;
         }
         let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
@@ -528,13 +535,14 @@ impl World {
                 best.model = m.bsp_model;
             }
         }
-        for (lo, hi) in &self.solids {
-            if inside(start, *lo, *hi) {
-                best.start_solid = true;
-            } else if let Some((f, normal)) = sweep_aabb(start, end, *lo, *hi) {
-                if f < best.fraction {
-                    (best.fraction, best.normal, best.end, best.hit_sky, best.model) = (f, normal, lerp(start, end, f), false, 0);
+        for b in self.brushes.iter().filter(|b| b.contents != BrushContents::Water && b.near(lo, hi, [0.0; 3])) {
+            match b.clip(start, end, [0.0; 3]) {
+                Clip::Inside { .. } => best.start_solid = true,
+                Clip::Hit(h) if h.fraction < best.fraction => {
+                    (best.fraction, best.normal, best.end) = (h.fraction, h.normal, lerp(start, end, h.fraction));
+                    (best.hit_sky, best.model) = (b.contents == BrushContents::Sky, b.model);
                 }
+                _ => {}
             }
         }
         best
@@ -594,9 +602,13 @@ impl World {
         false
     }
 
-    /// A map made of solid boxes (mins, maxs), not a BSP: what Godot maps give until they
-    /// carry full brushes. No water, ladders, doors or sky yet.
+    /// A map made of solid boxes (mins, maxs): concrete walls and floors, nothing else.
     pub fn from_boxes(solids: Vec<(Vec3, Vec3)>) -> World {
+        World::from_brushes(solids.into_iter().map(|(lo, hi)| Brush::from_box(lo, hi, BrushContents::Solid, b'C', 0)).collect())
+    }
+
+    /// A map made of convex brushes, not a BSP (maps built in Godot).
+    pub fn from_brushes(brushes: Vec<Brush>) -> World {
         World {
             nodes: Vec::new(),
             models: Vec::new(),
@@ -607,7 +619,7 @@ impl World {
             doors: Doors::default(),
             zones: Default::default(),
             boxes: Vec::new(),
-            solids,
+            brushes,
             node_faces: Vec::new(),
             surfaces: Vec::new(),
             textures: Vec::new(),
@@ -632,7 +644,7 @@ impl World {
             doors: Doors::default(),
             zones: Default::default(),
             boxes: Vec::new(),
-            solids: Vec::new(),
+            brushes: Vec::new(),
             node_faces: vec![(0, 0)],
             surfaces: Vec::new(),
             textures: Vec::new(),
