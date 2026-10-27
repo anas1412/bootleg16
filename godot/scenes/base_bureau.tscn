@@ -1,0 +1,429 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/base.gd" id="1_m76vl"]
+[ext_resource type="Shader" path="res://shaders/base.gdshader" id="2_m0pne"]
+[ext_resource type="Texture2D" path="res://ui/marks/bureau.svg" id="3_hsmah"]
+[ext_resource type="Shader" path="res://shaders/prop.gdshader" id="4_whsfl"]
+
+[sub_resource type="Environment" id="Environment_siyi8"]
+background_mode = 1
+background_color = Color(0.008, 0.009, 0.012, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.34362745, 0.40164706, 0.46, 1)
+ambient_light_energy = 0.12
+tonemap_mode = 3
+tonemap_exposure = 1.05
+ssr_enabled = true
+ssao_enabled = true
+ssao_intensity = 1.6
+glow_enabled = true
+glow_intensity = 0.45
+glow_bloom = 0.04
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.008
+volumetric_fog_albedo = Color(0.85, 0.85, 0.88, 1)
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_rl1m7"]
+dof_blur_far_enabled = true
+dof_blur_far_transition = 6.0
+dof_blur_amount = 0.05
+
+[sub_resource type="Image" id="Image_k3ij0"]
+data = {
+"data": PackedByteArray(255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12),
+"format": "Lum8",
+"height": 128,
+"mipmaps": false,
+"width": 8
+}
+
+[sub_resource type="ImageTexture" id="ImageTexture_hpm1r"]
+image = SubResource("Image_k3ij0")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ogukf"]
+render_priority = 0
+shader = ExtResource("2_m0pne")
+shader_parameter/kind = 4
+shader_parameter/body = Color(0.07, 0.075, 0.085, 1)
+shader_parameter/glow = Color(0, 0, 0, 1)
+shader_parameter/glow_energy = 1.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_7mksj"]
+size = Vector3(20, 0.1, 18)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kx7n2"]
+albedo_color = Color(0.045, 0.048, 0.055, 1)
+metallic = 0.3
+roughness = 0.35
+
+[sub_resource type="BoxMesh" id="BoxMesh_joa6e"]
+size = Vector3(20, 0.3, 14)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_q228i"]
+render_priority = 0
+shader = ExtResource("2_m0pne")
+shader_parameter/kind = 3
+shader_parameter/body = Color(0.5, 0.52, 0.55, 1)
+shader_parameter/glow = Color(0.55, 0.78, 1, 1)
+shader_parameter/glow_energy = 1.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_hluio"]
+size = Vector3(7.4, 3.9, 0.04)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7hayc"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_2wlka"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_e0a7j"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_irk6r"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kkbgh"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_psu50"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_yqcah"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_biuy5"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_47jq3"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_f2abr"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xkolv"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_27c7k"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="BoxMesh" id="BoxMesh_uxevj"]
+size = Vector3(7.4, 3.9, 0.04)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_73yxy"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_rkghd"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qii5d"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_8iowt"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1ag12"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_w480g"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_knbaf"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_lr0wl"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6g46t"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_pxtei"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6e2vm"]
+albedo_color = Color(0.02, 0.02, 0.025, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_5toyj"]
+size = Vector3(0.07, 3.9, 0.14)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ie1us"]
+size = Vector3(20, 0.3, 0.3)
+
+[sub_resource type="BoxMesh" id="BoxMesh_txvrr"]
+size = Vector3(20, 0.5, 0.3)
+
+[sub_resource type="BoxMesh" id="BoxMesh_oak37"]
+size = Vector3(2, 4.8, 0.3)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_rjjyj"]
+render_priority = 0
+shader = ExtResource("4_whsfl")
+shader_parameter/kind = 0
+shader_parameter/body = Color(0.1, 0.105, 0.12, 1)
+shader_parameter/accent = Color(0.28627452, 0.7764706, 1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_sydfu"]
+size = Vector3(0.72, 2, 0.9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8hy7j"]
+size = Vector3(0.72, 2, 0.9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_4ity3"]
+size = Vector3(2.4, 0.86, 1.2)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ks5vb"]
+render_priority = 0
+shader = ExtResource("2_m0pne")
+shader_parameter/kind = 5
+shader_parameter/body = Color(0.02, 0.02, 0.02, 1)
+shader_parameter/glow = Color(0.28627452, 0.7764706, 1, 1)
+shader_parameter/glow_energy = 1.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_porqr"]
+size = Vector3(2.3, 0.03, 1.1)
+
+[node name="BaseBureau" type="Node3D" unique_id=761687499]
+script = ExtResource("1_m76vl")
+side = "bureau"
+
+[node name="Environment" type="WorldEnvironment" parent="." unique_id=1609479568]
+environment = SubResource("Environment_siyi8")
+
+[node name="Camera" type="Camera3D" parent="." unique_id=1906260421]
+attributes = SubResource("CameraAttributesPractical_rl1m7")
+current = true
+fov = 30.0
+
+[node name="Slots" type="Node3D" parent="." unique_id=1783122352]
+
+[node name="0" type="Marker3D" parent="Slots" unique_id=1171391854]
+metadata/pose = "Idle"
+
+[node name="1" type="Marker3D" parent="Slots" unique_id=828986128]
+transform = Transform3D(0.9702957, 0, 0.2419219, 0, 1, 0, -0.2419219, 0, 0.9702957, -1.05, 0, -0.85)
+metadata/pose = "Idle"
+
+[node name="2" type="Marker3D" parent="Slots" unique_id=1066517203]
+transform = Transform3D(0.9702957, 0, -0.2419219, 0, 1, 0, 0.2419219, 0, 0.9702957, 1.05, 0, -0.85)
+metadata/pose = "Idle_Talking"
+
+[node name="3" type="Marker3D" parent="Slots" unique_id=115131221]
+transform = Transform3D(0.92718387, 0, 0.3746066, 0, 1, 0, -0.3746066, 0, 0.92718387, -2, 0, -1.7)
+metadata/pose = "Idle_Talking"
+
+[node name="4" type="Marker3D" parent="Slots" unique_id=1326275631]
+transform = Transform3D(0.92718387, 0, -0.3746066, 0, 1, 0, 0.3746066, 0, 0.92718387, 2, 0, -1.7)
+metadata/pose = "Idle"
+
+[node name="Lights" type="Node3D" parent="." unique_id=1308737654]
+
+[node name="RimL" type="SpotLight3D" parent="Lights" unique_id=607062874]
+transform = Transform3D(-0.6585046, 0.26504275, -0.7043607, 0, 0.9359322, 0.3521804, 0.7525767, 0.2319124, -0.61631566, -3.2, 2.9, -3.6)
+light_color = Color(0.28627452, 0.7764706, 1, 1)
+light_energy = 9.0
+light_volumetric_fog_energy = 0.6
+spot_range = 24.0
+spot_angle = 26.0
+spot_angle_attenuation = 0.8
+metadata/rim = true
+
+[node name="RimR" type="SpotLight3D" parent="Lights" unique_id=1290467756]
+transform = Transform3D(-0.6585046, -0.26504275, 0.7043607, 0, 0.9359322, 0.3521804, -0.7525767, 0.2319124, -0.61631566, 3.2, 2.9, -3.6)
+light_color = Color(0.28627452, 0.7764706, 1, 1)
+light_energy = 7.0
+light_volumetric_fog_energy = 0.6
+spot_range = 24.0
+spot_angle = 26.0
+spot_angle_attenuation = 0.8
+metadata/rim = true
+
+[node name="SealWash" type="SpotLight3D" parent="Lights" unique_id=617726826]
+transform = Transform3D(1, 0, 0, 0, 0.22337623, -0.9747323, 0, 0.9747323, 0.22337623, 0, 0.4, -4.1)
+light_color = Color(0.8, 0.92, 1, 1)
+light_energy = 2.5
+spot_range = 24.0
+spot_angle = 30.0
+spot_angle_attenuation = 0.8
+
+[node name="City" type="SpotLight3D" parent="Lights" unique_id=1204216020]
+transform = Transform3D(-0.9242614, -0.24958348, 0.28887525, 0, 0.75669295, 0.6537703, -0.38176018, 0.60425466, -0.6993821, 2.5, 4.3, -7)
+light_color = Color(0.62, 0.8, 1, 1)
+light_energy = 16.0
+light_volumetric_fog_energy = 1.5
+light_projector = SubResource("ImageTexture_hpm1r")
+shadow_enabled = true
+spot_range = 24.0
+spot_angle = 28.0
+spot_angle_attenuation = 0.8
+
+[node name="MapGlow" type="OmniLight3D" parent="Lights" unique_id=1281701590]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 1.2, -2.7)
+light_color = Color(0.28627452, 0.7764706, 1, 1)
+omni_range = 2.6
+
+[node name="Key" type="SpotLight3D" parent="Lights" unique_id=607719816]
+transform = Transform3D(0.925547, -0.21143004, 0.31410217, 0, 0.82956934, 0.55840385, -0.37863284, -0.516829, 0.76780534, 1.8, 4.2, 3.6)
+light_color = Color(0.93, 0.96, 1, 1)
+light_energy = 8.0
+shadow_enabled = true
+spot_range = 24.0
+spot_angle = 26.0
+spot_angle_attenuation = 0.8
+
+[node name="Fill" type="OmniLight3D" parent="Lights" unique_id=1028076342]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.8, 1.6, 4.2)
+light_color = Color(1, 0.9, 0.8, 1)
+light_energy = 0.3
+omni_range = 9.0
+
+[node name="Room" type="Node3D" parent="." unique_id=1968482370]
+
+[node name="Floor" type="MeshInstance3D" parent="Room" unique_id=177153301]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, -3)
+material_override = SubResource("ShaderMaterial_ogukf")
+mesh = SubResource("BoxMesh_7mksj")
+
+[node name="Ceiling" type="MeshInstance3D" parent="Room" unique_id=729045310]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.75, -2)
+material_override = SubResource("StandardMaterial3D_kx7n2")
+mesh = SubResource("BoxMesh_joa6e")
+
+[node name="Blinds-1" type="MeshInstance3D" parent="Room" unique_id=1496049946]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.7, 2.25, -4.75)
+material_override = SubResource("ShaderMaterial_q228i")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_hluio")
+
+[node name="Mullion-1_0" type="MeshInstance3D" parent="Room" unique_id=248730288]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_7hayc")
+mesh = SubResource("BoxMesh_2wlka")
+
+[node name="Mullion-1_1" type="MeshInstance3D" parent="Room" unique_id=292650623]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.25, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_e0a7j")
+mesh = SubResource("BoxMesh_irk6r")
+
+[node name="Mullion-1_2" type="MeshInstance3D" parent="Room" unique_id=41615599]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_kkbgh")
+mesh = SubResource("BoxMesh_psu50")
+
+[node name="Mullion-1_3" type="MeshInstance3D" parent="Room" unique_id=1572836075]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.75, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_yqcah")
+mesh = SubResource("BoxMesh_biuy5")
+
+[node name="Mullion-1_4" type="MeshInstance3D" parent="Room" unique_id=1792720758]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_47jq3")
+mesh = SubResource("BoxMesh_f2abr")
+
+[node name="Mullion-1_5" type="MeshInstance3D" parent="Room" unique_id=2135569364]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.25, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_xkolv")
+mesh = SubResource("BoxMesh_27c7k")
+
+[node name="Blinds1" type="MeshInstance3D" parent="Room" unique_id=1158893413]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.7, 2.25, -4.75)
+material_override = SubResource("ShaderMaterial_q228i")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_uxevj")
+
+[node name="Mullion1_0" type="MeshInstance3D" parent="Room" unique_id=1736847321]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_73yxy")
+mesh = SubResource("BoxMesh_rkghd")
+
+[node name="Mullion1_1" type="MeshInstance3D" parent="Room" unique_id=775615725]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_qii5d")
+mesh = SubResource("BoxMesh_8iowt")
+
+[node name="Mullion1_2" type="MeshInstance3D" parent="Room" unique_id=1379084449]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_1ag12")
+mesh = SubResource("BoxMesh_w480g")
+
+[node name="Mullion1_3" type="MeshInstance3D" parent="Room" unique_id=1765567766]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.75, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_knbaf")
+mesh = SubResource("BoxMesh_lr0wl")
+
+[node name="Mullion1_4" type="MeshInstance3D" parent="Room" unique_id=1738692474]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_6g46t")
+mesh = SubResource("BoxMesh_pxtei")
+
+[node name="Mullion1_5" type="MeshInstance3D" parent="Room" unique_id=1759189589]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.25, 2.25, -4.68)
+material_override = SubResource("StandardMaterial3D_6e2vm")
+mesh = SubResource("BoxMesh_5toyj")
+
+[node name="Sill" type="MeshInstance3D" parent="Room" unique_id=630278454]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, -4.7)
+material_override = SubResource("StandardMaterial3D_kx7n2")
+mesh = SubResource("BoxMesh_ie1us")
+
+[node name="Header" type="MeshInstance3D" parent="Room" unique_id=239526411]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.45, -4.75)
+material_override = SubResource("StandardMaterial3D_kx7n2")
+mesh = SubResource("BoxMesh_txvrr")
+
+[node name="Pier" type="MeshInstance3D" parent="Room" unique_id=398149818]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, -4.8)
+material_override = SubResource("StandardMaterial3D_kx7n2")
+mesh = SubResource("BoxMesh_oak37")
+
+[node name="Mark" type="Sprite3D" parent="Room" unique_id=755971948]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.75, -4.62)
+modulate = Color(0.28627452, 0.7764706, 1, 1)
+pixel_size = 0.00390625
+texture = ExtResource("3_hsmah")
+
+[node name="Props" type="Node3D" parent="." unique_id=800962714]
+
+[node name="Cabinet0" type="MeshInstance3D" parent="Props" unique_id=70358635]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.2, 1, -3.4)
+material_override = SubResource("ShaderMaterial_rjjyj")
+instance_shader_parameters/size = Vector3(0.72, 2, 0.9)
+mesh = SubResource("BoxMesh_sydfu")
+
+[node name="Cabinet1" type="MeshInstance3D" parent="Props" unique_id=1522762968]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.45, 1, -3.4)
+material_override = SubResource("ShaderMaterial_rjjyj")
+instance_shader_parameters/size = Vector3(0.72, 2, 0.9)
+mesh = SubResource("BoxMesh_8hy7j")
+
+[node name="Table" type="MeshInstance3D" parent="Props" unique_id=1093024425]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 0.43, -2.7)
+material_override = SubResource("StandardMaterial3D_kx7n2")
+mesh = SubResource("BoxMesh_4ity3")
+
+[node name="Map" type="MeshInstance3D" parent="Props" unique_id=428161063]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 0.875, -2.7)
+material_override = SubResource("ShaderMaterial_ks5vb")
+mesh = SubResource("BoxMesh_porqr")
