@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FONTS = ROOT / "godot/fonts"
 OUT = ROOT / "design/identity/marks"
 
-AMBER, WHITE, CYAN, PINK, RED = "#ffa000", "#f2f2f0", "#49c6ff", "#ff4f8b", "#ff3b3b"
+AMBER, WHITE, GREY, CYAN, PINK, RED = "#ffa000", "#f2f2f0", "#8b9099", "#49c6ff", "#ff4f8b", "#ff3b3b"
 DISPLAY = FONTS / "anton/Anton-Regular.ttf"  # the tall heavy letters of the board
 JP = FONTS / "noto_sans_jp/NotoSansJP[wght].ttf"
 
@@ -51,6 +51,15 @@ class Text:
         self._draw(pen, left - l, top - t)
         return f'<path fill="{fill}" d="{pen.getCommands()}"/>'
 
+    def path_on(self, x, baseline, fill):
+        """The text drawn from pen position x on this baseline (for joining two colours)."""
+        pen = SVGPathPen(self.glyphs)
+        self._draw(pen, x, baseline)
+        return f'<path fill="{fill}" d="{pen.getCommands()}"/>'
+
+    def advance(self):
+        return sum(self.glyphs[n].width * self.scale + self.tracking for n in self.names)
+
     @property
     def size(self):
         l, t, r, b = self.bounds()
@@ -72,7 +81,8 @@ def poly(points, fill):
 
 
 def wordmark():
-    # BOOTLEG white, 16 amber; amber rule 16 under the letters; katakana 16 under the rule.
+    # White carries the mark, amber only on the 16: white rule 16 under the letters, grey katakana
+    # 16 under the rule.
     boot = fit_height(DISPLAY, "BOOTLEG", 160, tracking=4)
     num = fit_height(DISPLAY, "16", 160, tracking=4)
     kana = Text(JP, "ブートレグ", 40, tracking=24, weight=700)
@@ -85,8 +95,8 @@ def wordmark():
     kana_y = rule_y + 8 + 16
     h = kana_y + kh
     body = boot.path(0, 0, WHITE) + num.path(bw + gap_num, 0, AMBER)
-    body += f'<rect fill="{AMBER}" x="0" y="{rule_y:g}" width="{w:g}" height="8"/>'
-    body += kana.path((w - kw) / 2, kana_y, AMBER)
+    body += f'<rect fill="{WHITE}" x="0" y="{rule_y:g}" width="{w:g}" height="8"/>'
+    body += kana.path((w - kw) / 2, kana_y, GREY)
     return svg(w, h, body)
 
 
@@ -101,15 +111,19 @@ def hexagon(cx, cy, r, inner=None):
 
 
 def monogram():
-    # B16 inside a hexagon ring 16 thick; the letters are sized to sit 24 clear of the ring's
-    # straight sides and centred on the hexagon.
+    # B16 inside a hexagon ring 16 thick, coloured like the wordmark: white ring and B, amber 16.
+    # The letters are sized to sit 24 clear of the ring's straight sides and centred on the hexagon.
     size, r = 256, 128
     inner_width = 2 * (r - 16) * math.cos(math.radians(30))
     probe = Text(DISPLAY, "B16", 100, tracking=2)
-    letters = Text(DISPLAY, "B16", 100 * (inner_width - 48) / probe.size[0], tracking=2)
+    px = 100 * (inner_width - 48) / probe.size[0]
+    letters = Text(DISPLAY, "B16", px, tracking=2)
     lw, lh = letters.size
-    body = f'<path fill="{AMBER}" fill-rule="evenodd" d="{hexagon(r, r, r, r - 16)}"/>'
-    body += letters.path((size - lw) / 2, (size - lh) / 2, AMBER)
+    l, t, _, _ = letters.bounds()
+    x, baseline = (size - lw) / 2 - l, (size - lh) / 2 - t
+    b = Text(DISPLAY, "B", px, tracking=2)
+    body = f'<path fill="{WHITE}" fill-rule="evenodd" d="{hexagon(r, r, r, r - 16)}"/>'
+    body += b.path_on(x, baseline, WHITE) + Text(DISPLAY, "16", px, tracking=2).path_on(x + b.advance(), baseline, AMBER)
     w = 2 * r * math.cos(math.radians(30))
     # trim the empty sides of the pointy-top hexagon
     return svg(w, size, f'<g transform="translate({(w - size) / 2:.2f},0)">{body}</g>')
