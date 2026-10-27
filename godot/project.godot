@@ -16,7 +16,7 @@ window/size/mode=0
 window/stretch/aspect="expand"
 display_server/driver.linuxbsd="wayland"
 ; mailbox: no tearing, and frames aren't held back (plain vsync on NVIDIA + Wayland ran at ~47 fps)
-window/vsync/vsync_mode=2
+window/vsync/vsync_mode=3
 
 [rendering]
 
