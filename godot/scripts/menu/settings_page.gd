@@ -2,6 +2,8 @@
 ## on the left half of the grid. Every row changes the setting the moment you use it.
 extends Control
 
+signal back
+
 const SECTIONS := [["Graphics", "画質"], ["Controls", "操作"], ["Audio", "音声"]]
 const TITLE_Y := 184
 const TABS_Y: int = TITLE_Y + Tokens.TYPE["page"]["line"] + Tokens.SPACE_XL  # under the title, 32 clear
@@ -11,6 +13,7 @@ var _title: Label
 var _scroll := ScrollContainer.new()
 var _rows := VBoxContainer.new()
 var _preset_row: SettingRow
+var _back: FrameButton
 var _option_rows := {}
 
 func _ready() -> void:
@@ -31,6 +34,11 @@ func _ready() -> void:
 	_scroll.add_child(_rows)
 	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(_scroll)
+	_back = FrameButton.new("‹  Back")
+	_back.pressed.connect(func(): back.emit())
+	add_child(_back)
+	# bottom left, on the margins
+	_back.position = Vector2(Grid.x(0), Grid.bottom() - _back.get_combined_minimum_size().y)
 	Settings.changed.connect(_sync)
 	_show(0)
 
@@ -38,7 +46,8 @@ func _layout_scroll() -> void:
 	# from where the tabs rest, not where they are (they slide in when the page arrives)
 	var top := TABS_Y + _tabs.get_combined_minimum_size().y + Tokens.SPACE_XL
 	_scroll.position = Vector2(Grid.x(0), top)
-	_scroll.size = Vector2(Grid.w(6), Grid.bottom() - top)
+	var bottom := _back.position.y - Tokens.SPACE_XL
+	_scroll.size = Vector2(Grid.w(6), bottom - top)
 
 func _show(section: int) -> void:
 	for c in _rows.get_children():
@@ -94,5 +103,5 @@ func _sync() -> void:
 		_option_rows[key].set_index(Settings.graphics[key])
 
 func enter() -> void:
-	Motion.enter_all([_title, _tabs])
+	Motion.enter_all([_title, _tabs, _back])
 	Motion.enter_all(_rows.get_children(), Tokens.STAGGER * 2)

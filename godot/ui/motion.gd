@@ -20,11 +20,13 @@ static func enter(c: Control, delay := 0.0) -> void:
 	var t := tween(c).set_parallel()
 	t.tween_property(c, "modulate:a", 1.0, Tokens.ENTER).set_delay(delay)
 	if not c.get_parent() is Container:
-		# a second enter while one is running takes over from it, from the same resting place
-		var rest: Vector2 = c.get_meta("motion_rest", c.position)
+		# only the height moves, so a control re-placed sideways while it arrives (text that
+		# measured itself late) keeps its new place; a second enter while one is running takes
+		# over from it, from the same resting height
+		var rest: float = c.get_meta("motion_rest", c.position.y)
 		c.set_meta("motion_rest", rest)
-		c.position = rest + Vector2(0, Tokens.SLIDE)
-		t.tween_property(c, "position", rest, Tokens.ENTER).set_delay(delay)
+		c.position.y = rest + Tokens.SLIDE
+		t.tween_property(c, "position:y", rest, Tokens.ENTER).set_delay(delay)
 	c.set_meta("motion_tween", t)
 	t.finished.connect(func():
 		c.remove_meta("motion_rest")
