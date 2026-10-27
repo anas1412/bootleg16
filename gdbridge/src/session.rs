@@ -34,6 +34,9 @@ pub struct Session {
     pub(crate) defuse_seen: std::cell::Cell<f32>,
     /// Who we heard last and when, by player id (`game::voices`).
     pub(crate) heard: std::collections::HashMap<u8, crate::game::Heard>,
+    /// In a practice match: the bots' names (they join like players, so the server doesn't
+    /// flag them; `game::players` does).
+    pub(crate) bots: &'static [&'static str],
     base: Base<RefCounted>,
 }
 
@@ -49,6 +52,7 @@ impl IRefCounted for Session {
             prev_punch: [0.0; 3],
             defuse_seen: Default::default(),
             heard: Default::default(),
+            bots: &[],
             base,
         }
     }
@@ -130,6 +134,7 @@ impl Session {
         self.stop = Some(stop);
         self.joined = false;
         self.view.reset();
+        self.bots = &crate::practice::NAMES;
         true
     }
 
@@ -348,6 +353,8 @@ impl Session {
             c.disconnect();
         }
         self.client = None;
+        self.bots = &[];
+        self.heard.clear();
         if let Some(s) = self.stop.take() {
             s.store(true, Ordering::Relaxed);
         }

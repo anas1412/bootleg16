@@ -34,6 +34,7 @@ impl Session {
     /// zone), `team`, `phase`
     /// (warmup, freeze, live, over, gameover), `round`, `left` (seconds of the phase),
     /// `score_t`, `score_ct`, `alive_t`, `alive_ct`, `weapon` (CS name), `slot` (1 to 5),
+    /// `primary` and `secondary` (CS names of the guns you carry, "" none),
     /// `clip` and `reserve` (-1: no gun), `reloading`, `grenades` (HE, flash, smoke), `c4`
     /// (you carry it), `planting` (0 to 1, -1: not), `bomb` (none, carried, dropped,
     /// planted), `bomb_at`, `bomb_left` (the fuse), `defusing` (someone is), `defuse_left`,
@@ -98,6 +99,8 @@ impl Session {
             "alive_ct" => alive(Team::Ct),
             "weapon" => sim::weapons::data::def(l.active_id()).name,
             "slot" => l.active as i64,
+            "primary" => l.primary.as_ref().map_or("", |g| sim::weapons::data::def(g.id).name),
+            "secondary" => l.secondary.as_ref().map_or("", |g| sim::weapons::data::def(g.id).name),
             "clip" => gun.map_or(-1, |g| g.clip as i64),
             "reserve" => gun.map_or(-1, |g| g.reserve as i64),
             "reloading" => gun.is_some_and(|g| g.reloading),
@@ -214,7 +217,7 @@ impl Session {
                 let health = if you { c.vitals.health.ceil() as i64 } else { mates.get(&s.id).copied().unwrap_or(-1) };
                 vdict! {
                     "id" => s.id as i64, "name" => s.name.as_str(), "team" => side(s.team), "alive" => s.alive,
-                    "bot" => s.bot, "you" => you, "health" => health,
+                    "bot" => s.bot || self.bots.contains(&s.name.as_str()), "you" => you, "health" => health,
                 }
             })
             .collect()
@@ -279,8 +282,9 @@ impl Session {
         flying.chain(clouds).collect()
     }
 
-    /// The buy menu for your side: `category`, `name`, `key` (for `buy`), `price`, and `cost`
-    /// now (-1: nothing to buy, you have it or carry the most allowed).
+    /// The buy menu for your side: `category`, `name`, `key` (for `buy`), `price`, `cost`
+    /// now (-1: nothing to buy, you have it or carry the most allowed), and for a gun its
+    /// `clip` and `reserve` (0 for gear).
     #[func]
     fn shop(&self) -> Array<VarDictionary> {
         let Some(c) = &self.client else { return Array::new() };
@@ -288,9 +292,14 @@ impl Session {
             .into_iter()
             .map(|(cat, name, item)| {
                 let cost = net::server::buy::cost_now(item, &c.state.loadout, c.vitals.armor, c.vitals.helmet, c.me_info.defuse_kit);
+                let gun = match item {
+                    net::protocol::BuyItem::Weapon(id) => sim::weapons::data::gun(id),
+                    _ => None,
+                };
                 vdict! {
                     "category" => cat, "name" => name, "key" => crate::shop::key(item),
                     "price" => net::server::buy::price(item).unwrap_or(0) as i64, "cost" => cost.map_or(-1, |p| p as i64),
+                    "clip" => gun.map_or(0, |g| g.clip as i64), "reserve" => gun.map_or(0, |g| g.reserve as i64),
                 }
             })
             .collect()

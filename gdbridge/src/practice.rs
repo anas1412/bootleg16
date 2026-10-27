@@ -13,7 +13,7 @@ pub const SIDE: usize = 5;
 /// Rounds in a short match (CS2: first to 9, sides swap after 8, 8 all is a draw).
 pub const ROUNDS: u32 = 16;
 /// The bots' names (no clan tags, no em dashes).
-const NAMES: [&str; 2 * SIDE - 1] = ["Ash", "Bishop", "Cole", "Dex", "Echo", "Flint", "Gale", "Hex", "Ivo"];
+pub const NAMES: [&str; 2 * SIDE - 1] = ["Ash", "Bishop", "Cole", "Dex", "Echo", "Flint", "Gale", "Hex", "Ivo"];
 
 /// The bots' view of the last map played (working it out takes a moment, so a second
 /// match on the same map file starts at once).
