@@ -24,6 +24,9 @@ func _ready() -> void:
 	Engine.max_physics_steps_per_frame = 16
 	for node in [$Player, $Others, $Pieces, $Doors, $Hud/Speed]:
 		node.session = session
+	var pause := preload("res://scripts/pause.gd").new()
+	pause.leave.connect(func(): get_tree().change_scene_to_file("res://scenes/menu.tscn"))
+	add_child(pause)
 	if OS.get_environment("BOOTLEG16_BENCH") != "":
 		add_child(preload("res://scripts/bench.gd").new())
 

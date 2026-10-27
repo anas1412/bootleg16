@@ -9,25 +9,16 @@ const NORMAL_FOV := 73.74
 ## The buttons `Session.tick` takes, in bit order.
 const BUTTONS := ["jump", "crouch", "walk", "use", "attack", "attack2", "reload", "drop"]
 
-@export var sensitivity := 2.0
-
 var session: Session
 var yaw := 0.0
 var pitch := 0.0
 
-func _ready() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# zoomed scopes slow the mouse in proportion, like CS
-		var k := deg_to_rad(sensitivity * M_YAW) * fov / NORMAL_FOV
+		var k := deg_to_rad(Settings.sensitivity * M_YAW) * fov / NORMAL_FOV
 		yaw -= event.relative.x * k
 		pitch = clamp(pitch - event.relative.y * k, deg_to_rad(-89), deg_to_rad(89))
-	elif event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif event is InputEventMouseButton and event.pressed:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _physics_process(_delta: float) -> void:
 	if session == null:
@@ -42,6 +33,12 @@ func _physics_process(_delta: float) -> void:
 	for s in range(1, 6):
 		if Input.is_action_just_pressed("slot%d" % s):
 			slot = s
+	# the game keeps running under the pause overlay, but your hands are off the keys
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		forward = 0.0
+		side = 0.0
+		buttons = 0
+		slot = 0
 	session.tick(forward, side, yaw, pitch, buttons, slot)
 
 func _process(delta: float) -> void:

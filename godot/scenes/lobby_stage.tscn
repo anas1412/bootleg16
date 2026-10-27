@@ -1,6 +1,6 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=11 format=3]
 
-[ext_resource type="Script" path="res://scripts/lobby_test.gd" id="script"]
+[ext_resource type="Script" path="res://scripts/menu/stage.gd" id="script"]
 [ext_resource type="PackedScene" path="res://characters/mannequin.glb" id="mannequin"]
 
 [sub_resource type="Environment" id="env"]
@@ -51,36 +51,7 @@ emission_enabled = true
 emission = Color(0.12, 0.35, 0.5, 1)
 emission_energy_multiplier = 0.08
 
-[sub_resource type="StyleBoxFlat" id="deploy"]
-bg_color = Color(1, 0.63, 0, 0.06)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(1, 0.63, 0, 1)
-
-[sub_resource type="StyleBoxFlat" id="deploy_hover"]
-bg_color = Color(1, 0.63, 0, 0.16)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(1, 0.63, 0, 1)
-
-[sub_resource type="SystemFont" id="title"]
-font_names = PackedStringArray("Oswald", "Anton", "Bebas Neue", "DejaVu Sans Condensed", "Noto Sans")
-font_weight = 800
-font_stretch = 75
-
-[sub_resource type="SystemFont" id="kana"]
-font_names = PackedStringArray("Noto Sans CJK JP", "Noto Sans JP", "Noto Serif CJK JP")
-font_weight = 700
-
-[sub_resource type="SystemFont" id="ui"]
-font_names = PackedStringArray("Noto Sans", "DejaVu Sans")
-font_weight = 600
-
-[node name="LobbyTest" type="Node3D"]
+[node name="LobbyStage" type="Node3D"]
 script = ExtResource("script")
 
 [node name="Environment" type="WorldEnvironment" parent="."]
@@ -171,84 +142,3 @@ sides = 6
 
 [node name="Mate" parent="Stage" instance=ExtResource("mannequin")]
 transform = Transform3D(0.94, 0, -0.342, 0, 1, 0, 0.342, 0, 0.94, 1.15, -0.12, -1.7)
-
-[node name="UI" type="CanvasLayer" parent="."]
-
-[node name="Title" type="VBoxContainer" parent="UI"]
-offset_left = 96.0
-offset_top = 312.0
-offset_right = 656.0
-offset_bottom = 712.0
-theme_override_constants/separation = 8
-
-[node name="Side" type="Label" parent="UI/Title"]
-theme_override_fonts/font = SubResource("ui")
-theme_override_font_sizes/font_size = 18
-text = "STRAYS · ATTACK"
-
-[node name="Name" type="Label" parent="UI/Title"]
-theme_override_fonts/font = SubResource("title")
-theme_override_font_sizes/font_size = 160
-theme_override_constants/line_spacing = -40
-text = "VERA"
-
-[node name="Kana" type="Label" parent="UI/Title"]
-theme_override_fonts/font = SubResource("kana")
-theme_override_font_sizes/font_size = 24
-text = "ヴェラ"
-
-[node name="Rule" type="ColorRect" parent="UI/Title"]
-custom_minimum_size = Vector2(268, 4)
-size_flags_horizontal = 0
-color = Color(1, 0.31, 0.55, 1)
-
-[node name="Line" type="Label" parent="UI/Title"]
-theme_override_fonts/font = SubResource("ui")
-theme_override_font_sizes/font_size = 20
-theme_override_colors/font_color = Color(0.57, 0.61, 0.65, 1)
-text = "Plants the bomb. Every round."
-
-[node name="Squad" type="VBoxContainer" parent="UI"]
-offset_left = 1410.0
-offset_top = 312.0
-offset_right = 1824.0
-offset_bottom = 584.0
-theme_override_constants/separation = 8
-
-[node name="Head" type="Label" parent="UI/Squad"]
-theme_override_fonts/font = SubResource("ui")
-theme_override_font_sizes/font_size = 16
-theme_override_colors/font_color = Color(0.57, 0.61, 0.65, 1)
-text = "YOUR SQUAD · 2 / 5"
-
-[node name="You" type="Label" parent="UI/Squad"]
-theme_override_fonts/font = SubResource("ui")
-theme_override_font_sizes/font_size = 22
-theme_override_colors/font_color = Color(1, 0.63, 0, 1)
-text = "Vera  ·  you"
-
-[node name="Mate" type="Label" parent="UI/Squad"]
-theme_override_fonts/font = SubResource("ui")
-theme_override_font_sizes/font_size = 22
-text = "Nadia  ·  ready"
-
-[node name="Invite" type="Label" parent="UI/Squad"]
-theme_override_fonts/font = SubResource("ui")
-theme_override_font_sizes/font_size = 22
-theme_override_colors/font_color = Color(0.34, 0.38, 0.42, 1)
-text = "+ invite"
-
-[node name="Deploy" type="Button" parent="UI"]
-offset_left = 1410.0
-offset_top = 920.0
-offset_right = 1824.0
-offset_bottom = 1016.0
-theme_override_fonts/font = SubResource("title")
-theme_override_font_sizes/font_size = 48
-theme_override_colors/font_color = Color(1, 0.63, 0, 1)
-theme_override_colors/font_hover_color = Color(1, 0.63, 0, 1)
-theme_override_styles/normal = SubResource("deploy")
-theme_override_styles/hover = SubResource("deploy_hover")
-theme_override_styles/pressed = SubResource("deploy_hover")
-theme_override_styles/focus = SubResource("deploy")
-text = "DEPLOY  ›"

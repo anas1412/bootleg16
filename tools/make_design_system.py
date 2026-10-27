@@ -23,7 +23,7 @@ CSS_FONT = {  # family var, weight, extra css
 }
 SAMPLES = {
     "takeover": "Operation ready", "name": "Vera", "page": "Locker", "action": "Deploy",
-    "tab": "Play", "body": "Nadia joined your squad", "label": "Your squad 2/5", "kana": "ヴェラ",
+    "tab": "Play", "body": "Nadia joined your squad", "label": "Your squad 2/5", "kana": "ヴェラ", "tab_kana": "出撃",
 }
 COLOUR_GROUPS = (
     ("Ground", ("bg", "panel", "panel_hi", "line")),
@@ -141,7 +141,7 @@ def tokens_gd():
     out += [f"const SPACE_{k.upper()} := {v}" for k, v in T["space"].items()]
     out += [""] + [f"const STROKE_{k.upper()} := {v}" for k, v in T["stroke"].items()]
     out += [""] + [f'const {k.upper()} := Color("{v["hex"]}")  # {v["use"]}' for k, v in T["color"].items()]
-    out += [""] + [f'const FONT_{k.upper()} := "res://fonts/{v["file"]}"' for k, v in T["font"].items()]
+    out += ["", "const FONT_FILES := {" + ", ".join(f'"{k}": "res://fonts/{v["file"]}"' for k, v in T["font"].items()) + "}"]
     axes = {k: {a: v[a] for a in ("wdth", "wght") if a in v} for k, v in T["font"].items()}
     out += [f"const FONT_AXES := {gd_value({k: v for k, v in axes.items() if v})}"]
     out += ["", f"const TYPE := {gd_value(T['type'])}", ""]

@@ -33,15 +33,10 @@ const ALERT := Color("#ff3b3b")  # Live, danger, bomb planted. Only when somethi
 const BUREAU := Color("#49c6ff")  # The Bureau: their emblem, their players, their side of a score.
 const STRAYS := Color("#ff4f8b")  # The Strays: their emblem, their players, their side of a score.
 
-const FONT_DISPLAY := "res://fonts/anton/Anton-Regular.ttf"
-const FONT_TITLE := "res://fonts/noto_serif_display/NotoSerifDisplay[wdth,wght].ttf"
-const FONT_UI := "res://fonts/barlow_condensed/BarlowCondensed-SemiBold.ttf"
-const FONT_UI_BOLD := "res://fonts/barlow_condensed/BarlowCondensed-Bold.ttf"
-const FONT_MONO := "res://fonts/ibm_plex_mono/IBMPlexMono-Medium.ttf"
-const FONT_KANA := "res://fonts/noto_sans_jp/NotoSansJP[wght].ttf"
+const FONT_FILES := {"display": "res://fonts/anton/Anton-Regular.ttf", "title": "res://fonts/noto_serif_display/NotoSerifDisplay[wdth,wght].ttf", "ui": "res://fonts/barlow_condensed/BarlowCondensed-SemiBold.ttf", "ui_bold": "res://fonts/barlow_condensed/BarlowCondensed-Bold.ttf", "mono": "res://fonts/ibm_plex_mono/IBMPlexMono-Medium.ttf", "kana": "res://fonts/noto_sans_jp/NotoSansJP[wght].ttf"}
 const FONT_AXES := {"title": {"wdth": 62.5, "wght": 900}, "kana": {"wght": 500}}
 
-const TYPE := {"takeover": {"font": "display", "size": 96, "line": 96, "track": 0.01, "upper": true, "use": "Full-screen moments: OPERATION READY, BOMB PLANTED."}, "name": {"font": "title", "size": 168, "line": 136, "track": 0, "upper": true, "use": "Your character's name card in the lobby."}, "page": {"font": "display", "size": 48, "line": 56, "track": 0.01, "upper": true, "use": "Page titles: LOCKER, SETTINGS."}, "action": {"font": "ui_bold", "size": 40, "line": 48, "track": 0.06, "upper": true, "use": "The main button: DEPLOY."}, "tab": {"font": "ui_bold", "size": 24, "line": 32, "track": 0.12, "upper": true, "use": "Top tabs and secondary buttons."}, "body": {"font": "ui", "size": 24, "line": 32, "track": 0, "upper": false, "use": "Names in lists, settings rows, sentences."}, "label": {"font": "mono", "size": 16, "line": 24, "track": 0.14, "upper": true, "use": "Small headers and readouts: YOUR SQUAD 2/5, ping, timers."}, "kana": {"font": "kana", "size": 24, "line": 32, "track": 0.3, "upper": false, "use": "The katakana line under a name or title, in text_dim."}}
+const TYPE := {"takeover": {"font": "display", "size": 96, "line": 96, "track": 0.01, "upper": true, "use": "Full-screen moments: OPERATION READY, BOMB PLANTED."}, "name": {"font": "title", "size": 168, "line": 136, "track": 0, "upper": true, "use": "Your character's name card in the lobby."}, "page": {"font": "display", "size": 48, "line": 56, "track": 0.01, "upper": true, "use": "Page titles: LOCKER, SETTINGS."}, "action": {"font": "ui_bold", "size": 40, "line": 48, "track": 0.06, "upper": true, "use": "The main button: DEPLOY."}, "tab": {"font": "ui_bold", "size": 24, "line": 32, "track": 0.12, "upper": true, "use": "Top tabs and secondary buttons."}, "body": {"font": "ui", "size": 24, "line": 32, "track": 0, "upper": false, "use": "Names in lists, settings rows, sentences."}, "label": {"font": "mono", "size": 16, "line": 24, "track": 0.14, "upper": true, "use": "Small headers and readouts: YOUR SQUAD 2/5, ping, timers."}, "kana": {"font": "kana", "size": 24, "line": 32, "track": 0.3, "upper": false, "use": "The katakana line under a name or title, in text_dim."}, "tab_kana": {"font": "kana", "size": 16, "line": 24, "track": 0.3, "upper": false, "use": "The katakana under a tab name."}}
 
 const HOVER := 0.12  # seconds
 const ENTER := 0.24  # seconds

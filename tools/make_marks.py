@@ -1,7 +1,8 @@
 """Draws the bootleg16 identity marks as plain SVG paths (no font needed to show them).
 
 Letters come from OFL fonts in godot/fonts, turned into outlines; layouts are measured from the
-real ink bounds so gaps land exactly on the 8px scale. Writes design/identity/marks/*.svg.
+real ink bounds so gaps land exactly on the 8px scale. Writes design/identity/marks/*.svg and the same files
+to godot/ui/marks/ for the game.
 
     python3 -I tools/make_marks.py
 """
@@ -16,6 +17,7 @@ from fontTools.ttLib import TTFont
 ROOT = Path(__file__).resolve().parent.parent
 FONTS = ROOT / "godot/fonts"
 OUT = ROOT / "design/identity/marks"
+GAME = ROOT / "godot/ui/marks"  # the same files, for the game
 
 AMBER, WHITE, GREY, CYAN, PINK, RED = "#ffa000", "#f2f2f0", "#8b9099", "#49c6ff", "#ff4f8b", "#ff3b3b"
 DISPLAY = FONTS / "anton/Anton-Regular.ttf"  # the tall heavy letters of the board
@@ -178,8 +180,11 @@ def live_bug():
 
 
 if __name__ == "__main__":
-    OUT.mkdir(parents=True, exist_ok=True)
+    for out in (OUT, GAME):
+        out.mkdir(parents=True, exist_ok=True)
     for name, make in (("wordmark", wordmark), ("monogram", monogram), ("bureau", bureau),
                        ("strays", strays), ("live16", live_bug)):
-        (OUT / f"{name}.svg").write_text(make())
-        print(OUT / f"{name}.svg")
+        drawn = make()
+        for out in (OUT, GAME):
+            (out / f"{name}.svg").write_text(drawn)
+        print(name)

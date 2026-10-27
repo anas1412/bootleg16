@@ -12,6 +12,8 @@ const KEYS := {
 const MOUSE := {"attack": MOUSE_BUTTON_LEFT, "attack2": MOUSE_BUTTON_RIGHT}
 
 static func install() -> void:
+	if InputMap.has_action("forward"):
+		return
 	for action in KEYS:
 		var e := InputEventKey.new()
 		e.physical_keycode = KEYS[action]

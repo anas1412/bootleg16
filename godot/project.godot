@@ -5,8 +5,12 @@ config_version=5
 [application]
 
 config/name="bootleg16"
-run/main_scene="res://main.tscn"
+run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
+
+[autoload]
+
+Settings="*res://scripts/settings.gd"
 
 [display]
 
