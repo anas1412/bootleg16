@@ -13,7 +13,7 @@ fn aim(eye: [f32; 3], at: [f32; 3]) -> (f32, f32) {
 
 #[test]
 fn a_body_is_picked_up_with_e_and_shields_its_carrier() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.server.set_rules(net::server::Rules::practice(0));
     g.server.set_give(vec![sim::weapons::Id::Ak47]);
@@ -77,8 +77,8 @@ fn a_body_is_picked_up_with_e_and_shields_its_carrier() {
 
 #[test]
 fn a_body_killed_against_a_wall_lies_clear_of_it() {
-    let Some(bsp) = dust2() else { return };
-    let world = sim::collision::World::from_bsp(&bsp);
+    let bsp = arena_map();
+    let world = bsp.world();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::T));
     let b = g.b.id().unwrap();
@@ -123,7 +123,7 @@ fn a_body_killed_against_a_wall_lies_clear_of_it() {
 
 /// B dies, comes back (practice), and A is given a body to work with.
 fn with_a_body() -> Option<(Game, u8, u8)> {
-    let bsp = dust2()?;
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.server.set_rules(net::server::Rules::practice(0));
     g.server.set_give(vec![sim::weapons::Id::Ak47]);

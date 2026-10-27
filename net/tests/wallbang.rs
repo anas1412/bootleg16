@@ -1,5 +1,5 @@
 //! A bullet that gets through a wall hurts someone the server never sent to the shooter.
-//! Skipped when de_dust2 isn't installed.
+//! On our own test arena.
 mod common;
 use common::*;
 use net::protocol::Team;
@@ -9,12 +9,12 @@ use sim::weapons::bullets::{fire_bullet, view_vectors, Target};
 
 #[test]
 fn a_shot_through_a_wall_hurts_someone_who_was_never_sent() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.server.set_give(vec![sim::weapons::Id::Ak47]);
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
-    let world = sim::collision::World::from_bsp(&bsp);
+    let world = bsp.world();
     let assets = assets();
     let (origin, eye) = (g.server.player(a).unwrap().origin, g.server.player(a).unwrap().eye());
     let ak = g.server.player_state(a).unwrap().loadout.active_gun().map(|_| sim::weapons::Id::Ak47).unwrap();

@@ -26,7 +26,7 @@ fn aim(eye: [f32; 3], at: [f32; 3]) -> (f32, f32) {
 #[test]
 fn shooting_the_window_breaks_it_for_everyone_and_you_walk_through() {
     use sim::pmove::Input;
-    let mut g = setup_arena(0, 0.0);
+    let mut g = setup(&arena_map(), 0, 0.0);
     g.server.set_give(vec![sim::weapons::Id::Ak47]);
     g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
     let a = g.a.id().unwrap();
@@ -58,7 +58,7 @@ fn shooting_the_window_breaks_it_for_everyone_and_you_walk_through() {
 #[test]
 fn walking_into_the_door_opens_it_for_everyone_and_you_pass() {
     use sim::pmove::Input;
-    let mut g = setup_arena(20, 0.0);
+    let mut g = setup(&arena_map(), 20, 0.0);
     g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
     let a = g.a.id().unwrap();
     let to = |x: f32, y: f32, z: f32| [x / 0.0254, -z / 0.0254, y / 0.0254];

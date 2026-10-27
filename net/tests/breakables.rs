@@ -13,10 +13,11 @@ fn shooting_nukes_glass_breaks_it_for_everyone() {
     // The thin axis is the glass's facing: stand 120 units off it, eyes level with its middle.
     let size: Vec<f32> = (0..3).map(|i| m.maxs[i] - m.mins[i]).collect();
     let axis = if size[0] < size[1] { 0 } else { 1 };
-    let mut g = setup(&bsp, 0, 0.0);
+    let map = TestMap::Bsp(bsp);
+    let mut g = setup(&map, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::T));
     let a = g.a.id().unwrap();
-    let world = sim::collision::World::from_bsp(&bsp);
+    let world = map.world();
     let c = glass.center;
     let spot = [-1.0f32, 1.0]
         .iter()

@@ -9,7 +9,7 @@ use std::time::Duration;
 
 #[test]
 fn a_match_is_recorded_and_plays_back() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let dir = std::env::temp_dir().join(format!("bootleg16-demos-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig { demos: dir.to_string_lossy().into(), name: "rec test".into(), ..Default::default() });
@@ -31,10 +31,10 @@ fn a_match_is_recorded_and_plays_back() {
     let files: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).collect();
     assert_eq!(files.len(), 1, "one recording: {files:?}");
     let name = files[0].file_name().unwrap().to_string_lossy().into_owned();
-    assert!(name.contains("rec_test") && name.ends_with("-test.bdem"), "{name}");
+    assert!(name.contains("rec_test") && name.ends_with("-test_arena.bdem"), "{name}");
     // Read back: A is in it, walking, and was where the server had them.
     let mut r = net::demo::Reader::open(&files[0]).unwrap();
-    assert_eq!(r.header.map, "test");
+    assert_eq!(r.header.map, "test_arena");
     let mut frames = 0;
     let mut a_moved = false;
     while let Some(f) = r.next_frame() {
@@ -47,7 +47,7 @@ fn a_match_is_recorded_and_plays_back() {
     assert!(a_moved, "A's walk is in the recording");
     // Played back to a watching game: it sees A.
     let mut replay = net::replay::Replay::open("127.0.0.1:0".parse().unwrap(), &files[0]).unwrap();
-    let mut viewer = net::Client::connect(replay.local_addr(), "viewer", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut viewer = net::Client::connect(replay.local_addr(), "viewer", bsp.world()).unwrap();
     let mut seen = false;
     for t in 1..400 {
         replay.step(t);

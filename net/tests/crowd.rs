@@ -10,7 +10,7 @@ fn flat_distance(a: [f32; 3], b: [f32; 3]) -> f32 {
 
 #[test]
 fn a_player_running_at_another_stops_at_their_edge() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::T));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());

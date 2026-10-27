@@ -26,12 +26,12 @@ fn run(g: &mut Game, extra: &mut [&mut net::Client], ticks: u32, events: &mut Ve
 
 #[test]
 fn surrender_after_a_teammate_abandons() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig { round_time: 1e6, ..Default::default() });
     g.server.reserve(MatchSetup { players: vec![(1, Group::A), (2, Group::A), (3, Group::B)], knife_round: false, keys: Vec::new(), map: String::new() });
     g.a.ticket = 1;
     g.b.ticket = 3;
-    let mut mate = net::Client::connect(g.server.local_addr(), "mate", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut mate = net::Client::connect(g.server.local_addr(), "mate", bsp.world()).unwrap();
     mate.ticket = 2;
     let mut ev = Vec::new();
     run(&mut g, &mut [&mut mate], 256, &mut ev);
@@ -54,7 +54,7 @@ fn surrender_after_a_teammate_abandons() {
 
 #[test]
 fn an_empty_side_pauses_then_forfeits() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig { freeze_time: 1.0, round_time: 30.0, ..Default::default() });
     g.server.reserve(MatchSetup { players: vec![(1, Group::A), (2, Group::B)], knife_round: false, keys: Vec::new(), map: String::new() });
     g.a.ticket = 1;
@@ -75,12 +75,12 @@ fn an_empty_side_pauses_then_forfeits() {
 
 #[test]
 fn a_team_votes_a_teammate_out() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig { round_time: 1e6, ..Default::default() });
     g.server.reserve(MatchSetup { players: vec![(1, Group::A), (2, Group::A), (3, Group::B)], knife_round: false, keys: Vec::new(), map: String::new() });
     g.a.ticket = 1;
     g.b.ticket = 3;
-    let mut mate = net::Client::connect(g.server.local_addr(), "mate", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut mate = net::Client::connect(g.server.local_addr(), "mate", bsp.world()).unwrap();
     mate.ticket = 2;
     let mut ev = Vec::new();
     run(&mut g, &mut [&mut mate], 256, &mut ev);
@@ -91,7 +91,7 @@ fn a_team_votes_a_teammate_out() {
     assert!(ev.iter().any(|e| *e == GameEvent::VotedOut { player: target }), "{ev:?}");
     assert_eq!(mate.status, net::client::Status::Rejected);
     // They can't come back, and A's team may now surrender (a teammate is gone for good).
-    let mut back = net::Client::connect(g.server.local_addr(), "mate", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut back = net::Client::connect(g.server.local_addr(), "mate", bsp.world()).unwrap();
     back.ticket = 2;
     run(&mut g, &mut [&mut back], 256, &mut ev);
     assert!(back.id().is_none());
@@ -104,7 +104,7 @@ fn a_team_votes_a_teammate_out() {
 
 #[test]
 fn a_dropped_player_rejoins_their_seat() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig { round_time: 1e6, ..Default::default() });
     g.server.reserve(MatchSetup { players: vec![(1, Group::A), (2, Group::B)], knife_round: false, keys: Vec::new(), map: String::new() });
     g.a.ticket = 1;

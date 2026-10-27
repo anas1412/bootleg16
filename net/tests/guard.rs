@@ -17,8 +17,8 @@ fn recv(udp: &UdpSocket) -> Vec<ServerMsg> {
 
 #[test]
 fn join_needs_the_cookie_and_floods_are_cut_off() {
-    let Some(bsp) = dust2() else { return };
-    let mut server = net::Server::new(SocketAddr::from(([127, 0, 0, 1], 0)), "de_dust2", &bsp, assets()).unwrap();
+    let bsp = arena_map();
+    let mut server = bsp.server(SocketAddr::from(([127, 0, 0, 1], 0)), assets()).unwrap();
     let addr = server.local_addr();
     let udp = UdpSocket::bind("127.0.0.1:0").unwrap();
     udp.set_read_timeout(Some(Duration::from_millis(20))).unwrap();

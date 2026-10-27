@@ -1,5 +1,5 @@
 //! The round system end to end over localhost UDP: freeze time, round wins and money,
-//! planting, defusing and the explosion. Skipped when de_dust2 isn't installed.
+//! planting, defusing and the explosion. On our own test arena (`godot/maps/test_arena`).
 mod common;
 use common::*;
 use net::config::MatchConfig;
@@ -21,8 +21,8 @@ fn wait(g: &mut Game, secs: f32, ia: Input, ib: Input, events: &mut Vec<GameEven
 }
 
 /// A standing spot in the middle of a bomb site (players drop to the floor).
-fn site_spot(bsp: &goldsrc::bsp::Bsp) -> [f32; 3] {
-    let z = sim::zones::Zones::from_bsp(bsp);
+fn site_spot(map: &TestMap) -> [f32; 3] {
+    let z = map.world().zones;
     let (lo, hi) = z.bomb_sites[0];
     let p = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2] + 40.0];
     assert!(z.in_bomb_site(p, sim::collision::Hull::Standing));
@@ -31,7 +31,7 @@ fn site_spot(bsp: &goldsrc::bsp::Bsp) -> [f32; 3] {
 
 #[test]
 fn freeze_time_then_a_win_pays_both_teams_and_starts_the_next_round() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, quick());
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
@@ -87,7 +87,7 @@ fn freeze_time_then_a_win_pays_both_teams_and_starts_the_next_round() {
 }
 
 /// Plant in a site (3 s holding attack with the C4 out), then either defuse or let it blow.
-fn plant(g: &mut Game, bsp: &goldsrc::bsp::Bsp, ev: &mut Vec<GameEvent>) -> [f32; 3] {
+fn plant(g: &mut Game, bsp: &TestMap, ev: &mut Vec<GameEvent>) -> [f32; 3] {
     let a = g.a.id().unwrap();
     while g.a.round.phase != Phase::Live {
         wait(g, 0.05, Input::default(), Input::default(), ev);
@@ -110,7 +110,7 @@ fn plant(g: &mut Game, bsp: &goldsrc::bsp::Bsp, ev: &mut Vec<GameEvent>) -> [f32
 
 #[test]
 fn bomb_defused_pays_the_planters_bonus() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, quick());
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
@@ -132,7 +132,7 @@ fn bomb_defused_pays_the_planters_bonus() {
 
 #[test]
 fn bomb_explodes_wins_the_round_and_kills_nearby() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, quick());
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let b = g.b.id().unwrap();
@@ -144,7 +144,7 @@ fn bomb_explodes_wins_the_round_and_kills_nearby() {
     assert!(ev.iter().any(|e| matches!(e, GameEvent::BombExploded { .. })), "{ev:?}");
     assert!(ev.iter().any(|e| *e == GameEvent::RoundEnd { winner: Team::T, reason: EndReason::BombExploded }));
     assert!(ev.iter().any(|e| matches!(e, GameEvent::Kill { victim, weapon: Some(sim::weapons::Id::C4), .. } if *victim == b)), "{ev:?}");
-    // dust2's crates at that site go with it, and are back next round.
+    // pieces near the blast break with it (and any its site names), and are back next round.
     assert!(ev.iter().any(|e| matches!(e, GameEvent::Broke { .. })), "no crates broke: {ev:?}");
     assert!(!g.a.broken.is_empty());
     wait(&mut g, 2.0, Input::default(), Input::default(), &mut ev);
@@ -153,7 +153,7 @@ fn bomb_explodes_wins_the_round_and_kills_nearby() {
 
 #[test]
 fn time_running_out_pays_living_terrorists_nothing() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, MatchConfig { round_time: 2.0, ..quick() });
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
@@ -173,7 +173,7 @@ fn time_running_out_pays_living_terrorists_nothing() {
 fn everything_bought_this_round_sells_back() {
     use net::protocol::BuyItem;
     use sim::weapons::Id;
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, MatchConfig { freeze_time: 3.0, buy_time: 20.0, start_money: 16000, ..quick() });
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let a = g.a.id().unwrap();
@@ -206,7 +206,7 @@ fn everything_bought_this_round_sells_back() {
 
 #[test]
 fn practice_hands_the_strays_the_bomb_and_only_a_ct_defuses() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, quick());
     g.server.set_rules(net::server::Rules::practice(0));
     g.connect_as(Some(Team::T), Some(Team::Ct));
@@ -256,7 +256,7 @@ fn practice_hands_the_strays_the_bomb_and_only_a_ct_defuses() {
 
 #[test]
 fn a_dead_cts_defuse_kit_drops_and_another_ct_picks_it_up() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, quick());
     g.connect_as(Some(Team::Ct), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
@@ -280,7 +280,7 @@ fn a_dead_cts_defuse_kit_drops_and_another_ct_picks_it_up() {
 
 #[test]
 fn practice_brings_you_back_after_the_bomb_kills_you() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, quick());
     g.server.set_rules(net::server::Rules::practice(0));
     g.connect_as(Some(Team::T), Some(Team::Spectator));

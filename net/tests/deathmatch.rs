@@ -4,7 +4,7 @@
 //! starts over. No seat: no way in.
 mod common;
 use common::*;
-use net::bot::{Bot, BotMap, Difficulty, Profile};
+use net::bot::{Bot, Difficulty, Profile};
 use net::lobby::{Command, LobbyClient, LobbyServer};
 use net::protocol::GameEvent;
 use net::server::Rules;
@@ -15,8 +15,8 @@ const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
 #[test]
 fn drop_in_fight_respawn_and_the_time_limit_resets_scores() {
-    let Some(bsp) = dust2() else { return };
-    let map = BotMap::new(bsp, "de_dust2");
+    let bsp = arena_map();
+    let map = bsp.bots();
     let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
@@ -85,8 +85,8 @@ fn drop_in_fight_respawn_and_the_time_limit_resets_scores() {
 
 #[test]
 fn the_aim_check_flags_an_aimbot_and_nobody_else() {
-    let Some(bsp) = dust2() else { return };
-    let map = BotMap::new(bsp, "de_dust2");
+    let bsp = arena_map();
+    let map = bsp.bots();
     let reports = std::env::temp_dir().join(format!("bootleg16-aim-{}.jsonl", std::process::id()));
     let _ = std::fs::remove_file(&reports);
     let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();

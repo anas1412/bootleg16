@@ -1,5 +1,5 @@
 //! Anti-wallhack over localhost UDP: enemies behind walls aren't sent (smoke hides no one); sounds are sent only
-//! within hearing range. Skipped when de_dust2 isn't installed.
+//! within hearing range. On our own test arena.
 mod common;
 use common::*;
 use net::protocol::{GameEvent, Team};
@@ -7,11 +7,11 @@ use sim::pmove::Input;
 
 #[test]
 fn enemies_behind_walls_are_not_sent_but_in_the_open_they_are() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
-    // T and CT spawns on dust2 are far apart with the whole map in between.
+    // The Bureau spawn is behind a long wall from the Strays spawn.
     for _ in 0..64 {
         g.tick(Input::default(), Input::default());
     }
@@ -40,7 +40,7 @@ fn enemies_behind_walls_are_not_sent_but_in_the_open_they_are() {
 #[test]
 fn smoke_does_not_hide_anyone_from_the_server() {
     // CS 1.6 sends players behind smoke as usual (the cloud only hides them on screen).
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
@@ -55,10 +55,10 @@ fn smoke_does_not_hide_anyone_from_the_server() {
 
 #[test]
 fn the_dead_only_see_what_their_living_teammates_see() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::Ct));
-    let mut mate = net::Client::connect(g.server.local_addr(), "mate", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut mate = net::Client::connect(g.server.local_addr(), "mate", bsp.world()).unwrap();
     let tick = |g: &mut Game, mate: &mut net::Client| {
         g.tick(Input::default(), Input::default());
         mate.tick(Input::default());
@@ -97,7 +97,7 @@ fn the_dead_only_see_what_their_living_teammates_see() {
 
 #[test]
 fn a_whole_team_dead_sees_nothing_of_the_enemy() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (t, ct) = (g.a.id().unwrap(), g.b.id().unwrap());
@@ -117,7 +117,7 @@ fn a_whole_team_dead_sees_nothing_of_the_enemy() {
 
 #[test]
 fn a_dropped_bomb_is_sent_to_cts_only_in_their_sight() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.server.set_rules(net::server::Rules::practice(0)); // practice hands the Strays the bomb
     g.connect_as(Some(Team::T), Some(Team::Ct));

@@ -1,4 +1,4 @@
-//! Server + two clients over real localhost UDP. Skipped when de_dust2 isn't installed.
+//! Server + two clients over real localhost UDP, on our own test arena.
 mod common;
 use common::*;
 use sim::pmove::Input;
@@ -11,6 +11,11 @@ use std::time::Duration;
 /// solid, is corrected by a few units: the client only knows where they were a moment ago).
 fn run_and_check(g: &mut Game, label: &str, unlag_tolerance: f32, max_correction: f32) {
     let id = g.a.id().unwrap();
+    // in the open, clear of B at the spawn (bumping a teammate mispredicts a little)
+    g.server.teleport(id, [8.0 / 0.0254, -14.0 / 0.0254, 40.0]);
+    for _ in 0..64 {
+        g.tick(Input::default(), Input::default());
+    }
     let mut last = g.server.player(id).unwrap().origin;
     let mut travelled = 0.0;
     let mut worst_correction = 0.0f32;
@@ -48,7 +53,7 @@ fn run_and_check(g: &mut Game, label: &str, unlag_tolerance: f32, max_correction
 
 #[test]
 fn two_clients_on_lan() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     // Teammates: always sent to each other (enemies only when in sight, see tests/visibility.rs).
     g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
@@ -57,7 +62,7 @@ fn two_clients_on_lan() {
 
 #[test]
 fn a_64_tick_server_makes_clients_step_at_64() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let rate = net::tick::TickRate::new(64).unwrap();
     let cfg = net::config::MatchConfig { freeze_time: 0.0, buy_time: 1e6, round_time: 1e6, start_money: 16_000, friendly_fire: true, tick_rate: rate, ..Default::default() };
     let mut g = setup_with(&bsp, 0, 0.0, cfg);
@@ -69,7 +74,7 @@ fn a_64_tick_server_makes_clients_step_at_64() {
 
 #[test]
 fn two_clients_at_100ms_ping_with_5_percent_loss() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 100, 0.05);
     g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
     run_and_check(&mut g, "100ms/5%", 2.0, 1.0);
@@ -77,7 +82,7 @@ fn two_clients_at_100ms_ping_with_5_percent_loss() {
 
 #[test]
 fn speed_hack_gains_nothing() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect();
     let id = g.a.id().unwrap();
@@ -105,7 +110,7 @@ fn speed_hack_gains_nothing() {
 
 #[test]
 fn ak_kills_another_player_and_everyone_hears_about_it() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 60, 0.0);
     g.server.set_give(vec![sim::weapons::Id::Ak47]);
     g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
@@ -143,7 +148,7 @@ fn ak_kills_another_player_and_everyone_hears_about_it() {
 fn he_hurts_and_flash_blinds_across_the_network() {
     use net::protocol::GameEvent;
     use sim::weapons::Id;
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 40, 0.0);
     g.server.set_give(vec![Id::HeGrenade, Id::Flashbang]);
     g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::T));
@@ -189,7 +194,7 @@ fn he_hurts_and_flash_blinds_across_the_network() {
 
 #[test]
 fn idle_players_keep_their_ammo() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 40, 0.0);
     g.connect();
     for _ in 0..1280 {
@@ -205,7 +210,7 @@ fn idle_players_keep_their_ammo() {
 #[test]
 fn throwing_grenades_does_not_touch_anyone_elses_ammo() {
     use sim::weapons::Id;
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.server.set_give(vec![Id::Smoke, Id::HeGrenade]);
     g.connect();
@@ -227,7 +232,7 @@ fn throwing_grenades_does_not_touch_anyone_elses_ammo() {
 #[test]
 fn weapon_menu_gives_the_weapon() {
     use sim::weapons::Id;
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 60, 0.0);
     g.connect();
     g.a.buy(net::protocol::BuyItem::Weapon(Id::Awp));
@@ -246,7 +251,7 @@ fn weapon_menu_gives_the_weapon() {
 #[test]
 fn dropped_guns_land_and_everyone_sees_them() {
     use sim::weapons::Id;
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 40, 0.0);
     g.server.set_give(vec![Id::Ak47]);
     g.connect();
@@ -267,7 +272,7 @@ fn dropped_guns_land_and_everyone_sees_them() {
 #[test]
 fn practice_room_dummies_and_infinite_ammo() {
     use sim::weapons::Id;
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.server.set_rules(net::server::Rules::practice(3));
     g.server.set_give(vec![Id::Ak47]);
@@ -296,17 +301,17 @@ fn practice_room_dummies_and_infinite_ammo() {
 
 #[test]
 fn welcome_carries_the_servers_map_file_hash() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect();
     // The client compares this with its own file before playing (client/src/game.rs).
-    assert_eq!(g.a.map_hash, bsp.hash);
-    assert_ne!(bsp.hash, 0);
+    assert_eq!(g.a.map_hash, bsp.hash());
+    assert_ne!(bsp.hash(), 0);
 }
 
 #[test]
 fn kill_feed_survives_packet_loss() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     // 40% of packets lost: plain events would often vanish.
     let mut g = setup(&bsp, 50, 0.4);
     g.server.set_give(vec![sim::weapons::Id::Ak47]);
@@ -331,7 +336,7 @@ fn kill_feed_survives_packet_loss() {
 
 #[test]
 fn characters_picked_show_on_the_scoreboard() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(net::protocol::Team::T), Some(net::protocol::Team::Ct));
     let a = g.a.id().unwrap();

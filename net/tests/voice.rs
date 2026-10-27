@@ -14,7 +14,7 @@ fn heard(g: &mut Game) -> Vec<net::client::Heard> {
 
 #[test]
 fn team_voice_everywhere_proximity_only_nearby_and_fading() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::Ct)); // enemies, at opposite ends of the map
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
@@ -49,13 +49,13 @@ fn team_voice_everywhere_proximity_only_nearby_and_fading() {
 
 #[test]
 fn proximity_voice_through_a_wall_is_muffled() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.connect_as(Some(Team::T), Some(Team::Ct));
     let (a, b) = (g.a.id().unwrap(), g.b.id().unwrap());
     let o = g.server.player(a).unwrap().origin;
     // A standing spot within earshot with a wall between the two.
-    let world = sim::collision::World::from_bsp(&bsp);
+    let world = bsp.world();
     let eye = |p: [f32; 3]| [p[0], p[1], p[2] + 17.0];
     let spot = (1..12)
         .flat_map(|r| (0..16).map(move |k| (r as f32 * 40.0, k as f32 * 22.5)))

@@ -8,7 +8,7 @@ use sim::pmove::Input;
 
 #[test]
 fn knife_round_then_winners_pick_sides() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig::default());
     g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: true, keys: Vec::new(), map: String::new() });
     g.a.ticket = 111;
@@ -28,7 +28,7 @@ fn knife_round_then_winners_pick_sides() {
     assert_eq!(g.a.round.stage, Stage::Knife, "everyone's in: knife round");
     assert_eq!(g.server.player_state(a).unwrap().loadout.active_id(), sim::weapons::Id::Knife);
     // Someone without a ticket is turned away.
-    let mut stranger = net::Client::connect(g.server.local_addr(), "x", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut stranger = net::Client::connect(g.server.local_addr(), "x", bsp.world()).unwrap();
     for _ in 0..64 {
         g.server.step();
         stranger.tick(Input::default());
@@ -62,7 +62,7 @@ fn knife_round_then_winners_pick_sides() {
     let money = g.server.money(b).unwrap();
     g.b.disconnect();
     run(&mut g, 16, Input::default(), Input::default(), &mut ev);
-    let mut back = net::Client::connect(g.server.local_addr(), "b", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut back = net::Client::connect(g.server.local_addr(), "b", bsp.world()).unwrap();
     back.ticket = 222;
     for _ in 0..128 {
         g.server.step();
@@ -77,7 +77,7 @@ fn knife_round_then_winners_pick_sides() {
 
 #[test]
 fn abandoned_match_frees_the_server() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig::default());
     g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: false, keys: Vec::new(), map: String::new() });
     // Nobody with a ticket shows up (a and b have none): after the wait, the server is free again.
@@ -89,7 +89,7 @@ fn abandoned_match_frees_the_server() {
 
 #[test]
 fn draining_waits_for_the_match_to_end() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup_with(&bsp, 0, 0.0, net::config::MatchConfig::default());
     g.server.reserve(MatchSetup { players: vec![(111, Group::A), (222, Group::B)], knife_round: false, keys: Vec::new(), map: String::new() });
     g.a.ticket = 111;

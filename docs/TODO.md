@@ -249,4 +249,6 @@ Now: one server box, the game server as a systemd service. Only when we run seve
 ## Godot port (plan: ~/.claude/plans/why-are-you-rushing-parsed-thacker.md)
 - [x] P0: `gdbridge` GDExtension (Session: practice server + predicted client), `client_core` (view maths), box-brush `World::from_boxes`, `Server::with_world`, Godot test room, Linux export
 - [ ] P0: Windows export needs `gdbridge.dll` built on Windows (CI, P6)
-- [ ] P1: map format (.bmap) with brushes, doors, ladders, water, sky, zones; tests off Valve maps
+- [x] P1: map format (.bmap: convex brushes, glass, sky, water, ladders, zones, breakables, doors) made in Godot (`godot/tools/export_map.gd`), server, bots and client on it; the network tests play on our test arena
+- [ ] P1 leftovers: buttons and triggers in .bmap; convex shapes other than boxes in the exporter; the BSP format tests (`sim/tests/maps.rs`, nuke glass) go with the BSP loader in P6
+- [ ] P4: tests still load Valve's player model (hitboxes) and `materials.txt`

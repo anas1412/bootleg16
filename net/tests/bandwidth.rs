@@ -7,7 +7,7 @@ use sim::pmove::Input;
 
 #[test]
 fn snapshot_size_with_ten_players() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let mut g = setup(&bsp, 0, 0.0);
     g.server.set_rules(net::server::Rules::practice(8));
     // Spectators get everyone (the worst case: all 10 players in every snapshot).

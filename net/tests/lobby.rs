@@ -18,17 +18,17 @@ fn accepting(mut c: LobbyClient) -> LobbyClient {
 const LOCAL: ([u8; 4], u16) = ([127, 0, 0, 1], 0);
 
 /// A lobby (in its own thread) and an official game server announcing to it.
-fn world(bsp: &goldsrc::bsp::Bsp, match_size: usize) -> (Server, SocketAddr) {
+fn world(bsp: &TestMap, match_size: usize) -> (Server, SocketAddr) {
     world_with(bsp, match_size, None)
 }
 
-fn world_with(bsp: &goldsrc::bsp::Bsp, match_size: usize, reports: Option<std::path::PathBuf>) -> (Server, SocketAddr) {
+fn world_with(bsp: &TestMap, match_size: usize, reports: Option<std::path::PathBuf>) -> (Server, SocketAddr) {
     let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     m.match_size = match_size;
     m.reports = reports;
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
-    let mut server = Server::new(SocketAddr::from(LOCAL), "test", bsp, assets()).unwrap();
+    let mut server = bsp.server(SocketAddr::from(LOCAL), assets()).unwrap();
     server.set_config(net::config::MatchConfig { lobby: lobby.to_string(), official_token: "tok".into(), ..Default::default() });
     (server, lobby)
 }
@@ -47,12 +47,12 @@ fn until(server: &mut Server, cs: &mut [&mut LobbyClient], what: &str, done: imp
 }
 
 /// Both join the server they were sent to with their tickets; returns their teams.
-fn play(server: &mut Server, bsp: &goldsrc::bsp::Bsp, found: [(SocketAddr, u64, [u8; 32]); 2]) -> [Team; 2] {
+fn play(server: &mut Server, bsp: &TestMap, found: [(SocketAddr, u64, [u8; 32]); 2]) -> [Team; 2] {
     let mut cs: Vec<net::Client> = found
         .iter()
         .map(|(addr, ticket, key)| {
             assert_eq!(*addr, server.local_addr());
-            let mut c = net::Client::connect(*addr, "p", sim::collision::World::from_bsp(bsp)).unwrap();
+            let mut c = net::Client::connect(*addr, "p", bsp.world()).unwrap();
             c.ticket = *ticket;
             c.key = Some(*key);
             c
@@ -68,7 +68,7 @@ fn play(server: &mut Server, bsp: &goldsrc::bsp::Bsp, found: [(SocketAddr, u64, 
 
 #[test]
 fn custom_game_with_a_friend() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut server, lobby) = world(&bsp, 2);
     let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
@@ -92,7 +92,7 @@ fn custom_game_with_a_friend() {
 
 #[test]
 fn casual_queue_matches_two_strangers() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut server, lobby) = world(&bsp, 2);
     let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
@@ -106,7 +106,7 @@ fn casual_queue_matches_two_strangers() {
 
 #[test]
 fn steam_sign_in_and_lobby_restart() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut server, lobby) = world(&bsp, 2);
     let login = |id: u64| -> Option<Box<dyn FnMut() -> Option<net::lobby::SteamLogin> + Send + Sync>> { Some(Box::new(move || Some(net::lobby::SteamLogin { steam_id: id, ticket: vec![1, 2, 3] }))) };
     let mut a = accepting(LobbyClient::new(lobby, "a").unwrap());
@@ -219,9 +219,9 @@ fn signs_in_again_after_the_lobby_restarts() {
 
 #[test]
 fn queue_books_the_region_players_ping_best() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut eu, lobby) = world(&bsp, 2);
-    let mut na = Server::new(SocketAddr::from(LOCAL), "test", &bsp, assets()).unwrap();
+    let mut na = bsp.server(SocketAddr::from(LOCAL), assets()).unwrap();
     na.set_config(net::config::MatchConfig { lobby: lobby.to_string(), official_token: "tok".into(), region: "na".into(), ..Default::default() });
     let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     let both = |eu: &mut Server, na: &mut Server, cs: &mut [&mut LobbyClient], what: &str, done: &dyn Fn(&[&mut LobbyClient]) -> bool| {
@@ -248,7 +248,7 @@ fn queue_books_the_region_players_ping_best() {
 
 #[test]
 fn reports_are_filed_with_steam_ids() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let path = std::env::temp_dir().join(format!("bootleg16-reports-{}.jsonl", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let (mut server, lobby) = world_with(&bsp, 2, Some(path.clone()));
@@ -263,7 +263,7 @@ fn reports_are_filed_with_steam_ids() {
     let mut cs: Vec<net::Client> = [a.found.unwrap(), b.found.unwrap()]
         .iter()
         .map(|(addr, ticket, key)| {
-            let mut c = net::Client::connect(*addr, "p", sim::collision::World::from_bsp(&bsp)).unwrap();
+            let mut c = net::Client::connect(*addr, "p", bsp.world()).unwrap();
             c.ticket = *ticket;
             c.key = Some(*key);
             c
@@ -287,7 +287,7 @@ fn reports_are_filed_with_steam_ids() {
     std::thread::sleep(Duration::from_millis(300));
     let text = std::fs::read_to_string(&path).unwrap();
     assert_eq!(text.lines().count(), 1, "{text}");
-    for want in ["\"reason\":\"Cheating\"", "\"steam\":111", "\"steam\":222,\"name\":\"b \\\"quoted\\\"\"", "\"map\":\"test\"", "\"server\":\""] {
+    for want in ["\"reason\":\"Cheating\"", "\"steam\":111", "\"steam\":222,\"name\":\"b \\\"quoted\\\"\"", "\"map\":\"test_arena\"", "\"server\":\""] {
         assert!(text.contains(want), "{want} in {text}");
     }
     let _ = std::fs::remove_file(&path);
@@ -313,9 +313,9 @@ fn official_lobbies_turn_away_players_without_steam() {
 
 #[test]
 fn official_servers_only_take_booked_players() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut server, _lobby) = world(&bsp, 2);
-    let mut c = net::Client::connect(server.local_addr(), "walk-in", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut c = net::Client::connect(server.local_addr(), "walk-in", bsp.world()).unwrap();
     for _ in 0..256 {
         server.step();
         c.tick(Input::default());
@@ -329,7 +329,7 @@ fn official_servers_only_take_booked_players() {
 
 #[test]
 fn a_seen_ticket_without_its_key_gets_nobody_in() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut server, lobby) = world(&bsp, 2);
     let (mut a, mut b) = (accepting(LobbyClient::new(lobby, "a").unwrap()), accepting(LobbyClient::new(lobby, "b").unwrap()));
     until(&mut server, &mut [&mut a, &mut b], "sign in", |c| c.iter().all(|c| c.online()));
@@ -339,10 +339,10 @@ fn a_seen_ticket_without_its_key_gets_nobody_in() {
     let (addr, ticket, key) = a.found.unwrap();
     // Someone who saw A's ticket (but not the key, which never travels in the clear) tries
     // first; then A joins for real.
-    let mut thief = net::Client::connect(addr, "thief", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut thief = net::Client::connect(addr, "thief", bsp.world()).unwrap();
     thief.ticket = ticket;
     thief.key = Some([7; 32]);
-    let mut real = net::Client::connect(addr, "a", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut real = net::Client::connect(addr, "a", bsp.world()).unwrap();
     real.ticket = ticket;
     real.key = Some(key);
     for t in 0..512 {
@@ -359,11 +359,11 @@ fn a_seen_ticket_without_its_key_gets_nobody_in() {
 
 /// A lobby stepped by the test itself (to stand in for Steam's answers), with an official
 /// server in its pool.
-fn manual_world(bsp: &goldsrc::bsp::Bsp) -> (LobbyServer, Server) {
+fn manual_world(bsp: &TestMap) -> (LobbyServer, Server) {
     let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     m.match_size = 2;
     m.steam_mode = net::lobby::SteamMode::Verify;
-    let mut server = Server::new(SocketAddr::from(LOCAL), "test", bsp, assets()).unwrap();
+    let mut server = bsp.server(SocketAddr::from(LOCAL), assets()).unwrap();
     server.set_config(net::config::MatchConfig { lobby: m.local_addr().to_string(), official_token: "tok".into(), ..Default::default() });
     (m, server)
 }
@@ -387,7 +387,7 @@ fn step_all(m: &mut LobbyServer, server: &mut Server, cs: &mut [&mut LobbyClient
 
 #[test]
 fn not_accepting_a_match_costs_a_cooldown_and_the_other_keeps_their_place() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut m, mut server) = manual_world(&bsp);
     let (mut a, mut b) = (LobbyClient::new(m.local_addr(), "a").unwrap(), accepting(LobbyClient::new(m.local_addr(), "b").unwrap()));
     a.steam = steam(1);
@@ -408,7 +408,7 @@ fn not_accepting_a_match_costs_a_cooldown_and_the_other_keeps_their_place() {
 
 #[test]
 fn a_restarted_game_is_offered_its_running_match() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut m, mut server) = manual_world(&bsp);
     let (mut a, mut b) = (accepting(LobbyClient::new(m.local_addr(), "a").unwrap()), accepting(LobbyClient::new(m.local_addr(), "b").unwrap()));
     a.steam = steam(1);
@@ -428,7 +428,7 @@ fn a_restarted_game_is_offered_its_running_match() {
 
 #[test]
 fn a_custom_game_plays_the_map_the_leader_picked() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let Some(dir) = game_dir() else { return };
     let (mut server, lobby) = world(&bsp, 2);
     server.set_game_dir(dir.into());
@@ -447,7 +447,7 @@ fn a_custom_game_plays_the_map_the_leader_picked() {
     until(&mut server, &mut [&mut a, &mut b], "match found", |c| c.iter().all(|c| c.found.is_some()));
     // The server switched to the picked map; the players are told so when they join.
     let (addr, ticket, key) = a.found.unwrap();
-    let mut p = net::Client::connect(addr, "a", sim::collision::World::from_bsp(&bsp)).unwrap();
+    let mut p = net::Client::connect(addr, "a", bsp.world()).unwrap();
     p.ticket = ticket;
     p.key = Some(key);
     for _ in 0..256 {
@@ -460,7 +460,7 @@ fn a_custom_game_plays_the_map_the_leader_picked() {
 
 #[test]
 fn only_maps_everyone_has_are_offered() {
-    let Some(bsp) = dust2() else { return };
+    let bsp = arena_map();
     let (mut server, lobby) = world(&bsp, 2);
     let (mut a, mut b) = (LobbyClient::new(lobby, "a").unwrap(), LobbyClient::new(lobby, "b").unwrap());
     // A has every pool map; B is missing de_train.

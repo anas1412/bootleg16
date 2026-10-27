@@ -1,5 +1,6 @@
 //! Shared by the network tests: a server and two clients over real localhost UDP.
-//! Tests are skipped when de_dust2 isn't installed.
+//! They play on our own test arena (`godot/maps/test_arena`); a test about one of Valve's maps loads it
+//! with `map`, and is skipped when it isn't installed.
 #![allow(dead_code)]
 use goldsrc::bsp::Bsp;
 use net::{Client, Server};
@@ -16,8 +17,52 @@ pub fn map(name: &str) -> Option<Bsp> {
     Bsp::load(format!("{}/maps/{name}.bsp", game_dir()?)).ok()
 }
 
-pub fn dust2() -> Option<Bsp> {
-    Bsp::load(format!("{}/maps/de_dust2.bsp", game_dir()?)).ok()
+pub fn dust2() -> Option<TestMap> {
+    Bsp::load(format!("{}/maps/de_dust2.bsp", game_dir()?)).ok().map(TestMap::Bsp)
+}
+
+/// The map a test runs on: one of Valve's BSPs (only where a test is about that map) or our
+/// own test arena.
+pub enum TestMap {
+    Bsp(Bsp),
+    Ours(sim::mapfile::MapFile, u64),
+}
+
+impl TestMap {
+    pub fn world(&self) -> World {
+        match self {
+            TestMap::Bsp(b) => World::from_bsp(b),
+            TestMap::Ours(m, _) => m.world(),
+        }
+    }
+
+    pub fn server(&self, bind: SocketAddr, assets: net::server::Assets) -> std::io::Result<Server> {
+        match self {
+            TestMap::Bsp(b) => Server::new(bind, "test", b, assets),
+            TestMap::Ours(m, h) => Server::with_map(bind, m, *h, assets),
+        }
+    }
+
+    pub fn hash(&self) -> u64 {
+        match self {
+            TestMap::Bsp(b) => b.hash,
+            TestMap::Ours(_, h) => *h,
+        }
+    }
+
+    /// The bots' view of it.
+    pub fn bots(self) -> std::sync::Arc<net::bot::BotMap> {
+        match self {
+            TestMap::Bsp(b) => net::bot::BotMap::new(b, "de_dust2"),
+            TestMap::Ours(m, h) => net::bot::BotMap::from_map(m, h),
+        }
+    }
+}
+
+/// Our own test map (`godot/maps/test_arena`), what the tests play on.
+pub fn arena_map() -> TestMap {
+    let (m, h) = arena();
+    TestMap::Ours(m, h)
 }
 
 /// Our own test map (`godot/maps/test_arena`, exported to `.bmap`) and its file's hash.
@@ -42,26 +87,13 @@ pub struct Game {
 
 /// A server and two clients; engine tests use rules that stay out of the way:
 /// no freeze time, money to spare, teammates hittable.
-pub fn setup(bsp: &Bsp, ping_ms: u32, loss: f32) -> Game {
-    setup_with(bsp, ping_ms, loss, net::config::MatchConfig { freeze_time: 0.0, buy_time: 1e6, round_time: 1e6, start_money: 16_000, friendly_fire: true, ..Default::default() })
+pub fn setup(map: &TestMap, ping_ms: u32, loss: f32) -> Game {
+    setup_with(map, ping_ms, loss, net::config::MatchConfig { freeze_time: 0.0, buy_time: 1e6, round_time: 1e6, start_money: 16_000, friendly_fire: true, ..Default::default() })
 }
 
-pub fn setup_with(bsp: &Bsp, ping_ms: u32, loss: f32, cfg: net::config::MatchConfig) -> Game {
-    let mut server = Server::new(SocketAddr::from(([127, 0, 0, 1], 0)), "test", bsp, assets()).unwrap();
+pub fn setup_with(map: &TestMap, ping_ms: u32, loss: f32, cfg: net::config::MatchConfig) -> Game {
+    let mut server = map.server(SocketAddr::from(([127, 0, 0, 1], 0)), assets()).unwrap();
     server.set_config(cfg);
-    let addr = server.local_addr();
-    let mut a = Client::connect(addr, "a", World::from_bsp(bsp)).unwrap();
-    let mut b = Client::connect(addr, "b", World::from_bsp(bsp)).unwrap();
-    a.simulate_network(ping_ms, loss);
-    b.simulate_network(ping_ms, loss);
-    Game { server, a, b }
-}
-
-/// A server on our own test arena and two clients (`setup`'s rules).
-pub fn setup_arena(ping_ms: u32, loss: f32) -> Game {
-    let (map, hash) = arena();
-    let mut server = Server::with_map(SocketAddr::from(([127, 0, 0, 1], 0)), &map, hash, assets()).unwrap();
-    server.set_config(net::config::MatchConfig { freeze_time: 0.0, buy_time: 1e6, round_time: 1e6, start_money: 16_000, friendly_fire: true, ..Default::default() });
     let addr = server.local_addr();
     let mut a = Client::connect(addr, "a", map.world()).unwrap();
     let mut b = Client::connect(addr, "b", map.world()).unwrap();
