@@ -10,23 +10,21 @@ const REACH := 16
 static func tween(node: Node) -> Tween:
 	return node.create_tween().set_trans(Tokens.EASE_TRANS).set_ease(Tokens.EASE_TYPE)
 
-## Slides a control up from SLIDE below and fades it in, after `delay` seconds.
+## Slides a control up from SLIDE below and fades it in, after `delay` seconds. Inside a
+## container (rows of a list) it only fades: the container owns where its children sit, and
+## moving them fights its layout (a list built while hidden hasn't placed its rows yet).
 static func enter(c: Control, delay := 0.0) -> void:
-	c.modulate.a = 0.0
-	# a container places its children on its next sort: start from where it puts them
-	if c.get_parent() is Container:
-		await c.get_tree().process_frame
-		if not is_instance_valid(c) or not c.is_inside_tree():
-			return
-	# a second enter while one is running takes over from it, from the same resting place
-	var rest: Vector2 = c.get_meta("motion_rest", c.position)
 	if c.has_meta("motion_tween"):
 		(c.get_meta("motion_tween") as Tween).kill()
-	c.set_meta("motion_rest", rest)
-	c.position = rest + Vector2(0, Tokens.SLIDE)
+	c.modulate.a = 0.0
 	var t := tween(c).set_parallel()
 	t.tween_property(c, "modulate:a", 1.0, Tokens.ENTER).set_delay(delay)
-	t.tween_property(c, "position", rest, Tokens.ENTER).set_delay(delay)
+	if not c.get_parent() is Container:
+		# a second enter while one is running takes over from it, from the same resting place
+		var rest: Vector2 = c.get_meta("motion_rest", c.position)
+		c.set_meta("motion_rest", rest)
+		c.position = rest + Vector2(0, Tokens.SLIDE)
+		t.tween_property(c, "position", rest, Tokens.ENTER).set_delay(delay)
 	c.set_meta("motion_tween", t)
 	t.finished.connect(func():
 		c.remove_meta("motion_rest")

@@ -43,6 +43,11 @@ func _initialize() -> void:
 		await process_frame
 	_check(ui._pages[1].visible, "Settings opens")
 	_check(ui._pages[1]._rows.get_child_count() == s.GRAPHICS.size() + 4, "graphics rows: preset, options, display, vsync, frame cap")
+	var ys: Array = ui._pages[1]._rows.get_children().map(func(r): return r.position.y)
+	var stacked := true
+	for i in range(1, ys.size()):
+		stacked = stacked and is_equal_approx(ys[i] - ys[i - 1], 48 + Tokens.SPACE_XS)
+	_check(stacked, "settings rows sit one under the other, 52 apart (were piled up): %s" % [ys])
 	ui._tabs.pick(0)
 	for f in 30:
 		await process_frame

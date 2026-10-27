@@ -3,6 +3,8 @@
 extends Control
 
 const SECTIONS := [["Graphics", "画質"], ["Controls", "操作"], ["Audio", "音声"]]
+const TITLE_Y := 184
+const TABS_Y: int = TITLE_Y + Tokens.TYPE["page"]["line"] + Tokens.SPACE_XL  # under the title, 32 clear
 
 var _tabs := TopTabs.new()
 var _title: Label
@@ -15,12 +17,14 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_title = UiTheme.label("page", "Settings")
-	Grid.place(_title, 0, 6, 184)
+	Grid.place(_title, 0, 6, TITLE_Y)
 	add_child(_title)
 	for s in SECTIONS:
 		_tabs.add_tab(s[0], s[1])
-	_tabs.position = Vector2(Grid.x(0), 184 + Tokens.TYPE.page.line + Tokens.SPACE_XL)
+	_tabs.position = Vector2(Grid.x(0), TABS_Y)
 	_tabs.picked.connect(_show)
+	# the tabs' text measures itself late: the list starts under them once they know their size
+	_tabs.minimum_size_changed.connect(_layout_scroll)
 	add_child(_tabs)
 	_rows.add_theme_constant_override("separation", Tokens.SPACE_XS)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -31,7 +35,8 @@ func _ready() -> void:
 	_show(0)
 
 func _layout_scroll() -> void:
-	var top := _tabs.position.y + _tabs.get_combined_minimum_size().y + Tokens.SPACE_XL
+	# from where the tabs rest, not where they are (they slide in when the page arrives)
+	var top := TABS_Y + _tabs.get_combined_minimum_size().y + Tokens.SPACE_XL
 	_scroll.position = Vector2(Grid.x(0), top)
 	_scroll.size = Vector2(Grid.w(6), Grid.bottom() - top)
 
