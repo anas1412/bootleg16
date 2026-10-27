@@ -34,6 +34,8 @@ pub struct Brush {
     pub material: u8,
     /// Which map piece it belongs to (0 = the world; else a breakable or door).
     pub model: usize,
+    /// Off while its piece is broken.
+    pub enabled: bool,
 }
 
 /// Where a sweep first touched a brush.
@@ -69,12 +71,17 @@ impl Brush {
             n[i] = -1.0;
             planes.push((n, -lo[i]));
         }
-        Brush { planes, lo, hi, contents, material, model }
+        Brush { planes, lo, hi, contents, material, model, enabled: true }
     }
 
     /// An axis-aligned box.
     pub fn from_box(lo: Vec3, hi: Vec3, contents: Contents, material: u8, model: usize) -> Brush {
         Brush::new(Vec::new(), lo, hi, contents, material, model)
+    }
+
+    /// Whether it stops players and bullets now (not water, not broken).
+    pub fn blocks(&self) -> bool {
+        self.enabled && self.contents != Contents::Water
     }
 
     /// Whether its bounds (grown by `grow`) overlap the box lo..hi.

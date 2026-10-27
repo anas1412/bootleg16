@@ -2,6 +2,7 @@
 //! the Godot exporter (`godot/tools/export_map.gd`). Everything is in GoldSrc units (z up,
 //! 1 unit = 1 inch), so the simulation reads it as it is. The look of the map lives in the
 //! Godot scene beside it; this file is only what players, bullets and the rules touch.
+use crate::breakables::Breakable;
 use crate::brush::{Brush, Contents};
 use crate::collision::{Ladder, World};
 use crate::zones::{Side, Zones};
@@ -20,6 +21,9 @@ pub struct MapFile {
     pub bomb_sites: Vec<Site>,
     #[serde(default)]
     pub ladders: Vec<BoxDef>,
+    /// Pieces that break (their brushes carry the same `model`).
+    #[serde(default)]
+    pub breakables: Vec<BreakableDef>,
     /// The bomb's blast reaches 3.5 times this (CS: `info_map_parameters bombradius`).
     #[serde(default = "bomb_radius")]
     pub bomb_radius: f32,
@@ -108,6 +112,27 @@ pub struct Site {
     pub letter: char,
     pub lo: Vec3,
     pub hi: Vec3,
+    /// Pieces with this `targetname` break when the bomb goes off here (dust2's crates).
+    #[serde(default)]
+    pub target: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BreakableDef {
+    /// Its brushes' `model`.
+    pub model: usize,
+    pub health: f32,
+    /// glass, wood, metal, flesh, concrete, ceilingtile, computer, rocks: its break sound
+    /// and debris.
+    pub material: String,
+    /// Only the bomb at a site naming it breaks it (not shots or grenades).
+    #[serde(default)]
+    pub trigger_only: bool,
+    #[serde(default)]
+    pub targetname: String,
+    /// Its node in the map scene (the client hides it while broken).
+    #[serde(default)]
+    pub node: String,
 }
 
 impl MapFile {
@@ -149,6 +174,39 @@ impl MapFile {
             self.bomb_sites.iter().map(|s| ((s.lo, s.hi), Some(s.letter.to_ascii_lowercase()))).collect(),
             self.bomb_radius,
         )
+    }
+
+    /// The pieces that break, with their middles (from their brushes).
+    pub fn breakables(&self) -> Vec<Breakable> {
+        use crate::breakables::Material::*;
+        self.breakables
+            .iter()
+            .map(|b| {
+                let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+                for r in self.brushes.iter().filter(|r| r.model == b.model) {
+                    for i in 0..3 {
+                        lo[i] = lo[i].min(r.lo[i]);
+                        hi[i] = hi[i].max(r.hi[i]);
+                    }
+                }
+                let material = match b.material.as_str() {
+                    "wood" => Wood,
+                    "metal" => Metal,
+                    "flesh" => Flesh,
+                    "concrete" => Concrete,
+                    "ceilingtile" => CeilingTile,
+                    "computer" => Computer,
+                    "rocks" => Rocks,
+                    _ => Glass,
+                };
+                Breakable { model: b.model, health: b.health.max(1.0), material, trigger_only: b.trigger_only, targetname: b.targetname.clone(), center: std::array::from_fn(|i| (lo[i] + hi[i]) / 2.0) }
+            })
+            .collect()
+    }
+
+    /// Bomb sites that break pieces when the bomb goes off there: (lo, hi, target).
+    pub fn site_targets(&self) -> Vec<(Vec3, Vec3, String)> {
+        self.bomb_sites.iter().filter(|s| !s.target.is_empty()).map(|s| (s.lo, s.hi, s.target.clone())).collect()
     }
 
     /// The map's bounds (bots sample their walking graph inside them).

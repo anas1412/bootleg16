@@ -368,7 +368,7 @@ impl World {
         if self.is_solid_point(p) {
             return Contents::Solid;
         }
-        if self.brushes.iter().any(|b| b.contents == BrushContents::Water && b.overlaps(p, [0.0; 3])) {
+        if self.brushes.iter().any(|b| b.enabled && b.contents == BrushContents::Water && b.overlaps(p, [0.0; 3])) {
             return Contents::Water;
         }
         for &(root, offset) in &self.water_roots {
@@ -389,7 +389,7 @@ impl World {
     }
 
     fn is_solid_point(&self, p: Vec3) -> bool {
-        if self.brushes.iter().any(|b| b.contents != BrushContents::Water && b.overlaps(p, [0.0; 3])) {
+        if self.brushes.iter().any(|b| b.blocks() && b.overlaps(p, [0.0; 3])) {
             return true;
         }
         let Some(&(mut num, _)) = self.water_roots.first() else { return false };
@@ -411,7 +411,7 @@ impl World {
         let (lo, hi) = (add(origin, hull.mins()), add(origin, hull.maxs()));
         self.models.iter().filter(|m| m.enabled && self.reaches(m, lo, hi)).any(|m| self.contents(m.heads[hull as usize], to_local(m, self.door_of(m), origin)) == CONTENTS_SOLID)
             || self.boxes.iter().any(|(blo, bhi)| (0..3).all(|i| lo[i] < bhi[i] && hi[i] > blo[i]))
-            || self.brushes.iter().any(|b| b.contents != BrushContents::Water && b.near(lo, hi, [0.0; 3]) && b.overlaps(origin, brush::half(hull)))
+            || self.brushes.iter().any(|b| b.blocks() && b.near(lo, hi, [0.0; 3]) && b.overlaps(origin, brush::half(hull)))
     }
 
     /// Sweep the player box from `start` to `end`; returns where it stops.
@@ -452,7 +452,7 @@ impl World {
                 }
             }
         }
-        for b in self.brushes.iter().filter(|b| b.contents != BrushContents::Water && b.near(lo, hi, [0.0; 3])) {
+        for b in self.brushes.iter().filter(|b| b.blocks() && b.near(lo, hi, [0.0; 3])) {
             match b.clip(start, end, brush::half(hull)) {
                 Clip::Inside { all } => {
                     best.start_solid = true;
@@ -482,6 +482,9 @@ impl World {
         for m in self.models.iter_mut().filter(|m| m.bsp_model == bsp_model) {
             m.enabled = !broken;
         }
+        for b in self.brushes.iter_mut().filter(|b| b.model == bsp_model) {
+            b.enabled = !broken;
+        }
     }
 
     /// Whether anything you can't see through blocks a line of sight: the world, closed doors,
@@ -490,7 +493,7 @@ impl World {
     pub fn sight_blocked(&self, start: Vec3, end: Vec3) -> bool {
         // (see-through brushes don't hide anyone; water doesn't either)
         let (lo, hi): (Vec3, Vec3) = (std::array::from_fn(|i| start[i].min(end[i])), std::array::from_fn(|i| start[i].max(end[i])));
-        if self.brushes.iter().filter(|b| matches!(b.contents, BrushContents::Solid | BrushContents::Sky) && b.near(lo, hi, [0.0; 3])).any(|b| !matches!(b.clip(start, end, [0.0; 3]), Clip::Miss)) {
+        if self.brushes.iter().filter(|b| b.enabled && matches!(b.contents, BrushContents::Solid | BrushContents::Sky) && b.near(lo, hi, [0.0; 3])).any(|b| !matches!(b.clip(start, end, [0.0; 3]), Clip::Miss)) {
             return true;
         }
         let tree = Tree::Point(&self.point_nodes, &self.leaf_contents);
@@ -535,7 +538,7 @@ impl World {
                 best.model = m.bsp_model;
             }
         }
-        for b in self.brushes.iter().filter(|b| b.contents != BrushContents::Water && b.near(lo, hi, [0.0; 3])) {
+        for b in self.brushes.iter().filter(|b| b.blocks() && b.near(lo, hi, [0.0; 3])) {
             match b.clip(start, end, [0.0; 3]) {
                 Clip::Inside { .. } => best.start_solid = true,
                 Clip::Hit(h) if h.fraction < best.fraction => {

@@ -33,7 +33,7 @@ impl Server {
         if ours.exists() {
             let (map, hash) = sim::mapfile::MapFile::load(&ours)?;
             self.world = map.world();
-            self.pieces = breakables::Pieces::default();
+            self.pieces = breakables::Pieces::from_map(&map);
             self.map_hash = hash;
         } else {
             let bsp = Bsp::load(dir.join(format!("maps/{name}.bsp"))).map_err(|e| format!("{name}: {e}"))?;

@@ -57,6 +57,19 @@ pub fn setup_with(bsp: &Bsp, ping_ms: u32, loss: f32, cfg: net::config::MatchCon
     Game { server, a, b }
 }
 
+/// A server on our own test arena and two clients (`setup`'s rules).
+pub fn setup_arena(ping_ms: u32, loss: f32) -> Game {
+    let (map, hash) = arena();
+    let mut server = Server::with_map(SocketAddr::from(([127, 0, 0, 1], 0)), &map, hash, assets()).unwrap();
+    server.set_config(net::config::MatchConfig { freeze_time: 0.0, buy_time: 1e6, round_time: 1e6, start_money: 16_000, friendly_fire: true, ..Default::default() });
+    let addr = server.local_addr();
+    let mut a = Client::connect(addr, "a", map.world()).unwrap();
+    let mut b = Client::connect(addr, "b", map.world()).unwrap();
+    a.simulate_network(ping_ms, loss);
+    b.simulate_network(ping_ms, loss);
+    Game { server, a, b }
+}
+
 impl Game {
     /// One tick of everything; a short sleep lets localhost packets arrive.
     pub fn tick(&mut self, ia: Input, ib: Input) {

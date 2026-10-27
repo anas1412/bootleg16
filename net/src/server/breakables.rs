@@ -14,6 +14,11 @@ pub(super) struct Pieces {
 }
 
 impl Pieces {
+    pub(super) fn from_map(map: &sim::mapfile::MapFile) -> Pieces {
+        let list = map.breakables();
+        Pieces { health: list.iter().map(|b| b.health).collect(), broken: vec![false; list.len()], list, site_targets: map.site_targets() }
+    }
+
     pub(super) fn from_bsp(bsp: &Bsp) -> Pieces {
         let list = sim::breakables::from_bsp(bsp);
         Pieces { health: list.iter().map(|b| b.health).collect(), broken: vec![false; list.len()], list, site_targets: sim::breakables::bomb_site_targets(bsp) }

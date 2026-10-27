@@ -6,11 +6,16 @@
 ##   StaticBody3D, rotated and scaled as placed. Metadata on the node (or the body):
 ##   `contents` = "solid" (default), "clear" (glass, fences), "sky", "water";
 ##   `material` = CS's letter: "C" concrete (default), "M" metal, "W" wood, "G" grate,
-##   "V" vent, "T" tile, "P" computer, "Y" glass, "D" dirt; `model` = piece number (0: the world).
+##   "V" vent, "T" tile, "P" computer, "Y" glass, "D" dirt.
+## - Breakables: a brush with `health` metadata breaks (its piece number is given here). Also
+##   `breaks` = "glass" (default), "wood", "metal", "concrete", "computer", "rocks",
+##   "ceilingtile", "flesh" (its sound and debris); `trigger_only` = true: only the bomb at a
+##   site naming its `targetname` breaks it.
 ## - Spawns: Marker3D nodes in group "spawn_t" (Strays) or "spawn_ct" (Bureau); they face
 ##   the way the marker faces (its -z).
 ## - Zones: Area3D nodes in group "buy_t", "buy_ct", "buy" (both sides), "site_a", "site_b"
-##   or "ladder", each with a CollisionShape3D box (its bounding box is used).
+##   or "ladder", each with a CollisionShape3D box (its bounding box is used). A site's
+##   `target` metadata names the pieces the bomb breaks when it goes off there.
 ## - The root may carry `bomb_radius` metadata (default 500).
 extends SceneTree
 
@@ -20,6 +25,7 @@ const METRES := 0.0254
 var _scene: Node
 var _path := ""
 var _done := false
+var _next_model := 1
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -44,7 +50,7 @@ func _process(_delta: float) -> bool:
 	var path := _path
 	var map := {
 		"name": path.get_file().get_basename(),
-		"brushes": [], "spawns": [], "buy_zones": [], "bomb_sites": [], "ladders": [],
+		"brushes": [], "spawns": [], "buy_zones": [], "bomb_sites": [], "ladders": [], "breakables": [],
 		"bomb_radius": scene.get_meta("bomb_radius", 500.0),
 	}
 	_walk(scene, map)
@@ -52,15 +58,15 @@ func _process(_delta: float) -> bool:
 	var f := FileAccess.open(out, FileAccess.WRITE)
 	f.store_string(JSON.stringify(map, "\t"))
 	f.close()
-	print("%s: %d brushes, %d spawns, %d buy zones, %d sites, %d ladders" % [out, map.brushes.size(), map.spawns.size(), map.buy_zones.size(), map.bomb_sites.size(), map.ladders.size()])
+	print("%s: %d brushes, %d spawns, %d buy zones, %d sites, %d ladders, %d breakables" % [out, map.brushes.size(), map.spawns.size(), map.buy_zones.size(), map.bomb_sites.size(), map.ladders.size(), map.breakables.size()])
 	quit(0)
 	return true
 
 func _walk(node: Node, map: Dictionary) -> void:
 	if node is CSGBox3D:
-		map.brushes.append(_brush(node.global_transform, node.size, node))
+		map.brushes.append(_brush(node.global_transform, node.size, node, map))
 	elif node is CollisionShape3D and node.shape is BoxShape3D and node.get_parent() is StaticBody3D:
-		map.brushes.append(_brush(node.global_transform, node.shape.size, node))
+		map.brushes.append(_brush(node.global_transform, node.shape.size, node, map))
 	elif node is Marker3D:
 		for side in ["t", "ct"]:
 			if node.is_in_group("spawn_" + side):
@@ -77,14 +83,14 @@ func _walk(node: Node, map: Dictionary) -> void:
 					map.buy_zones.append(box.merged({"side": side}))
 			for letter in ["a", "b"]:
 				if node.is_in_group("site_" + letter):
-					map.bomb_sites.append(box.merged({"letter": letter}))
+					map.bomb_sites.append(box.merged({"letter": letter, "target": node.get_meta("target", "")}))
 			if node.is_in_group("ladder"):
 				map.ladders.append(box)
 	for child in node.get_children():
 		_walk(child, map)
 
 ## A box placed by `t` as a brush: its six faces as planes, its corners' bounds.
-func _brush(t: Transform3D, size: Vector3, node: Node) -> Dictionary:
+func _brush(t: Transform3D, size: Vector3, node: Node, map: Dictionary) -> Dictionary:
 	var corners := _corners(t, size)
 	var planes := []
 	var normals := t.basis.inverse().transposed()
@@ -100,7 +106,18 @@ func _brush(t: Transform3D, size: Vector3, node: Node) -> Dictionary:
 	b["planes"] = planes
 	b["contents"] = info.get_meta("contents", "solid")
 	b["material"] = info.get_meta("material", "C")
-	b["model"] = info.get_meta("model", 0)
+	b["model"] = 0
+	if info.has_meta("health"):
+		b["model"] = _next_model
+		map.breakables.append({
+			"model": _next_model,
+			"health": float(info.get_meta("health")),
+			"material": info.get_meta("breaks", "glass"),
+			"trigger_only": bool(info.get_meta("trigger_only", false)),
+			"targetname": info.get_meta("targetname", ""),
+			"node": str(_scene.get_path_to(info)),
+		})
+		_next_model += 1
 	return b
 
 ## An area's box (the bounding box of its first box shape), or {} if it has none.

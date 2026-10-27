@@ -59,7 +59,7 @@ impl BotMap {
     pub fn server(&self, bind: std::net::SocketAddr, name: &str, assets: crate::server::Assets) -> std::io::Result<crate::Server> {
         match &self.source {
             Source::Bsp(bsp) => crate::Server::new(bind, name, bsp, assets),
-            Source::Map(map, hash) => crate::Server::with_world(bind, name, map.world(), *hash, assets),
+            Source::Map(map, hash) => crate::Server::with_map(bind, map, *hash, assets),
         }
     }
 }

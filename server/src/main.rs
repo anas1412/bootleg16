@@ -62,7 +62,7 @@ fn main() {
     let ours = dir.join("maps").join(format!("{map}.bmap"));
     let mut server = if ours.exists() {
         let (file, hash) = sim::mapfile::MapFile::load(&ours).unwrap_or_else(|e| panic!("loading {}: {e}", ours.display()));
-        net::Server::with_world(addr, &map, file.world(), hash, assets)
+        net::Server::with_map(addr, &file, hash, assets)
     } else {
         let path = dir.join("maps").join(format!("{map}.bsp"));
         let bsp = goldsrc::bsp::Bsp::load(&path).unwrap_or_else(|e| panic!("loading {}: {e}", path.display()));

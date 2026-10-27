@@ -136,6 +136,33 @@ transform = Transform3D(1, 0, 0, 0, 0.90631, 0.42262, 0, -0.42262, 0.90631, -14,
 size = Vector3(3, 0.3, 5)
 material = SubResource("concrete")
 
+[node name="Window" type="CSGBox3D" parent="Brushes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1.25, 0)
+size = Vector3(4, 2.5, 0.1)
+material = SubResource("glass")
+metadata/contents = "clear"
+metadata/material = "Y"
+metadata/health = 20.0
+metadata/breaks = "glass"
+
+[node name="Crate" type="CSGBox3D" parent="Brushes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.5, 10)
+size = Vector3(1, 1, 1)
+material = SubResource("wood")
+metadata/material = "W"
+metadata/health = 60.0
+metadata/breaks = "wood"
+
+[node name="SiteBCrate" type="CSGBox3D" parent="Brushes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.5, 0.5, -15.5)
+size = Vector3(1, 1, 1)
+material = SubResource("wood")
+metadata/material = "W"
+metadata/health = 1.0
+metadata/breaks = "wood"
+metadata/trigger_only = true
+metadata/targetname = "tgt_b"
+
 [node name="Spawns" type="Node3D" parent="."]
 
 [node name="T1" type="Marker3D" parent="Spawns" groups=["spawn_t"]]
@@ -172,6 +199,7 @@ shape = SubResource("SiteA")
 
 [node name="SiteB" type="Area3D" parent="Zones" groups=["site_b"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 1, -14)
+metadata/target = "tgt_b"
 
 [node name="Box" type="CollisionShape3D" parent="Zones/SiteB"]
 shape = SubResource("SiteB")

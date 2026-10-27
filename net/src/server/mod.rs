@@ -263,6 +263,13 @@ impl Server {
         Ok(server)
     }
 
+    /// A server on one of our own maps (`.bmap`, with its file's hash).
+    pub fn with_map(bind: SocketAddr, map: &sim::mapfile::MapFile, hash: u64, assets: Assets) -> std::io::Result<Server> {
+        let mut server = Server::with_world(bind, &map.name, map.world(), hash, assets)?;
+        server.pieces = breakables::Pieces::from_map(map);
+        Ok(server)
+    }
+
     /// A server on a map that isn't a BSP: its `world` (spawns in `world.zones`) and an id
     /// for the map file (`hash`, checked by clients).
     pub fn with_world(bind: SocketAddr, map: &str, world: World, hash: u64, assets: Assets) -> std::io::Result<Server> {

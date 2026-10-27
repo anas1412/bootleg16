@@ -9,15 +9,18 @@ var session := Session.new()
 
 func _ready() -> void:
 	Binds.install()
-	$Room.add_child(load(MAP + ".tscn").instantiate())
-	if not session.start_practice(FileAccess.get_file_as_string(MAP + ".bmap"), 3):
+	var scene: Node = load(MAP + ".tscn").instantiate()
+	$Room.add_child(scene)
+	var text := FileAccess.get_file_as_string(MAP + ".bmap")
+	$Pieces.setup(scene, JSON.parse_string(text))
+	if not session.start_practice(text, 3):
 		push_error("bootleg16: practice didn't start (see the log)")
 		return
 	# simulation steps at the server's rate (followed in _physics_process: a server says its
 	# rate when it welcomes us); frames are drawn between them
 	Engine.physics_ticks_per_second = session.tick_rate()
 	Engine.max_physics_steps_per_frame = 16
-	for node in [$Player, $Others, $Hud/Speed]:
+	for node in [$Player, $Others, $Pieces, $Hud/Speed]:
 		node.session = session
 	if OS.get_environment("BOOTLEG16_BENCH") != "":
 		add_child(preload("res://scripts/bench.gd").new())

@@ -63,7 +63,7 @@ impl Session {
             }
         };
         let hash = sim::mapfile::hash(text.as_bytes());
-        let mut server = match net::Server::with_world(([127, 0, 0, 1], 0).into(), &file.name, file.world(), hash, assets) {
+        let mut server = match net::Server::with_map(([127, 0, 0, 1], 0).into(), &file, hash, assets) {
             Ok(s) => s,
             Err(e) => {
                 godot_error!("bootleg16: the practice server didn't start ({e})");
@@ -192,6 +192,12 @@ impl Session {
     fn others_yaw(&self, frac: f32) -> PackedFloat32Array {
         let Some(c) = &self.client else { return PackedFloat32Array::new() };
         c.others_at(frac).iter().filter(|o| o.alive).map(|o| yaw_to_godot(o.yaw)).collect()
+    }
+
+    /// The map's pieces broken right now (their numbers; the server puts them back each round).
+    #[func]
+    fn broken_pieces(&self) -> PackedInt32Array {
+        self.client.as_ref().map_or_else(PackedInt32Array::new, |c| c.broken.iter().map(|m| *m as i32).collect())
     }
 
     /// Leave and stop the server.
