@@ -1,6 +1,7 @@
 //! The voice settings page (menu -> Voice): on/off, microphone, volumes, open mic and the noise
 //! gate, and a live mic meter (with the gate's line) to test with. The push-to-talk keys are in Settings · Keys.
-use super::{Audio, Devices, MicLevel, VoiceSettings};
+use super::{sync, Devices, MicLevel, VoiceSettings};
+use client_core::voice::Voice;
 use crate::ui::{chips, Choice, UiMemory, chip, page_title, setting_row, stepper, t, vh, Kit, Type, UiAction, AMBER, BG1, OK, TX2};
 use bevy::prelude::*;
 
@@ -40,13 +41,10 @@ pub(super) struct MicMeter;
 const GAUGE: f32 = 1.4;
 
 /// On the voice settings page the mic is live, so you can see it working.
-pub(super) fn mic_test(mut audio: NonSendMut<Audio>, settings: Res<VoiceSettings>, mut level: ResMut<MicLevel>, mut meter: Query<&mut Node, With<MicMeter>>) {
-    audio.follow(&settings);
+pub(super) fn mic_test(mut voice: NonSendMut<Voice>, settings: Res<VoiceSettings>, mut level: ResMut<MicLevel>, mut meter: Query<&mut Node, With<MicMeter>>) {
+    sync(&mut voice, &settings);
     let on = !meter.is_empty() && settings.on;
-    if let Some(mic) = &mut audio.mic {
-        mic.set_running(on);
-    }
-    let (_, peak) = audio.captured(&settings);
+    let peak = voice.mic_test(on);
     level.0 = if on { level.0 * 0.85 + peak * 0.15 } else { 0.0 };
     for mut n in &mut meter {
         n.width = percent((level.0 * GAUGE * 100.0).min(100.0));

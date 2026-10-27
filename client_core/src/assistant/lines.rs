@@ -1,4 +1,4 @@
-//! The assistant's lines: `assets/assistant/lines.txt`, picked without repeats.
+//! The assistant's lines: `lines.txt` next to this file, picked without repeats.
 use std::collections::HashMap;
 
 /// The 9 reactions, in face-sheet column order.
@@ -49,7 +49,7 @@ pub struct Lines {
     last: HashMap<(String, usize), usize>,
 }
 
-/// Assistant names as written in the lines file, in `ASSISTANTS` order.
+/// Assistant names as written in the lines file, in `NAMES` order.
 const KEYS: [&str; 4] = ["claudette", "childgbt", "twins", "grumpk"];
 
 impl Lines {
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn shipped_file_has_every_trigger_for_every_assistant() {
-        let mut l = Lines::parse(include_str!("../../assets/assistant/lines.txt"));
+        let mut l = Lines::parse(include_str!("lines.txt"));
         for t in super::super::TRIGGERS {
             for who in 0..KEYS.len() {
                 let line = l.pick(t, who).unwrap_or_else(|| panic!("no {t} line for {}", KEYS[who]));
