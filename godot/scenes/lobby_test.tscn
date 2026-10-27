@@ -1,0 +1,254 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://scripts/lobby_test.gd" id="script"]
+[ext_resource type="PackedScene" path="res://characters/mannequin.glb" id="mannequin"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.02, 0.024, 0.031, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.28, 0.32, 0.38, 1)
+ambient_light_energy = 0.12
+tonemap_mode = 3
+glow_enabled = true
+glow_intensity = 0.3
+glow_bloom = 0.05
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.008
+volumetric_fog_albedo = Color(0.8, 0.82, 0.85, 1)
+
+[sub_resource type="CameraAttributesPractical" id="cam"]
+dof_blur_far_enabled = true
+dof_blur_far_distance = 7.0
+dof_blur_far_transition = 4.0
+dof_blur_amount = 0.06
+
+[sub_resource type="StandardMaterial3D" id="floor"]
+albedo_color = Color(0.035, 0.04, 0.05, 1)
+roughness = 0.28
+metallic = 0.2
+
+[sub_resource type="PlaneMesh" id="floormesh"]
+size = Vector2(40, 40)
+
+[sub_resource type="StandardMaterial3D" id="plat"]
+albedo_color = Color(0.07, 0.08, 0.1, 1)
+roughness = 0.5
+metallic = 0.4
+
+[sub_resource type="StandardMaterial3D" id="edge"]
+albedo_color = Color(1, 0.63, 0, 1)
+emission_enabled = true
+emission = Color(1, 0.63, 0, 1)
+emission_energy_multiplier = 1.6
+
+[sub_resource type="BoxMesh" id="screenmesh"]
+size = Vector3(2.4, 1.3, 0.05)
+
+[sub_resource type="StandardMaterial3D" id="screen"]
+albedo_color = Color(0.02, 0.05, 0.08, 1)
+emission_enabled = true
+emission = Color(0.12, 0.35, 0.5, 1)
+emission_energy_multiplier = 0.08
+
+[sub_resource type="StyleBoxFlat" id="deploy"]
+bg_color = Color(1, 0.63, 0, 0.06)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.63, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="deploy_hover"]
+bg_color = Color(1, 0.63, 0, 0.16)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.63, 0, 1)
+
+[sub_resource type="SystemFont" id="title"]
+font_names = PackedStringArray("Oswald", "Anton", "Bebas Neue", "DejaVu Sans Condensed", "Noto Sans")
+font_weight = 800
+font_stretch = 75
+
+[sub_resource type="SystemFont" id="kana"]
+font_names = PackedStringArray("Noto Sans CJK JP", "Noto Sans JP", "Noto Serif CJK JP")
+font_weight = 700
+
+[sub_resource type="SystemFont" id="ui"]
+font_names = PackedStringArray("Noto Sans", "DejaVu Sans")
+font_weight = 600
+
+[node name="LobbyTest" type="Node3D"]
+script = ExtResource("script")
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+camera_attributes = SubResource("cam")
+
+[node name="Camera" type="Camera3D" parent="."]
+fov = 30.0
+current = true
+
+[node name="Lights" type="Node3D" parent="."]
+
+[node name="Key" type="SpotLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 6.5, 0.15)
+light_color = Color(1, 0.96, 0.9, 1)
+light_energy = 7.0
+light_volumetric_fog_energy = 1.0
+shadow_enabled = true
+spot_range = 10.0
+spot_angle = 12.0
+spot_angle_attenuation = 0.6
+
+[node name="Rim" type="SpotLight3D" parent="Lights"]
+transform = Transform3D(-1, 0, -8.74228e-08, -3.07e-08, 0.9363, 0.3513, 8.18e-08, 0.3513, -0.9363, 0, 2.6, -2.8)
+light_color = Color(1, 0.31, 0.55, 1)
+light_energy = 6.0
+light_volumetric_fog_energy = 0.4
+spot_range = 8.0
+spot_angle = 28.0
+
+[node name="Face" type="SpotLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 2.3, 2.6)
+light_color = Color(1, 0.94, 0.88, 1)
+light_energy = 4.0
+light_size = 0.4
+light_volumetric_fog_energy = 0.0
+shadow_enabled = true
+spot_range = 8.0
+spot_angle = 22.0
+spot_angle_attenuation = 1.5
+
+[node name="Fill" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 1.6, 3.5)
+light_color = Color(0.6, 0.72, 0.9, 1)
+light_energy = 0.35
+omni_range = 9.0
+
+[node name="Room" type="Node3D" parent="."]
+
+[node name="Floor" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, 0)
+mesh = SubResource("floormesh")
+surface_material_override/0 = SubResource("floor")
+
+[node name="ScreenL" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.94, 0, 0.34, 0, 1, 0, -0.34, 0, 0.94, -5.5, 2.2, -10)
+mesh = SubResource("screenmesh")
+surface_material_override/0 = SubResource("screen")
+
+[node name="ScreenR" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.94, 0, -0.34, 0, 1, 0, 0.34, 0, 0.94, 5.7, 2.2, -10.4)
+mesh = SubResource("screenmesh")
+surface_material_override/0 = SubResource("screen")
+
+[node name="Stage" type="Node3D" parent="."]
+
+[node name="Platform" type="CSGCylinder3D" parent="Stage"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, 0)
+radius = 1.05
+height = 0.12
+sides = 6
+material = SubResource("plat")
+
+[node name="Edge" type="CSGCylinder3D" parent="Stage"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.004, 0)
+radius = 1.08
+height = 0.01
+sides = 6
+material = SubResource("edge")
+
+[node name="Cut" type="CSGCylinder3D" parent="Stage/Edge"]
+operation = 2
+radius = 1.03
+height = 0.05
+sides = 6
+
+[node name="Hero" parent="Stage" instance=ExtResource("mannequin")]
+
+[node name="Mate" parent="Stage" instance=ExtResource("mannequin")]
+transform = Transform3D(0.94, 0, -0.342, 0, 1, 0, 0.342, 0, 0.94, 1.15, -0.12, -1.7)
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Title" type="VBoxContainer" parent="UI"]
+offset_left = 96.0
+offset_top = 312.0
+offset_right = 656.0
+offset_bottom = 712.0
+theme_override_constants/separation = 8
+
+[node name="Side" type="Label" parent="UI/Title"]
+theme_override_fonts/font = SubResource("ui")
+theme_override_font_sizes/font_size = 18
+text = "STRAYS · ATTACK"
+
+[node name="Name" type="Label" parent="UI/Title"]
+theme_override_fonts/font = SubResource("title")
+theme_override_font_sizes/font_size = 160
+theme_override_constants/line_spacing = -40
+text = "VERA"
+
+[node name="Kana" type="Label" parent="UI/Title"]
+theme_override_fonts/font = SubResource("kana")
+theme_override_font_sizes/font_size = 24
+text = "ヴェラ"
+
+[node name="Rule" type="ColorRect" parent="UI/Title"]
+custom_minimum_size = Vector2(268, 4)
+size_flags_horizontal = 0
+color = Color(1, 0.31, 0.55, 1)
+
+[node name="Line" type="Label" parent="UI/Title"]
+theme_override_fonts/font = SubResource("ui")
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.57, 0.61, 0.65, 1)
+text = "Plants the bomb. Every round."
+
+[node name="Squad" type="VBoxContainer" parent="UI"]
+offset_left = 1410.0
+offset_top = 312.0
+offset_right = 1824.0
+offset_bottom = 584.0
+theme_override_constants/separation = 8
+
+[node name="Head" type="Label" parent="UI/Squad"]
+theme_override_fonts/font = SubResource("ui")
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.57, 0.61, 0.65, 1)
+text = "YOUR SQUAD · 2 / 5"
+
+[node name="You" type="Label" parent="UI/Squad"]
+theme_override_fonts/font = SubResource("ui")
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.63, 0, 1)
+text = "Vera  ·  you"
+
+[node name="Mate" type="Label" parent="UI/Squad"]
+theme_override_fonts/font = SubResource("ui")
+theme_override_font_sizes/font_size = 22
+text = "Nadia  ·  ready"
+
+[node name="Invite" type="Label" parent="UI/Squad"]
+theme_override_fonts/font = SubResource("ui")
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(0.34, 0.38, 0.42, 1)
+text = "+ invite"
+
+[node name="Deploy" type="Button" parent="UI"]
+offset_left = 1410.0
+offset_top = 920.0
+offset_right = 1824.0
+offset_bottom = 1016.0
+theme_override_fonts/font = SubResource("title")
+theme_override_font_sizes/font_size = 48
+theme_override_colors/font_color = Color(1, 0.63, 0, 1)
+theme_override_colors/font_hover_color = Color(1, 0.63, 0, 1)
+theme_override_styles/normal = SubResource("deploy")
+theme_override_styles/hover = SubResource("deploy_hover")
+theme_override_styles/pressed = SubResource("deploy_hover")
+theme_override_styles/focus = SubResource("deploy")
+text = "DEPLOY  ›"
