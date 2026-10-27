@@ -1,0 +1,346 @@
+<meta charset="utf-8">
+<title>bootleg16 Identity</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Antonio:wght@500;700&family=Martian+Mono:wght@400;600;800&family=Noto+Serif+Display:wdth,wght@62.5..100,100..900&family=Noto+Serif+JP:wght@900&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=Saira+Stencil+One&family=Archivo+Narrow:wght@400;500;600;700&display=swap">
+<style>
+/*
+  Layout: three identity directions behind tabs. Each: a concept line, a row of cards
+  (wordmark, faction emblems, colours, type, voice), then its lobby stage as a 1920 x 1080
+  artboard scaled to fit.
+  Spacing rule (page): one scale only, 8 / 16 / 24 / 32 / 48 / 64. Cards sit on a 12-column
+  grid with 24 gutters inside a 1280 max width.
+  Spacing rule (artboard): 12 columns, 96 side margins, 24 gutters (column 122, step 146);
+  every block starts and ends on a column edge; every top and height is a multiple of 8.
+*/
+:root {
+  --bg: #050608;
+  --card: #0b0e12;
+  --line: rgba(205, 225, 240, 0.12);
+  --line2: rgba(205, 225, 240, 0.26);
+  --tx1: #eef3f7;
+  --tx2: #919ca7;
+  --tx3: #56606a;
+  --you: #ffa000;
+  --you-ink: #160c00;
+  --bureau: #49c6ff;
+  --strays: #ff4f8b;
+  --s1: 8px; --s2: 16px; --s3: 24px; --s4: 32px; --s6: 48px; --s8: 64px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--tx1); font: 400 15px/1.5 "IBM Plex Sans Condensed", "Arial Narrow", sans-serif; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: var(--s6) var(--s8); }
+main { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--s6); }
+.head { display: flex; flex-direction: column; gap: var(--s2); max-width: 760px; }
+.eyebrow { font: 600 12px "Martian Mono", ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--tx2); }
+h1 { margin: 0; font: 900 56px/1 "Noto Serif Display", serif; font-stretch: 62.5%; letter-spacing: .01em; }
+.head p { margin: 0; color: var(--tx2); max-width: 68ch; }
+.ground { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+.ground div { border-top: 1px solid var(--line2); padding-top: var(--s2); display: flex; flex-direction: column; gap: var(--s1); }
+.ground b { font-weight: 600; }
+.ground span { color: var(--tx2); }
+.tabs { display: flex; gap: 0; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; align-self: flex-start; flex-wrap: wrap; }
+.tabs button { font: 600 13px "IBM Plex Sans Condensed", sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--tx2); background: none; border: 0; padding: var(--s2) var(--s3); cursor: pointer; }
+.tabs button + button { border-left: 1px solid var(--line2); }
+.tabs button[aria-pressed="true"] { background: var(--you); color: var(--you-ink); }
+.tabs button:focus-visible { outline: 2px solid var(--you); outline-offset: -2px; }
+.dir { display: none; flex-direction: column; gap: var(--s4); }
+.dir.on { display: flex; }
+.concept { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--s3); align-items: end; }
+.concept .name { grid-column: span 5; }
+.concept .name .n { font: 600 12px "Martian Mono", monospace; color: var(--tx2); letter-spacing: .12em; }
+.concept .name h2 { margin: var(--s1) 0 0; font-size: 48px; line-height: 1; }
+.concept p { grid-column: span 7; margin: 0; color: var(--tx2); font-size: 17px; max-width: 68ch; }
+.concept p b { color: var(--tx1); font-weight: 500; }
+.cards { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--s3); }
+.c { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.c > .wm { flex: 1; display: flex; align-items: center; }
+.c .lab { font: 600 11px "Martian Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--tx3); }
+.c.w6 { grid-column: span 6; } .c.w4 { grid-column: span 4; } .c.w3 { grid-column: span 3; } .c.w8 { grid-column: span 8; } .c.w12 { grid-column: span 12; }
+.swatches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+.sw { display: flex; gap: var(--s2); align-items: center; }
+.sw i { width: 40px; height: 40px; border-radius: 4px; flex: none; border: 1px solid var(--line); }
+.sw div { display: flex; flex-direction: column; font-size: 13px; color: var(--tx2); line-height: 1.35; }
+.sw b { color: var(--tx1); font-weight: 600; font-size: 14px; }
+.emblems { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.emb { display: flex; flex-direction: column; gap: var(--s1); align-items: flex-start; }
+.emb svg { width: 96px; height: 96px; }
+.emb b { font-weight: 600; }
+.emb span { color: var(--tx2); font-size: 13px; }
+.voice { display: flex; flex-direction: column; gap: var(--s2); }
+.voice div { display: grid; grid-template-columns: 120px 1fr; gap: var(--s2); font-size: 14px; }
+.voice div span:first-child { color: var(--tx3); font: 600 11px "Martian Mono", monospace; letter-spacing: .1em; text-transform: uppercase; padding-top: 3px; }
+.typespec { display: flex; flex-direction: column; gap: var(--s2); }
+.typespec .r { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); border-bottom: 1px solid var(--line); padding-bottom: var(--s1); }
+.typespec .r span:last-child { color: var(--tx3); font: 500 11px "Martian Mono", monospace; }
+.stagewrap { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 6px; border: 1px solid var(--line); }
+.stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; }
+.cap { color: var(--tx2); font-size: 14px; display: flex; gap: var(--s3); flex-wrap: wrap; justify-content: space-between; }
+.cap b { color: var(--tx1); font-weight: 600; }
+
+/* --- artboard grid helpers (1920 x 1080): column k starts at 96 + 146k, spans end at 96 + 146(k+n) - 24 ---
+   Header band: every header item is top 64, height 64, its content centred in it (one centre line at 96).
+   Bottom line: the name block and the play button both end at 1016. */
+.g { position: absolute; }
+[data-band] { top: 64px !important; height: 64px; display: flex !important; align-items: center; }
+[data-bottom] { top: auto !important; bottom: 64px; }
+
+/* ===================== Direction 1: Channel 16 ===================== */
+.d1 { --d-title: "Antonio", "Arial Narrow", sans-serif; --d-mono: "Martian Mono", monospace; }
+.d1 h2 { font-family: var(--d-title); font-weight: 700; text-transform: uppercase; }
+.d1 .wm { display: flex; align-items: center; gap: var(--s2); }
+.d1 .wm .bug { width: 72px; height: 72px; border: 3px solid var(--you); border-radius: 12px; display: grid; place-items: center; font: 800 30px var(--d-mono); color: var(--you); position: relative; }
+.d1 .wm .bug::after { content: ""; position: absolute; right: 8px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: #ff3b3b; }
+.d1 .wm .w { font: 700 64px/1 var(--d-title); text-transform: uppercase; letter-spacing: .02em; }
+.d1 .wm .w small { display: block; font: 600 12px var(--d-mono); letter-spacing: .3em; color: var(--tx2); margin-top: var(--s1); }
+.s1 { background: radial-gradient(ellipse 900px 520px at 50% 92%, rgba(255, 160, 0, .18), transparent 70%), linear-gradient(180deg, #0b0a08 0%, #050608 70%); }
+.s1 .bars { position: absolute; left: 0; right: 0; bottom: 0; height: 320px; background: repeating-linear-gradient(180deg, rgba(255, 160, 0, .05) 0 2px, transparent 2px 8px); }
+.s1 .floor { left: 682px; top: 880px; width: 556px; height: 48px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 160, 0, .45), transparent); }
+.s1 .chan { left: 96px; top: 64px; display: flex; gap: 16px; align-items: center; }
+.s1 .chan .bug { width: 56px; height: 56px; border: 3px solid var(--you); border-radius: 10px; display: grid; place-items: center; font: 800 22px "Martian Mono", monospace; color: var(--you); }
+.s1 .chan .w { font: 700 40px/1 "Antonio", sans-serif; text-transform: uppercase; }
+.s1 .tabs16 { left: 534px; top: 80px; width: 852px; display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; }
+.s1 .tabs16 span { font: 700 28px "Antonio", sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--tx2); height: 64px; display: flex; align-items: center; justify-content: center; border-bottom: 2px solid transparent; }
+.s1 .tabs16 span.on { color: var(--tx1); border-color: var(--you); }
+.s1 .onair { right: 96px; top: 72px; display: flex; gap: 8px; align-items: center; font: 600 16px "Martian Mono", monospace; color: #ff3b3b; letter-spacing: .1em; }
+.s1 .onair i { width: 12px; height: 12px; border-radius: 50%; background: #ff3b3b; }
+.s1 .lower { left: 96px; top: 800px; width: 560px; height: 152px; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; }
+.s1 .lower .k { font: 600 16px "Martian Mono", monospace; letter-spacing: .14em; color: var(--strays); }
+.s1 .lower .n { font: 700 96px/.9 "Antonio", sans-serif; text-transform: uppercase; }
+.s1 .lower .t { font: 500 20px "IBM Plex Sans Condensed", sans-serif; color: var(--tx2); }
+.s1 .play { left: 1410px; top: 904px; width: 414px; height: 112px; background: var(--you); color: var(--you-ink); border-radius: 8px; display: flex; flex-direction: column; justify-content: center; padding: 0 32px; }
+.s1 .play b { font: 700 48px/1 "Antonio", sans-serif; text-transform: uppercase; letter-spacing: .04em; }
+.s1 .play span { font: 600 14px "Martian Mono", monospace; letter-spacing: .08em; opacity: .75; }
+
+/* ===================== Direction 2: Operation 16 ===================== */
+.d2 h2 { font-family: "Noto Serif Display", serif; font-stretch: 62.5%; font-weight: 900; }
+.d2 .wm { display: flex; flex-direction: column; gap: var(--s1); }
+.d2 .wm .w { font: 900 88px/.85 "Noto Serif Display", serif; font-stretch: 62.5%; letter-spacing: .005em; }
+.d2 .wm .w em { font-style: normal; color: var(--you); }
+.d2 .wm .jp { font: 900 15px "Noto Serif JP", serif; letter-spacing: .5em; color: var(--tx2); }
+.d2 .wm .rule { height: 3px; background: var(--you); width: 100%; }
+.s2 { background: radial-gradient(ellipse 760px 980px at 50% 30%, rgba(255, 255, 255, .06), transparent 65%), #040506; }
+.s2 .beam { left: 754px; top: 0; width: 412px; height: 960px; background: linear-gradient(180deg, rgba(255, 245, 225, .10), rgba(255, 245, 225, 0) 90%); clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%); }
+.s2 .plat { left: 682px; top: 888px; width: 556px; height: 64px; }
+.s2 .title { left: 96px; top: 280px; width: 560px; display: flex; flex-direction: column; gap: 16px; }
+.s2 .title .k { font: 600 16px "IBM Plex Sans Condensed", sans-serif; letter-spacing: .3em; color: var(--strays); }
+.s2 .title .n { font: 900 168px/.8 "Noto Serif Display", serif; font-stretch: 62.5%; }
+.s2 .title .jp { font: 900 22px "Noto Serif JP", serif; letter-spacing: .5em; color: var(--tx2); }
+.s2 .title .rule { width: 268px; height: 4px; background: var(--strays); }
+.s2 .title .t { font: 500 20px "IBM Plex Sans Condensed", sans-serif; color: var(--tx2); max-width: 30ch; }
+.s2 .wmk { left: 96px; top: 64px; font: 900 40px/1 "Noto Serif Display", serif; font-stretch: 62.5%; }
+.s2 .wmk em { font-style: normal; color: var(--you); }
+.s2 .tabs16 { left: 680px; top: 72px; width: 560px; display: flex; justify-content: space-between; }
+.s2 .tabs16 span { font: 600 18px "IBM Plex Sans Condensed", sans-serif; letter-spacing: .26em; color: var(--tx2); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.s2 .tabs16 span small { font: 900 12px "Noto Serif JP", serif; letter-spacing: .3em; color: var(--tx3); }
+.s2 .tabs16 span.on { color: var(--tx1); }
+.s2 .tabs16 span.on small { color: var(--you); }
+.s2 .party { right: 96px; top: 280px; width: 414px; display: flex; flex-direction: column; gap: 16px; }
+.s2 .party .p { border-left: 4px solid var(--strays); padding: 8px 16px; display: flex; justify-content: space-between; font: 600 20px "IBM Plex Sans Condensed", sans-serif; background: rgba(255, 79, 139, .06); }
+.s2 .party .p span { color: var(--tx2); font-weight: 500; }
+.s2 .party .p.empty { border-left-color: var(--line2); background: none; color: var(--tx3); font-weight: 500; }
+.s2 .play { right: 96px; top: 888px; width: 414px; height: 96px; border: 3px solid var(--you); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; color: var(--you); }
+.s2 .play b { font: 900 52px/1 "Noto Serif Display", serif; font-stretch: 62.5%; }
+.s2 .play span { font: 600 14px "IBM Plex Sans Condensed", sans-serif; letter-spacing: .2em; }
+
+/* ===================== Direction 3: Dubbed ===================== */
+.d3 h2 { font-family: "Saira Stencil One", sans-serif; font-weight: 400; text-transform: uppercase; }
+.d3 .wm { display: flex; align-items: center; gap: var(--s2); }
+.d3 .wm .tape { background: #e9e2d0; color: #121212; padding: var(--s2) var(--s3); transform: rotate(-2deg); font: 400 56px/1 "Saira Stencil One", sans-serif; text-transform: uppercase; box-shadow: 0 0 0 3px var(--you) inset; }
+.d3 .wm .side { font: 600 13px "Archivo Narrow", sans-serif; color: var(--tx2); letter-spacing: .2em; line-height: 1.6; }
+.s3 { background: radial-gradient(ellipse 640px 760px at 50% 18%, rgba(255, 176, 64, .22), transparent 62%), linear-gradient(180deg, #0a0806, #050506 75%); }
+.s3 .lamp { left: 900px; top: 0; width: 120px; height: 32px; background: #2a2218; border-radius: 0 0 8px 8px; box-shadow: 0 16px 80px 24px rgba(255, 176, 64, .35); }
+.s3 .roof { left: 0; top: 920px; width: 1920px; height: 160px; background: #0d0b09; border-top: 2px solid #1f1a14; }
+.s3 .marker { left: 754px; top: 896px; width: 412px; height: 48px; border: 4px dashed rgba(255, 160, 0, .7); border-radius: 50%; }
+.s3 .tag { left: 96px; top: 64px; background: #e9e2d0; color: #121212; padding: 0 16px; font: 400 36px/1 "Saira Stencil One", sans-serif; text-transform: uppercase; transform: rotate(-2deg); }
+.s3 .tabs16 { left: 680px; top: 72px; width: 560px; display: flex; justify-content: space-between; }
+.s3 .tabs16 span { font: 700 22px "Archivo Narrow", sans-serif; text-transform: uppercase; letter-spacing: .12em; color: var(--tx2); }
+.s3 .tabs16 span.on { color: #121212; background: var(--you); padding: 0 8px; }
+.s3 .card { left: 96px; top: 640px; width: 414px; height: 176px; background: #e9e2d0; color: #121212; padding: 24px; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; transform: rotate(-1deg); }
+.s3 .card .k { font: 700 14px "Archivo Narrow", sans-serif; letter-spacing: .2em; color: #b0154c; }
+.s3 .card .n { font: 400 72px/.9 "Saira Stencil One", sans-serif; text-transform: uppercase; }
+.s3 .card .t { font: 500 18px "Archivo Narrow", sans-serif; }
+.s3 .play { right: 96px; top: 888px; width: 414px; height: 112px; background: var(--you); color: #121212; display: flex; flex-direction: column; justify-content: center; padding: 0 32px; }
+.s3 .play b { font: 400 52px/1 "Saira Stencil One", sans-serif; text-transform: uppercase; }
+.s3 .play span { font: 700 14px "Archivo Narrow", sans-serif; letter-spacing: .14em; }
+
+/* the character stand-ins: the real thing is the 3D character from the Locker */
+.hero { left: 754px; top: 216px; width: 412px; height: 720px; }
+.mate { width: 268px; height: 520px; top: 400px; opacity: .55; }
+.mate.l { left: 462px; } .mate.r { left: 1190px; }
+
+/* grid check overlay (?check): red outlines on anything off the grid */
+.bad { outline: 3px solid #ff2b2b !important; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<main>
+  <section class="head">
+    <span class="eyebrow">bootleg16 identity · three directions · pick one</span>
+    <h1>What bootleg16 looks like</h1>
+    <p>Each direction is a whole identity: the idea, the wordmark, both faction emblems, colours and what they mean, type, how it talks, and the lobby stage your character stands on. The figures on the stages are stand-ins for your 3D character.</p>
+  </section>
+
+  <section class="ground">
+    <div><b>The world</b><span>The 2040s. The Bureau, a private conglomerate, runs the city: "Order is mercy". The Strays, a leaderless network, bomb its pillars: "Nothing left to lose".</span></div>
+    <div><b>The name</b><span>A bootleg is something that isn't supposed to exist: a pirated tape, a hijacked signal, an unlicensed copy.</span></div>
+    <div><b>Fixed in every direction</b><span>Amber is you. Cyan is the Bureau, pink the Strays. The menu is a lobby with your character centre stage.</span></div>
+  </section>
+
+  <div class="tabs" role="group" aria-label="Direction">
+    <button type="button" id="t1" data-d="1" aria-pressed="true">1 · Channel 16</button>
+    <button type="button" id="t2" data-d="2" aria-pressed="false">2 · Operation 16</button>
+    <button type="button" id="t3" data-d="3" aria-pressed="false">3 · Dubbed</button>
+  </div>
+
+  <!-- ===================== 1 ===================== -->
+  <section class="dir d1 on" id="d1">
+    <div class="concept"><div class="name"><span class="n">DIRECTION 1</span><h2>Channel 16</h2></div>
+      <p><b>bootleg16 is a pirate broadcast.</b> Channel 16 cuts into the Bureau's feed and shows what really happens on the streets. The game looks like live TV: a channel bug in the corner, an ON AIR light, lower-thirds with names, the signal breaking up when the picture changes.</p></div>
+    <div class="cards">
+      <div class="c w6"><span class="lab">Wordmark</span><div class="wm"><div class="bug">16</div><div class="w">bootleg<small>CHANNEL 16 · LIVE</small></div></div></div>
+      <div class="c w6"><span class="lab">Faction emblems</span><div class="emblems">
+        <div class="emb"><svg viewBox="0 0 96 96"><circle cx="48" cy="48" r="40" fill="none" stroke="#49c6ff" stroke-width="5"/><rect x="24" y="34" width="48" height="6" fill="#49c6ff"/><rect x="24" y="45" width="48" height="6" fill="#49c6ff"/><rect x="24" y="56" width="48" height="6" fill="#49c6ff"/></svg><b>Bureau</b><span>The official broadcast: a seal with the standard test bars.</span></div>
+        <div class="emb"><svg viewBox="0 0 96 96"><rect x="14" y="58" width="14" height="24" fill="#ff4f8b"/><rect x="34" y="42" width="14" height="40" fill="#ff4f8b"/><rect x="54" y="26" width="14" height="56" fill="#ff4f8b"/><path d="M10 74 L84 16" stroke="#050608" stroke-width="10"/><path d="M10 74 L84 16" stroke="#ff4f8b" stroke-width="3"/></svg><b>Strays</b><span>Signal bars cut through: the jammed transmission.</span></div></div></div>
+      <div class="c w4"><span class="lab">Colour</span><div class="swatches">
+        <div class="sw"><i style="background:#ffa000"></i><div><b>Amber</b>you, live picture</div></div>
+        <div class="sw"><i style="background:#ff3b3b"></i><div><b>On air red</b>alerts only</div></div>
+        <div class="sw"><i style="background:#49c6ff"></i><div><b>Cyan</b>Bureau</div></div>
+        <div class="sw"><i style="background:#ff4f8b"></i><div><b>Pink</b>Strays</div></div></div></div>
+      <div class="c w4"><span class="lab">Type</span><div class="typespec">
+        <div class="r"><span style="font:700 34px 'Antonio',sans-serif;text-transform:uppercase">Headline</span><span>Antonio</span></div>
+        <div class="r"><span style="font:600 16px 'Martian Mono',monospace">0:42 · CH16</span><span>Martian Mono</span></div>
+        <div class="r"><span style="font:500 17px 'IBM Plex Sans Condensed',sans-serif">Body and settings</span><span>Plex Condensed</span></div></div></div>
+      <div class="c w4"><span class="lab">Voice</span><div class="voice">
+        <div><span>Play</span><span>Go live</span></div><div><span>Match found</span><span>Signal found. 18 s to tune in.</span></div><div><span>Round won</span><span>Broadcast holds.</span></div><div><span>Assistant</span><span>"You're on air. Don't flinch."</span></div></div></div>
+    </div>
+    <div class="stagewrap"><div class="stage s1" data-stage>
+      <div class="bars g"></div>
+      <div class="chan g" data-grid="start" data-band><div class="bug">16</div><div class="w">bootleg</div></div>
+      <div class="tabs16 g" data-grid="span" data-band><span class="on">Play</span><span>Locker</span><span>Characters</span><span>Settings</span></div>
+      <div class="onair g" data-band><i></i>ON AIR · EU 42 MS</div>
+      <svg class="g mate l" data-figure></svg><svg class="g mate r" data-figure></svg>
+      <div class="floor g"></div><svg class="g hero" data-figure data-rim="#ff4f8b"></svg>
+      <div class="lower g" data-grid="span" data-bottom><span class="k">STRAYS · ATTACK</span><span class="n">Vera</span><span class="t">With Nadia and Kiki · party 3 / 5</span></div>
+      <div class="play g" data-grid="span" data-bottom><b>Go live</b><span>CASUAL 5 V 5 · ENTER</span></div>
+    </div></div>
+    <div class="cap"><span><b>Stage:</b> a TV studio after hours. One amber key light from below, the floor glowing where you stand, your name as a news lower-third.</span><span><b>Motion:</b> the picture tunes in on every change, channel-flip style.</span></div>
+  </section>
+
+  <!-- ===================== 2 ===================== -->
+  <section class="dir d2" id="d2">
+    <div class="concept"><div class="name"><span class="n">DIRECTION 2</span><h2>Operation 16</h2></div>
+      <p><b>bootleg16 is an operation file.</b> Every match is an operation, every character a dossier. The look is the command room: heavy serif title cards with Japanese under them, black fields, one hard light from above, warnings that take over the screen when it matters, then leave.</p></div>
+    <div class="cards">
+      <div class="c w6"><span class="lab">Wordmark</span><div class="wm"><div class="w">BOOTLEG<em>16</em></div><div class="rule"></div><div class="jp">ブートレグ・十六</div></div></div>
+      <div class="c w6"><span class="lab">Faction emblems</span><div class="emblems">
+        <div class="emb"><svg viewBox="0 0 96 96"><path d="M16 64 A32 32 0 0 1 80 64 Z" fill="none" stroke="#49c6ff" stroke-width="5"/><rect x="10" y="70" width="76" height="5" fill="#49c6ff"/><rect x="45" y="18" width="6" height="14" fill="#49c6ff"/></svg><b>Bureau</b><span>A rising sun on a horizon line: order, always up.</span></div>
+        <div class="emb"><svg viewBox="0 0 96 96"><path d="M48 12 L58 44 L44 40 Z" fill="#ff4f8b"/><path d="M62 50 L84 84 L52 70 Z" fill="#ff4f8b"/><path d="M40 48 L46 74 L12 84 Z" fill="#ff4f8b"/></svg><b>Strays</b><span>A triangle blown into three shards: the pillar after.</span></div></div></div>
+      <div class="c w4"><span class="lab">Colour</span><div class="swatches">
+        <div class="sw"><i style="background:#ffa000"></i><div><b>Amber</b>you, the main action</div></div>
+        <div class="sw"><i style="background:#ff3b3b"></i><div><b>Warning red</b>takeover alerts</div></div>
+        <div class="sw"><i style="background:#49c6ff"></i><div><b>Cyan</b>Bureau</div></div>
+        <div class="sw"><i style="background:#ff4f8b"></i><div><b>Pink</b>Strays</div></div></div></div>
+      <div class="c w4"><span class="lab">Type</span><div class="typespec">
+        <div class="r"><span style="font:900 40px 'Noto Serif Display',serif;font-stretch:62.5%">Title</span><span>Noto Serif Display</span></div>
+        <div class="r"><span style="font:900 16px 'Noto Serif JP',serif;letter-spacing:.3em">作戦</span><span>Noto Serif JP</span></div>
+        <div class="r"><span style="font:500 17px 'IBM Plex Sans Condensed',sans-serif">Body and readouts</span><span>Plex Condensed</span></div></div></div>
+      <div class="c w4"><span class="lab">Voice</span><div class="voice">
+        <div><span>Play</span><span>Deploy</span></div><div><span>Match found</span><span>Operation ready. Confirm in 18.</span></div><div><span>Round won</span><span>Objective held.</span></div><div><span>Assistant</span><span>"Dossier open. Make it worth reading."</span></div></div></div>
+    </div>
+    <div class="stagewrap"><div class="stage s2" data-stage>
+      <div class="beam g"></div>
+      <div class="wmk g" data-grid="start" data-band>BOOTLEG<em>16</em></div>
+      <div class="tabs16 g" data-grid="span" data-band><span class="on">PLAY<small>出撃</small></span><span>LOCKER<small>装備</small></span><span>CHARACTERS<small>人員</small></span><span>SETTINGS<small>設定</small></span></div>
+      <div class="title g" data-grid="span"><span class="k">STRAYS · ATTACK</span><span class="n">VERA</span><span class="jp">ヴェラ</span><div class="rule"></div><span class="t">Plants the bomb. Every round.</span></div>
+      <svg class="g mate l" data-figure></svg><svg class="g mate r" data-figure></svg>
+      <svg class="g plat" viewBox="0 0 556 64"><polygon points="0,32 139,0 417,0 556,32 417,64 139,64" fill="none" stroke="rgba(255,160,0,.5)" stroke-width="2"/></svg>
+      <svg class="g hero" data-figure data-rim="#ffffff"></svg>
+      <div class="party g" data-grid="span"><div class="p">Vera<span>you</span></div><div class="p">Nadia<span>ready</span></div><div class="p">Kiki<span>ready</span></div><div class="p empty">invite</div><div class="p empty">invite</div></div>
+      <div class="play g" data-grid="span" data-bottom><b>DEPLOY</b><span>CASUAL · ENTER</span></div>
+    </div></div>
+    <div class="cap"><span><b>Stage:</b> a dark command room. One hard light straight down, a hex platform under your feet, your name as a title card to the left.</span><span><b>Motion:</b> title cards slam in, warnings take over and leave, everything else still.</span></div>
+  </section>
+
+  <!-- ===================== 3 ===================== -->
+  <section class="dir d3" id="d3">
+    <div class="concept"><div class="name"><span class="n">DIRECTION 3</span><h2>Dubbed</h2></div>
+      <p><b>bootleg16 is a tape passed hand to hand.</b> The sixteenth copy of a recording the Bureau tried to erase. The look is street print: stencil type, masking-tape labels, paper cards, one sodium streetlight. Rough at the edges, still clean to read.</p></div>
+    <div class="cards">
+      <div class="c w6"><span class="lab">Wordmark</span><div class="wm"><div class="tape">bootleg 16</div><div class="side">SIDE A<br>DUB 16 OF ?<br>DO NOT ERASE</div></div></div>
+      <div class="c w6"><span class="lab">Faction emblems</span><div class="emblems">
+        <div class="emb"><svg viewBox="0 0 96 96"><rect x="10" y="22" width="76" height="52" rx="6" fill="none" stroke="#49c6ff" stroke-width="5"/><g fill="#49c6ff"><rect x="20" y="34" width="4" height="28"/><rect x="28" y="34" width="8" height="28"/><rect x="40" y="34" width="4" height="28"/><rect x="48" y="34" width="12" height="28"/><rect x="64" y="34" width="4" height="28"/><rect x="72" y="34" width="4" height="28"/></g></svg><b>Bureau</b><span>A barcode stamp: everything filed, everyone counted.</span></div>
+        <div class="emb"><svg viewBox="0 0 96 96"><path d="M20 76 L48 16 L76 76 L60 76 L48 50 L36 76 Z" fill="#ff4f8b"/><rect x="44" y="80" width="8" height="10" fill="#ff4f8b"/><rect x="30" y="80" width="4" height="6" fill="#ff4f8b"/><rect x="62" y="80" width="4" height="8" fill="#ff4f8b"/></svg><b>Strays</b><span>A spray-stencilled arrow, running at the bottom.</span></div></div></div>
+      <div class="c w4"><span class="lab">Colour</span><div class="swatches">
+        <div class="sw"><i style="background:#ffa000"></i><div><b>Amber</b>you, the streetlight</div></div>
+        <div class="sw"><i style="background:#e9e2d0"></i><div><b>Paper</b>labels and cards</div></div>
+        <div class="sw"><i style="background:#49c6ff"></i><div><b>Cyan</b>Bureau</div></div>
+        <div class="sw"><i style="background:#ff4f8b"></i><div><b>Pink</b>Strays</div></div></div></div>
+      <div class="c w4"><span class="lab">Type</span><div class="typespec">
+        <div class="r"><span style="font:400 34px 'Saira Stencil One',sans-serif;text-transform:uppercase">Stencil</span><span>Saira Stencil</span></div>
+        <div class="r"><span style="font:700 17px 'Archivo Narrow',sans-serif;text-transform:uppercase;letter-spacing:.12em">Labels</span><span>Archivo Narrow</span></div>
+        <div class="r"><span style="font:500 17px 'Archivo Narrow',sans-serif">Body and settings</span><span>Archivo Narrow</span></div></div></div>
+      <div class="c w4"><span class="lab">Voice</span><div class="voice">
+        <div><span>Play</span><span>Press play</span></div><div><span>Match found</span><span>Tape's in. 18 s, you in or out?</span></div><div><span>Round won</span><span>Still rolling.</span></div><div><span>Assistant</span><span>"Recording. Make it a good copy."</span></div></div></div>
+    </div>
+    <div class="stagewrap"><div class="stage s3" data-stage>
+      <div class="roof g"></div><div class="lamp g"></div>
+      <div class="tag g" data-grid="start" data-band>bootleg 16</div>
+      <div class="tabs16 g" data-grid="span" data-band><span class="on">Play</span><span>Locker</span><span>Characters</span><span>Settings</span></div>
+      <svg class="g mate l" data-figure></svg><svg class="g mate r" data-figure></svg>
+      <div class="marker g"></div><svg class="g hero" data-figure data-rim="#ffb040"></svg>
+      <div class="card g" data-grid="span" data-bottom><span class="k">STRAYS · ATTACK</span><span class="n">Vera</span><span class="t">With Nadia and Kiki · party 3 / 5</span></div>
+      <div class="play g" data-grid="span" data-bottom><b>Press play</b><span>CASUAL 5 V 5 · ENTER</span></div>
+    </div></div>
+    <div class="cap"><span><b>Stage:</b> a rooftop at night under one sodium lamp, a painted circle where you stand, your name on a paper card.</span><span><b>Motion:</b> things land like cards dropped on a table; tape-stop wobble on transitions.</span></div>
+  </section>
+</main>
+
+<script>
+// the character stand-in: a front-facing figure, lit from above with a rim in the stage's colour
+const FIG = `<defs><linearGradient id="FILL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b323a"/><stop offset="1" stop-color="#11151a"/></linearGradient></defs>
+<g fill="url(#FILL)" stroke="RIM" stroke-width="3" stroke-opacity=".55">
+<ellipse cx="206" cy="78" rx="44" ry="54"/>
+<path d="M176 128 L236 128 L240 150 L172 150 Z"/>
+<path d="M118 160 Q206 136 294 160 L310 380 Q300 392 284 384 L272 250 L262 430 L150 430 L140 250 L128 384 Q112 392 102 380 Z"/>
+<path d="M150 430 L262 430 L270 700 L222 704 L210 470 L202 470 L190 704 L142 700 Z"/>
+</g>`;
+document.querySelectorAll("[data-figure]").forEach((s, i) => {
+  s.setAttribute("viewBox", "0 0 412 720");
+  s.setAttribute("preserveAspectRatio", "xMidYMax meet");
+  s.innerHTML = FIG.replace("FILL", "f" + i).replace("url(#FILL)", `url(#f${i})`).replace("RIM", s.dataset.rim || "#8f9aa5");
+});
+
+const fit = () => document.querySelectorAll("[data-stage]").forEach(s => { s.style.transform = `scale(${s.parentElement.clientWidth / 1920})`; });
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  document.querySelectorAll(".dir").forEach(d => d.classList.toggle("on", d.id === "d" + b.dataset.d));
+  fit();
+}));
+addEventListener("resize", fit);
+fit();
+
+// grid check, in artboard pixels (layout positions, so rotation doesn't count): every
+// [data-grid] block starts on a column edge (96 + 146k) with its top on the 8 grid; a
+// data-grid="span" block also ends on one (96 + 146k - 24). ?check outlines misses in red.
+window.gridCheck = () => {
+  const out = [];
+  document.querySelectorAll(".dir.on [data-stage] [data-grid]").forEach(el => {
+    const L = el.offsetLeft, T = el.offsetTop, R = L + el.offsetWidth;
+    const onCol = x => (x - 96) % 146 === 0 && x >= 96;
+    const ok = onCol(L) && T % 8 === 0 && (el.dataset.grid !== "span" || onCol(R + 24));
+    el.classList.toggle("bad", !ok);
+    if (!ok) out.push(`${el.className.replace(/ ?g$/, "").replace(" bad", "")}: left ${L}, right ${R}, top ${T}`);
+  });
+  document.querySelectorAll(".dir.on [data-stage] [data-band]").forEach(el => {
+    const c = el.offsetTop + el.offsetHeight / 2;
+    if (c !== 96) { el.classList.add("bad"); out.push(`band ${el.className}: centre ${c}`); }
+  });
+  document.querySelectorAll(".dir.on [data-stage] [data-bottom]").forEach(el => {
+    const b = el.offsetTop + el.offsetHeight;
+    if (b !== 1016) { el.classList.add("bad"); out.push(`bottom ${el.className}: ${b}`); }
+  });
+  return out;
+};
+if (location.search.includes("check")) setTimeout(() => console.log(gridCheck()), 800);
+</script>
