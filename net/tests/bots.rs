@@ -30,7 +30,7 @@ fn booked(map: &Arc<BotMap>, cfg: impl Fn(SocketAddr) -> net::config::MatchConfi
     let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
-    let mut server = Server::new(SocketAddr::from(LOCAL), "test", &map.bsp, assets()).unwrap();
+    let mut server = map.server(SocketAddr::from(LOCAL), "test", assets()).unwrap();
     server.set_config(cfg(lobby));
     let mut queue: Vec<LobbyClient> = (0..10).map(|i| accepting(LobbyClient::new(lobby, &format!("bot{i}")).unwrap())).collect();
     let mut bots: Vec<Bot> = Vec::new();
@@ -94,6 +94,21 @@ fn ten_bots_play_a_whole_match() {
     assert!(events.iter().any(|e| matches!(e, GameEvent::MatchOver { .. })));
     assert!(rounds >= 3 && kills > 0, "{rounds} rounds, {kills} kills");
     assert!(!server.is_reserved(), "server free for the next match");
+}
+
+/// The same on our own map format (the exported Godot test arena): no Valve files.
+#[test]
+fn ten_bots_play_a_whole_match_on_our_own_map() {
+    let (arena, hash) = arena();
+    let map = BotMap::from_map(arena, hash);
+    let (mut server, mut bots) = booked(&map, short);
+    let mut events = Vec::new();
+    let secs = play("whole match on the arena", &mut server, &mut bots, 6 * 60, &mut events, |b, _| b.iter().all(|b| b.client.match_ended));
+    let count = |f: fn(&GameEvent) -> bool| events.iter().filter(|e| f(e)).count();
+    let (kills, rounds) = (count(|e| matches!(e, GameEvent::Kill { .. })), count(|e| matches!(e, GameEvent::RoundEnd { .. })));
+    println!("arena: {rounds} rounds, {kills} kills, {secs:.0} game seconds");
+    assert!(events.iter().any(|e| matches!(e, GameEvent::MatchOver { .. })));
+    assert!(rounds >= 3 && kills > 0, "{rounds} rounds, {kills} kills");
 }
 
 #[test]

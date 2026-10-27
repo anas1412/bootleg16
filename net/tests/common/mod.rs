@@ -20,6 +20,11 @@ pub fn dust2() -> Option<Bsp> {
     Bsp::load(format!("{}/maps/de_dust2.bsp", game_dir()?)).ok()
 }
 
+/// Our own test map (`godot/maps/test_arena`, exported to `.bmap`) and its file's hash.
+pub fn arena() -> (sim::mapfile::MapFile, u64) {
+    sim::mapfile::MapFile::load(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../godot/maps/test_arena.bmap"))).expect("the exported test arena")
+}
+
 pub fn assets() -> net::server::Assets {
     let dir = game_dir().unwrap();
     let model = goldsrc::mdl::Model::load(format!("{dir}/models/player/arctic/arctic.mdl")).expect("player model");

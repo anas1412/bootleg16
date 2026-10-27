@@ -32,8 +32,12 @@ fn main() {
     let mut maps: std::collections::HashMap<String, std::sync::Arc<BotMap>> = std::collections::HashMap::new();
     let mut load = |name: &str| -> Option<std::sync::Arc<BotMap>> {
         if !maps.contains_key(name) {
-            let bsp = goldsrc::bsp::Bsp::load(format!("{dir}/maps/{name}.bsp")).ok()?;
-            maps.insert(name.to_string(), BotMap::new(bsp, name));
+            // our own map format first, else a GoldSrc BSP
+            let map = match sim::mapfile::MapFile::load(std::path::Path::new(&format!("{dir}/maps/{name}.bmap"))) {
+                Ok((map, hash)) => BotMap::from_map(map, hash),
+                Err(_) => BotMap::new(goldsrc::bsp::Bsp::load(format!("{dir}/maps/{name}.bsp")).ok()?, name),
+            };
+            maps.insert(name.to_string(), map);
         }
         maps.get(name).cloned()
     };
@@ -157,7 +161,7 @@ fn main() {
                             b.site = sites[i];
                             bots[i] = Some(b);
                         }
-                        None => println!("bot{i}: no {name}.bsp here (BOOTLEG16_DIR)"),
+                        None => println!("bot{i}: no {name}.bmap or .bsp here (BOOTLEG16_DIR)"),
                     }
                 }
             }

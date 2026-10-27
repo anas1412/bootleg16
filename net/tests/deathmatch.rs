@@ -7,7 +7,7 @@ use common::*;
 use net::bot::{Bot, BotMap, Difficulty, Profile};
 use net::lobby::{Command, LobbyClient, LobbyServer};
 use net::protocol::GameEvent;
-use net::server::{Rules, Server};
+use net::server::Rules;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
@@ -20,7 +20,7 @@ fn drop_in_fight_respawn_and_the_time_limit_resets_scores() {
     let mut m = LobbyServer::bind(SocketAddr::from(LOCAL), vec!["tok".into()]).unwrap();
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
-    let mut server = Server::new(SocketAddr::from(LOCAL), "dm", &map.bsp, assets()).unwrap();
+    let mut server = map.server(SocketAddr::from(LOCAL), "dm", assets()).unwrap();
     server.set_config(net::config::MatchConfig { lobby: lobby.to_string(), official_token: "tok".into(), deathmatch: true, max_players: 20, ..Default::default() });
     server.set_rules(Rules { time_limit: 20.0, ..Rules::deathmatch() });
     // Two players ask for deathmatch and get seats on it.
@@ -93,7 +93,7 @@ fn the_aim_check_flags_an_aimbot_and_nobody_else() {
     m.reports = Some(reports.clone());
     let lobby = m.local_addr();
     std::thread::spawn(move || m.run());
-    let mut server = Server::new(SocketAddr::from(LOCAL), "dm", &map.bsp, assets()).unwrap();
+    let mut server = map.server(SocketAddr::from(LOCAL), "dm", assets()).unwrap();
     server.set_config(net::config::MatchConfig { lobby: lobby.to_string(), official_token: "tok".into(), deathmatch: true, max_players: 20, ..Default::default() });
     // Six players: one cheats with an aimbot; the honest ones are hard and normal bots.
     let mut cs: Vec<LobbyClient> = (0..6).map(|i| LobbyClient::new(lobby, &format!("p{i}")).unwrap()).collect();

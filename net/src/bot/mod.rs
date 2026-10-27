@@ -19,7 +19,7 @@ pub use profile::{Difficulty, Profile};
 
 /// What bots know about a map: the way around, the spawns, the bomb sites.
 pub struct BotMap {
-    pub bsp: goldsrc::bsp::Bsp,
+    pub source: Source,
     pub nav: Nav,
     /// (terrorist, counter-terrorist) spawn.
     pub spawns: ([f32; 3], [f32; 3]),
@@ -32,16 +32,50 @@ impl BotMap {
     /// Takes a moment (the navigation is worked out from the map): load once, share.
     /// `name`: the map's name (which bomb site is A depends on the map).
     pub fn new(bsp: goldsrc::bsp::Bsp, name: &str) -> Arc<BotMap> {
-        let world = sim::collision::World::from_bsp(&bsp);
-        let m = &bsp.models[0];
-        let nav = Nav::build(&world, m.mins, m.maxs);
-        let zones = sim::zones::Zones::from_bsp(&bsp);
+        let (lo, hi) = (bsp.models[0].mins, bsp.models[0].maxs);
+        BotMap::build(Source::Bsp(bsp), name, lo, hi)
+    }
+
+    /// The same for one of our own maps (`.bmap`).
+    pub fn from_map(map: sim::mapfile::MapFile, hash: u64) -> Arc<BotMap> {
+        let (lo, hi) = map.bounds();
+        let name = map.name.clone();
+        BotMap::build(Source::Map(map, hash), &name, lo, hi)
+    }
+
+    fn build(source: Source, name: &str, lo: [f32; 3], hi: [f32; 3]) -> Arc<BotMap> {
+        let world = source.world();
+        let nav = Nav::build(&world, lo, hi);
+        let zones = world.zones.clone();
         let sites = zones.sites_a_first(name);
-        Arc::new(BotMap { spawns: spawns_of(&zones), nav, sites, zones, bsp })
+        Arc::new(BotMap { spawns: spawns_of(&zones), nav, sites, zones, source })
     }
 
     pub fn world(&self) -> sim::collision::World {
-        sim::collision::World::from_bsp(&self.bsp)
+        self.source.world()
+    }
+
+    /// A game server on this map (tests: the bots' server).
+    pub fn server(&self, bind: std::net::SocketAddr, name: &str, assets: crate::server::Assets) -> std::io::Result<crate::Server> {
+        match &self.source {
+            Source::Bsp(bsp) => crate::Server::new(bind, name, bsp, assets),
+            Source::Map(map, hash) => crate::Server::with_world(bind, name, map.world(), *hash, assets),
+        }
+    }
+}
+
+/// Where a map comes from: a GoldSrc BSP or our own format (with its file's hash).
+pub enum Source {
+    Bsp(goldsrc::bsp::Bsp),
+    Map(sim::mapfile::MapFile, u64),
+}
+
+impl Source {
+    pub fn world(&self) -> sim::collision::World {
+        match self {
+            Source::Bsp(bsp) => sim::collision::World::from_bsp(bsp),
+            Source::Map(map, _) => map.world(),
+        }
     }
 }
 
