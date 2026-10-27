@@ -1,8 +1,13 @@
-## The game: practice on a map, or the match the lobby found (`LobbyLink.pending`). Shows the
-## map's scene, hands the session the map's `.bmap` (what the rules collide with, exported from
-## the same scene) and gives the session to the parts that use it. Esc pauses; leaving, a
-## failed join or the match's end go back to the menu.
+## The game: a practice match against bots, or the match the lobby found
+## (`LobbyLink.pending`). Shows the map's scene, hands the session the map's `.bmap` (what the
+## rules collide with, exported from the same scene), gives the session to the parts that use
+## it, reads what the HUD shows once a frame (`Session.hud`) and hands it to every part that
+## uses it (`on_hud`, or a `hud` property), and passes them the game's events (`on_event`).
+## Esc pauses, B buys; leaving, a failed join or the match's end go back to the menu.
 extends Node3D
+
+## Something happened in the game (`Session.take_events`): kills, hits, rounds, the bomb.
+signal game_event(e: Dictionary)
 
 const PRACTICE_MAP := "data_center"
 ## A server that hasn't welcomed us in this long isn't coming.
@@ -11,12 +16,21 @@ const JOIN_WAIT := 10.0
 var session := Session.new()
 var _joining := false
 var _waited := 0.0
+var _left := false
+var _buy := preload("res://scripts/hud/buy_menu.gd").new()
+## The parts that get this frame's `Session.hud` (set in `_play`).
+var _readers: Array[Node] = []
 
 func _ready() -> void:
 	Binds.install()
 	var pause := preload("res://scripts/pause.gd").new()
 	pause.leave.connect(_back)
 	add_child(pause)
+	# after the pause menu, so Esc closes the buy menu first
+	add_child(_buy)
+	_buy.opened.connect(func(on: bool): $Player.menu_open = on)
+	_buy.notice.connect($Hud.notice)
+	$Hud.leave.connect(_back)
 	var seat: Dictionary = LobbyLink.pending
 	LobbyLink.pending = {}
 	if seat.is_empty():
@@ -30,7 +44,7 @@ func _ready() -> void:
 
 func _practice() -> void:
 	var text := _load_map(PRACTICE_MAP)
-	if not session.start_practice(text, 3):
+	if not session.start_match(text, LobbyLink.player_name()):
 		_back("Practice didn't start.")
 		return
 	_play()
@@ -53,8 +67,17 @@ func _process(delta: float) -> void:
 					_play()
 			_ when _waited > JOIN_WAIT:
 				_back("The match server didn't answer.")
-	elif session.match_ended():
-		_back()
+	elif not _readers.is_empty():
+		var hud := session.hud()
+		for node in _readers:
+			if node.has_method("on_hud"):
+				node.on_hud(hud)
+			else:
+				node.hud = hud
+		for e in session.take_events():
+			game_event.emit(e)
+		if session.match_ended():
+			_back()
 
 ## Shows a map's scene and sets up its pieces and doors; returns its `.bmap` text.
 func _load_map(name: String) -> String:
@@ -72,8 +95,12 @@ func _play() -> void:
 	# rate when it welcomes us); frames are drawn between them
 	Engine.physics_ticks_per_second = session.tick_rate()
 	Engine.max_physics_steps_per_frame = 16
-	for node in [$Player, $Others, $Pieces, $Doors, $Hud/Speed]:
+	for node in [$Player, $Player/Gun, $Others, $Grenades, $Bomb, $Pieces, $Doors, $Hud, _buy]:
 		node.session = session
+		if node.has_method("on_event"):
+			game_event.connect(node.on_event)
+	_readers = [$Hud, _buy, $Player/Gun, $Bomb]
+	$Hud.camera = $Player
 
 func _physics_process(_delta: float) -> void:
 	# prediction must step exactly as often as the server, or it's corrected all the time
@@ -83,6 +110,9 @@ func _physics_process(_delta: float) -> void:
 
 ## Back to the menu, saying why if something went wrong.
 func _back(why := "") -> void:
+	if _left:
+		return
+	_left = true
 	_joining = false
 	if why != "":
 		LobbyLink.tell(why)

@@ -6,7 +6,8 @@ extends RefCounted
 const KEYS := {
 	"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D,
 	"jump": KEY_SPACE, "crouch": KEY_CTRL, "walk": KEY_SHIFT, "use": KEY_E,
-	"reload": KEY_R, "drop": KEY_G,
+	"reload": KEY_R, "drop": KEY_G, "buy": KEY_B, "lastinv": KEY_Q, "undo_buys": KEY_BACKSPACE,
+	"team_voice": KEY_V, "near_voice": KEY_X,
 	"slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "slot5": KEY_5,
 }
 const MOUSE := {"attack": MOUSE_BUTTON_LEFT, "attack2": MOUSE_BUTTON_RIGHT}
