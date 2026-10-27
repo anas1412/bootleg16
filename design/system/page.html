@@ -1,0 +1,292 @@
+<meta charset="utf-8">
+<title>bootleg16 Design System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- Template: tools/make_design_system.py fills the {{...}} slots from tokens.json and writes index.html. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Sans+JP:wght@500&family=Noto+Serif+Display:wdth,wght@62.5,900&display=swap">
+<style>
+/* Layout: one 1200 column of sections; game screens shown on a 1920x1080 stage scaled to fit. */
+:root {
+  color-scheme: dark;
+/*{{tokens_css}}*/
+  --f-display: "Anton", Impact, "Arial Narrow", sans-serif;
+  --f-title: "Noto Serif Display", Georgia, serif;
+  --f-ui: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --f-kana: "Noto Sans JP", sans-serif;
+  --ease: cubic-bezier(var(--ease-curve));
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font: 600 20px/1.5 var(--f-ui); }
+.page { max-width: 1200px; margin: 0 auto; padding-block: var(--s-huge); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: var(--s-max); }
+h2 { font: 400 48px/56px var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+.lab { font: 500 16px/24px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+.sec { display: flex; flex-direction: column; gap: var(--s-xl); }
+.sec > header { display: flex; flex-direction: column; gap: var(--s-s); }
+.sec > header p { margin: 0; color: var(--text-dim); max-width: 62ch; }
+
+/* Intro */
+.intro { display: flex; flex-direction: column; gap: var(--s-xl); }
+.intro .wm svg { width: min(560px, 100%); height: auto; display: block; }
+.intro p { margin: 0; max-width: 62ch; color: var(--text-dim); }
+.intro p b { color: var(--text); font-weight: 600; }
+
+/* Marks */
+.marks { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-l); } /* wordmark across, four marks below */
+@media (max-width: 900px) { .marks { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .marks { grid-template-columns: 1fr; } }
+.mark { border: 2px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+.mark .art { height: 200px; display: grid; place-items: center; padding: var(--s-xl); border-bottom: 2px solid var(--line); }
+.mark .art svg { max-width: 100%; max-height: 136px; width: auto; height: auto; }
+.mark .art.wide svg { max-height: 104px; }
+.mark .txt { padding: var(--s-m) var(--s-l) var(--s-l); display: flex; flex-direction: column; gap: var(--s-xs); }
+.mark .txt b { font: 700 24px/32px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; }
+.mark .txt span { color: var(--text-dim); }
+.mark.span2 { grid-column: 1 / -1; }
+
+/* Colour */
+.swgroup { display: flex; flex-direction: column; gap: var(--s-m); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s-l); }
+.sw { display: grid; grid-template-columns: 64px 1fr; gap: var(--s-m); align-items: start; min-width: 0; }
+.sw i { width: 64px; height: 64px; border: 2px solid var(--line); }
+.sw div { display: flex; flex-direction: column; min-width: 0; }
+.sw b { font: 700 24px/32px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; }
+.sw code { font: 500 16px/24px var(--f-mono); color: var(--text-dim); }
+.sw span { color: var(--text-dim); font-size: 18px; line-height: 24px; margin-top: var(--s-xs); }
+
+/* Type */
+.types { display: flex; flex-direction: column; }
+.ty { display: grid; grid-template-columns: 280px 1fr; gap: var(--s-l); padding-block: var(--s-l); border-top: 2px solid var(--line); align-items: center; }
+.ty:last-child { border-bottom: 2px solid var(--line); }
+.ty .spec { display: flex; flex-direction: column; gap: var(--s-xs); min-width: 0; }
+.ty .spec b { font: 700 24px/32px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; }
+.ty .spec code { font: 500 16px/24px var(--f-mono); color: var(--text-dim); }
+.ty .spec span { color: var(--text-dim); font-size: 18px; line-height: 24px; }
+.ty .sample { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .ty { grid-template-columns: 1fr; } .ty .sample { font-size: min(var(--size), 15vw) !important; line-height: 1 !important; } }
+
+/* Stage: a 1920x1080 game screen scaled to the column. */
+.stage-box { width: 100%; aspect-ratio: 16 / 9; position: relative; overflow: hidden; border: 2px solid var(--line); }
+.stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; background: var(--bg); }
+.cols { position: absolute; inset: 64px 96px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 24px; }
+.cols i { background: rgba(255, 160, 0, .08); border-left: 2px solid rgba(255, 160, 0, .35); border-right: 2px solid rgba(255, 160, 0, .35); }
+.stage .dim { position: absolute; font: 500 28px/1 var(--f-mono); color: var(--you); letter-spacing: .08em; }
+.space { display: flex; flex-direction: column; gap: var(--s-s); }
+.sp { display: grid; grid-template-columns: 72px 48px 1fr; gap: var(--s-m); align-items: center; }
+.sp code { font: 500 16px/24px var(--f-mono); color: var(--text-dim); }
+.sp i { height: 16px; background: var(--you); }
+.sp span { color: var(--text-dim); font-size: 18px; }
+
+/* Components: the same rules the Godot theme uses. Square corners, frames not fills. */
+.comps { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s-l); } /* pairs, wide ones across */
+@media (max-width: 760px) { .comps { grid-template-columns: 1fr; } }
+.comp { border: 2px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+.comp .demo { padding: var(--s-xl); display: flex; flex-wrap: wrap; gap: var(--s-m); align-items: flex-start; border-bottom: 2px solid var(--line); min-height: 160px; flex: 1; align-content: center; }
+.comp .txt { padding: var(--s-m) var(--s-l) var(--s-l); display: flex; flex-direction: column; gap: var(--s-xs); }
+.comp .txt b { font: 700 24px/32px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; }
+.comp .txt span { color: var(--text-dim); }
+.comp.wide { grid-column: 1 / -1; }
+
+.btn { font: 700 40px/48px var(--f-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--you); background: transparent; border: 4px solid var(--you); padding: 12px 32px; display: inline-flex; align-items: center; gap: var(--s-m); cursor: pointer; position: relative; transition: background var(--hover) var(--ease), color var(--hover) var(--ease), transform var(--hover) var(--ease); }
+.btn svg { width: 24px; height: 24px; }
+.btn.small { font-size: 24px; line-height: 32px; letter-spacing: .12em; padding: 8px 24px; border-width: 2px; color: var(--text); border-color: var(--line); }
+.btn:hover, .btn.is-hover { background: rgba(255, 160, 0, .12); }
+.btn.small:hover, .btn.small.is-hover { background: var(--panel-hi); border-color: var(--text-dim); }
+.btn:active { transform: translateY(2px); background: rgba(255, 160, 0, .2); }
+.btn[disabled] { color: var(--text-off); border-color: var(--line); background: transparent; cursor: default; transform: none; }
+.btn:focus-visible { outline: 2px solid var(--text); outline-offset: 4px; }
+.state { display: flex; flex-direction: column; gap: var(--s-s); align-items: flex-start; }
+
+.glitch { animation: glitch var(--glitch) steps(4, end) 1; }
+@keyframes glitch {
+  0% { text-shadow: calc(var(--split) * -1) 0 var(--bureau), var(--split) 0 var(--strays); transform: translateX(2px); }
+  50% { text-shadow: var(--split) 0 var(--bureau), calc(var(--split) * -1) 0 var(--strays); transform: translateX(-2px); }
+  100% { text-shadow: none; transform: none; }
+}
+
+.tabs { display: flex; gap: var(--s-xl); flex-wrap: wrap; }
+.tab { display: flex; flex-direction: column; align-items: center; gap: var(--s-xs); padding: 0 0 var(--s-s); border: 0; border-bottom: 4px solid transparent; background: none; font: 700 24px/32px var(--f-ui); letter-spacing: .12em; color: var(--text-dim); cursor: pointer; transition: color var(--hover) var(--ease), border-color var(--hover) var(--ease); }
+.tab small { font: 500 16px/24px var(--f-kana); letter-spacing: .3em; color: var(--text-off); }
+.tab:hover { color: var(--text); }
+.tab.on { color: var(--text); border-bottom-color: var(--you); }
+.tab.on small { color: var(--you); }
+.tab:focus-visible { outline: 2px solid var(--text); outline-offset: 4px; }
+
+.squad { display: flex; flex-direction: column; gap: var(--s-s); width: 100%; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: var(--s-m); background: var(--panel); border-left: 4px solid var(--strays); padding: var(--s-s) var(--s-m); font: 600 24px/32px var(--f-ui); }
+.row .st { font: 500 16px/24px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+.row.you { color: var(--you); }
+.row.empty { background: transparent; border-left-color: var(--line); color: var(--text-off); box-shadow: inset 0 0 0 2px var(--line); }
+
+.readouts { display: flex; gap: var(--s-xl); flex-wrap: wrap; }
+.ro { display: flex; flex-direction: column; gap: var(--s-xs); }
+.ro b { font: 400 48px/56px var(--f-display); font-variant-numeric: tabular-nums; }
+.ro b.alert { color: var(--alert); }
+
+.live { display: flex; align-items: center; gap: var(--s-m); }
+.live svg { width: 48px; height: 48px; display: block; }
+.live svg circle { animation: breathe 2.4s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .5; } }
+
+.takeover { position: relative; width: 100%; aspect-ratio: 16 / 7; overflow: hidden; background: var(--bg); display: grid; place-items: center; }
+.takeover .band { position: absolute; left: -10%; right: -10%; height: 18%; background: repeating-linear-gradient(-45deg, var(--you) 0 40px, transparent 40px 80px); }
+.takeover .band.top { top: 8%; }
+.takeover .band.bot { bottom: 8%; }
+.takeover .msg { display: flex; flex-direction: column; align-items: center; gap: var(--s-s); position: relative; }
+.takeover .frame { border: 4px solid var(--you); padding: var(--s-s) var(--s-xl); font: 400 clamp(32px, 6vw, 96px)/1.1 var(--f-display); color: var(--you); text-transform: uppercase; letter-spacing: .01em; background: var(--bg); }
+.takeover.play .band.top { animation: slideR var(--takeover) var(--ease) both; }
+.takeover.play .band.bot { animation: slideL var(--takeover) var(--ease) both; }
+.takeover.play .frame { animation: pop var(--takeover) var(--ease) both, glitch var(--glitch) steps(4, end) var(--hover) 1; }
+.takeover.play .lab { animation: fade var(--enter) var(--ease) calc(var(--takeover) / 2) both; }
+@keyframes slideR { from { transform: translateX(-30%); opacity: 0; } }
+@keyframes slideL { from { transform: translateX(30%); opacity: 0; } }
+@keyframes pop { from { transform: scale(1.08); opacity: 0; } }
+@keyframes fade { from { opacity: 0; transform: translateY(var(--slide)); } }
+
+.enter-demo { display: flex; flex-direction: column; gap: var(--s-s); width: 100%; }
+.enter-demo.play > * { animation: fade var(--enter) var(--ease) both; }
+.enter-demo.play > :nth-child(2) { animation-delay: var(--stagger); }
+.enter-demo.play > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+.enter-demo.play > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
+
+.motion { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s-l); }
+.mo { display: flex; flex-direction: column; gap: var(--s-xs); border-top: 2px solid var(--line); padding-top: var(--s-m); }
+.mo b { font: 400 48px/56px var(--f-display); font-variant-numeric: tabular-nums; }
+.mo span { color: var(--text-dim); font-size: 18px; line-height: 24px; }
+.replay { align-self: flex-start; margin-top: calc(var(--s-m) - var(--s-xs)); } /* 16 below the text, counting the row gap */
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="page">
+  <section class="intro">
+    <div class="wm">{{mark:wordmark}}</div>
+    <p><b>The rules every bootleg16 screen is built from.</b> Every value here comes from one file, design/system/tokens.json, which also writes the game's Godot theme, so this page and the game can't drift apart. Every detail on a screen has a job: it shows information, shows state, or is something you use.</p>
+  </section>
+
+  <section class="sec" id="marks">
+    <header><span class="lab">Marks</span><h2>Who we are</h2><p>White carries every mark, amber only on the 16. Keep at least 32 clear around each one.</p></header>
+    <div class="marks">
+      <div class="mark span2"><div class="art wide">{{mark:wordmark}}</div><div class="txt"><b>Wordmark</b><span>Title screen, store pages, loading screens.</span></div></div>
+      <div class="mark"><div class="art">{{mark:monogram}}</div><div class="txt"><b>Monogram</b><span>App and Steam icon, the loading spinner, the HUD corner.</span></div></div>
+      <div class="mark"><div class="art">{{mark:bureau}}</div><div class="txt"><b>Bureau</b><span>A sun on the water. They defend, every round.</span></div></div>
+      <div class="mark"><div class="art">{{mark:strays}}</div><div class="txt"><b>Strays</b><span>The pillar, blown apart. They attack, every round.</span></div></div>
+      <div class="mark"><div class="art">{{mark:live16}}</div><div class="txt"><b>Live</b><span>Only on live things: spectating, replays, the kill cam.</span></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="colour">
+    <header><span class="lab">Colour</span><h2>Every colour means something</h2><p>Colour is information. Amber is you, red needs you now, cyan and pink are the two sides. Nothing gets a colour for looks.</p></header>
+    {{swatches}}
+  </section>
+
+  <section class="sec" id="type">
+    <header><span class="lab">Type</span><h2>Six faces, eight jobs</h2><p>Sizes are pixels on a 1920 by 1080 screen. Every line height sits on the 8 grid.</p></header>
+    <div class="types">{{type_specimens}}</div>
+  </section>
+
+  <section class="sec" id="grid">
+    <header><span class="lab">Grid and spacing</span><h2>Twelve columns, one scale</h2><p>Every screen sits on 12 columns of 122 with 24 gutters, 96 from the sides and 64 from the top and bottom. Every gap is a step of the scale, never a number in between.</p></header>
+    <div class="stage-box"><div class="stage" data-stage>
+      <div class="cols">{{cols}}</div>
+      <span class="dim" style="left:96px;top:16px">96</span>
+      <span class="dim" style="left:16px;top:64px">64</span>
+      <span class="dim" style="left:96px;top:1032px">COLUMN 122 · GUTTER 24</span>
+    </div></div>
+    <div class="space">{{space_scale}}</div>
+  </section>
+
+  <section class="sec" id="components">
+    <header><span class="lab">Components</span><h2>Built once, used everywhere</h2><p>Square corners and frames, never solid fills. Hover them: each one moves the way it does in the game.</p></header>
+    <div class="comps">
+      <div class="comp wide"><div class="demo">
+        <div class="state"><button class="btn" data-glitch>Deploy <svg viewBox="0 0 24 24"><path d="M8 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="4"/></svg></button><span class="lab">Rest</span></div>
+        <div class="state"><button class="btn is-hover" tabindex="-1">Deploy <svg viewBox="0 0 24 24"><path d="M8 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="4"/></svg></button><span class="lab">Hover</span></div>
+        <div class="state"><button class="btn" disabled>Deploy <svg viewBox="0 0 24 24"><path d="M8 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="4"/></svg></button><span class="lab">Not ready</span></div>
+      </div><div class="txt"><b>Main action</b><span>One per screen, amber, bottom right. A quick channel split as the pointer arrives, then clean.</span></div></div>
+
+      <div class="comp wide"><div class="demo">
+        <div class="tabs" role="tablist">
+          <button class="tab on" role="tab" aria-selected="true">PLAY<small>出撃</small></button>
+          <button class="tab" role="tab" aria-selected="false">LOCKER<small>装備</small></button>
+          <button class="tab" role="tab" aria-selected="false">CHARACTERS<small>人員</small></button>
+          <button class="tab" role="tab" aria-selected="false">SETTINGS<small>設定</small></button>
+        </div>
+      </div><div class="txt"><b>Tabs</b><span>The page you're on is underlined in amber. Click one to move it.</span></div></div>
+
+      <div class="comp"><div class="demo">
+        <div class="state"><button class="btn small" data-glitch>Invite</button><span class="lab">Rest</span></div>
+        <div class="state"><button class="btn small is-hover" tabindex="-1">Invite</button><span class="lab">Hover</span></div>
+        <div class="state"><button class="btn small" disabled>Invite</button><span class="lab">Off</span></div>
+      </div><div class="txt"><b>Button</b><span>Everything that isn't the main action. White on a resting frame.</span></div></div>
+
+      <div class="comp"><div class="demo">
+        <div class="squad">
+          <div class="row you">Vera<span class="st">You</span></div>
+          <div class="row">Nadia<span class="st">Ready</span></div>
+          <div class="row empty">Invite<span class="st">Empty</span></div>
+        </div>
+      </div><div class="txt"><b>Squad row</b><span>The bar is the side's colour. Your own name is amber.</span></div></div>
+
+      <div class="comp"><div class="demo">
+        <div class="readouts">
+          <div class="ro"><span class="lab">Ping</span><b>24</b></div>
+          <div class="ro"><span class="lab">In queue</span><b>01:12</b></div>
+          <div class="ro"><span class="lab">Bomb</span><b class="alert">0:31</b></div>
+        </div>
+      </div><div class="txt"><b>Readout</b><span>A mono label over a number. Red only when it needs you now.</span></div></div>
+
+      <div class="comp"><div class="demo">
+        <div class="live">{{mark:live16}}<span class="lab" style="color:var(--text)">Spectating · Vera</span></div>
+      </div><div class="txt"><b>Live mark</b><span>The dot breathes while the thing is live, and only then.</span></div></div>
+
+      <div class="comp wide"><div class="demo" style="padding:0">
+        <div class="takeover play" id="takeover">
+          <div class="band top"></div><div class="band bot"></div>
+          <div class="msg"><div class="frame">Operation ready</div><span class="lab" style="color:var(--text)">Confirm in 18</span></div>
+        </div>
+      </div><div class="txt"><b>Takeover</b><span>For the few moments that matter: match found, bomb planted. It takes the whole screen, then leaves.</span><button class="btn small replay" id="replay-takeover">Replay</button></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="motion">
+    <header><span class="lab">Motion</span><h2>Alive, never noisy</h2><p>Everything eases out fast and settles. Glitch only on arrival, hover start, a change of state or an alert, and always settles clean.</p></header>
+    {{motion_list}}
+    <div class="comp"><div class="demo">
+      <div class="enter-demo play" id="enter-demo">
+        <div class="row you">Vera<span class="st">You</span></div>
+        <div class="row">Nadia<span class="st">Ready</span></div>
+        <div class="row">Kiki<span class="st">Ready</span></div>
+        <div class="row empty">Invite<span class="st">Empty</span></div>
+      </div>
+    </div><div class="txt"><b>Enter</b><span>Rows slide up 16 and fade in, one every 40 ms.</span><button class="btn small replay" id="replay-enter">Replay</button></div></div>
+  </section>
+</div>
+
+<script>
+// Scale every 1920x1080 stage to its box.
+const fit = () => document.querySelectorAll("[data-stage]").forEach(s => {
+  s.style.transform = `scale(${s.parentElement.clientWidth / 1920})`;
+});
+new ResizeObserver(fit).observe(document.body);
+fit();
+
+// Glitch on hover start, once, then clean.
+const kick = el => { el.classList.remove("glitch"); void el.offsetWidth; el.classList.add("glitch"); };
+document.querySelectorAll("[data-glitch]").forEach(b => b.addEventListener("pointerenter", () => { if (!b.disabled) kick(b); }));
+
+// Tabs: move the selection.
+document.querySelectorAll(".tabs").forEach(t => t.addEventListener("click", e => {
+  const tab = e.target.closest(".tab");
+  if (!tab) return;
+  t.querySelectorAll(".tab").forEach(x => { x.classList.toggle("on", x === tab); x.setAttribute("aria-selected", x === tab); });
+  kick(tab);
+}));
+
+// Replays restart an animation by toggling its class.
+const replay = (btn, id) => document.getElementById(btn).addEventListener("click", () => {
+  const el = document.getElementById(id);
+  el.classList.remove("play"); void el.offsetWidth; el.classList.add("play");
+});
+replay("replay-takeover", "takeover");
+replay("replay-enter", "enter-demo");
+</script>
