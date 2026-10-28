@@ -17,7 +17,7 @@ pub(crate) fn side(t: Team) -> &'static str {
 
 #[godot_api(secondary)]
 impl Session {
-    /// Everything the HUD shows, read once a frame: `alive`, `health`, `armor`, `helmet`,
+    /// Everything the HUD shows, read once a frame: `alive`, `crouched`, `health`, `armor`, `helmet`,
     /// `kit`, `money`, `can_buy`, `buy_left` (seconds, -1: no limit), `in_zone` (your buy
     /// zone), `team`, `phase`
     /// (warmup, freeze, live, over, gameover), `round`, `left` (seconds of the phase),
@@ -69,6 +69,7 @@ impl Session {
         let in_zone = zone.is_some_and(|z| c.world.zones.in_buy_zone(z, c.me().origin, c.me().hull()));
         let mut d = vdict! {
             "alive" => c.vitals.alive(),
+            "crouched" => c.me().crouched,
             "health" => c.vitals.health.ceil() as i64,
             "armor" => c.vitals.armor.ceil() as i64,
             "helmet" => c.vitals.helmet,

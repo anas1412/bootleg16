@@ -18,6 +18,7 @@ var _joining := false
 var _waited := 0.0
 var _left := false
 var _buy := preload("res://scripts/hud/buy_menu.gd").new()
+var _arms := preload("res://scripts/arms.gd").new()
 ## The parts that get this frame's `Session.hud` (set in `_play`).
 var _readers: Array[Node] = []
 
@@ -102,7 +103,11 @@ func _play() -> void:
 		node.session = session
 		if node.has_method("on_event"):
 			game_event.connect(node.on_event)
-	_readers = [$Hud, _buy, $Player/Gun, $Bomb]
+	_arms.camera = $Player
+	_arms.gun = $Player/Gun
+	_arms.session = session
+	$Player.add_child(_arms)
+	_readers = [$Hud, _buy, $Player/Gun, $Bomb, _arms]
 	$Hud.camera = $Player
 
 func _physics_process(_delta: float) -> void:

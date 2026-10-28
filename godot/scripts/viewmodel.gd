@@ -70,6 +70,10 @@ var _bob := 0.0
 var _bob_amount := 0.0
 var _sway := Vector2.ZERO
 var _last_look := Vector2.ZERO
+## Where your hands hold it (`arms.gd` reaches them): the right hand on the grip, the left on
+## the handguard (under the right for a pistol); null where that hand is free.
+var grip_right: Marker3D
+var grip_left: Marker3D
 
 static func family(weapon: String) -> String:
 	match weapon:
@@ -137,6 +141,8 @@ func _build(weapon: String, team: String) -> void:
 	_raise = 0.0
 	for c in get_children():
 		c.queue_free()
+	grip_right = null
+	grip_left = null
 	var model := _model(weapon)
 	if model:
 		add_child(model)
@@ -173,6 +179,8 @@ func _build(weapon: String, team: String) -> void:
 		part.position = p[1] * big
 		part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(part)
+	# a grenade or the bomb: in the right hand, the left one free
+	grip_right = _grip(self, Vector3(0.02, -0.03, 0.02))
 
 ## The weapon's gun model, its barrel pointing ahead, its middle a little ahead of the grip,
 ## drawn with the hands' shader (never into a wall) in the colours it came with. Null when the
@@ -212,4 +220,23 @@ func _model(weapon: String) -> Node3D:
 	var turn := Basis(Vector3.UP, PI / 2.0).scaled(Vector3.ONE * s)
 	m.basis = turn * m.basis
 	m.position = -(turn * box.get_center()) + Vector3(0, 0, -length * 0.15)
+	# the hands: the right a little behind the middle and low (the grip), the left ahead on
+	# the handguard; a pistol's left hand cups the right, a knife's is free
+	var height := box.size.y * s
+	match family(weapon):
+		"pistol":
+			grip_right = _grip(holder, Vector3(0, -height * 0.3, 0.0))
+			grip_left = _grip(holder, Vector3(-0.025, -height * 0.4, 0.01))
+		"knife":
+			grip_right = _grip(holder, Vector3(0, 0, length * 0.2))
+		_:
+			grip_right = _grip(holder, Vector3(0, -height * 0.3, length * 0.05))
+			grip_left = _grip(holder, Vector3(0, -height * 0.15, -length * 0.35))
 	return holder
+
+## A hand's place on the held weapon (it moves with the weapon's kick, bob and sway).
+func _grip(on: Node3D, at: Vector3) -> Marker3D:
+	var g := Marker3D.new()
+	g.position = at
+	on.add_child(g)
+	return g

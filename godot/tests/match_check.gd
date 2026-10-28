@@ -33,8 +33,8 @@ func _initialize() -> void:
 		_fail("never joined the Strays: %s" % session.hud())
 		_end()
 		return
-	await _until(func(): return _count("t") == 4 and _count("ct") == 5, 10.0)
-	_check(_count("t") == 4 and _count("ct") == 5, "nine bots, 4 with you and 5 against: %d t, %d ct" % [_count("t"), _count("ct")])
+	await _until(func(): return _count("t") == 5 and _count("ct") == 5, 10.0)
+	_check(_count("t") == 5 and _count("ct") == 5, "nine bots, 4 with you and 5 against: %d t, %d ct" % [_count("t"), _count("ct")])
 	var hud := session.hud()
 	_check(hud.phase in ["freeze", "warmup"] and hud.money == 800, "a round starts with 800: %s %d" % [hud.phase, hud.money])
 	_check(main.get_node("Hud")._root.visible, "the HUD is up")
@@ -124,9 +124,10 @@ func _end() -> void:
 	print("match_check: %s" % ("FAILED" if failed else "ok"))
 	quit(1 if failed else 0)
 
-## Players on a side (the others; you're the fifth Stray).
+## Players on a side, from the scoreboard (you're one of the Strays). Not from where players
+## are drawn: the server sends only the enemies you can see (anti-wallhack).
 func _count(team: String) -> int:
-	return session.others(1.0).filter(func(o): return o.team == team).size()
+	return session.players().filter(func(o): return o.team == team).size()
 
 func _seen(type: String) -> bool:
 	return events.any(func(e): return e.type == type)
