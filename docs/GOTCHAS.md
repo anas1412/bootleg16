@@ -235,3 +235,11 @@ A translucent colour over a dark surface shows much brighter in the game than in
 - **Measure the reference with the same tool and the same points** (`tools/compare_maps.py`):
   bot-navigation path lengths, not straight lines; endpoints snap to the 48-unit grid, so
   moving a spawn less than 48 can change nothing.
+- **A build from a copy of the repo bakes that copy's path into the bridge**: `net::gamefiles`
+  (and `sim`, `goldsrc`, `gdbridge`) use `env!("CARGO_MANIFEST_DIR")`, and cargo doesn't
+  rebuild a crate when only its folder moved. A build from a scratchpad copy sharing `target/`
+  left `libgdbridge.so` looking for game data there ("missing the player model"). Build from
+  the real checkout; to fix, touch those files and rebuild.
+- **Scripts with a new `class_name` merged from a worktree don't parse on main until Godot
+  rescans**: "Identifier ... not declared". Run `godot --headless --path godot --import` once
+  after merging, and commit the new `.uid` files so every checkout uses the same ids.
